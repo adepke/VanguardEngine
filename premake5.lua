@@ -6,7 +6,7 @@ workspace "Vanguard"
 project "Engine"
 	language "C++"
 	cppdialect "C++17"
-	kind "SharedLib"
+	kind "WindowedApp"
 	
 	location "Build/Generated"
 	basedir "../../"
