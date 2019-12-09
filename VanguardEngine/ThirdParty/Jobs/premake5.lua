@@ -4,6 +4,7 @@ project "Jobs"
 	kind "StaticLib"
 	
 	location "../../../Build/ThirdParty/Jobs/Generated"
+	buildlog "../../../Build/Logs/JobsBuildLog.log"
 	objdir "../../../Build/ThirdParty/Jobs/Intermediate/%{cfg.platform}_%{cfg.buildcfg}"
 	targetdir "../../../Build/ThirdParty/Jobs/Bin/%{cfg.platform}_%{cfg.buildcfg}"
 	

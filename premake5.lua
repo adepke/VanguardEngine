@@ -26,7 +26,6 @@ workspace "Vanguard"
 	platforms { "Win64" }
 	configurations { "Debug", "Development", "Release" }
 	startproject "Engine"  -- #TODO: Set to empty project, similar to UE4's BlankProgram
-	buildlog "Build/Logs/Log"
 	
 project "Engine"
 	language "C++"
@@ -34,6 +33,7 @@ project "Engine"
 	kind "WindowedApp"
 	
 	location "Build/Generated"
+	buildlog "Build/Logs/EngineBuildLog.log"
 	basedir "../../"
 	objdir "Build/Intermediate/%{cfg.platform}_%{cfg.buildcfg}"
 	targetdir "Build/Bin/%{cfg.platform}_%{cfg.buildcfg}"
