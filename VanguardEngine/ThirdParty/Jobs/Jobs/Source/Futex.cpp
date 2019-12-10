@@ -26,7 +26,7 @@ namespace Jobs
 	bool Futex::Wait(void* CompareAddress, size_t Size, uint64_t TimeoutNs) const
 	{
 #if PLATFORM_WINDOWS
-		return WaitOnAddress(Address, CompareAddress, Size, TimeoutNs > 0 ? (TimeoutNs >= 1e6 ? TimeoutNs : 1e6) / 1e6 : INFINITE);
+		return WaitOnAddress(Address, CompareAddress, Size, static_cast<DWORD>(TimeoutNs > 0 ? (TimeoutNs >= 1e6 ? TimeoutNs : 1e6) / 1e6 : INFINITE));
 #else
 		timespec Timeout;
 		Timeout.tv_sec = static_cast<time_t>(TimeoutNs / (uint64_t)1e9);  // Whole seconds.
