@@ -1,6 +1,5 @@
 project "Jobs"
 	language "C++"
-	cppdialect "C++17"
 	kind "StaticLib"
 	
 	location "../../../Build/ThirdParty/Jobs/Generated"

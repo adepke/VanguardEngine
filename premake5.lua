@@ -7,8 +7,8 @@ function IncludeThirdParty()
 end
 
 function LinkThirdParty()
-	libdirs "Build/ThirdParty/Jobs"
-	libdirs "Build/ThirdParty/Tracy"
+	libdirs "Build/ThirdParty/Jobs/Bin/*"
+	libdirs "Build/ThirdParty/Tracy/Bin/*"
 	
 	links "Jobs"
 	links "Tracy"
@@ -25,11 +25,36 @@ workspace "Vanguard"
 	architecture "x86_64"
 	platforms { "Win64" }
 	configurations { "Debug", "Development", "Release" }
-	startproject "Engine"  -- #TODO: Set to empty project, similar to UE4's BlankProgram
+	startproject "Engine"  -- #TODO: Set to empty project, similar to UE4's BlankProgram.
+	
+	cppdialect "C++17"
+	
+	-- Global Platform
+	
+	flags { "MultiProcessorCompile" }
+	
+	filter { "platforms:Win64" }
+		defines { "WIN32", "_WIN32" }
+	
+	-- Global Configurations
+	
+	filter { "configurations:Debug" }
+		defines { "DEBUG", "_DEBUG" }
+		symbols "On"
+		optimize "Off"
+		
+	filter { "configurations:Development" }
+		defines { "DEBUG", "_DEBUG" }
+		symbols "On"
+		optimize "Debug"
+	
+	filter { "configurations:Release" }
+		defines { "NDEBUG" }
+		symbols "Off"
+		optimize "Speed"
 	
 project "Engine"
 	language "C++"
-	cppdialect "C++17"
 	kind "WindowedApp"
 	
 	location "Build/Generated"
@@ -46,7 +71,7 @@ project "Engine"
 		
 	filter {}
 		defines { "PLATFORM_WINDOWS=0", "BUILD_DEBUG=0", "BUILD_DEVELOPMENT=0", "BUILD_RELEASE=0" }
-		flags { "FatalWarnings", "NoPCH", "MultiProcessorCompile" }
+		flags { "FatalWarnings", "NoPCH" }
 		clr "Off"
 		rtti "Off"
 		characterset "Unicode"
@@ -62,7 +87,7 @@ project "Engine"
 	-- Configurations
 		
 	filter { "configurations:Debug" }
-		defines { "BUILD_DEBUG=1", "DEBUG", "D3DCOMPILE_DEBUG=1" }
+		defines { "BUILD_DEBUG=1", "D3DCOMPILE_DEBUG=1", "TRACY_ENABLE" }
 		flags { }
 		symbols "On"
 		optimize "Off"
@@ -70,7 +95,7 @@ project "Engine"
 		exceptionhandling "On"
 		
 	filter { "configurations:Development" }
-		defines { "BUILD_DEVELOPMENT=1", "DEBUG" }
+		defines { "BUILD_DEVELOPMENT=1", "TRACY_ENABLE", "JOBS_DISABLE_LOGGING" }
 		flags { "LinkTimeOptimization" }
 		symbols "On"
 		optimize "Debug"
@@ -78,10 +103,10 @@ project "Engine"
 		exceptionhandling "On"
 		
 	filter { "configurations:Release" }
-		defines { "BUILD_RELEASE=1", "NDEBUG", "ENTT_DISABLE_ASSERT" }
+		defines { "BUILD_RELEASE=1", "ENTT_DISABLE_ASSERT", "JOBS_DISABLE_LOGGING" }
 		flags { "LinkTimeOptimization", "NoRuntimeChecks" }
 		symbols "Off"
-		optimize "Speed"  -- /O2 instead of /Ox on MSVS with "Full"
+		optimize "Speed"  -- /O2 instead of /Ox on MSVS with "Full".
 		omitframepointer "On"
 		exceptionhandling "Off"
 		
