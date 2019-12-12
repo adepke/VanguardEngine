@@ -12,6 +12,7 @@
 #include <vector>
 #include <sstream>
 #include <memory>
+#include <system_error>
 
 namespace Detail
 {
@@ -50,6 +51,15 @@ namespace Detail
 		std::wstringstream MessageStream;
 
 		LogRecord(const char* InSubsystem, LogSeverity InSeverity) : Subsystem(InSubsystem), Severity(InSeverity) {}
+
+#if PLATFORM_WINDOWS
+		LogRecord& operator<<(HRESULT In)
+		{
+			const auto NarrowMessage{ std::system_category().message(In) };
+			MessageStream << std::wstring{ NarrowMessage.begin(), NarrowMessage.end() };
+			return *this;
+		}
+#endif
 
 		template <typename T>
 		LogRecord& operator<<(const T& In)
