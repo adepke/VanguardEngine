@@ -8,10 +8,10 @@
 #define VGWarningPop __pragma(warning(pop))
 #define VGWarningDisable(Number, String) __pragma(warning(disable:Number))
 #elif defined(__GNUC__) || defined(__clang__)
-#define _Detail_VGPragma(Param) _Pragma(#Param)
+#define _Detail_VGExpandStringify(Token) VGStringify(Token)
 #define VGWarningPush _Pragma("GCC diagnostic push")
 #define VGWarningPop _Pragma("GCC diagnostic pop")
-#define VGWarningDisable(Number, String) _Detail_VGPragma(VGConcat(GCC diagnostic ignored , VGStringify(-W##String)))
+#define VGWarningDisable(Number, String) _Pragma(_Detail_VGExpandStringify(GCC diagnostic ignored VGStringify(-W##String)))
 #else
 #define VGWarningPush
 #define VGWarningPop
