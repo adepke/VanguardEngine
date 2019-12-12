@@ -1,3 +1,5 @@
+// Copyright (c) 2019 Andrew Depke
+
 #pragma once
 
 #define VGConcat(Left, Right) Left ## Right
