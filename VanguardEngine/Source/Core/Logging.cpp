@@ -10,7 +10,7 @@ auto GetPlatformError()
 {
 #if PLATFORM_WINDOWS
 	return HRESULT_FROM_WIN32(GetLastError());
-#endif
-
+#else
 	return 0;
+#endif
 }
