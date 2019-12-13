@@ -1,8 +1,7 @@
 // Copyright (c) 2019 Andrew Depke
 
 #include <Threading/CriticalSection.h>
-
-#include <Windows.h>
+#include <Core/Windows/WindowsMinimal.h>
 
 static_assert(sizeof(CRITICAL_SECTION) == SizeOfHandle, "Invalid CRITICAL_SECTION size! Header requires update.");
 
