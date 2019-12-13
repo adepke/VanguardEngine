@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <Core/Pragma.h>
+
 #if !BUILD_RELEASE
 #include <Tracy.hpp>
 #endif
