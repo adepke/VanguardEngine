@@ -2,8 +2,6 @@
 
 #pragma once
 
-#include <Core/Pragma.h>
-
 #if !BUILD_RELEASE
 #include <Tracy.hpp>
 #endif
@@ -13,6 +11,12 @@
 #include <sstream>
 #include <memory>
 #include <system_error>
+
+#if PLATFORM_WINDOWS && !defined(HRESULT)
+using HRESULT = long;
+#endif
+
+auto GetPlatformError();
 
 namespace Detail
 {
