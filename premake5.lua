@@ -82,7 +82,7 @@ project "Engine"
 		
 	filter { "platforms:Win64" }
 		system "Windows"
-		defines { "PLATFORM_WINDOWS=1", "NOMINMAX" }
+		defines { "PLATFORM_WINDOWS=1" }
 		
 	-- Configurations
 		
