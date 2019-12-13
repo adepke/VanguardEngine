@@ -147,7 +147,7 @@ VGWarningPop
 
 #if !BUILD_RELEASE
 #define VGScopedCPUStat(Name) ZoneScopedN(Name)
-#define VGScopedGPUStat(Name) do {} while (0)  // #TODO: GPU Profiling.
+#define VGScopedGPUStat(Name) do {} while (0)  // #TODO: GPU Profiling through PIX. Do we need the command list, command queue, and/or device context?
 #define VGStatFrame FrameMark
 #else
 #define VGScopedCPUStat(Name) do {} while (0)
