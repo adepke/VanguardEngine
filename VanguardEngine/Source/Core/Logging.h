@@ -18,7 +18,14 @@
 using HRESULT = long;
 #endif
 
-auto GetPlatformError();
+// Can't use auto type deduction if the definition is in a source file, so we need to do this instead.
+#if PLATFORM_WINDOWS
+using PlatformErrorType = HRESULT;
+#else
+using PlatformErrorType = int32_t;
+#endif
+
+PlatformErrorType GetPlatformError();
 
 namespace Detail
 {
@@ -111,7 +118,7 @@ public:
 	}
 
 VGWarningPush
-VGWarningDisable(4100, "-Wunused-parameter")
+VGWarningDisable(4100, unused-parameter)
 	// Can't use a stream operator here, causes precedence issues.
 	void operator+=(const Detail::LogRecord& Record)
 VGWarningPop
@@ -150,7 +157,7 @@ VGWarningPop
 
 // Global Subsystems
 
-#define VGDeclareLogSubsystem(Name) struct _##Name {}; _##Name Name; namespace Detail { constexpr const char* SubsysToString(_##Name) { return #Name; } }
+#define VGDeclareLogSubsystem(Name) struct ___##Name {}; static ___##Name Name; namespace Detail { constexpr const char* SubsysToString(___##Name) { return #Name; } }
 
 VGDeclareLogSubsystem(Core);
 VGDeclareLogSubsystem(Renderer);

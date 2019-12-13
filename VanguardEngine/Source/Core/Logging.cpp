@@ -6,7 +6,7 @@
 #include <Core/Windows/WindowsMinimal.h>
 #endif
 
-auto GetPlatformError()
+PlatformErrorType GetPlatformError()
 {
 #if PLATFORM_WINDOWS
 	return HRESULT_FROM_WIN32(GetLastError());
