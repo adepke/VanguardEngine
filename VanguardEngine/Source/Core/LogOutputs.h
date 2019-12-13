@@ -10,6 +10,10 @@
 #include <mutex>
 #include <fstream>
 
+#if PLATFORM_WINDOWS
+#include <Core/Windows/WindowsMinimal.h>
+#endif
+
 struct LogFileOutput : LogOutputBase
 {
 	CriticalSection Lock;
@@ -31,9 +35,6 @@ struct LogFileOutput : LogOutputBase
 };
 
 #if PLATFORM_WINDOWS
-
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
 
 struct LogWindowsOutput : LogOutputBase
 {
