@@ -40,3 +40,13 @@ public:
 
 template <typename Result, typename... ArgTypes>
 FunctionRef(Result(*)(ArgTypes...)) -> FunctionRef<Result(ArgTypes...)>;
+
+namespace std
+{
+	template <typename Result, typename... ArgTypes>
+	constexpr void swap(FunctionRef<Result(ArgTypes...)>& Left, FunctionRef<Result(ArgTypes...)>& Right) noexcept
+	{
+		std::swap(Left.Object, Right.Object);
+		std::swap(Left.Function, Right.Function);
+	}
+}
