@@ -3,7 +3,6 @@
 #pragma once
 
 #include <type_traits>
-#include <memory>
 
 namespace Detail
 {
@@ -98,10 +97,6 @@ namespace Detail
 		}
 	};
 
-	// Had issues getting this to compile, related to default constructing a lambda (not available until C++20). Can't be
-	// decayed to a function pointer either because of the auto type. Using ReleasableDelete as a replacement.
-	//constexpr auto ReleasableDeleter = [](auto* Ptr) { Ptr->Release(); delete Ptr; };
-
 	template <typename T>
 	struct ReleasableDelete
 	{
@@ -113,26 +108,7 @@ namespace Detail
 			delete Ptr;
 		}
 	};
-
-	template <typename T, bool>
-	struct ResourcePtrInternal : public ResourcePtrBase<T>
-	{
-		using BaseType = ResourcePtrBase<T>;
-
-		using BaseType::BaseType;
-	};
-
-	template <typename T>
-	struct ResourcePtrInternal<T, true> : ResourcePtrBase<T, ReleasableDelete<T>>
-	{
-		using BaseType = ResourcePtrBase<T, ReleasableDelete<T>>;
-
-		constexpr ResourcePtrInternal() noexcept : BaseType(nullptr) {}
-		ResourcePtrInternal(T* Ptr) noexcept : BaseType(Ptr) {}
-
-		using BaseType::BaseType;
-	};
 }
 
 template <typename T>
-using ResourcePtr = Detail::ResourcePtrInternal<T, Detail::Releasable<T>::Value>;
+using ResourcePtr = Detail::ResourcePtrBase<T, std::conditional_t<Detail::Releasable<T>::Value, Detail::ReleasableDelete<T>, std::default_delete<T>>>;
