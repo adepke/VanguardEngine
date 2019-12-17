@@ -105,7 +105,6 @@ namespace Detail
 		void operator()(T* Ptr) const
 		{
 			Ptr->Release();
-			delete Ptr;
 		}
 	};
 }
