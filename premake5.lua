@@ -123,6 +123,7 @@ project "Engine"
 		files { "VanguardEngine/Source/Rendering/*.h", "VanguardEngine/Source/Rendering/*.cpp" }
 		files { "VanguardEngine/Source/Threading/*.h", "VanguardEngine/Source/Threading/*.cpp" }
 		files { "VanguardEngine/Source/Utility/*.h", "VanguardEngine/Source/Utility/*.cpp" }
+		files { "VanguardEngine/Source/Window/*.h", "VanguardEngine/Source/Window/*.cpp" }
 		
 	-- Specific Files
 		
@@ -133,6 +134,7 @@ project "Engine"
 		files { "VanguardEngine/Source/Rendering/Windows/*.h", "VanguardEngine/Source/Rendering/Windows/*.cpp" }
 		files { "VanguardEngine/Source/Threading/Windows/*.h", "VanguardEngine/Source/Threading/Windows/*.cpp" }
 		files { "VanguardEngine/Source/Utility/Windows/*.h", "VanguardEngine/Source/Utility/Windows/*.cpp" }
+		files { "VanguardEngine/Source/Window/Windows/*.h", "VanguardEngine/Source/Window/Windows/*.cpp" }
 		
 	filter {}
 	
