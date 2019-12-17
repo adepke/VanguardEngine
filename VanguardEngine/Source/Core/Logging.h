@@ -3,6 +3,7 @@
 #pragma once
 
 #include <Core/Pragma.h>
+#include <Core/Misc.h>
 
 #if !BUILD_RELEASE
 #include <Tracy.hpp>
@@ -128,6 +129,11 @@ VGWarningPop
 		{
 			Output->Write(Record);
 		}
+
+		if (Record.Severity == Detail::LogSeverity::Fatal) VGUnlikely
+		{
+			VGBreak();
+		}
 #endif
 	}
 };
@@ -143,7 +149,11 @@ VGWarningPop
 #define VGLog(Subsystem) _Detail_VGLogBase(Subsystem, Detail::LogSeverity::Log)
 #define VGLogWarning(Subsystem) _Detail_VGLogBase(Subsystem, Detail::LogSeverity::Warning)
 #define VGLogError(Subsystem) _Detail_VGLogBase(Subsystem, Detail::LogSeverity::Error)
+#if !BUILD_RELEASE
 #define VGLogFatal(Subsystem) _Detail_VGLogBase(Subsystem, Detail::LogSeverity::Fatal)
+#else
+#define VGLogFatal(Subsystem) VGBreak()
+#endif
 
 #if !BUILD_RELEASE
 #define VGScopedCPUStat(Name) ZoneScopedN(Name)
@@ -160,6 +170,6 @@ VGWarningPop
 #define VGDeclareLogSubsystem(Name) struct ___##Name {}; static ___##Name Name; namespace Detail { constexpr const char* SubsysToString(___##Name) { return #Name; } }
 
 VGDeclareLogSubsystem(Core);
-VGDeclareLogSubsystem(Renderer);
+VGDeclareLogSubsystem(Rendering);
 VGDeclareLogSubsystem(Threading);
 VGDeclareLogSubsystem(Utility);
