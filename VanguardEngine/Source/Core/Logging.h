@@ -173,3 +173,4 @@ VGDeclareLogSubsystem(Core);
 VGDeclareLogSubsystem(Rendering);
 VGDeclareLogSubsystem(Threading);
 VGDeclareLogSubsystem(Utility);
+VGDeclareLogSubsystem(Window);
