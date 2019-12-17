@@ -4,5 +4,6 @@
 
 #include <vector>
 #include <string>
+#include <memory>
 
 static std::vector<std::wstring> GCommandLineArgs;
