@@ -3,7 +3,24 @@
 #include <Window/WindowFrame.h>
 #include <Core/Windows/WindowsMinimal.h>
 
+WindowFrame* GlobalWindow;  // #NOTE: This is assuming we're only ever going to have one active WindowFrame at a time.
+
+constexpr auto WindowStyle = WS_OVERLAPPED | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_VISIBLE;
+constexpr auto WindowStyleEx = 0;
+constexpr auto WindowClassStyle = CS_CLASSDC;
 constexpr auto WindowClassName = VGText("VanguardEngine");
+
+RECT CreateCenteredRect(size_t Width, size_t Height)
+{
+	RECT Result{};
+	Result.left = (GetSystemMetrics(SM_CXSCREEN) / 2) - (static_cast<int>(Width) / 2);
+	Result.top = (GetSystemMetrics(SM_CYSCREEN) / 2) - (static_cast<int>(Height) / 2);
+	Result.right = Result.left + static_cast<int>(Width);
+	Result.bottom = Result.top + static_cast<int>(Height);
+	AdjustWindowRect(&Result, WindowStyle, false);
+
+	return Result;
+}
 
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
@@ -14,9 +31,24 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	case WM_QUIT:
 		PostQuitMessage(0);
 		return 0;
+
 	case WM_DPICHANGED:
 		// #TODO: DPI awareness.
 		return DefWindowProc(hWnd, msg, wParam, lParam);
+
+	case WM_ACTIVATE:
+		const auto Active = LOWORD(wParam);
+		if (Active == WA_ACTIVE || Active == WA_CLICKACTIVE)
+		{
+			GlobalWindow->OnFocusChanged(true);
+		}
+
+		else
+		{
+			GlobalWindow->OnFocusChanged(false);
+		}
+
+		return 0;
 	}
 
 	return DefWindowProc(hWnd, msg, wParam, lParam);
@@ -26,18 +58,11 @@ WindowFrame::WindowFrame(const std::wstring& Title, size_t Width, size_t Height,
 {
 	VGScopedCPUStat("Build Window Frame");
 
+	GlobalWindow = this;
+
 	const auto ModuleHandle = GetModuleHandle(nullptr);
 
-	constexpr auto WindowStyle = WS_OVERLAPPED | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_VISIBLE;
-	constexpr auto WindowStyleEx = 0;
-	constexpr auto WindowClassStyle = CS_CLASSDC;
-
-	RECT WindowRect{};
-	WindowRect.left = (GetSystemMetrics(SM_CXSCREEN) / 2) - (static_cast<int>(Width) / 2);
-	WindowRect.top = (GetSystemMetrics(SM_CYSCREEN) / 2) - (static_cast<int>(Height) / 2);
-	WindowRect.right = WindowRect.left + static_cast<int>(Width);
-	WindowRect.bottom = WindowRect.top + static_cast<int>(Height);
-	AdjustWindowRect(&WindowRect, WindowStyle, false);
+	auto WindowRect{ CreateCenteredRect(Width, Height) };
 
 	WNDCLASSEX WindowDesc{};
 	ZeroMemory(&WindowDesc, sizeof(WindowDesc));
@@ -83,12 +108,30 @@ WindowFrame::~WindowFrame()
 
 void WindowFrame::SetTitle(std::wstring Title)
 {
-
+	const auto Result = SetWindowText(static_cast<HWND>(Handle), Title.c_str());
+	if (!Result)
+	{
+		VGLogError(Window) << "Failed to set title to: '" << Title << "'";
+	}
 }
 
 void WindowFrame::SetSize(size_t Width, size_t Height)
 {
+	const auto Rect{ CreateCenteredRect(Width, Height) };
 
+	const auto Result = SetWindowPos(
+		static_cast<HWND>(Handle),
+		HWND_NOTOPMOST,
+		Rect.left,
+		Rect.top,
+		Rect.right - Rect.left,
+		Rect.bottom - Rect.top,
+		0);  // Possibly SWP_NOREPOSITION
+
+	if (!Result)
+	{
+		VGLogError(Window) << "Failed to set size to: (" << Width << ", " << Height << ")";
+	}
 }
 
 void WindowFrame::ShowCursor(bool Visible)

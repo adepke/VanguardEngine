@@ -5,10 +5,13 @@
 #include <Core/Base.h>
 #include <Utility/FunctionRef.h>
 
+// #NOTE: Behaves as a singleton, do not create more than one at any given time.
 class WindowFrame
 {
 private:
 	void* Handle;
+
+public:
 	FunctionRef<void(bool)> OnFocusChanged;
 
 public:
