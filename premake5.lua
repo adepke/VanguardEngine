@@ -71,11 +71,13 @@ project "Engine"
 		
 	filter {}
 		defines { "PLATFORM_WINDOWS=0", "BUILD_DEBUG=0", "BUILD_DEVELOPMENT=0", "BUILD_RELEASE=0" }
-		flags { "FatalWarnings", "NoPCH" }
+		--flags { "FatalWarnings", "NoPCH" }  Disabled FatalWarnings indefinitely during early development
+		flags { "NoPCH" }
 		clr "Off"
 		rtti "Off"
 		characterset "Unicode"
-		warnings "Extra"
+		--warnings "Extra"  Disabled Extra warnings indefinitely during early development
+		warnings "Default"
 		disablewarnings { "4324", "4127" }
 		
 	-- Specific Build
