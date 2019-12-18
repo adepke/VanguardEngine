@@ -147,10 +147,18 @@ void WindowFrame::ShowCursor(bool Visible)
 
 void WindowFrame::RestrainCursor(bool Restrain)
 {
-	RECT WindowRect;
-	::GetWindowRect(static_cast<HWND>(Handle), &WindowRect);
+	if (Restrain)
+	{
+		RECT WindowRect;
+		::GetWindowRect(static_cast<HWND>(Handle), &WindowRect);
 
-	// #TODO: Minimize rect to actually keep the cursor entirely in the drawable interface of the window.
-	
-	::ClipCursor(&WindowRect);
+		// #TODO: Minimize rect to actually keep the cursor entirely in the drawable interface of the window.
+
+		::ClipCursor(&WindowRect);
+	}
+
+	else
+	{
+		::ClipCursor(nullptr);
+	}
 }
