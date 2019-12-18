@@ -48,9 +48,9 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 
 	if (EnableDebugging)
 	{
-		ID3D12Debug* DebugController;  // Intentionally not releasing this resource.
+		ResourcePtr<ID3D12Debug> DebugController;
 
-		auto Result = D3D12GetDebugInterface(IID_PPV_ARGS(&DebugController));
+		auto Result = D3D12GetDebugInterface(IID_PPV_ARGS(DebugController.Indirect()));
 		if (FAILED(Result))
 		{
 			VGLogError(Rendering) << "Failed to get debug interface: " << Result;
