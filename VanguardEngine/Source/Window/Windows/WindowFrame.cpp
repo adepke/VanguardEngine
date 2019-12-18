@@ -24,7 +24,7 @@ RECT CreateCenteredRect(size_t Width, size_t Height)
 
 LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 {
-	VGScopedCPUStat("Window Frame Message Pump");
+	VGScopedCPUStat("Window Message Pump");
 
 	switch (msg)
 	{
@@ -56,7 +56,7 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 WindowFrame::WindowFrame(const std::wstring& Title, size_t Width, size_t Height, FunctionRef<void(bool)>&& FocusChanged) : OnFocusChanged(std::move(FocusChanged))
 {
-	VGScopedCPUStat("Build Window Frame");
+	VGScopedCPUStat("Create Window");
 
 	GlobalWindow = this;
 
@@ -96,27 +96,34 @@ WindowFrame::WindowFrame(const std::wstring& Title, size_t Width, size_t Height,
 		nullptr
 	);
 
-	VGEnsure(Handle, "Failed to create window.");
+	if (!Handle)
+	{
+		VGLogFatal(Window) << "Failed to create window: " << GetPlatformError();
+	}
 }
 
 WindowFrame::~WindowFrame()
 {
-	VGScopedCPUStat("Destroy Window Frame");
+	VGScopedCPUStat("Destroy Window");
 
 	::UnregisterClass(WindowClassName, ::GetModuleHandle(nullptr));
 }
 
 void WindowFrame::SetTitle(std::wstring Title)
 {
+	VGScopedCPUStat("Set Window Title");
+
 	const auto Result = ::SetWindowText(static_cast<HWND>(Handle), Title.c_str());
 	if (!Result)
 	{
-		VGLogError(Window) << "Failed to set title to: '" << Title << "'";
+		VGLogError(Window) << "Failed to set title to: '" << Title << "': " << GetPlatformError();
 	}
 }
 
 void WindowFrame::SetSize(size_t Width, size_t Height)
 {
+	VGScopedCPUStat("Set Window Size");
+
 	const auto Rect{ CreateCenteredRect(Width, Height) };
 
 	const auto Result = ::SetWindowPos(
@@ -130,7 +137,7 @@ void WindowFrame::SetSize(size_t Width, size_t Height)
 
 	if (!Result)
 	{
-		VGLogError(Window) << "Failed to set size to: (" << Width << ", " << Height << ")";
+		VGLogError(Window) << "Failed to set size to: (" << Width << ", " << Height << "): " << GetPlatformError();
 	}
 
 	// Window size updated, we need to update the clipping bounds.
@@ -142,11 +149,15 @@ void WindowFrame::SetSize(size_t Width, size_t Height)
 
 void WindowFrame::ShowCursor(bool Visible)
 {
+	VGScopedCPUStat("Show Window Cursor");
+
 	::ShowCursor(Visible);
 }
 
 void WindowFrame::RestrainCursor(bool Restrain)
 {
+	VGScopedCPUStat("Restrain Window Cursor");
+
 	if (Restrain)
 	{
 		RECT WindowRect;
@@ -154,11 +165,19 @@ void WindowFrame::RestrainCursor(bool Restrain)
 
 		// #TODO: Minimize rect to actually keep the cursor entirely in the drawable interface of the window.
 
-		::ClipCursor(&WindowRect);
+		const auto Result = ::ClipCursor(&WindowRect);
+		if (!Result)
+		{
+			VGLogError(Window) << "Failed to restrain cursor: " << GetPlatformError();
+		}
 	}
 
 	else
 	{
-		::ClipCursor(nullptr);
+		const auto Result = ::ClipCursor(nullptr);
+		if (!Result)
+		{
+			VGLogError(Window) << "Failed to restrain cursor: " << GetPlatformError();
+		}
 	}
 }

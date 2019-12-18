@@ -2,12 +2,15 @@
 
 #include <Core/Engine.h>
 #include <Core/Globals.h>
+#include <Core/Logging.h>
 //#include <Core/Windows/WindowsMinimal.h>  // We actually can't include this since we need some API that's excluded from lean and mean.
 
 #include <Windows.h>
 
 void ParseCommandLine()
 {
+	VGScopedCPUStat("Parse Command Line");
+
 	int Count = 0;
 	auto** ArgV = CommandLineToArgvW(GetCommandLine(), &Count);
 
