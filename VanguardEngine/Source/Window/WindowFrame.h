@@ -11,8 +11,10 @@ class WindowFrame
 private:
 	void* Handle;
 
+// #NOTE: We need to make a bunch of these variables public in order to be accessible from WndProc.
 public:
 	FunctionRef<void(bool)> OnFocusChanged;
+	bool CursorRestrained = false;
 
 public:
 	WindowFrame(const std::wstring& Title, size_t Width, size_t Height, FunctionRef<void(bool)>&& FocusChanged);
@@ -21,6 +23,7 @@ public:
 	void SetTitle(std::wstring Title);
 	void SetSize(size_t Width, size_t Height);
 	void ShowCursor(bool Visible);
+	void RestrainCursor(bool Restrain);
 
 	void* GetHandle() noexcept
 	{

@@ -13,11 +13,11 @@ constexpr auto WindowClassName = VGText("VanguardEngine");
 RECT CreateCenteredRect(size_t Width, size_t Height)
 {
 	RECT Result{};
-	Result.left = (GetSystemMetrics(SM_CXSCREEN) / 2) - (static_cast<int>(Width) / 2);
-	Result.top = (GetSystemMetrics(SM_CYSCREEN) / 2) - (static_cast<int>(Height) / 2);
+	Result.left = (::GetSystemMetrics(SM_CXSCREEN) / 2) - (static_cast<int>(Width) / 2);
+	Result.top = (::GetSystemMetrics(SM_CYSCREEN) / 2) - (static_cast<int>(Height) / 2);
 	Result.right = Result.left + static_cast<int>(Width);
 	Result.bottom = Result.top + static_cast<int>(Height);
-	AdjustWindowRect(&Result, WindowStyle, false);
+	::AdjustWindowRect(&Result, WindowStyle, false);
 
 	return Result;
 }
@@ -29,12 +29,12 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	switch (msg)
 	{
 	case WM_QUIT:
-		PostQuitMessage(0);
+		::PostQuitMessage(0);
 		return 0;
 
 	case WM_DPICHANGED:
 		// #TODO: DPI awareness.
-		return DefWindowProc(hWnd, msg, wParam, lParam);
+		return ::DefWindowProc(hWnd, msg, wParam, lParam);
 
 	case WM_ACTIVATE:
 		const auto Active = LOWORD(wParam);
@@ -51,7 +51,7 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		return 0;
 	}
 
-	return DefWindowProc(hWnd, msg, wParam, lParam);
+	return ::DefWindowProc(hWnd, msg, wParam, lParam);
 }
 
 WindowFrame::WindowFrame(const std::wstring& Title, size_t Width, size_t Height, FunctionRef<void(bool)>&& FocusChanged) : OnFocusChanged(std::move(FocusChanged))
@@ -60,7 +60,7 @@ WindowFrame::WindowFrame(const std::wstring& Title, size_t Width, size_t Height,
 
 	GlobalWindow = this;
 
-	const auto ModuleHandle = GetModuleHandle(nullptr);
+	const auto ModuleHandle = ::GetModuleHandle(nullptr);
 
 	auto WindowRect{ CreateCenteredRect(Width, Height) };
 
@@ -79,9 +79,9 @@ WindowFrame::WindowFrame(const std::wstring& Title, size_t Width, size_t Height,
 	WindowDesc.lpszClassName = WindowClassName;
 	WindowDesc.hIconSm = nullptr;
 
-	RegisterClassEx(&WindowDesc);
+	::RegisterClassEx(&WindowDesc);
 
-	Handle = CreateWindowEx(
+	Handle = ::CreateWindowEx(
 		WindowStyleEx,
 		WindowDesc.lpszClassName,
 		Title.c_str(),
@@ -103,12 +103,12 @@ WindowFrame::~WindowFrame()
 {
 	VGScopedCPUStat("Destroy Window Frame");
 
-	UnregisterClass(WindowClassName, GetModuleHandle(nullptr));
+	::UnregisterClass(WindowClassName, ::GetModuleHandle(nullptr));
 }
 
 void WindowFrame::SetTitle(std::wstring Title)
 {
-	const auto Result = SetWindowText(static_cast<HWND>(Handle), Title.c_str());
+	const auto Result = ::SetWindowText(static_cast<HWND>(Handle), Title.c_str());
 	if (!Result)
 	{
 		VGLogError(Window) << "Failed to set title to: '" << Title << "'";
@@ -119,7 +119,7 @@ void WindowFrame::SetSize(size_t Width, size_t Height)
 {
 	const auto Rect{ CreateCenteredRect(Width, Height) };
 
-	const auto Result = SetWindowPos(
+	const auto Result = ::SetWindowPos(
 		static_cast<HWND>(Handle),
 		HWND_NOTOPMOST,
 		Rect.left,
@@ -132,9 +132,25 @@ void WindowFrame::SetSize(size_t Width, size_t Height)
 	{
 		VGLogError(Window) << "Failed to set size to: (" << Width << ", " << Height << ")";
 	}
+
+	// Window size updated, we need to update the clipping bounds.
+	if (CursorRestrained)
+	{
+		RestrainCursor(true);
+	}
 }
 
 void WindowFrame::ShowCursor(bool Visible)
 {
+	::ShowCursor(Visible);
+}
 
+void WindowFrame::RestrainCursor(bool Restrain)
+{
+	RECT WindowRect;
+	::GetWindowRect(static_cast<HWND>(Handle), &WindowRect);
+
+	// #TODO: Minimize rect to actually keep the cursor entirely in the drawable interface of the window.
+	
+	::ClipCursor(&WindowRect);
 }
