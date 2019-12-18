@@ -32,6 +32,7 @@ PlatformErrorType GetPlatformError();
 
 namespace Detail
 {
+#if !BUILD_RELEASE
 	inline tracy::Color::ColorType ResolveScopeColor(const char* Filename)
 	{
 		const std::filesystem::path Path{ Filename };
@@ -69,6 +70,7 @@ namespace Detail
 		else
 			return tracy::Color::Gray;
 	}
+#endif
 
 	enum class LogSeverity
 	{
@@ -180,20 +182,20 @@ VGWarningPop
 
 #if BUILD_RELEASE
 #define _Detail_VGLogBranch if constexpr (true) { do {} while (0); } else
+#define _Detail_VGLogBranchFatal if constexpr (true) { VGBreak(); } else
 #else
 #define _Detail_VGLogBranch
+#define _Detail_VGLogBranchFatal
 #endif
 
-#define _Detail_VGLogBase(Subsystem, Severity) _Detail_VGLogBranch LogManager::Get() += Detail::LogRecord{ Detail::SubsysToString(Subsystem), Severity }
+#define _Detail_VGLogBase(Subsystem, Severity) LogManager::Get() += Detail::LogRecord{ Detail::SubsysToString(Subsystem), Severity }
+#define _Detail_VGLogIntermediate(Subsystem, Severity) _Detail_VGLogBranch _Detail_VGLogBase(Subsystem, Severity)
+#define _Detail_VGLogIntermediateFatal(Subsystem, Severity) _Detail_VGLogBranchFatal _Detail_VGLogBase(Subsystem, Severity)
 
-#define VGLog(Subsystem) _Detail_VGLogBase(Subsystem, Detail::LogSeverity::Log)
-#define VGLogWarning(Subsystem) _Detail_VGLogBase(Subsystem, Detail::LogSeverity::Warning)
-#define VGLogError(Subsystem) _Detail_VGLogBase(Subsystem, Detail::LogSeverity::Error)
-#if !BUILD_RELEASE
-#define VGLogFatal(Subsystem) _Detail_VGLogBase(Subsystem, Detail::LogSeverity::Fatal)
-#else
-#define VGLogFatal(Subsystem) VGBreak()
-#endif
+#define VGLog(Subsystem) _Detail_VGLogIntermediate(Subsystem, Detail::LogSeverity::Log)
+#define VGLogWarning(Subsystem) _Detail_VGLogIntermediate(Subsystem, Detail::LogSeverity::Warning)
+#define VGLogError(Subsystem) _Detail_VGLogIntermediate(Subsystem, Detail::LogSeverity::Error)
+#define VGLogFatal(Subsystem) _Detail_VGLogIntermediateFatal(Subsystem, Detail::LogSeverity::Fatal)
 
 #if !BUILD_RELEASE
 #define VGScopedCPUStat(Name) ZoneScopedNC(Name, static_cast<uint32_t>(Detail::ResolveScopeColor(__FILE__)))
