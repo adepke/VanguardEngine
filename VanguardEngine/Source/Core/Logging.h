@@ -14,6 +14,8 @@
 #include <sstream>
 #include <memory>
 #include <system_error>
+#include <filesystem>
+#include <cstring>
 
 #if PLATFORM_WINDOWS && !defined(HRESULT)
 using HRESULT = long;
@@ -30,6 +32,44 @@ PlatformErrorType GetPlatformError();
 
 namespace Detail
 {
+	inline tracy::Color::ColorType ResolveScopeColor(const char* Filename)
+	{
+		const std::filesystem::path Path{ Filename };
+		const auto GenericWidePath{ Path.generic_wstring() };
+		auto StartIndex = GenericWidePath.find(VGText("VanguardEngine/Source/"), 3);  // Assume we have at least the root drive letter in the path.
+		if (StartIndex == std::wstring::npos)
+		{
+			return tracy::Color::Gray;  // Couldn't determine the module, default to gray.
+		}
+
+		StartIndex += 22;
+
+		const auto EndIndex = GenericWidePath.find(VGText("/"), StartIndex + 3);  // Assume the module name is at least 3 characters long.
+		if (EndIndex == std::wstring::npos)
+		{
+			return tracy::Color::Gray;  // Couldn't determine the module, default to gray.
+		}
+
+		const auto ModuleName = GenericWidePath.substr(StartIndex, EndIndex - StartIndex);
+
+		if (ModuleName == VGText("Core"))
+			return tracy::Color::Red;
+		else if (ModuleName == VGText("Debug"))
+			return tracy::Color::Green;
+		else if (ModuleName == VGText("Editor"))
+			return tracy::Color::Blue;
+		else if (ModuleName == VGText("Rendering"))
+			return tracy::Color::Orange;
+		else if (ModuleName == VGText("Threading"))
+			return tracy::Color::Purple;
+		else if (ModuleName == VGText("Utility"))
+			return tracy::Color::Aqua;
+		else if (ModuleName == VGText("Window"))
+			return tracy::Color::Cyan;
+		else
+			return tracy::Color::Gray;
+	}
+
 	enum class LogSeverity
 	{
 		Log,
@@ -156,7 +196,7 @@ VGWarningPop
 #endif
 
 #if !BUILD_RELEASE
-#define VGScopedCPUStat(Name) ZoneScopedN(Name)
+#define VGScopedCPUStat(Name) ZoneScopedNC(Name, static_cast<uint32_t>(Detail::ResolveScopeColor(__FILE__)))
 #define VGScopedGPUStat(Name) do {} while (0)  // #TODO: GPU Profiling through PIX. Do we need the command list, command queue, and/or device context?
 #define VGStatFrame FrameMark
 #else
