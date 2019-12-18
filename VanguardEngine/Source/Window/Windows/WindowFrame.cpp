@@ -32,6 +32,15 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		::PostQuitMessage(0);
 		return 0;
 
+	case WM_MOVE:
+		// #TODO: Not working.
+		if (GlobalWindow->CursorRestrained)
+		{
+			GlobalWindow->RestrainCursor(true);
+		}
+
+		return 0;
+
 	case WM_DPICHANGED:
 		// #TODO: DPI awareness.
 		return ::DefWindowProc(hWnd, msg, wParam, lParam);
@@ -41,6 +50,10 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		if (Active == WA_ACTIVE || Active == WA_CLICKACTIVE)
 		{
 			GlobalWindow->OnFocusChanged(true);
+			if (GlobalWindow->CursorRestrained)
+			{
+				GlobalWindow->RestrainCursor(true);
+			}
 		}
 
 		else
@@ -157,6 +170,8 @@ void WindowFrame::ShowCursor(bool Visible)
 void WindowFrame::RestrainCursor(bool Restrain)
 {
 	VGScopedCPUStat("Restrain Window Cursor");
+
+	CursorRestrained = Restrain;
 
 	if (Restrain)
 	{
