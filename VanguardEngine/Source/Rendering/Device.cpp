@@ -48,6 +48,8 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 
 	if (EnableDebugging)
 	{
+		VGScopedCPUStat("Render Device Enable Debug Layer");
+
 		ResourcePtr<ID3D12Debug> DebugController;
 
 		auto Result = D3D12GetDebugInterface(IID_PPV_ARGS(DebugController.Indirect()));
