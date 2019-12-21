@@ -87,6 +87,17 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		VGLogFatal(Rendering) << "Failed to create render device: " << Result;
 	}
 
+	D3D12MA::ALLOCATOR_DESC AllocatorDesc{};
+	AllocatorDesc.pAdapter = Adapter.Get();
+	AllocatorDesc.pDevice = Device.Get();
+	AllocatorDesc.Flags = D3D12MA::ALLOCATOR_FLAG_NONE;
+
+	Result = D3D12MA::CreateAllocator(&AllocatorDesc, Allocator.Indirect());
+	if (FAILED(Result))
+	{
+		VGLogFatal(Rendering) << "Failed to create device allocator: " << Result;
+	}
+
 	D3D12_COMMAND_QUEUE_DESC CommandQueueDesc{};
 	ZeroMemory(&CommandQueueDesc, sizeof(CommandQueueDesc));
 	CommandQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
