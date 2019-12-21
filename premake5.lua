@@ -4,14 +4,17 @@ function IncludeThirdParty()
 	includedirs "VanguardEngine/ThirdParty/imgui"
 	includedirs "VanguardEngine/ThirdParty/Jobs/Jobs/Include"
 	includedirs "VanguardEngine/ThirdParty/Tracy"
+	includedirs "VanguardEngine/ThirdParty/D3D12MemoryAllocator/src"
 end
 
 function LinkThirdParty()
 	libdirs "Build/ThirdParty/Jobs/Bin/*"
 	libdirs "Build/ThirdParty/Tracy/Bin/*"
+	libdirs "Build/ThirdParty/D3D12MemoryAllocator/Bin/*"
 	
 	links "Jobs"
 	links "Tracy"
+	links "D3D12MemoryAllocator"
 end
 
 function RunThirdParty()
@@ -19,6 +22,7 @@ function RunThirdParty()
 	include "VanguardEngine/ThirdParty/Jobs"
 	include "VanguardEngine/ThirdParty/Tracy"
 	include "VanguardEngine/ThirdParty/Tracy/server"
+	include "VanguardEngine/ThirdParty/D3D12MemoryAllocator"
 end
 
 workspace "Vanguard"
