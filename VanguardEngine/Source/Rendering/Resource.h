@@ -14,42 +14,40 @@ enum class ResourceFrequency
 
 enum BindFlag
 {
-	BindVertexBuffer = 1 << 0,
-	BindIndexBuffer = 1 << 1,
-	BindConstantBuffer = 1 << 2,
-	BindRenderTarget = 1 << 3,
-	BindDepthStencil = 1 << 4,
-	BindShaderResource = 1 << 5,
-	BindUnorderedAccess = 1 << 6,
+	VertexBuffer = 1 << 0,
+	IndexBuffer = 1 << 1,
+	ConstantBuffer = 1 << 2,
+	RenderTarget = 1 << 3,
+	DepthStencil = 1 << 4,
+	ShaderResource = 1 << 5,
+	UnorderedAccess = 1 << 6,
 };
 
 enum AccessFlag
 {
-	AccessCPURead = 1 << 0,
-	AccessCPUWrite = 1 << 1,
-	AccessGPUWrite = 1 << 2,  // #TODO: Do we need this?
+	CPURead = 1 << 0,
+	CPUWrite = 1 << 1,
+	GPUWrite = 1 << 2,  // #TODO: Do we need this?
 };
 
 struct ResourceDescription
 {
 	size_t Size;
 	ResourceFrequency UpdateRate;
-	uint32_t BindFlags = 0;  // Determines the view type created.
+	uint32_t BindFlags = 0;  // Determines the view type(s) created.
 	uint32_t AccessFlags = 0;
 };
 
 struct GPUBuffer
 {
 	ResourcePtr<D3D12MA::Allocation> Resource;
+	ResourceDescription Description;
 
-	size_t Size;
-	// Usage;
-	// Format;
-	// Bind flags?
-	// CPU access flags?
-	CPUHandle View = 0;  // RTV/DSV/SRV/UAV/CBV
+	CPUHandle CBV = 0;
+	CPUHandle SRV = 0;
+	CPUHandle UAV = 0;
 
-	GPUBuffer(ResourcePtr<D3D12MA::Allocation>&& InResource, uint32_t InSize) : Resource(std::move(InResource)), Size(InSize) {}
+	GPUBuffer(ResourcePtr<D3D12MA::Allocation>&& InResource, const ResourceDescription& InDesc) : Resource(std::move(InResource)), Description(InDesc) {}
 	GPUBuffer(const GPUBuffer&) = delete;
 	GPUBuffer(GPUBuffer&&) noexcept = default;
 
@@ -62,6 +60,9 @@ struct GPUTexture : GPUBuffer
 	uint32_t Width;
 	uint32_t Height;
 	uint32_t Depth;
+
+	CPUHandle RTV;
+	CPUHandle DSV;
 
 	using GPUBuffer::GPUBuffer;
 };

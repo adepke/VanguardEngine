@@ -8,7 +8,9 @@
 
 std::shared_ptr<GPUBuffer> ResourceManager::Allocate(ResourcePtr<D3D12MA::Allocator>& Allocator, const ResourceDescription& Description)
 {
-	const auto Alignment = Description.BindFlags & BindFlag::BindConstantBuffer ? D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT : D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+	VGScopedCPUStat("Resource Manager Allocate");
+
+	const auto Alignment = Description.BindFlags & BindFlag::ConstantBuffer ? D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT : D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
 	const auto FinalSize = AlignedSize(Description.Size, static_cast<size_t>(Alignment));
 
 	D3D12_RESOURCE_DESC ResourceDesc;
@@ -25,17 +27,17 @@ std::shared_ptr<GPUBuffer> ResourceManager::Allocate(ResourcePtr<D3D12MA::Alloca
 	ResourceDesc.SampleDesc.Quality = 0;
 	ResourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-	if (Description.BindFlags & BindFlag::BindRenderTarget)
+	if (Description.BindFlags & BindFlag::RenderTarget)
 	{
 		ResourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 	}
 
-	if (Description.BindFlags & BindFlag::BindDepthStencil)
+	if (Description.BindFlags & BindFlag::DepthStencil)
 	{
 		ResourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 	}
 
-	if (Description.BindFlags & BindFlag::BindUnorderedAccess)
+	if (Description.BindFlags & BindFlag::UnorderedAccess)
 	{
 		ResourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	}
@@ -44,7 +46,7 @@ std::shared_ptr<GPUBuffer> ResourceManager::Allocate(ResourcePtr<D3D12MA::Alloca
 	AllocationDesc.HeapType = Description.UpdateRate == ResourceFrequency::Static ? D3D12_HEAP_TYPE_DEFAULT : D3D12_HEAP_TYPE_UPLOAD;
 	AllocationDesc.Flags = D3D12MA::ALLOCATION_FLAG_NONE;
 
-	if (Description.BindFlags & BindFlag::BindRenderTarget)
+	if (Description.BindFlags & BindFlag::RenderTarget)
 	{
 		// Render targets deserve their own partition. #TODO: Only apply this flag if the render target resolution is >=50% of the full screen resolution?
 		AllocationDesc.Flags |= D3D12MA::ALLOCATION_FLAG_COMMITTED;
@@ -61,20 +63,21 @@ std::shared_ptr<GPUBuffer> ResourceManager::Allocate(ResourcePtr<D3D12MA::Alloca
 		return nullptr;
 	}
 
-	auto Allocation = std::make_shared<GPUBuffer>(ResourcePtr<D3D12MA::Allocation>{ AllocationHandle }, FinalSize);
+	// #TODO: Create a texture instead of a buffer if applicable.
+	auto Allocation = std::make_shared<GPUBuffer>(ResourcePtr<D3D12MA::Allocation>{ AllocationHandle }, Description);
 
 	// Create view based on bind flags.
 
-	if (Description.BindFlags & BindFlag::BindConstantBuffer)
+	if (Description.BindFlags & BindFlag::ConstantBuffer)
 	{
 		D3D12_CONSTANT_BUFFER_VIEW_DESC ViewDesc{};
 		ViewDesc.BufferLocation = Allocation->Resource->GetResource()->GetGPUVirtualAddress();
-		ViewDesc.SizeInBytes = static_cast<UINT>(Allocation->Size);
+		ViewDesc.SizeInBytes = static_cast<UINT>(FinalSize);
 
 		// #TODO: Device->CreateConstantBufferView
 	}
 
-	else if (Description.BindFlags & BindFlag::BindShaderResource)
+	if (Description.BindFlags & BindFlag::ShaderResource)
 	{
 		D3D12_SHADER_RESOURCE_VIEW_DESC ViewDesc{};
 		ViewDesc.Buffer.FirstElement = 0;
@@ -83,7 +86,7 @@ std::shared_ptr<GPUBuffer> ResourceManager::Allocate(ResourcePtr<D3D12MA::Alloca
 		// #TODO: Raw, structured, and typed buffer.
 	}
 
-	else if (Description.BindFlags & BindFlag::BindUnorderedAccess)
+	if (Description.BindFlags & BindFlag::UnorderedAccess)
 	{
 		D3D12_UNORDERED_ACCESS_VIEW_DESC ViewDesc{};
 		ViewDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
