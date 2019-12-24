@@ -13,14 +13,16 @@ class ResourceManager;
 
 class RenderDevice
 {
-private:
+public:
 	bool Debugging = false;
-	uint32_t FrameCount = 2;
 	bool VSync = false;
 	size_t RenderWidth = 10;
 	size_t RenderHeight = 10;
 	bool Fullscreen = false;
 
+	static constexpr uint32_t FrameCount = 2;
+
+private:
 	const D3D_FEATURE_LEVEL FeatureLevel = D3D_FEATURE_LEVEL_11_0;
 
 	// #NOTE: Ordering of these variables is significant for proper destruction!
@@ -28,8 +30,8 @@ private:
 	ResourcePtr<ID3D12CommandAllocator> CommandAllocator;
 	ResourcePtr<ID3D12CommandQueue> CommandQueue;
 	ResourcePtr<IDXGISwapChain3> SwapChain;
-	ResourcePtr<ID3D12Fence> FrameFence;
-	HANDLE FrameFenceEvent;
+	ResourcePtr<ID3D12Fence> FrameFence;  // #TODO: Support multiple frames in flight, ring buffer.
+	HANDLE FrameFenceEvent;  // #TODO: Support multiple frames in flight, ring buffer.
 
 	ResourcePtr<D3D12MA::Allocator> Allocator;
 

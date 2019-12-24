@@ -1,12 +1,13 @@
 // Copyright (c) 2019 Andrew Depke
 
 #include <Rendering/ResourceManager.h>
+#include <Rendering/Device.h>
 #include <Rendering/Resource.h>
 #include <Utility/AlignedSize.h>
 
 #include <D3D12MemAlloc.h>
 
-std::shared_ptr<GPUBuffer> ResourceManager::Allocate(ResourcePtr<D3D12MA::Allocator>& Allocator, const ResourceDescription& Description)
+std::shared_ptr<GPUBuffer> ResourceManager::Allocate(RenderDevice& Device, ResourcePtr<D3D12MA::Allocator>& Allocator, const ResourceDescription& Description, const std::wstring_view Name)
 {
 	VGScopedCPUStat("Resource Manager Allocate");
 
@@ -65,6 +66,17 @@ std::shared_ptr<GPUBuffer> ResourceManager::Allocate(ResourcePtr<D3D12MA::Alloca
 
 	// #TODO: Create a texture instead of a buffer if applicable.
 	auto Allocation = std::make_shared<GPUBuffer>(ResourcePtr<D3D12MA::Allocation>{ AllocationHandle }, Description);
+
+	// Name the resource.
+	if (Device.Debugging)
+	{
+		Allocation->Resource->SetName(Name.data());  // Set the name in the allocator.
+		const auto Result = Allocation->Resource->GetResource()->SetName(Name.data());  // Set the name in the API.
+		if (FAILED(Result))
+		{
+			VGLogWarning(Rendering) << "Failed to set resource name to: '" << Name << "':" << Result;
+		}
+	}
 
 	// Create view based on bind flags.
 
