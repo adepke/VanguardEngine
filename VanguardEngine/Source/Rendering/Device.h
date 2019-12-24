@@ -3,13 +3,17 @@
 #pragma once
 
 #include <Rendering/Base.h>
+#include <Rendering/Resource.h>
 
 #include <D3D12MemAlloc.h>
+
+#include <memory>
+#include <string_view>
 
 #include <d3d12.h>
 #include <dxgi1_4.h>
 
-class ResourceManager;
+struct ResourceDescription;
 
 class RenderDevice
 {
@@ -30,6 +34,7 @@ private:
 	ResourcePtr<ID3D12CommandAllocator> CommandAllocator;
 	ResourcePtr<ID3D12CommandQueue> CommandQueue;
 	ResourcePtr<IDXGISwapChain3> SwapChain;
+	size_t Frame = 1;  // Stores the actual frame number. Refers to the current CPU frame being run, stepped after finishing CPU pass.
 	ResourcePtr<ID3D12Fence> FrameFence;  // #TODO: Support multiple frames in flight, ring buffer.
 	HANDLE FrameFenceEvent;  // #TODO: Support multiple frames in flight, ring buffer.
 
@@ -40,6 +45,12 @@ private:
 public:
 	RenderDevice(HWND InWindow, bool Software, bool EnableDebugging);
 	~RenderDevice();
+
+	std::shared_ptr<GPUBuffer> Allocate(const ResourceDescription& Description, const std::wstring_view Name);
+	void Write(std::shared_ptr<GPUBuffer>& Buffer, std::unique_ptr<ResourceWriteType>&& Source, size_t BufferOffset = 0);
+
+	// Blocking, waits for the gpu to finish the next frame before returning. Marks the current frame as finished submitting and can move on to the next frame.
+	void FrameStep();
 
 	void SetResolution(size_t Width, size_t Height, bool InFullscreen);
 };

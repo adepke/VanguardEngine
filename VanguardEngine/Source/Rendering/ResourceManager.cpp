@@ -110,3 +110,27 @@ std::shared_ptr<GPUBuffer> ResourceManager::Allocate(RenderDevice& Device, Resou
 
 	return std::move(Allocation);
 }
+
+void ResourceManager::Write(RenderDevice& Device, std::shared_ptr<GPUBuffer>& Buffer, std::unique_ptr<ResourceWriteType>&& Source, size_t BufferOffset)
+{
+	VGScopedCPUStat("Resource Manager Write");
+
+	FrameResources[CurrentFrame % RenderDevice::FrameCount].push_back(std::move(Source));
+
+	// #TODO: Submit a CopyBufferRegion command to the device.
+}
+
+void ResourceManager::CleanupFrameResources(size_t Frame)
+{
+	VGScopedCPUStat("Cleanup Frame Resources");
+
+	const auto FrameID = Frame % RenderDevice::FrameCount;
+
+	if (FrameResources[FrameID].size() > 0)
+	{
+		VGLog(Rendering) << "Cleaning up " << FrameResources[FrameID].size() << " resources from frame " << Frame;
+	}
+
+	FrameResources[FrameID].clear();
+	++CurrentFrame;
+}

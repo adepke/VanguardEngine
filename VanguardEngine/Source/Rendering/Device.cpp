@@ -1,6 +1,7 @@
 // Copyright (c) 2019 Andrew Depke
 
 #include <Rendering/Device.h>
+#include <Rendering/ResourceManager.h>
 
 #include <wrl/client.h>
 
@@ -45,6 +46,8 @@ ResourcePtr<IDXGIAdapter1> RenderDevice::GetAdapter(ResourcePtr<IDXGIFactory4>& 
 RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 {
 	VGScopedCPUStat("Render Device Initialize");
+
+	Debugging = EnableDebugging;
 
 	if (EnableDebugging)
 	{
@@ -154,6 +157,29 @@ RenderDevice::~RenderDevice()
 	VGScopedCPUStat("Render Device Shutdown");
 
 	// #TODO: Full frame sync.
+}
+
+std::shared_ptr<GPUBuffer> RenderDevice::Allocate(const ResourceDescription& Description, const std::wstring_view Name)
+{
+	return std::move(ResourceManager::Get().Allocate(*this, Allocator, Description, Name));
+}
+
+void RenderDevice::Write(std::shared_ptr<GPUBuffer>& Buffer, std::unique_ptr<ResourceWriteType>&& Source, size_t BufferOffset /*= 0*/)
+{
+	ResourceManager::Get().Write(*this, Buffer, std::forward<std::unique_ptr<ResourceWriteType>>(Source), BufferOffset);
+}
+
+void RenderDevice::FrameStep()
+{
+	// Cleanup the previous frame's resources while the GPU is rendering.
+	ResourceManager::Get().CleanupFrameResources(Frame - 1);
+
+	// #TODO: Check our frame budget, try and get some additional work done if we have time?
+
+	VGStatFrame;  // Mark the new frame.
+	++Frame;  // Increment before we're actually able to begin processing (if the renderer is behind).
+	
+	// #TODO: Wait on frame fence.
 }
 
 void RenderDevice::SetResolution(size_t Width, size_t Height, bool InFullscreen)
