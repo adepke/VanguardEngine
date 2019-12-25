@@ -11,6 +11,7 @@
 // #TEMP
 #include <chrono>
 #include <thread>
+#include <Rendering/RenderComponents.h>
 
 std::unique_ptr<WindowFrame> MainWindow;
 
@@ -50,10 +51,13 @@ void EngineLoop()
 			}
 		}
 
+		// #TEMP: Testing resource management.
+		auto Comp{ CreateMeshComponent(*Renderer::Get().Device, std::vector<Vertex>{ Vertex{}, Vertex{}, Vertex{} }, std::vector<uint32_t>{ 0, 1, 2 }) };
+
 		// #TEMP
 		std::this_thread::sleep_for(16ms);
 
-		VGStatFrame;
+		Renderer::Get().Device->FrameStep();
 	}
 }
 
