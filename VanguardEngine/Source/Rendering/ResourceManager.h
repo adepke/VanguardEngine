@@ -22,7 +22,7 @@ namespace D3D12MA
 class ResourceManager
 {
 private:
-	size_t CurrentFrame = 1;
+	size_t CurrentFrame = 0;
 	std::array<std::vector<std::unique_ptr<ResourceWriteType>>, RenderDevice::FrameCount> FrameResources;  // Per-frame CPU resources that need to be destroyed after the frame has finished.
 
 public:

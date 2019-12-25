@@ -9,6 +9,7 @@
 
 #include <memory>
 #include <string_view>
+#include <array>
 
 #include <d3d12.h>
 #include <dxgi1_4.h>
@@ -24,7 +25,7 @@ public:
 	size_t RenderHeight = 10;
 	bool Fullscreen = false;
 
-	static constexpr uint32_t FrameCount = 2;
+	static constexpr uint32_t FrameCount = 3;
 
 private:
 	const D3D_FEATURE_LEVEL FeatureLevel = D3D_FEATURE_LEVEL_11_0;
@@ -34,13 +35,16 @@ private:
 	ResourcePtr<ID3D12CommandAllocator> CommandAllocator;
 	ResourcePtr<ID3D12CommandQueue> CommandQueue;
 	ResourcePtr<IDXGISwapChain3> SwapChain;
-	size_t Frame = 1;  // Stores the actual frame number. Refers to the current CPU frame being run, stepped after finishing CPU pass.
-	ResourcePtr<ID3D12Fence> FrameFence;  // #TODO: Support multiple frames in flight, ring buffer.
-	HANDLE FrameFenceEvent;  // #TODO: Support multiple frames in flight, ring buffer.
+	size_t Frame = 0;  // Stores the actual frame number. Refers to the current CPU frame being run, stepped after finishing CPU pass.
+	ResourcePtr<ID3D12Fence> FrameFence;
+	HANDLE FrameFenceEvent;
 
 	ResourcePtr<D3D12MA::Allocator> Allocator;
 
 	ResourcePtr<IDXGIAdapter1> GetAdapter(ResourcePtr<IDXGIFactory4>& Factory, bool Software);
+
+	// Blocking.
+	void WaitForFrame(size_t FrameID);
 
 public:
 	RenderDevice(HWND InWindow, bool Software, bool EnableDebugging);

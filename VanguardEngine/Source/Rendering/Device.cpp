@@ -43,6 +43,30 @@ ResourcePtr<IDXGIAdapter1> RenderDevice::GetAdapter(ResourcePtr<IDXGIFactory4>& 
 	return std::move(Adapter);
 }
 
+void RenderDevice::WaitForFrame(size_t FrameID)
+{
+	VGScopedCPUStat("Wait For Frame");
+
+	const auto FrameIndex = FrameID % FrameCount;
+
+	auto Result = CommandQueue->Signal(FrameFence.Get(), FrameIndex);
+	if (FAILED(Result))
+	{
+		VGLogFatal(Rendering) << "Failed to submit signal command to GPU during frame wait: " << Result;
+	}
+
+	if (FrameFence->GetCompletedValue() != FrameIndex)
+	{
+		Result = FrameFence->SetEventOnCompletion(FrameIndex, FrameFenceEvent);
+		if (FAILED(Result))
+		{
+			VGLogFatal(Rendering) << "Failed to set fence completion event during frame wait: " << Result;
+		}
+
+		WaitForSingleObject(FrameFenceEvent, INFINITE);
+	}
+}
+
 RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 {
 	VGScopedCPUStat("Render Device Initialize");
@@ -150,13 +174,26 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 	{
 		VGLogFatal(Rendering) << "Failed to bind device to window: " << Result;
 	}
+
+	Result = Device->CreateFence(Frame, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(FrameFence.Indirect()));
+	if (FAILED(Result))
+	{
+		VGLogFatal(Rendering) << "Failed to create frame fence: " << Result;
+	}
+
+	if (FrameFenceEvent = ::CreateEvent(nullptr, false, false, VGText("Frame Fence Event")); !FrameFenceEvent)
+	{
+		VGLogFatal(Rendering) << "Failed to create frame fence event: " << GetPlatformError();
+	}
 }
 
 RenderDevice::~RenderDevice()
 {
 	VGScopedCPUStat("Render Device Shutdown");
 
-	// #TODO: Full frame sync.
+	WaitForFrame(Frame);
+
+	::CloseHandle(FrameFenceEvent);
 }
 
 std::shared_ptr<GPUBuffer> RenderDevice::Allocate(const ResourceDescription& Description, const std::wstring_view Name)
@@ -171,15 +208,15 @@ void RenderDevice::Write(std::shared_ptr<GPUBuffer>& Buffer, std::unique_ptr<Res
 
 void RenderDevice::FrameStep()
 {
-	// Cleanup the previous frame's resources while the GPU is rendering.
-	ResourceManager::Get().CleanupFrameResources(Frame - 1);
+	WaitForFrame(Frame + 1);
 
-	// #TODO: Check our frame budget, try and get some additional work done if we have time?
+	// The frame has finished, cleanup its resources. #TODO: Will leave CPU gaps if we're bottlenecking on the GPU, consider deferred cleanup?
+	ResourceManager::Get().CleanupFrameResources(Frame + 1);
+
+	// #TODO: Check our CPU frame budget, try and get some additional work done if we have time?
 
 	VGStatFrame;  // Mark the new frame.
-	++Frame;  // Increment before we're actually able to begin processing (if the renderer is behind).
-	
-	// #TODO: Wait on frame fence.
+	++Frame;
 }
 
 void RenderDevice::SetResolution(size_t Width, size_t Height, bool InFullscreen)
