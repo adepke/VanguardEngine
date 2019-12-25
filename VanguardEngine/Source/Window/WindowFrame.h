@@ -3,7 +3,8 @@
 #pragma once
 
 #include <Core/Base.h>
-#include <Utility/FunctionRef.h>
+
+#include <functional>
 
 // #NOTE: Behaves as a singleton, do not create more than one at any given time.
 class WindowFrame
@@ -13,11 +14,11 @@ private:
 
 // #NOTE: We need to make a bunch of these variables public in order to be accessible from WndProc.
 public:
-	FunctionRef<void(bool)> OnFocusChanged;
+	std::function<void(bool)> OnFocusChanged;
 	bool CursorRestrained = false;
 
 public:
-	WindowFrame(const std::wstring& Title, size_t Width, size_t Height, FunctionRef<void(bool)>&& FocusChanged);
+	WindowFrame(const std::wstring& Title, size_t Width, size_t Height, std::function<void(bool)>&& FocusChanged);
 	~WindowFrame();
 
 	void SetTitle(std::wstring Title);

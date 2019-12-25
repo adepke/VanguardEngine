@@ -67,7 +67,7 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	return ::DefWindowProc(hWnd, msg, wParam, lParam);
 }
 
-WindowFrame::WindowFrame(const std::wstring& Title, size_t Width, size_t Height, FunctionRef<void(bool)>&& FocusChanged) : OnFocusChanged(std::move(FocusChanged))
+WindowFrame::WindowFrame(const std::wstring& Title, size_t Width, size_t Height, std::function<void(bool)>&& FocusChanged) : OnFocusChanged(std::move(FocusChanged))
 {
 	VGScopedCPUStat("Create Window");
 
