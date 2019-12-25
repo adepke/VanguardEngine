@@ -31,6 +31,27 @@ void OnFocusChanged(bool Focus)
 	// #TODO: Limit render FPS, disable audio.
 }
 
+void EngineBoot()
+{
+	VGScopedCPUStat("Engine Boot");
+
+	LogManager::Get().AddOutput<DefaultLogOutput>();
+
+	EnableDPIAwareness();
+
+	MainWindow = std::make_unique<WindowFrame>(VGText("Vanguard Engine"), 800, 600, &OnFocusChanged);
+	MainWindow->RestrainCursor(true);
+
+#if BUILD_DEBUG
+	constexpr auto EnableDebugging = true;
+#else
+	constexpr auto EnableDebugging = false;
+#endif
+
+	auto Device = std::make_unique<RenderDevice>(static_cast<HWND>(MainWindow->GetHandle()), false, EnableDebugging);
+	Renderer::Get().Initialize(std::move(Device));
+}
+
 void EngineLoop()
 {
 	while (true)
@@ -61,38 +82,20 @@ void EngineLoop()
 	}
 }
 
+void EngineShutdown()
+{
+	VGScopedCPUStat("Engine Shutdown");
+
+	MainWindow.reset();
+}
+
 int32_t EngineMain()
 {
-	{
-		VGScopedCPUStat("Engine Boot");
-
-		LogManager::Get().AddOutput<DefaultLogOutput>();
-
-		EnableDPIAwareness();
-
-		MainWindow = std::make_unique<WindowFrame>(VGText("Vanguard Engine"), 800, 600, &OnFocusChanged);
-		MainWindow->RestrainCursor(true);
-
-#if BUILD_DEBUG
-		constexpr auto EnableDebugging = true;
-#else
-		constexpr auto EnableDebugging = false;
-#endif
-
-		auto Device = std::make_unique<RenderDevice>(static_cast<HWND>(MainWindow->GetHandle()), false, EnableDebugging);
-		Renderer::Get().Initialize(std::move(Device));
-	}
+	EngineBoot();
 
 	EngineLoop();
 
 	EngineShutdown();
 
 	return 0;
-}
-
-void EngineShutdown()
-{
-	VGScopedCPUStat("Engine Shutdown");
-
-	MainWindow.reset();
 }
