@@ -43,7 +43,7 @@ MeshComponent CreateMeshComponent(RenderDevice& Device, const std::vector<Vertex
 	Result.VertexBuffer = std::move(Device.Allocate(VertexDescription, VGText("Vertex Buffer")));
 
 	auto VertexResource{ std::make_unique<ResourceWriteType>(sizeof(Vertex) * VertexPositions.size()) };
-	//std::memcpy(VertexResource.get(), VertexPositions.data(), VertexResource->size());
+	std::memcpy(VertexResource->data(), VertexPositions.data(), VertexResource->size());
 	Device.Write(Result.VertexBuffer, std::move(VertexResource));
 
 	ResourceDescription IndexDescription{};
@@ -56,7 +56,7 @@ MeshComponent CreateMeshComponent(RenderDevice& Device, const std::vector<Vertex
 	Result.IndexBuffer = std::move(Device.Allocate(IndexDescription, VGText("Index Buffer")));
 
 	auto IndexResource{ std::make_unique<ResourceWriteType>(sizeof(uint32_t) * Indices.size()) };
-	//std::memcpy(IndexResource.get(), Indices.data(), IndexResource->size());
+	std::memcpy(IndexResource->data(), Indices.data(), IndexResource->size());
 	Device.Write(Result.IndexBuffer, std::move(IndexResource));
 
 	return std::move(Result);
