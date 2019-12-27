@@ -27,7 +27,7 @@ struct CameraComponent
 };
 
 // #TODO: Normals, UVs, etc.
-MeshComponent CreateMeshComponent(RenderDevice& Device, const std::vector<Vertex>& VertexPositions, const std::vector<uint32_t>& Indices)
+inline MeshComponent CreateMeshComponent(RenderDevice& Device, const std::vector<Vertex>& VertexPositions, const std::vector<uint32_t>& Indices)
 {
 	VGScopedCPUStat("Create Mesh Component");
 

@@ -1,0 +1,40 @@
+// Copyright (c) 2019 Andrew Depke
+
+#pragma once
+
+#include <Core/Base.h>
+
+#include <entt/entt.hpp>
+
+class RenderDevice;
+
+namespace entt
+{
+	template <typename>
+	class basic_registry;
+}
+
+class Renderer
+{
+public:
+	std::unique_ptr<RenderDevice> Device;
+
+public:
+	static inline Renderer& Get() noexcept
+	{
+		static Renderer Singleton;
+		return Singleton;
+	}
+
+	Renderer() = default;
+	Renderer(const Renderer&) = delete;
+	Renderer(Renderer&&) noexcept = delete;
+
+	Renderer& operator=(const Renderer&) = delete;
+	Renderer& operator=(Renderer&&) noexcept = delete;
+
+	void Initialize(std::unique_ptr<RenderDevice>&& InDevice);
+
+	// Entity data is safe to write to immediately after this function returns. Do not attempt to write before Render() returns.
+	void Render(entt::registry& Registry);
+};

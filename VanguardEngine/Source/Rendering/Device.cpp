@@ -49,7 +49,7 @@ void RenderDevice::WaitForFrame(size_t FrameID)
 
 	const auto FrameIndex = FrameID % FrameCount;
 
-	auto Result = CommandQueue->Signal(FrameFence.Get(), FrameIndex);
+	auto Result = DirectCommandQueue->Signal(FrameFence.Get(), FrameIndex);
 	if (FAILED(Result))
 	{
 		VGLogFatal(Rendering) << "Failed to submit signal command to GPU during frame wait: " << Result;
@@ -125,15 +125,82 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		VGLogFatal(Rendering) << "Failed to create device allocator: " << Result;
 	}
 
-	D3D12_COMMAND_QUEUE_DESC CommandQueueDesc{};
-	ZeroMemory(&CommandQueueDesc, sizeof(CommandQueueDesc));
-	CommandQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-	CommandQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+	// Copy
 
-	Result = Device->CreateCommandQueue(&CommandQueueDesc, IID_PPV_ARGS(CommandQueue.Indirect()));
+	Result = Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(CopyCommandAllocator.Indirect()));
 	if (FAILED(Result))
 	{
-		VGLogFatal(Rendering) << "Failed to create command queue: " << Result;
+		VGLogFatal(Rendering) << "Failed to create copy command allocator: " << Result;
+	}
+
+	D3D12_COMMAND_QUEUE_DESC CopyCommandQueueDesc{};
+	CopyCommandQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_COPY;
+	CopyCommandQueueDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
+	CopyCommandQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+	CopyCommandQueueDesc.NodeMask = 0;
+
+	Result = Device->CreateCommandQueue(&CopyCommandQueueDesc, IID_PPV_ARGS(CopyCommandQueue.Indirect()));
+	if (FAILED(Result))
+	{
+		VGLogFatal(Rendering) << "Failed to create copy command queue: " << Result;
+	}
+
+	Result = Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COPY, CopyCommandAllocator.Get(), nullptr, IID_PPV_ARGS(CopyCommandList.Indirect()));
+	if (FAILED(Result))
+	{
+		VGLogFatal(Rendering) << "Failed to create copy command list: " << Result;
+	}
+
+	// Direct
+
+	Result = Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(DirectCommandAllocator.Indirect()));
+	if (FAILED(Result))
+	{
+		VGLogFatal(Rendering) << "Failed to create direct command allocator: " << Result;
+	}
+
+	D3D12_COMMAND_QUEUE_DESC DirectCommandQueueDesc{};
+	DirectCommandQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+	DirectCommandQueueDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
+	DirectCommandQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+	DirectCommandQueueDesc.NodeMask = 0;
+
+	Result = Device->CreateCommandQueue(&DirectCommandQueueDesc, IID_PPV_ARGS(DirectCommandQueue.Indirect()));
+	if (FAILED(Result))
+	{
+		VGLogFatal(Rendering) << "Failed to create direct command queue: " << Result;
+	}
+
+	Result = Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, DirectCommandAllocator.Get(), nullptr, IID_PPV_ARGS(DirectCommandList.Indirect()));
+	if (FAILED(Result))
+	{
+		VGLogFatal(Rendering) << "Failed to create direct command list: " << Result;
+	}
+
+	// Compute
+
+	Result = Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(ComputeCommandAllocator.Indirect()));
+	if (FAILED(Result))
+	{
+		VGLogFatal(Rendering) << "Failed to create compute command allocator: " << Result;
+	}
+
+	D3D12_COMMAND_QUEUE_DESC ComputeCommandQueueDesc{};
+	ComputeCommandQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
+	ComputeCommandQueueDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
+	ComputeCommandQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+	ComputeCommandQueueDesc.NodeMask = 0;
+
+	Result = Device->CreateCommandQueue(&ComputeCommandQueueDesc, IID_PPV_ARGS(ComputeCommandQueue.Indirect()));
+	if (FAILED(Result))
+	{
+		VGLogFatal(Rendering) << "Failed to create compute command queue: " << Result;
+	}
+
+	Result = Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, ComputeCommandAllocator.Get(), nullptr, IID_PPV_ARGS(ComputeCommandList.Indirect()));
+	if (FAILED(Result))
+	{
+		VGLogFatal(Rendering) << "Failed to create compute command list: " << Result;
 	}
 
 	DXGI_SWAP_CHAIN_DESC1 SwapChainDescription{};
@@ -159,7 +226,7 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 	SwapChainFSDescription.Windowed = !Fullscreen;
 
 	Microsoft::WRL::ComPtr<IDXGISwapChain1> SwapChainWrapper;
-	Result = Factory->CreateSwapChainForHwnd(CommandQueue.Get(), InWindow, &SwapChainDescription, &SwapChainFSDescription, nullptr, &SwapChainWrapper);
+	Result = Factory->CreateSwapChainForHwnd(DirectCommandQueue.Get(), InWindow, &SwapChainDescription, &SwapChainFSDescription, nullptr, &SwapChainWrapper);
 	if (FAILED(Result))
 	{
 		VGLogFatal(Rendering) << "Failed to create swap chain: " << Result;
@@ -210,7 +277,7 @@ void RenderDevice::FrameStep()
 {
 	WaitForFrame(Frame + 1);
 
-	// The frame has finished, cleanup its resources. #TODO: Will leave CPU gaps if we're bottlenecking on the GPU, consider deferred cleanup?
+	// The frame has finished, cleanup its resources. #TODO: Will leave additional GPU gaps if we're bottlenecking on the CPU, consider deferred cleanup?
 	ResourceManager::Get().CleanupFrameResources(Frame + 1);
 
 	// #TODO: Check our CPU frame budget, try and get some additional work done if we have time?
