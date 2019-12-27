@@ -53,7 +53,7 @@ void Renderer::Render(entt::registry& Registry)
 			});
 	}
 
-	ID3D12GraphicsCommandList* CommandList;  // #TEMP: Placeholder until a graphics, compute, and copy command list is put in place on the device.
+	auto* CommandList = Device->DirectCommandList.Get();
 
 	Registry.view<const TransformComponent, const MeshComponent>().each([&InstanceBuffer, CommandList](auto Entity, const auto&, const auto& Mesh)
 		{
