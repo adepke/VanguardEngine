@@ -78,7 +78,6 @@ WindowFrame::WindowFrame(const std::wstring& Title, size_t Width, size_t Height,
 	auto WindowRect{ CreateCenteredRect(Width, Height) };
 
 	WNDCLASSEX WindowDesc{};
-	ZeroMemory(&WindowDesc, sizeof(WindowDesc));
 	WindowDesc.cbSize = sizeof(WindowDesc);
 	WindowDesc.style = WindowClassStyle;
 	WindowDesc.lpfnWndProc = &WndProc;

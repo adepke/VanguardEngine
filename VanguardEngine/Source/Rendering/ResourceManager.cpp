@@ -14,8 +14,7 @@ std::shared_ptr<GPUBuffer> ResourceManager::Allocate(RenderDevice& Device, Resou
 	const auto Alignment = Description.BindFlags & BindFlag::ConstantBuffer ? D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT : D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
 	const auto FinalSize = AlignedSize(Description.Size, static_cast<size_t>(Alignment));
 
-	D3D12_RESOURCE_DESC ResourceDesc;
-	ZeroMemory(&ResourceDesc, sizeof(ResourceDesc));
+	D3D12_RESOURCE_DESC ResourceDesc{};
 	ResourceDesc.Alignment = 0;
 	ResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
 	ResourceDesc.Width = FinalSize;

@@ -36,17 +36,17 @@ private:
 	// #NOTE: Ordering of these variables is significant for proper destruction!
 	ResourcePtr<ID3D12Device> Device;
 
-	ResourcePtr<ID3D12CommandAllocator> CopyCommandAllocator;  // #TODO: Probably per frame.
+	ResourcePtr<ID3D12CommandAllocator> CopyCommandAllocator;
 	ResourcePtr<ID3D12CommandQueue> CopyCommandQueue;
-	ResourcePtr<ID3D12CommandList> CopyCommandList;
+	ResourcePtr<ID3D12CommandList> CopyCommandList[FrameCount];
 
-	ResourcePtr<ID3D12CommandAllocator> DirectCommandAllocator;  // #TODO: One per worker thread? One set per frame?
-	ResourcePtr<ID3D12CommandQueue> DirectCommandQueue;  // #TODO: One per worker thread? One set per frame? We bind one to the window so maybe only 1?
-	ResourcePtr<ID3D12GraphicsCommandList> DirectCommandList;  // #TODO: One per worker thread? One set per frame?
+	ResourcePtr<ID3D12CommandAllocator> DirectCommandAllocator;  // #TODO: One per worker thread?
+	ResourcePtr<ID3D12CommandQueue> DirectCommandQueue;  // #TODO: One per worker thread? We bind one to the window so maybe only 1?
+	ResourcePtr<ID3D12GraphicsCommandList> DirectCommandList[FrameCount];  // #TODO: One per worker thread?
 
-	ResourcePtr<ID3D12CommandAllocator> ComputeCommandAllocator;  // #TODO: One per worker thread? One set per frame?
-	ResourcePtr<ID3D12CommandQueue> ComputeCommandQueue;  // #TODO: One per worker thread? One set per frame?
-	ResourcePtr<ID3D12CommandList> ComputeCommandList;  // #TODO: One per worker thread? One set per frame?
+	ResourcePtr<ID3D12CommandAllocator> ComputeCommandAllocator;  // #TODO: One per worker thread?
+	ResourcePtr<ID3D12CommandQueue> ComputeCommandQueue;  // #TODO: One per worker thread?
+	ResourcePtr<ID3D12CommandList> ComputeCommandList[FrameCount];  // #TODO: One per worker thread?
 
 	ResourcePtr<IDXGISwapChain3> SwapChain;
 	size_t Frame = 0;  // Stores the actual frame number. Refers to the current CPU frame being run, stepped after finishing CPU pass.

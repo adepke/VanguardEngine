@@ -204,7 +204,6 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 	}
 
 	DXGI_SWAP_CHAIN_DESC1 SwapChainDescription{};
-	ZeroMemory(&SwapChainDescription, sizeof(SwapChainDescription));
 	SwapChainDescription.Width = static_cast<UINT>(RenderWidth);
 	SwapChainDescription.Height = static_cast<UINT>(RenderHeight);
 	SwapChainDescription.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
@@ -218,7 +217,6 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 	SwapChainDescription.Flags = 0;
 
 	DXGI_SWAP_CHAIN_FULLSCREEN_DESC SwapChainFSDescription{};
-	ZeroMemory(&SwapChainFSDescription, sizeof(SwapChainFSDescription));
 	SwapChainFSDescription.RefreshRate.Numerator = 60;  // #TODO: Determine this based on the current monitor refresh rate?
 	SwapChainFSDescription.RefreshRate.Denominator = 1;
 	SwapChainFSDescription.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;  // Required for proper scaling.
