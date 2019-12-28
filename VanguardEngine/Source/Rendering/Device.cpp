@@ -127,12 +127,6 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 
 	// Copy
 
-	Result = Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(CopyCommandAllocator.Indirect()));
-	if (FAILED(Result))
-	{
-		VGLogFatal(Rendering) << "Failed to create copy command allocator: " << Result;
-	}
-
 	D3D12_COMMAND_QUEUE_DESC CopyCommandQueueDesc{};
 	CopyCommandQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_COPY;
 	CopyCommandQueueDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
@@ -145,19 +139,22 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		VGLogFatal(Rendering) << "Failed to create copy command queue: " << Result;
 	}
 
-	Result = Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COPY, CopyCommandAllocator.Get(), nullptr, IID_PPV_ARGS(CopyCommandList.Indirect()));
+	Result = Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(CopyCommandAllocator.Indirect()));
 	if (FAILED(Result))
 	{
-		VGLogFatal(Rendering) << "Failed to create copy command list: " << Result;
+		VGLogFatal(Rendering) << "Failed to create copy command allocator: " << Result;
+	}
+
+	for (int Index = 0; Index < FrameCount; ++Index)
+	{
+		Result = Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COPY, CopyCommandAllocator.Get(), nullptr, IID_PPV_ARGS(CopyCommandList[Index].Indirect()));
+		if (FAILED(Result))
+		{
+			VGLogFatal(Rendering) << "Failed to create copy command list for frame " << Index << ": " << Result;
+		}
 	}
 
 	// Direct
-
-	Result = Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(DirectCommandAllocator.Indirect()));
-	if (FAILED(Result))
-	{
-		VGLogFatal(Rendering) << "Failed to create direct command allocator: " << Result;
-	}
 
 	D3D12_COMMAND_QUEUE_DESC DirectCommandQueueDesc{};
 	DirectCommandQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
@@ -171,19 +168,22 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		VGLogFatal(Rendering) << "Failed to create direct command queue: " << Result;
 	}
 
-	Result = Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, DirectCommandAllocator.Get(), nullptr, IID_PPV_ARGS(DirectCommandList.Indirect()));
+	Result = Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(DirectCommandAllocator.Indirect()));
 	if (FAILED(Result))
 	{
-		VGLogFatal(Rendering) << "Failed to create direct command list: " << Result;
+		VGLogFatal(Rendering) << "Failed to create direct command allocator: " << Result;
+	}
+
+	for (int Index = 0; Index < FrameCount; ++Index)
+	{
+		Result = Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, DirectCommandAllocator.Get(), nullptr, IID_PPV_ARGS(DirectCommandList[Index].Indirect()));
+		if (FAILED(Result))
+		{
+			VGLogFatal(Rendering) << "Failed to create direct command list for frame " << Index << ": " << Result;
+		}
 	}
 
 	// Compute
-
-	Result = Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(ComputeCommandAllocator.Indirect()));
-	if (FAILED(Result))
-	{
-		VGLogFatal(Rendering) << "Failed to create compute command allocator: " << Result;
-	}
 
 	D3D12_COMMAND_QUEUE_DESC ComputeCommandQueueDesc{};
 	ComputeCommandQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
@@ -197,10 +197,19 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		VGLogFatal(Rendering) << "Failed to create compute command queue: " << Result;
 	}
 
-	Result = Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, ComputeCommandAllocator.Get(), nullptr, IID_PPV_ARGS(ComputeCommandList.Indirect()));
+	Result = Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(ComputeCommandAllocator.Indirect()));
 	if (FAILED(Result))
 	{
-		VGLogFatal(Rendering) << "Failed to create compute command list: " << Result;
+		VGLogFatal(Rendering) << "Failed to create compute command allocator: " << Result;
+	}
+
+	for (int Index = 0; Index < FrameCount; ++Index)
+	{
+		Result = Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, ComputeCommandAllocator.Get(), nullptr, IID_PPV_ARGS(ComputeCommandList[Index].Indirect()));
+		if (FAILED(Result))
+		{
+			VGLogFatal(Rendering) << "Failed to create compute command list for frame " << Index << ": " << Result;
+		}
 	}
 
 	DXGI_SWAP_CHAIN_DESC1 SwapChainDescription{};

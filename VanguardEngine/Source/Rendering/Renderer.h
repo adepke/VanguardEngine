@@ -4,15 +4,9 @@
 
 #include <Core/Base.h>
 
-#include <entt/entt.hpp>
+#include <entt/entt.hpp>  // #TODO: Don't include, forward and include in the source.
 
 class RenderDevice;
-
-namespace entt
-{
-	template <typename>
-	class basic_registry;
-}
 
 class Renderer
 {

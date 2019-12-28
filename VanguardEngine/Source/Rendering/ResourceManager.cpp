@@ -116,11 +116,10 @@ void ResourceManager::Write(RenderDevice& Device, std::shared_ptr<GPUBuffer>& Bu
 
 	FrameResources[CurrentFrame % RenderDevice::FrameCount].push_back(std::move(Source));
 
-	ID3D12Resource* TempSource;
-	//Source->data()
-	// #TODO: Probably use a D3D12Resource from the initial memcpy instead of a vector buffer.
+	auto* TargetCommandList = static_cast<ID3D12GraphicsCommandList*>(Device.CopyCommandList[Device.Frame & RenderDevice::FrameCount].Get());
+	//TargetCommandList->CopyBufferRegion(Buffer->Resource->GetResource(), BufferOffset, Source, 0, Source->size());
 
-	static_cast<ID3D12GraphicsCommandList*>(Device.CopyCommandList.Get())->CopyBufferRegion(Buffer->Resource->GetResource(), BufferOffset, TempSource, 0, Source->size());
+	// #TODO: Use ID3D12Resource instead of raw buffer.
 
 	// #TODO: Resource barrier?
 }

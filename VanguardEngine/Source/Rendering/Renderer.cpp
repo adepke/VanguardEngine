@@ -21,7 +21,7 @@ void Renderer::Render(entt::registry& Registry)
 {
 	VGScopedCPUStat("Render");
 
-	ID3D12CommandList* CopyLists[] = { Device->CopyCommandList.Get() };
+	ID3D12CommandList* CopyLists[] = { Device->CopyCommandList[Device->Frame % RenderDevice::FrameCount].Get() };
 
 	Device->CopyCommandQueue->ExecuteCommandLists(1, CopyLists);
 
@@ -53,7 +53,7 @@ void Renderer::Render(entt::registry& Registry)
 			});
 	}
 
-	auto* CommandList = Device->DirectCommandList.Get();
+	auto* CommandList = Device->DirectCommandList[Device->Frame % RenderDevice::FrameCount].Get();
 
 	Registry.view<const TransformComponent, const MeshComponent>().each([&InstanceBuffer, CommandList](auto Entity, const auto&, const auto& Mesh)
 		{
