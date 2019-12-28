@@ -53,9 +53,9 @@ void Renderer::Render(entt::registry& Registry)
 			});
 	}
 
-	auto* CommandList = Device->DirectCommandList[Device->Frame % RenderDevice::FrameCount].Get();
+	auto* DrawList = Device->DirectCommandList[Device->Frame % RenderDevice::FrameCount].Get();
 
-	Registry.view<const TransformComponent, const MeshComponent>().each([&InstanceBuffer, CommandList](auto Entity, const auto&, const auto& Mesh)
+	Registry.view<const TransformComponent, const MeshComponent>().each([&InstanceBuffer, DrawList](auto Entity, const auto&, const auto& Mesh)
 		{
 			std::vector<D3D12_VERTEX_BUFFER_VIEW> VertexViews;
 
@@ -71,20 +71,24 @@ void Renderer::Render(entt::registry& Registry)
 			VertexViews[1].SizeInBytes = InstanceBuffer->Description.Size;
 			VertexViews[1].StrideInBytes = InstanceBuffer->Description.Stride;
 
-			CommandList->IASetVertexBuffers(0, VertexViews.size(), VertexViews.data());  // #TODO: Slot?
+			DrawList->IASetVertexBuffers(0, VertexViews.size(), VertexViews.data());  // #TODO: Slot?
 
 			D3D12_INDEX_BUFFER_VIEW IndexView{};
 			IndexView.BufferLocation = Mesh.IndexBuffer->Resource->GetResource()->GetGPUVirtualAddress();
 			IndexView.SizeInBytes = Mesh.IndexBuffer->Description.Size;
 			IndexView.Format = DXGI_FORMAT_R32_UINT;
 
-			CommandList->IASetIndexBuffer(&IndexView);
+			DrawList->IASetIndexBuffer(&IndexView);
 
-			//CommandList->OMSetStencilRef();  // #TODO: Stencil ref.
+			//DrawList->OMSetStencilRef();  // #TODO: Stencil ref.
 
-			//CommandList->SetPipelineState();  // #TODO: Pipeline state.
-			//CommandList->IASetPrimitiveTopology();  // #TODO: Primitive topology.
+			//DrawList->SetPipelineState();  // #TODO: Pipeline state.
+			//DrawList->IASetPrimitiveTopology();  // #TODO: Primitive topology.
 
-			//CommandList->DrawIndexedInstanced();  // #TODO: Draw.
+			//DrawList->DrawIndexedInstanced();  // #TODO: Draw.
 		});
+
+	ID3D12CommandList* DirectLists[] = { DrawList };
+
+	Device->DirectCommandQueue->ExecuteCommandLists(1, DirectLists);
 }
