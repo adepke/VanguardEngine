@@ -40,7 +40,7 @@ void EngineBoot()
 	EnableDPIAwareness();
 
 	MainWindow = std::make_unique<WindowFrame>(VGText("Vanguard Engine"), 800, 600, &OnFocusChanged);
-	MainWindow->RestrainCursor(true);
+	MainWindow->RestrainCursor(false);
 
 #if BUILD_DEBUG
 	constexpr auto EnableDebugging = true;
