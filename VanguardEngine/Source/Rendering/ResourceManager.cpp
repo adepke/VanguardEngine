@@ -116,7 +116,7 @@ void ResourceManager::Write(RenderDevice& Device, std::shared_ptr<GPUBuffer>& Bu
 
 	FrameResources[CurrentFrame % RenderDevice::FrameCount].push_back(std::move(Source));
 
-	auto* TargetCommandList = static_cast<ID3D12GraphicsCommandList*>(Device.CopyCommandList[Device.Frame & RenderDevice::FrameCount].Get());
+	auto* TargetCommandList = static_cast<ID3D12GraphicsCommandList*>(Device.CopyCommandList[Device.Frame % RenderDevice::FrameCount].Get());
 	//TargetCommandList->CopyBufferRegion(Buffer->Resource->GetResource(), BufferOffset, Source, 0, Source->size());
 
 	// #TODO: Use ID3D12Resource instead of raw buffer.
