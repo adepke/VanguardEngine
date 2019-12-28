@@ -35,6 +35,7 @@ private:
 
 	// #NOTE: Ordering of these variables is significant for proper destruction!
 	ResourcePtr<ID3D12Device> Device;
+	ResourcePtr<IDXGIAdapter1> Adapter;
 
 	ResourcePtr<ID3D12CommandQueue> CopyCommandQueue;
 	ResourcePtr<ID3D12CommandAllocator> CopyCommandAllocator;

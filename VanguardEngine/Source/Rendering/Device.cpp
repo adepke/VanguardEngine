@@ -8,35 +8,32 @@
 ResourcePtr<IDXGIAdapter1> RenderDevice::GetAdapter(ResourcePtr<IDXGIFactory4>& Factory, bool Software)
 {
 	VGScopedCPUStat("Render Device Get Adapter");
-	
+
 	ResourcePtr<IDXGIAdapter1> Adapter;
 
-	for (uint32_t Index = 0; Factory->EnumAdapters1(Index, Adapter.Indirect()) != DXGI_ERROR_NOT_FOUND; ++Index)
+	if (Software)
 	{
-		DXGI_ADAPTER_DESC1 Description;
-		Adapter->GetDesc1(&Description);
+		Factory->EnumWarpAdapter(IID_PPV_ARGS(Adapter.Indirect()));
+	}
 
-		if (Software)
+	else
+	{
+		for (uint32_t Index = 0; Factory->EnumAdapters1(Index, Adapter.Indirect()) != DXGI_ERROR_NOT_FOUND; ++Index)
 		{
-			if ((Description.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) != DXGI_ADAPTER_FLAG_SOFTWARE)
-			{
-				continue;
-			}
-		}
+			DXGI_ADAPTER_DESC1 Description;
+			Adapter->GetDesc1(&Description);
 
-		else
-		{
 			if ((Description.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) == DXGI_ADAPTER_FLAG_SOFTWARE)
 			{
 				continue;
 			}
-		}
 
-		// Check the device and feature level without creating it.
-		const auto CreateDeviceResult = D3D12CreateDevice(Adapter.Get(), FeatureLevel, __uuidof(ID3D12Device), nullptr);
-		if (SUCCEEDED(CreateDeviceResult))
-		{
-			break;
+			// Check the device and feature level without creating it.
+			const auto CreateDeviceResult = D3D12CreateDevice(Adapter.Get(), FeatureLevel, __uuidof(ID3D12Device), nullptr);
+			if (SUCCEEDED(CreateDeviceResult))
+			{
+				break;
+			}
 		}
 	}
 
@@ -98,15 +95,19 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 	{
 		FactoryFlags |= DXGI_CREATE_FACTORY_DEBUG;
 	}
-	
+
 	auto Result = CreateDXGIFactory2(FactoryFlags, IID_PPV_ARGS(Factory.Indirect()));
 	if (FAILED(Result))
 	{
 		VGLogFatal(Rendering) << "Failed to create render device factory: " << Result;
 	}
 
-	auto Adapter{ GetAdapter(Factory, Software) };
+	Adapter = std::move(GetAdapter(Factory, Software));
 	VGEnsure(Adapter.Get(), "Failed to find an adapter.");
+
+	// #TODO: Adapter events.
+	//Adapter->RegisterVideoMemoryBudgetChangeNotificationEvent();
+	//Adapter->RegisterHardwareContentProtectionTeardownStatusEvent();
 
 	Result = D3D12CreateDevice(Adapter.Get(), FeatureLevel, IID_PPV_ARGS(Device.Indirect()));
 	if (FAILED(Result))
