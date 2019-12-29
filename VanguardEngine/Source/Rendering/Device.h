@@ -29,7 +29,7 @@ public:
 	size_t RenderHeight = 10;
 	bool Fullscreen = false;
 
-	static constexpr uint32_t FrameCount = 3;
+	static constexpr uint32_t FrameCount = 3;  // #TODO: Determine at runtime.
 
 private:
 	const D3D_FEATURE_LEVEL FeatureLevel = D3D_FEATURE_LEVEL_11_0;
@@ -39,15 +39,15 @@ private:
 	ResourcePtr<IDXGIAdapter1> Adapter;
 
 	ResourcePtr<ID3D12CommandQueue> CopyCommandQueue;
-	ResourcePtr<ID3D12CommandAllocator> CopyCommandAllocator;
+	ResourcePtr<ID3D12CommandAllocator> CopyCommandAllocator[FrameCount];
 	ResourcePtr<ID3D12CommandList> CopyCommandList[FrameCount];
 
 	ResourcePtr<ID3D12CommandQueue> DirectCommandQueue;
-	ResourcePtr<ID3D12CommandAllocator> DirectCommandAllocator;  // #TODO: One per worker thread.
+	ResourcePtr<ID3D12CommandAllocator> DirectCommandAllocator[FrameCount];  // #TODO: One per worker thread.
 	ResourcePtr<ID3D12GraphicsCommandList> DirectCommandList[FrameCount];  // #TODO: One per worker thread.
 
 	ResourcePtr<ID3D12CommandQueue> ComputeCommandQueue;
-	ResourcePtr<ID3D12CommandAllocator> ComputeCommandAllocator;  // #TODO: One per worker thread.
+	ResourcePtr<ID3D12CommandAllocator> ComputeCommandAllocator[FrameCount];  // #TODO: One per worker thread.
 	ResourcePtr<ID3D12CommandList> ComputeCommandList[FrameCount];  // #TODO: One per worker thread.
 
 	ResourcePtr<IDXGISwapChain3> SwapChain;
@@ -60,8 +60,14 @@ private:
 
 	ResourcePtr<IDXGIAdapter1> GetAdapter(ResourcePtr<IDXGIFactory4>& Factory, bool Software);
 
+	// Name the D3D objects.
+	void SetNames();
+
 	// Blocking.
 	void WaitForFrame(size_t FrameID);
+
+	// Resets command lists and allocators.
+	void ResetFrame(size_t FrameID);
 
 public:
 	RenderDevice(HWND InWindow, bool Software, bool EnableDebugging);

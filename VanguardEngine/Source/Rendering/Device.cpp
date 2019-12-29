@@ -40,6 +40,34 @@ ResourcePtr<IDXGIAdapter1> RenderDevice::GetAdapter(ResourcePtr<IDXGIFactory4>& 
 	return std::move(Adapter);
 }
 
+void RenderDevice::SetNames()
+{
+	VGScopedCPUStat("Device Set Names");
+
+	Device->SetName(VGText("Primary Render Device"));
+
+	CopyCommandQueue->SetName(VGText("Copy Command Queue"));
+	for (auto Index = 0; Index < FrameCount; ++Index)
+	{
+		CopyCommandAllocator[Index]->SetName(VGText("Copy Command Allocator"));
+		CopyCommandList[Index]->SetName(VGText("Copy Command List"));
+	}
+
+	DirectCommandQueue->SetName(VGText("Direct Command Queue"));
+	for (auto Index = 0; Index < FrameCount; ++Index)
+	{
+		DirectCommandAllocator[Index]->SetName(VGText("Direct Command Allocator"));
+		DirectCommandList[Index]->SetName(VGText("Direct Command List"));
+	}
+
+	ComputeCommandQueue->SetName(VGText("Compute Command Queue"));
+	for (auto Index = 0; Index < FrameCount; ++Index)
+	{
+		ComputeCommandAllocator[Index]->SetName(VGText("Compute Command Allocator"));
+		ComputeCommandList[Index]->SetName(VGText("Compute Command List"));
+	}
+}
+
 void RenderDevice::WaitForFrame(size_t FrameID)
 {
 	VGScopedCPUStat("Wait For Frame");
@@ -62,6 +90,52 @@ void RenderDevice::WaitForFrame(size_t FrameID)
 
 		WaitForSingleObject(FrameFenceEvent, INFINITE);
 	}
+}
+
+void RenderDevice::ResetFrame(size_t FrameID)
+{
+	VGScopedCPUStat("Reset Frame");
+
+	const auto FrameIndex = FrameID % FrameCount;
+
+	auto Result = CopyCommandAllocator[FrameIndex]->Reset();
+	if (FAILED(Result))
+	{
+		VGLogError(Rendering) << "Failed to reset copy command allocator for frame " << FrameIndex << ": " << Result;
+	}
+
+	Result = static_cast<ID3D12GraphicsCommandList*>(CopyCommandList[FrameIndex].Get())->Reset(CopyCommandAllocator[FrameIndex].Get(), nullptr);
+	if (FAILED(Result))
+	{
+		VGLogError(Rendering) << "Failed to reset copy command list for frame " << FrameIndex << ": " << Result;
+	}
+
+	Result = DirectCommandAllocator[FrameIndex]->Reset();
+	if (FAILED(Result))
+	{
+		VGLogError(Rendering) << "Failed to reset direct command allocator for frame " << FrameIndex << ": " << Result;
+	}
+
+	Result = static_cast<ID3D12GraphicsCommandList*>(DirectCommandList[FrameIndex].Get())->Reset(DirectCommandAllocator[FrameIndex].Get(), nullptr);
+	if (FAILED(Result))
+	{
+		VGLogError(Rendering) << "Failed to reset direct command list for frame " << FrameIndex << ": " << Result;
+	}
+
+	// #TODO: Implement compute.
+	/*
+	Result = ComputeCommandAllocator[FrameIndex]->Reset();
+	if (FAILED(Result))
+	{
+		VGLogError(Rendering) << "Failed to reset compute command allocator for frame " << FrameIndex << ": " << Result;
+	}
+
+	Result = static_cast<ID3D12GraphicsCommandList*>(ComputeCommandList[FrameIndex].Get())->Reset(ComputeCommandAllocator[FrameIndex].Get(), nullptr);
+	if (FAILED(Result))
+	{
+		VGLogError(Rendering) << "Failed to reset compute command list for frame " << FrameIndex << ": " << Result;
+	}
+	*/
 }
 
 RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
@@ -147,18 +221,24 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		VGLogFatal(Rendering) << "Failed to create copy command queue: " << Result;
 	}
 
-	Result = Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(CopyCommandAllocator.Indirect()));
-	if (FAILED(Result))
-	{
-		VGLogFatal(Rendering) << "Failed to create copy command allocator: " << Result;
-	}
-
 	for (int Index = 0; Index < FrameCount; ++Index)
 	{
-		Result = Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COPY, CopyCommandAllocator.Get(), nullptr, IID_PPV_ARGS(CopyCommandList[Index].Indirect()));
+		Result = Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(CopyCommandAllocator[Index].Indirect()));
+		if (FAILED(Result))
+		{
+			VGLogFatal(Rendering) << "Failed to create copy command allocator for frame " << Index << ": " << Result;
+		}
+
+		Result = Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COPY, CopyCommandAllocator[Index].Get(), nullptr, IID_PPV_ARGS(CopyCommandList[Index].Indirect()));
 		if (FAILED(Result))
 		{
 			VGLogFatal(Rendering) << "Failed to create copy command list for frame " << Index << ": " << Result;
+		}
+
+		// Close all lists except the current frame's list.
+		if (Index > 0)
+		{
+			static_cast<ID3D12GraphicsCommandList*>(CopyCommandList[Index].Get())->Close();
 		}
 	}
 
@@ -176,18 +256,24 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		VGLogFatal(Rendering) << "Failed to create direct command queue: " << Result;
 	}
 
-	Result = Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(DirectCommandAllocator.Indirect()));
-	if (FAILED(Result))
-	{
-		VGLogFatal(Rendering) << "Failed to create direct command allocator: " << Result;
-	}
-
 	for (int Index = 0; Index < FrameCount; ++Index)
 	{
-		Result = Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, DirectCommandAllocator.Get(), nullptr, IID_PPV_ARGS(DirectCommandList[Index].Indirect()));
+		Result = Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(DirectCommandAllocator[Index].Indirect()));
+		if (FAILED(Result))
+		{
+			VGLogFatal(Rendering) << "Failed to create direct command allocator for frame " << Index << ": " << Result;
+		}
+
+		Result = Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, DirectCommandAllocator[Index].Get(), nullptr, IID_PPV_ARGS(DirectCommandList[Index].Indirect()));
 		if (FAILED(Result))
 		{
 			VGLogFatal(Rendering) << "Failed to create direct command list for frame " << Index << ": " << Result;
+		}
+
+		// Close all lists except the current frame's list.
+		if (Index > 0)
+		{
+			static_cast<ID3D12GraphicsCommandList*>(DirectCommandList[Index].Get())->Close();
 		}
 	}
 
@@ -205,18 +291,24 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		VGLogFatal(Rendering) << "Failed to create compute command queue: " << Result;
 	}
 
-	Result = Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(ComputeCommandAllocator.Indirect()));
-	if (FAILED(Result))
-	{
-		VGLogFatal(Rendering) << "Failed to create compute command allocator: " << Result;
-	}
-
 	for (int Index = 0; Index < FrameCount; ++Index)
 	{
-		Result = Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, ComputeCommandAllocator.Get(), nullptr, IID_PPV_ARGS(ComputeCommandList[Index].Indirect()));
+		Result = Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(ComputeCommandAllocator[Index].Indirect()));
+		if (FAILED(Result))
+		{
+			VGLogFatal(Rendering) << "Failed to create compute command allocator for frame " << Index << ": " << Result;
+		}
+
+		Result = Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, ComputeCommandAllocator[Index].Get(), nullptr, IID_PPV_ARGS(ComputeCommandList[Index].Indirect()));
 		if (FAILED(Result))
 		{
 			VGLogFatal(Rendering) << "Failed to create compute command list for frame " << Index << ": " << Result;
+		}
+
+		// Close all lists except the current frame's list.
+		if (Index > 0)
+		{
+			static_cast<ID3D12GraphicsCommandList*>(ComputeCommandList[Index].Get())->Close();
 		}
 	}
 
@@ -267,6 +359,11 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 	{
 		VGLogFatal(Rendering) << "Failed to create frame fence event: " << GetPlatformError();
 	}
+
+	if (Debugging)
+	{
+		SetNames();
+	}
 }
 
 RenderDevice::~RenderDevice()
@@ -294,6 +391,8 @@ void RenderDevice::FrameStep()
 
 	// The frame has finished, cleanup its resources. #TODO: Will leave additional GPU gaps if we're bottlenecking on the CPU, consider deferred cleanup?
 	AllocatorManager.CleanupFrameResources(Frame + 1);
+
+	ResetFrame(Frame + 1);
 
 	// #TODO: Check our CPU frame budget, try and get some additional work done if we have time?
 

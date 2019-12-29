@@ -21,16 +21,18 @@ void Renderer::Render(entt::registry& Registry)
 {
 	VGScopedCPUStat("Render");
 
+	static_cast<ID3D12GraphicsCommandList*>(Device->CopyCommandList[Device->Frame % RenderDevice::FrameCount].Get())->Close();
+	
 	ID3D12CommandList* CopyLists[] = { Device->CopyCommandList[Device->Frame % RenderDevice::FrameCount].Get() };
 
 	Device->CopyCommandQueue->ExecuteCommandLists(1, CopyLists);
-
-	// #TODO: Sync copy engine. https://docs.microsoft.com/en-us/windows/win32/direct3d12/user-mode-heap-synchronization
 
 	// #TODO: Culling.
 
 	// #TODO: Sort by material.
 
+	// #TODO: Sync copy engine. https://docs.microsoft.com/en-us/windows/win32/direct3d12/user-mode-heap-synchronization
+	/*
 	// Number of entities with MeshComponent and TransformComponent
 	const auto RenderCount = 0;
 
@@ -54,9 +56,9 @@ void Renderer::Render(entt::registry& Registry)
 				// #TODO: Write transform to GPU buffer. View requires MeshComponent to exclude non-rendered entities.
 			});
 	}
-
+	*/
 	auto* DrawList = Device->DirectCommandList[Device->Frame % RenderDevice::FrameCount].Get();
-
+	/*
 	Registry.view<const TransformComponent, const MeshComponent>().each([&InstanceBuffer, DrawList](auto Entity, const auto&, const auto& Mesh)
 		{
 			std::vector<D3D12_VERTEX_BUFFER_VIEW> VertexViews;
@@ -89,8 +91,11 @@ void Renderer::Render(entt::registry& Registry)
 
 			//DrawList->DrawIndexedInstanced();  // #TODO: Draw.
 		});
+	*/
 
-	ID3D12CommandList* DirectLists[] = { DrawList };
+	DrawList->Close();
 
-	Device->DirectCommandQueue->ExecuteCommandLists(1, DirectLists);
+	//ID3D12CommandList* DirectLists[] = { DrawList };
+
+	//Device->DirectCommandQueue->ExecuteCommandLists(1, DirectLists);
 }
