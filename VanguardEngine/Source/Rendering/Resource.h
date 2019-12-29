@@ -8,8 +8,8 @@
 
 enum class ResourceFrequency
 {
-	Static,  // Resource is updated at most every few frames.
-	Dynamic,  // Resource is updated at least once per frame.
+	Static,  // Resource is updated at most every few frames. Default heap.
+	Dynamic,  // Resource is updated at least once per frame. Upload heap.
 };
 
 enum BindFlag

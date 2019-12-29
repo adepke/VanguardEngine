@@ -10,7 +10,6 @@
 using namespace DirectX;
 
 using CPUHandle = uint64_t;
-using ResourceWriteType = std::vector<uint8_t>;
 
 struct Vertex
 {

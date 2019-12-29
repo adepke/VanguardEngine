@@ -273,12 +273,12 @@ RenderDevice::~RenderDevice()
 
 std::shared_ptr<GPUBuffer> RenderDevice::Allocate(const ResourceDescription& Description, const std::wstring_view Name)
 {
-	return std::move(ResourceManager::Get().Allocate(*this, Allocator, Description, Name));
+	return std::move(ResourceManager::Get().Allocate(*this, Description, Name));
 }
 
-void RenderDevice::Write(std::shared_ptr<GPUBuffer>& Buffer, std::unique_ptr<ResourceWriteType>&& Source, size_t BufferOffset /*= 0*/)
+void RenderDevice::Write(std::shared_ptr<GPUBuffer>& Buffer, std::vector<uint8_t>&& Source, size_t BufferOffset)
 {
-	ResourceManager::Get().Write(*this, Buffer, std::forward<std::unique_ptr<ResourceWriteType>>(Source), BufferOffset);
+	ResourceManager::Get().Write(*this, Buffer, std::forward<std::vector<uint8_t>>(Source), BufferOffset);
 }
 
 void RenderDevice::FrameStep()
