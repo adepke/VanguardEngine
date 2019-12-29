@@ -54,7 +54,15 @@ namespace Detail
 		}
 
 		ResourcePtrBase& operator=(const ResourcePtrBase&) = delete;
-		ResourcePtrBase& operator=(ResourcePtrBase&& Other) noexcept = default;
+		ResourcePtrBase& operator=(ResourcePtrBase&& Other) noexcept
+		{
+			if (this != std::addressof(Other))
+			{
+				Reset(Other.Release());
+			}
+
+			return *this;
+		}
 		ResourcePtrBase& operator=(nullptr_t) noexcept { Internal = nullptr; }
 
 		pointer Release() noexcept
