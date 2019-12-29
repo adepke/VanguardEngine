@@ -6,7 +6,7 @@
 #include <Rendering/RenderComponents.h>
 #include <Rendering/RenderSystems.h>
 
-//#include <entt/entt.hpp>
+//#include <entt/entt.hpp>  // #TODO: Include from here instead of in the header.
 
 #include <vector>
 
@@ -24,6 +24,8 @@ void Renderer::Render(entt::registry& Registry)
 	ID3D12CommandList* CopyLists[] = { Device->CopyCommandList[Device->Frame % RenderDevice::FrameCount].Get() };
 
 	Device->CopyCommandQueue->ExecuteCommandLists(1, CopyLists);
+
+	// #TODO: Sync copy engine. https://docs.microsoft.com/en-us/windows/win32/direct3d12/user-mode-heap-synchronization
 
 	// #TODO: Culling.
 

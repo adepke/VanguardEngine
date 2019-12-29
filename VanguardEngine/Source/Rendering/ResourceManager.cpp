@@ -9,56 +9,68 @@
 
 #include <cstring>
 
-ResourceManager::ResourceManager()
+void ResourceManager::Initialize(RenderDevice& Device, size_t BufferedFrames)
 {
+	VGScopedCPUStat("Resource Manager Initialize");
+
+	FrameCount = BufferedFrames;
+
+	UploadResources.resize(FrameCount);
+	UploadOffsets.resize(FrameCount);
+	UploadPtrs.resize(FrameCount);
+
 	constexpr auto UploadResourceSize = 1024 * 1024 * 64;
 
-	D3D12_RESOURCE_DESC ResourceDesc{};
-	ResourceDesc.Alignment = 0;
-	ResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-	ResourceDesc.Width = AlignedSize(UploadResourceSize, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT);
-	ResourceDesc.Height = 1;
-	ResourceDesc.DepthOrArraySize = 1;
-	ResourceDesc.Format = DXGI_FORMAT_UNKNOWN;
-	ResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-	ResourceDesc.MipLevels = 1;
-	ResourceDesc.SampleDesc.Count = 1;
-	ResourceDesc.SampleDesc.Quality = 0;
-	ResourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
-
-	D3D12MA::ALLOCATION_DESC AllocationDesc{};
-	AllocationDesc.HeapType = D3D12_HEAP_TYPE_UPLOAD;
-	AllocationDesc.Flags = D3D12MA::ALLOCATION_FLAG_NONE;
-
-	ID3D12Resource* RawResource = nullptr;
-	D3D12MA::Allocation* AllocationHandle = nullptr;
-
-	auto Result = Device.Allocator->CreateResource(&AllocationDesc, &ResourceDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, &AllocationHandle, IID_PPV_ARGS(&RawResource));
-	if (FAILED(Result))
+	for (auto Index = 0; Index < FrameCount; ++Index)
 	{
-		VGLogError(Rendering) << "Failed to allocate write upload resource: " << Result;
+		D3D12_RESOURCE_DESC ResourceDesc{};
+		ResourceDesc.Alignment = 0;
+		ResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+		ResourceDesc.Width = AlignedSize(UploadResourceSize, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT);
+		ResourceDesc.Height = 1;
+		ResourceDesc.DepthOrArraySize = 1;
+		ResourceDesc.Format = DXGI_FORMAT_UNKNOWN;
+		ResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+		ResourceDesc.MipLevels = 1;
+		ResourceDesc.SampleDesc.Count = 1;
+		ResourceDesc.SampleDesc.Quality = 0;
+		ResourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-		return;
-	}
+		D3D12MA::ALLOCATION_DESC AllocationDesc{};
+		AllocationDesc.HeapType = D3D12_HEAP_TYPE_UPLOAD;
+		AllocationDesc.Flags = D3D12MA::ALLOCATION_FLAG_NONE;
 
-	D3D12_RANGE Range{ 0, 0 };
+		ID3D12Resource* RawResource = nullptr;
+		D3D12MA::Allocation* AllocationHandle = nullptr;
 
-	Result = Result->GetResource()->Map(0, &Range, &UploadPtr);
-	if (FAILED(Result))
-	{
-		VGLogError(Rendering) << "Failed to map upload resource: " << Result;
-	}
+		auto Result = Device.Allocator->CreateResource(&AllocationDesc, &ResourceDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, &AllocationHandle, IID_PPV_ARGS(&RawResource));
+		if (FAILED(Result))
+		{
+			VGLogError(Rendering) << "Failed to allocate write upload resource: " << Result;
+
+			return;
+		}
+
+		D3D12_RANGE Range{ 0, 0 };
+
+		Result = AllocationHandle->GetResource()->Map(0, &Range, &UploadPtrs[Index]);
+		if (FAILED(Result))
+		{
+			VGLogError(Rendering) << "Failed to map upload resource: " << Result;
+		}
 
 #if !BUILD_RELEASE
-	Allocation->Resource->SetName(VGText("Upload Heap"));  // Set the name in the allocator.
-	Result = Allocation->Resource->GetResource()->SetName(VGText("Upload Heap"));  // Set the name in the API.
-	if (FAILED(Result))
-	{
-		VGLogWarning(Rendering) << "Failed to set upload resource name to: '" << Name << "':" << Result;
-	}
+		constexpr auto* Name = VGText("Upload Heap");
+		AllocationHandle->SetName(Name);  // Set the name in the allocator.
+		Result = AllocationHandle->GetResource()->SetName(Name);  // Set the name in the API.
+		if (FAILED(Result))
+		{
+			VGLogWarning(Rendering) << "Failed to set upload resource name to: '" << Name << "':" << Result;
+		}
 #endif
 
-	UploadResource = std::move(ResourcePtr<D3D12MA::Allocation>{ AllocationHandle });
+		UploadResources[Index] = std::move(ResourcePtr<D3D12MA::Allocation>{ AllocationHandle });
+	}
 }
 
 std::shared_ptr<GPUBuffer> ResourceManager::Allocate(RenderDevice& Device, const ResourceDescription& Description, const std::wstring_view Name)
@@ -176,7 +188,7 @@ std::shared_ptr<GPUBuffer> ResourceManager::Allocate(RenderDevice& Device, const
 	return std::move(Allocation);
 }
 
-void ResourceManager::Write(RenderDevice& Device, std::shared_ptr<GPUBuffer>& Buffer, std::vector<uint8_t>&& Source, size_t BufferOffset)
+void ResourceManager::Write(RenderDevice& Device, std::shared_ptr<GPUBuffer>& Buffer, const std::vector<uint8_t>& Source, size_t BufferOffset)
 {
 	VGScopedCPUStat("Resource Manager Write");
 
@@ -184,23 +196,29 @@ void ResourceManager::Write(RenderDevice& Device, std::shared_ptr<GPUBuffer>& Bu
 	{
 		VGScopedCPUStat("Write Static");
 
-		std::memcpy(UploadAllocation.Data, Source.data(), Source.size());
+		const auto FrameID = Device.Frame % FrameCount;
 
-		auto* TargetCommandList = static_cast<ID3D12GraphicsCommandList*>(Device.CopyCommandList[Device.Frame % RenderDevice::FrameCount].Get());
-		TargetCommandList->CopyBufferRegion(Buffer->Resource->GetResource(), BufferOffset, UploadAllocation.Resource, UploadAllocation.Offset, Source.size());
-
-		UploadOffset += Source.size();
+		std::memcpy(static_cast<uint8_t*>(UploadPtrs[FrameID]) + UploadOffsets[FrameID], Source.data(), Source.size());
 
 		// #TODO: Resource barrier?
 
-		CPUFrameResources[CurrentFrame % RenderDevice::FrameCount].push_back({ std::move(Resource), std::move(Source) });
+		auto* TargetCommandList = static_cast<ID3D12GraphicsCommandList*>(Device.CopyCommandList[FrameID].Get());
+		TargetCommandList->CopyBufferRegion(Buffer->Resource->GetResource(), BufferOffset, UploadResources[FrameID]->GetResource(), UploadOffsets[FrameID], Source.size());
+
+		// #TODO: Resource barrier?
+
+		UploadOffsets[FrameID] += Source.size();
 	}
 
 	else
 	{
 		VGScopedCPUStat("Write Dynamic");
 
-		auto Result = Buffer->Resource->GetResource()->Map();
+		void* MappedPtr = nullptr;
+
+		D3D12_RANGE MapRange{ BufferOffset, BufferOffset + Source.size() };
+
+		auto Result = Buffer->Resource->GetResource()->Map(0, &MapRange, &MappedPtr);
 		if (FAILED(Result))
 		{
 			VGLogError(Rendering) << "Failed to map buffer resource during resource write: " << Result;
@@ -208,9 +226,11 @@ void ResourceManager::Write(RenderDevice& Device, std::shared_ptr<GPUBuffer>& Bu
 			return;
 		}
 
-		std::memcpy();
+		std::memcpy(MappedPtr, Source.data(), Source.size());
 
-		Buffer->Resource->GetResource()->Unmap();
+		D3D12_RANGE UnmapRange{ 0, 0 };
+
+		Buffer->Resource->GetResource()->Unmap(0, &UnmapRange);
 	}
 }
 
@@ -218,24 +238,6 @@ void ResourceManager::CleanupFrameResources(size_t Frame)
 {
 	VGScopedCPUStat("Cleanup Frame Resources");
 
-	const auto FrameID = Frame % RenderDevice::FrameCount;
-
-	if (CPUFrameResources[FrameID].size() > 0)
-	{
-		VGLog(Rendering) << "Cleaning up " << CPUFrameResources[FrameID].size() << " CPU resources from frame " << Frame;
-	}
-
-	{
-		VGScopedCPUStat("CPU Cleanup");
-
-		CPUFrameResources[FrameID].clear();  // Cleans CPU resources.
-	}
-
-	{
-		VGScopedCPUStat("GPU Cleanup");
-
-		GPUFrameResources[FrameID].Reset();  // Cleans GPU resources.
-	}
-
+	UploadOffsets[Frame % FrameCount] = 0;
 	++CurrentFrame;
 }

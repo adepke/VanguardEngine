@@ -105,6 +105,11 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 	Adapter = std::move(GetAdapter(Factory, Software));
 	VGEnsure(Adapter.Get(), "Failed to find an adapter.");
 
+	DXGI_ADAPTER_DESC1 AdapterDesc;
+	Adapter->GetDesc1(&AdapterDesc);
+
+	VGLog(Rendering) << "Using adapter: " << AdapterDesc.Description;
+
 	// #TODO: Adapter events.
 	//Adapter->RegisterVideoMemoryBudgetChangeNotificationEvent();
 	//Adapter->RegisterHardwareContentProtectionTeardownStatusEvent();
@@ -125,6 +130,8 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 	{
 		VGLogFatal(Rendering) << "Failed to create device allocator: " << Result;
 	}
+
+	AllocatorManager.Initialize(*this, FrameCount);
 
 	// Copy
 
@@ -273,12 +280,12 @@ RenderDevice::~RenderDevice()
 
 std::shared_ptr<GPUBuffer> RenderDevice::Allocate(const ResourceDescription& Description, const std::wstring_view Name)
 {
-	return std::move(ResourceManager::Get().Allocate(*this, Description, Name));
+	return std::move(AllocatorManager.Allocate(*this, Description, Name));
 }
 
-void RenderDevice::Write(std::shared_ptr<GPUBuffer>& Buffer, std::vector<uint8_t>&& Source, size_t BufferOffset)
+void RenderDevice::Write(std::shared_ptr<GPUBuffer>& Buffer, const std::vector<uint8_t>& Source, size_t BufferOffset)
 {
-	ResourceManager::Get().Write(*this, Buffer, std::forward<std::vector<uint8_t>>(Source), BufferOffset);
+	AllocatorManager.Write(*this, Buffer, Source, BufferOffset);
 }
 
 void RenderDevice::FrameStep()
@@ -286,7 +293,7 @@ void RenderDevice::FrameStep()
 	WaitForFrame(Frame + 1);
 
 	// The frame has finished, cleanup its resources. #TODO: Will leave additional GPU gaps if we're bottlenecking on the CPU, consider deferred cleanup?
-	ResourceManager::Get().CleanupFrameResources(Frame + 1);
+	AllocatorManager.CleanupFrameResources(Frame + 1);
 
 	// #TODO: Check our CPU frame budget, try and get some additional work done if we have time?
 

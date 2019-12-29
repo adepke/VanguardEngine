@@ -68,7 +68,7 @@ public:
 	~RenderDevice();
 
 	std::shared_ptr<GPUBuffer> Allocate(const ResourceDescription& Description, const std::wstring_view Name);
-	void Write(std::shared_ptr<GPUBuffer>& Buffer, std::vector<uint8_t>&& Source, size_t BufferOffset = 0);
+	void Write(std::shared_ptr<GPUBuffer>& Buffer, const std::vector<uint8_t>& Source, size_t BufferOffset = 0);
 
 	// Blocking, waits for the gpu to finish the next frame before returning. Marks the current frame as finished submitting and can move on to the next frame.
 	void FrameStep();
