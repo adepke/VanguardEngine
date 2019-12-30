@@ -66,42 +66,45 @@ void Renderer::Render(entt::registry& Registry)
 	Device->Sync(SyncType::Copy, Device->Frame);
 	
 	auto* DrawList = Device->DirectCommandList[Device->Frame % RenderDevice::FrameCount].Get();
-	/*
-	Registry.view<const TransformComponent, const MeshComponent>().each([&InstanceBuffer, DrawList](auto Entity, const auto&, const auto& Mesh)
-		{
-			std::vector<D3D12_VERTEX_BUFFER_VIEW> VertexViews;
 
-			// Vertex Buffer.
-			VertexViews.push_back({});
-			VertexViews[0].BufferLocation = Mesh.VertexBuffer->Resource->GetResource()->GetGPUVirtualAddress();
-			VertexViews[0].SizeInBytes = Mesh.VertexBuffer->Description.Size;
-			VertexViews[0].StrideInBytes = Mesh.VertexBuffer->Description.Stride;
+	{
+		VGScopedCPUStat("Main Pass");
 
-			// Instance Buffer.
-			VertexViews.push_back({});
-			VertexViews[1].BufferLocation = InstanceBuffer->Resource->GetResource()->GetGPUVirtualAddress();
-			VertexViews[1].SizeInBytes = InstanceBuffer->Description.Size;
-			VertexViews[1].StrideInBytes = InstanceBuffer->Description.Stride;
+		Registry.view<const TransformComponent, const MeshComponent>().each([&InstanceBuffer, DrawList](auto Entity, const auto&, const auto& Mesh)
+			{
+				std::vector<D3D12_VERTEX_BUFFER_VIEW> VertexViews;
 
-			DrawList->IASetVertexBuffers(0, VertexViews.size(), VertexViews.data());  // #TODO: Slot?
+				// Vertex Buffer.
+				VertexViews.push_back({});
+				VertexViews[0].BufferLocation = Mesh.VertexBuffer->Resource->GetResource()->GetGPUVirtualAddress();
+				VertexViews[0].SizeInBytes = Mesh.VertexBuffer->Description.Size;
+				VertexViews[0].StrideInBytes = Mesh.VertexBuffer->Description.Stride;
 
-			D3D12_INDEX_BUFFER_VIEW IndexView{};
-			IndexView.BufferLocation = Mesh.IndexBuffer->Resource->GetResource()->GetGPUVirtualAddress();
-			IndexView.SizeInBytes = Mesh.IndexBuffer->Description.Size;
-			IndexView.Format = DXGI_FORMAT_R32_UINT;
+				// Instance Buffer.
+				VertexViews.push_back({});
+				VertexViews[1].BufferLocation = InstanceBuffer.first->Resource->GetResource()->GetGPUVirtualAddress() + InstanceBuffer.second;
+				VertexViews[1].SizeInBytes = InstanceBuffer.first->Description.Size;
+				VertexViews[1].StrideInBytes = InstanceBuffer.first->Description.Stride;
 
-			DrawList->IASetIndexBuffer(&IndexView);
+				DrawList->IASetVertexBuffers(0, VertexViews.size(), VertexViews.data());  // #TODO: Slot?
 
-			//DrawList->OMSetStencilRef();  // #TODO: Stencil ref.
+				D3D12_INDEX_BUFFER_VIEW IndexView{};
+				IndexView.BufferLocation = Mesh.IndexBuffer->Resource->GetResource()->GetGPUVirtualAddress();
+				IndexView.SizeInBytes = Mesh.IndexBuffer->Description.Size;
+				IndexView.Format = DXGI_FORMAT_R32_UINT;
 
-			//DrawList->SetPipelineState();  // #TODO: Pipeline state.
-			//DrawList->IASetPrimitiveTopology();  // #TODO: Primitive topology.
+				DrawList->IASetIndexBuffer(&IndexView);
 
-			//DrawList->DrawIndexedInstanced();  // #TODO: Draw.
-		});
-	*/
+				//DrawList->OMSetStencilRef();  // #TODO: Stencil ref.
 
-	DrawList->Close();
+				//DrawList->SetPipelineState();  // #TODO: Pipeline state.
+				DrawList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+				DrawList->DrawIndexedInstanced(Mesh.IndexBuffer->Description.Size / sizeof(uint32_t), 1, 0, 0, 0);
+			});
+
+		DrawList->Close();
+	}
 
 	ID3D12CommandList* DirectLists[] = { DrawList };
 

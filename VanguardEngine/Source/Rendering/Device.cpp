@@ -458,7 +458,11 @@ void RenderDevice::Sync(SyncType Type, size_t FrameID)
 
 void RenderDevice::FrameStep()
 {
+	VGScopedCPUStat("Frame Step");
+
 	Sync(SyncType::Direct, Frame + 1);
+
+	FrameBufferOffsets[(Frame + 1) % FrameCount] = 0;  // GPU has fully consumed the frame resources, we can now reuse the buffer.
 
 	// The frame has finished, cleanup its resources. #TODO: Will leave additional GPU gaps if we're bottlenecking on the CPU, consider deferred cleanup?
 	AllocatorManager.CleanupFrameResources(Frame + 1);

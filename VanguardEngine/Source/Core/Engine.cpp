@@ -56,12 +56,14 @@ void EngineBoot()
 void EngineLoop()
 {
 	entt::registry TempReg;
-	
+
 	for (auto Index = 0; Index < 10; ++Index)
 	{
+		auto Mesh{ CreateMeshComponent(*Renderer::Get().Device, std::vector<Vertex>{ Vertex{}, Vertex{}, Vertex{} }, std::vector<uint32_t>{ 0, 1, 2 }) };
+
 		const auto Entity = TempReg.create();
 		TempReg.assign<TransformComponent>(Entity);
-		TempReg.assign<MeshComponent>(Entity);
+		TempReg.assign<MeshComponent>(Entity, std::move(Mesh));
 	}
 
 	while (true)
@@ -81,9 +83,6 @@ void EngineLoop()
 				return;
 			}
 		}
-
-		// #TEMP: Testing resource management.
-		auto Comp{ CreateMeshComponent(*Renderer::Get().Device, std::vector<Vertex>{ Vertex{}, Vertex{}, Vertex{} }, std::vector<uint32_t>{ 0, 1, 2 }) };
 
 		Renderer::Get().Render(TempReg);
 
