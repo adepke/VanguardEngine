@@ -68,30 +68,6 @@ void RenderDevice::SetNames()
 	}
 }
 
-void RenderDevice::WaitForFrame(size_t FrameID)
-{
-	VGScopedCPUStat("Wait For Frame");
-
-	const auto FrameIndex = FrameID % FrameCount;
-
-	auto Result = DirectCommandQueue->Signal(FrameFence.Get(), FrameIndex);
-	if (FAILED(Result))
-	{
-		VGLogFatal(Rendering) << "Failed to submit signal command to GPU during frame wait: " << Result;
-	}
-
-	if (FrameFence->GetCompletedValue() != FrameIndex)
-	{
-		Result = FrameFence->SetEventOnCompletion(FrameIndex, FrameFenceEvent);
-		if (FAILED(Result))
-		{
-			VGLogFatal(Rendering) << "Failed to set fence completion event during frame wait: " << Result;
-		}
-
-		WaitForSingleObject(FrameFenceEvent, INFINITE);
-	}
-}
-
 void RenderDevice::ResetFrame(size_t FrameID)
 {
 	VGScopedCPUStat("Reset Frame");
@@ -349,15 +325,52 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		VGLogFatal(Rendering) << "Failed to bind device to window: " << Result;
 	}
 
-	Result = Device->CreateFence(Frame, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(FrameFence.Indirect()));
+	Result = Device->CreateFence(Frame, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(CopyFence.Indirect()));
 	if (FAILED(Result))
 	{
-		VGLogFatal(Rendering) << "Failed to create frame fence: " << Result;
+		VGLogFatal(Rendering) << "Failed to create copy fence: " << Result;
 	}
 
-	if (FrameFenceEvent = ::CreateEvent(nullptr, false, false, VGText("Frame Fence Event")); !FrameFenceEvent)
+	if (CopyFenceEvent = ::CreateEvent(nullptr, false, false, VGText("Copy Fence Event")); !CopyFenceEvent)
 	{
-		VGLogFatal(Rendering) << "Failed to create frame fence event: " << GetPlatformError();
+		VGLogFatal(Rendering) << "Failed to create copy fence event: " << GetPlatformError();
+	}
+
+	Result = Device->CreateFence(Frame, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(DirectFence.Indirect()));
+	if (FAILED(Result))
+	{
+		VGLogFatal(Rendering) << "Failed to create direct fence: " << Result;
+	}
+
+	if (DirectFenceEvent = ::CreateEvent(nullptr, false, false, VGText("Direct Fence Event")); !DirectFenceEvent)
+	{
+		VGLogFatal(Rendering) << "Failed to create direct fence event: " << GetPlatformError();
+	}
+
+	Result = Device->CreateFence(Frame, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(ComputeFence.Indirect()));
+	if (FAILED(Result))
+	{
+		VGLogFatal(Rendering) << "Failed to create compute fence: " << Result;
+	}
+
+	if (ComputeFenceEvent = ::CreateEvent(nullptr, false, false, VGText("Compute Fence Event")); !ComputeFenceEvent)
+	{
+		VGLogFatal(Rendering) << "Failed to create compute fence event: " << GetPlatformError();
+	}
+
+	constexpr auto FrameBufferSize = 1024 * 1024 * 64;
+
+	// Allocate frame buffers.
+	for (auto Index = 0; Index < FrameCount; ++Index)
+	{
+		ResourceDescription Description{};
+		Description.Size = FrameBufferSize;
+		Description.Stride = 1;
+		Description.UpdateRate = ResourceFrequency::Dynamic;
+		Description.BindFlags = BindFlag::ConstantBuffer;  // #TODO: Correct?
+		Description.AccessFlags = AccessFlag::CPUWrite;
+
+		FrameBuffers[Index] = std::move(AllocatorManager.Allocate(*this, Description, VGText("Frame Buffer")));
 	}
 
 	if (Debugging)
@@ -370,9 +383,11 @@ RenderDevice::~RenderDevice()
 {
 	VGScopedCPUStat("Render Device Shutdown");
 
-	WaitForFrame(Frame);
+	Sync(SyncType::Direct, Frame);
 
-	::CloseHandle(FrameFenceEvent);
+	::CloseHandle(CopyFenceEvent);
+	::CloseHandle(DirectFenceEvent);
+	::CloseHandle(ComputeFenceEvent);
 }
 
 std::shared_ptr<GPUBuffer> RenderDevice::Allocate(const ResourceDescription& Description, const std::wstring_view Name)
@@ -385,9 +400,65 @@ void RenderDevice::Write(std::shared_ptr<GPUBuffer>& Buffer, const std::vector<u
 	AllocatorManager.Write(*this, Buffer, Source, BufferOffset);
 }
 
+std::pair<std::shared_ptr<GPUBuffer>, size_t> RenderDevice::FrameAllocate(size_t Size)
+{
+	const auto FrameIndex = Frame % FrameCount;
+
+	FrameBufferOffsets[FrameIndex] += Size;
+
+	return { FrameBuffers[FrameIndex], FrameBufferOffsets[FrameIndex] - Size };
+}
+
+void RenderDevice::Sync(SyncType Type, size_t FrameID)
+{
+	VGScopedCPUStat("Render Device Sync");
+
+	ID3D12CommandQueue* SyncQueue = nullptr;
+	ID3D12Fence* SyncFence = nullptr;
+	HANDLE SyncEvent = nullptr;
+
+	switch (Type)
+	{
+	case SyncType::Copy:
+		SyncQueue = CopyCommandQueue.Get();
+		SyncFence = CopyFence.Get();
+		SyncEvent = CopyFenceEvent;
+		break;
+	case SyncType::Direct:
+		SyncQueue = DirectCommandQueue.Get();
+		SyncFence = DirectFence.Get();
+		SyncEvent = DirectFenceEvent;
+		break;
+	case SyncType::Compute:
+		SyncQueue = ComputeCommandQueue.Get();
+		SyncFence = ComputeFence.Get();
+		SyncEvent = ComputeFenceEvent;
+		break;
+	}
+
+	const auto FrameIndex = FrameID % FrameCount;
+
+	auto Result = SyncQueue->Signal(SyncFence, FrameIndex);
+	if (FAILED(Result))
+	{
+		VGLogFatal(Rendering) << "Failed to submit signal command to GPU during sync: " << Result;
+	}
+
+	if (SyncFence->GetCompletedValue() != FrameIndex)
+	{
+		Result = SyncFence->SetEventOnCompletion(FrameIndex, SyncEvent);
+		if (FAILED(Result))
+		{
+			VGLogFatal(Rendering) << "Failed to set fence completion event during sync: " << Result;
+		}
+
+		WaitForSingleObject(SyncEvent, INFINITE);
+	}
+}
+
 void RenderDevice::FrameStep()
 {
-	WaitForFrame(Frame + 1);
+	Sync(SyncType::Direct, Frame + 1);
 
 	// The frame has finished, cleanup its resources. #TODO: Will leave additional GPU gaps if we're bottlenecking on the CPU, consider deferred cleanup?
 	AllocatorManager.CleanupFrameResources(Frame + 1);

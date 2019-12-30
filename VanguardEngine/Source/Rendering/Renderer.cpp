@@ -9,6 +9,15 @@
 //#include <entt/entt.hpp>  // #TODO: Include from here instead of in the header.
 
 #include <vector>
+#include <utility>
+
+// Per-entity data, passed through input assembler.
+struct EntityInstance
+{
+	// #TODO: Create from some form of shader interop.
+
+	TransformComponent Transform;
+};
 
 void Renderer::Initialize(std::unique_ptr<RenderDevice>&& InDevice)
 {
@@ -30,33 +39,32 @@ void Renderer::Render(entt::registry& Registry)
 	// #TODO: Culling.
 
 	// #TODO: Sort by material.
-
-	// #TODO: Sync copy engine. https://docs.microsoft.com/en-us/windows/win32/direct3d12/user-mode-heap-synchronization
-	/*
+	
 	// Number of entities with MeshComponent and TransformComponent
 	const auto RenderCount = 0;
 
-	std::shared_ptr<GPUBuffer> InstanceBuffer;
+	std::pair<std::shared_ptr<GPUBuffer>, size_t> InstanceBuffer;
 
 	{
 		VGScopedCPUStat("Generate Instance Buffer");
 
-		// #TODO: Allocate GPU buffer for instance data (transform).
-		ResourceDescription Description;
-		//Description.Size = RenderCount * sizeof(?);
-		//Description.Stride = sizeof(?);
-		Description.UpdateRate = ResourceFrequency::Dynamic;  // Don't bother sending to the default heap.
-		Description.BindFlags = BindFlag::ConstantBuffer;  // #TODO: Correct?
-		Description.AccessFlags = AccessFlag::CPUWrite;
+		InstanceBuffer = std::move(Device->FrameAllocate(sizeof(EntityInstance) * RenderCount));
 
-		InstanceBuffer = std::move(Device->Allocate(Description, VGText("Frame Instance Buffer")));
-
-		Registry.view<const TransformComponent, const MeshComponent>().each([](auto Entity, const auto& Transform, const auto&)
+		Registry.view<const TransformComponent, const MeshComponent>().each([this, &InstanceBuffer](auto Entity, const auto& Transform, const auto&)
 			{
-				// #TODO: Write transform to GPU buffer. View requires MeshComponent to exclude non-rendered entities.
+				EntityInstance Instance{ Transform };
+
+				std::vector<uint8_t> InstanceData{};
+				InstanceData.resize(sizeof(EntityInstance));
+				std::memcpy(InstanceData.data(), &Instance, InstanceData.size());
+
+				Device->Write(InstanceBuffer.first, InstanceData, InstanceBuffer.second);
 			});
 	}
-	*/
+
+	// Sync the copy engine so we're sure that all the resources are ready on the GPU. In the future this can be split up into separate sync groups (pre, main, post, etc.) to reduce idle time.
+	Device->Sync(SyncType::Copy, Device->Frame);
+	
 	auto* DrawList = Device->DirectCommandList[Device->Frame % RenderDevice::FrameCount].Get();
 	/*
 	Registry.view<const TransformComponent, const MeshComponent>().each([&InstanceBuffer, DrawList](auto Entity, const auto&, const auto& Mesh)
@@ -95,7 +103,7 @@ void Renderer::Render(entt::registry& Registry)
 
 	DrawList->Close();
 
-	//ID3D12CommandList* DirectLists[] = { DrawList };
+	ID3D12CommandList* DirectLists[] = { DrawList };
 
-	//Device->DirectCommandQueue->ExecuteCommandLists(1, DirectLists);
+	Device->DirectCommandQueue->ExecuteCommandLists(1, DirectLists);
 }

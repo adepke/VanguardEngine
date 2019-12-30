@@ -12,6 +12,7 @@
 #include <chrono>
 #include <thread>
 #include <Rendering/RenderComponents.h>
+#include <Core/CoreComponents.h>
 
 std::unique_ptr<WindowFrame> MainWindow;
 
@@ -54,6 +55,15 @@ void EngineBoot()
 
 void EngineLoop()
 {
+	entt::registry TempReg;
+	
+	for (auto Index = 0; Index < 10; ++Index)
+	{
+		const auto Entity = TempReg.create();
+		TempReg.assign<TransformComponent>(Entity);
+		TempReg.assign<MeshComponent>(Entity);
+	}
+
 	while (true)
 	{
 		{
@@ -74,8 +84,6 @@ void EngineLoop()
 
 		// #TEMP: Testing resource management.
 		auto Comp{ CreateMeshComponent(*Renderer::Get().Device, std::vector<Vertex>{ Vertex{}, Vertex{}, Vertex{} }, std::vector<uint32_t>{ 0, 1, 2 }) };
-
-		entt::registry TempReg;
 
 		Renderer::Get().Render(TempReg);
 

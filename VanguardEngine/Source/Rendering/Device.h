@@ -11,11 +11,19 @@
 #include <memory>
 #include <string_view>
 #include <array>
+#include <utility>
 
 #include <d3d12.h>
 #include <dxgi1_4.h>
 
 struct ResourceDescription;
+
+enum class SyncType
+{
+	Copy,
+	Direct,
+	Compute,
+};
 
 class RenderDevice
 {
@@ -52,19 +60,24 @@ private:
 
 	ResourcePtr<IDXGISwapChain3> SwapChain;
 	size_t Frame = 0;  // Stores the actual frame number. Refers to the current CPU frame being run, stepped after finishing CPU pass.
-	ResourcePtr<ID3D12Fence> FrameFence;
-	HANDLE FrameFenceEvent;
+
+	ResourcePtr<ID3D12Fence> CopyFence;
+	HANDLE CopyFenceEvent;
+	ResourcePtr<ID3D12Fence> DirectFence;
+	HANDLE DirectFenceEvent;
+	ResourcePtr<ID3D12Fence> ComputeFence;
+	HANDLE ComputeFenceEvent;
 
 	ResourcePtr<D3D12MA::Allocator> Allocator;
 	ResourceManager AllocatorManager;
+
+	std::array<std::shared_ptr<GPUBuffer>, FrameCount> FrameBuffers;
+	std::array<size_t, FrameCount> FrameBufferOffsets = {};
 
 	ResourcePtr<IDXGIAdapter1> GetAdapter(ResourcePtr<IDXGIFactory4>& Factory, bool Software);
 
 	// Name the D3D objects.
 	void SetNames();
-
-	// Blocking.
-	void WaitForFrame(size_t FrameID);
 
 	// Resets command lists and allocators.
 	void ResetFrame(size_t FrameID);
@@ -75,6 +88,12 @@ public:
 
 	std::shared_ptr<GPUBuffer> Allocate(const ResourceDescription& Description, const std::wstring_view Name);
 	void Write(std::shared_ptr<GPUBuffer>& Buffer, const std::vector<uint8_t>& Source, size_t BufferOffset = 0);
+
+	// Allocate a block of CPU write-only, GPU read-only memory from the per-frame dynamic heap.
+	std::pair<std::shared_ptr<GPUBuffer>, size_t> FrameAllocate(size_t Size);
+
+	// Sync the specified GPU engine to FrameID. Blocking.
+	void Sync(SyncType Type, size_t FrameID);
 
 	// Blocking, waits for the gpu to finish the next frame before returning. Marks the current frame as finished submitting and can move on to the next frame.
 	void FrameStep();
