@@ -11,7 +11,10 @@ void PipelineState::CreateShaders(RenderDevice& Device, const std::filesystem::p
 {
 	VGScopedCPUStat("Create Shaders");
 
-	for (auto& Entry : std::filesystem::directory_iterator{ ShaderPath })
+	auto PathOnly = ShaderPath;
+	PathOnly.remove_filename();
+
+	for (auto& Entry : std::filesystem::directory_iterator{ PathOnly })
 	{
 		Entry.path().filename().replace_extension("");
 
@@ -50,7 +53,7 @@ void PipelineState::CreateShaders(RenderDevice& Device, const std::filesystem::p
 
 			else
 			{
-				VGLogError(Rendering) << "Failed to determine shader type for shader '" << Entry.path().filename() << "'.";
+				VGLogError(Rendering) << "Failed to determine shader type for shader " << Entry.path().filename() << ".";
 			}
 
 			if (Type)
@@ -136,13 +139,13 @@ void PipelineState::Build(RenderDevice& Device, const std::filesystem::path& Sha
 {
 	VGScopedCPUStat("Build Pipeline");
 
-	VGLog(Rendering) << "Building pipeline for shader '" << ShaderPath.filename() << "'.";
+	VGLog(Rendering) << "Building pipeline for shader " << ShaderPath.filename() << ".";
 
 	const auto& Filename = ShaderPath.filename().generic_wstring();
 
 	if (ShaderPath.has_extension())
 	{
-		VGLogWarning(Rendering) << "Improper shader path '" << ShaderPath.filename() << "', do not include extension.";
+		VGLogWarning(Rendering) << "Improper shader path " << ShaderPath.filename() << ", do not include extension.";
 
 		auto ShaderPathFixed = ShaderPath;
 		ShaderPathFixed.replace_extension("");
