@@ -7,11 +7,15 @@
 #include <entt/entt.hpp>  // #TODO: Don't include, forward and include in the source.
 
 class RenderDevice;
+struct ID3D12GraphicsCommandList;
 
 class Renderer
 {
 public:
 	std::unique_ptr<RenderDevice> Device;
+
+private:
+	void SetRenderTargets(ID3D12GraphicsCommandList* CommandList, size_t Frame);
 
 public:
 	static inline Renderer& Get() noexcept

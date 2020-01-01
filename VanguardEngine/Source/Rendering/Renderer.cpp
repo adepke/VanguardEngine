@@ -19,20 +19,44 @@ struct EntityInstance
 	TransformComponent Transform;
 };
 
+void Renderer::SetRenderTargets(ID3D12GraphicsCommandList* CommandList, size_t Frame)
+{
+	D3D12_CPU_DESCRIPTOR_HANDLE RenderTargetHandle{};
+
+	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> RenderTargets;
+
+	// #TEMP
+	D3D12_CPU_DESCRIPTOR_HANDLE RtvHeapHandle;
+	size_t RenderTargetHeapSize;
+
+	// Final render target (bound to swap chain).
+	RenderTargets.push_back({});
+	RenderTargets[0] = { RtvHeapHandle.ptr + Frame * RenderTargetHeapSize };
+
+	CommandList->OMSetRenderTargets(RenderTargets.size(), RenderTargets.data(), false, nullptr);
+
+	constexpr float ClearColor[] = { 0.f, 0.f, 0.f, 1.f };
+	CommandList->ClearRenderTargetView(RenderTargets[0], ClearColor, 0, nullptr);
+}
+
 void Renderer::Initialize(std::unique_ptr<RenderDevice>&& InDevice)
 {
 	VGScopedCPUStat("Renderer Initialize");
 
 	Device = std::move(InDevice);
+
+	Device->ReloadShaders();
 }
 
 void Renderer::Render(entt::registry& Registry)
 {
 	VGScopedCPUStat("Render");
 
-	static_cast<ID3D12GraphicsCommandList*>(Device->CopyCommandList[Device->Frame % RenderDevice::FrameCount].Get())->Close();
+	const auto FrameIndex = Device->Frame % RenderDevice::FrameCount;
+
+	static_cast<ID3D12GraphicsCommandList*>(Device->CopyCommandList[FrameIndex].Get())->Close();
 	
-	ID3D12CommandList* CopyLists[] = { Device->CopyCommandList[Device->Frame % RenderDevice::FrameCount].Get() };
+	ID3D12CommandList* CopyLists[] = { Device->CopyCommandList[FrameIndex].Get() };
 
 	Device->CopyCommandQueue->ExecuteCommandLists(1, CopyLists);
 
@@ -62,10 +86,12 @@ void Renderer::Render(entt::registry& Registry)
 			});
 	}
 
+	auto* DrawList = Device->DirectCommandList[FrameIndex].Get();
+
+	SetRenderTargets(DrawList, FrameIndex);
+
 	// Sync the copy engine so we're sure that all the resources are ready on the GPU. In the future this can be split up into separate sync groups (pre, main, post, etc.) to reduce idle time.
 	Device->Sync(SyncType::Copy, Device->Frame);
-	
-	auto* DrawList = Device->DirectCommandList[Device->Frame % RenderDevice::FrameCount].Get();
 
 	{
 		VGScopedCPUStat("Main Pass");

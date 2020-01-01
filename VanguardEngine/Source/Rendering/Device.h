@@ -14,7 +14,7 @@
 #include <utility>
 
 #include <d3d12.h>
-#include <dxgi1_4.h>
+#include <dxgi1_6.h>
 
 struct ResourceDescription;
 
@@ -29,6 +29,7 @@ class RenderDevice
 {
 	friend class Renderer;
 	friend class ResourceManager;
+	friend struct PipelineState;
 
 public:
 	bool Debugging = false;
@@ -61,6 +62,8 @@ private:
 	ResourcePtr<IDXGISwapChain3> SwapChain;
 	size_t Frame = 0;  // Stores the actual frame number. Refers to the current CPU frame being run, stepped after finishing CPU pass.
 
+	std::array<ResourcePtr<ID3D12Resource>, FrameCount> FinalRenderTargets;  // Render targets bound to the swap chain.
+
 	ResourcePtr<ID3D12Fence> CopyFence;
 	HANDLE CopyFenceEvent;
 	ResourcePtr<ID3D12Fence> DirectFence;
@@ -71,13 +74,26 @@ private:
 	ResourcePtr<D3D12MA::Allocator> Allocator;
 	ResourceManager AllocatorManager;
 
-	std::array<std::shared_ptr<GPUBuffer>, FrameCount> FrameBuffers;
+	std::array<std::shared_ptr<GPUBuffer>, FrameCount> FrameBuffers;  // Per-frame shared dynamic heap.
 	std::array<size_t, FrameCount> FrameBufferOffsets = {};
 
-	ResourcePtr<IDXGIAdapter1> GetAdapter(ResourcePtr<IDXGIFactory4>& Factory, bool Software);
+	// #NOTE: Shader-visible descriptors require per-frame heaps.
+	std::array<ResourcePtr<ID3D12DescriptorHeap>, FrameCount> ResourceHeaps;  // CBV/SRV/UAV
+	std::array<ResourcePtr<ID3D12DescriptorHeap>, FrameCount> SamplerHeaps;
+	ResourcePtr<ID3D12DescriptorHeap> RenderTargetHeap;
+	ResourcePtr<ID3D12DescriptorHeap> DepthStencilHeap;
+	// #TODO: Compute heaps?
+
+	ResourcePtr<IDXGIAdapter1> GetAdapter(ResourcePtr<IDXGIFactory7>& Factory, bool Software);
 
 	// Name the D3D objects.
 	void SetNames();
+
+	void SetupDescriptorHeaps();
+	void SetupRenderTargets();
+
+	// Builds pipelines.
+	void ReloadShaders();
 
 	// Resets command lists and allocators.
 	void ResetFrame(size_t FrameID);

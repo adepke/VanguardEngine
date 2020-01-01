@@ -5,7 +5,7 @@
 
 #include <wrl/client.h>
 
-ResourcePtr<IDXGIAdapter1> RenderDevice::GetAdapter(ResourcePtr<IDXGIFactory4>& Factory, bool Software)
+ResourcePtr<IDXGIAdapter1> RenderDevice::GetAdapter(ResourcePtr<IDXGIFactory7>& Factory, bool Software)
 {
 	VGScopedCPUStat("Render Device Get Adapter");
 
@@ -18,7 +18,7 @@ ResourcePtr<IDXGIAdapter1> RenderDevice::GetAdapter(ResourcePtr<IDXGIFactory4>& 
 
 	else
 	{
-		for (uint32_t Index = 0; Factory->EnumAdapters1(Index, Adapter.Indirect()) != DXGI_ERROR_NOT_FOUND; ++Index)
+		for (uint32_t Index = 0; Factory->EnumAdapterByGpuPreference(Index, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(Adapter.Indirect())) != DXGI_ERROR_NOT_FOUND; ++Index)
 		{
 			DXGI_ADAPTER_DESC1 Description;
 			Adapter->GetDesc1(&Description);
@@ -66,6 +66,49 @@ void RenderDevice::SetNames()
 		ComputeCommandAllocator[Index]->SetName(VGText("Compute Command Allocator"));
 		ComputeCommandList[Index]->SetName(VGText("Compute Command List"));
 	}
+
+	for (auto Index = 0; Index < FrameCount; ++Index)
+	{
+		ResourceHeaps[Index]->SetName(VGText("Resource Heap"));
+		SamplerHeaps[Index]->SetName(VGText("Sampler Heap"));
+	}
+
+	RenderTargetHeap->SetName(VGText("Render Target Heap"));
+	DepthStencilHeap->SetName(VGText("Depth Stencil Heap"));
+}
+
+void RenderDevice::SetupDescriptorHeaps()
+{
+	VGScopedCPUStat("Setup Descriptor Heaps");
+
+	for (auto Index = 0; Index < FrameCount; ++Index)
+	{
+
+	}
+}
+
+void RenderDevice::SetupRenderTargets()
+{
+	VGScopedCPUStat("Setup Render Targets");
+
+	HRESULT Result;
+
+	for (auto Index = 0; Index < FrameCount; ++Index)
+	{
+		Result = SwapChain->GetBuffer(Index, IID_PPV_ARGS(FinalRenderTargets[Index].Indirect()));
+		if (FAILED(Result))
+		{
+			VGLogFatal(Rendering) << "Failed to get swap chain buffer for frame " << Index << ": " << Result;
+		}
+
+		// #TODO: Create rtv.
+		//Device->CreateRenderTargetView(FinalRenderTargets[Index], nullptr, )
+	}
+}
+
+void RenderDevice::ReloadShaders()
+{
+	VGScopedCPUStat("Reload Shaders");
 }
 
 void RenderDevice::ResetFrame(size_t FrameID)
@@ -138,7 +181,7 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		}
 	}
 
-	ResourcePtr<IDXGIFactory4> Factory;
+	ResourcePtr<IDXGIFactory7> Factory;
 	uint32_t FactoryFlags = 0;
 
 	if (EnableDebugging)
@@ -373,6 +416,9 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		FrameBuffers[Index] = std::move(AllocatorManager.Allocate(*this, Description, VGText("Frame Buffer")));
 	}
 
+	SetupDescriptorHeaps();
+	SetupRenderTargets();
+
 	if (Debugging)
 	{
 		SetNames();
@@ -478,4 +524,20 @@ void RenderDevice::FrameStep()
 void RenderDevice::SetResolution(size_t Width, size_t Height, bool InFullscreen)
 {
 	VGScopedCPUStat("Render Device Change Resolution");
+
+	Sync(SyncType::Direct, Frame);
+
+	RenderWidth = Width;
+	RenderHeight = Height;
+	Fullscreen = InFullscreen;
+
+	// #TODO: Fullscreen.
+
+	auto Result = SwapChain->ResizeBuffers(FrameCount, Width, Height, DXGI_FORMAT_UNKNOWN, 0);
+	if (FAILED(Result))
+	{
+		VGLogFatal(Rendering) << "Failed to resize swap chain buffers: " << Result;
+	}
+
+	SetupRenderTargets();
 }
