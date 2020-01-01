@@ -89,7 +89,8 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& Path, ShaderT
 	auto Result = D3DCompileFromFile(Path.c_str(), nullptr, nullptr, "main", CompileTarget, Flags, 0, &Blob, nullptr);
 	if (FAILED(Result))
 	{
-		VGLogError(Rendering) << "Failed to compile shader at '" << Path << "': " << Result;
+		VGLogError(Rendering) << "Failed to compile shader at '" << Path.generic_wstring() << "': " << Result;
+		return {};
 	}
 
 	auto ResultShader{ std::make_unique<Shader>() };

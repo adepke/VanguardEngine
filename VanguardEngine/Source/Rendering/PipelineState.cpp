@@ -11,14 +11,12 @@ void PipelineState::CreateShaders(RenderDevice& Device, const std::filesystem::p
 {
 	VGScopedCPUStat("Create Shaders");
 
-	auto PathOnly = ShaderPath;
-	PathOnly.remove_filename();
-
-	for (auto& Entry : std::filesystem::directory_iterator{ PathOnly })
+	for (auto& Entry : std::filesystem::directory_iterator{ ShaderPath.parent_path() })
 	{
-		Entry.path().filename().replace_extension("");
+		auto EntryName = Entry.path().filename().replace_extension("").generic_wstring();
+		EntryName = EntryName.substr(0, EntryName.size() - 3);  // Remove the shader type extension.
 
-		if (Entry.path().filename() == ShaderPath.filename())
+		if (EntryName == ShaderPath.filename())
 		{
 			const auto Filename = Entry.path().filename().generic_wstring();
 
@@ -53,7 +51,7 @@ void PipelineState::CreateShaders(RenderDevice& Device, const std::filesystem::p
 
 			else
 			{
-				VGLogError(Rendering) << "Failed to determine shader type for shader " << Entry.path().filename() << ".";
+				VGLogError(Rendering) << "Failed to determine shader type for shader " << Entry.path().filename().generic_wstring() << ".";
 			}
 
 			if (Type)
@@ -139,25 +137,16 @@ void PipelineState::Build(RenderDevice& Device, const std::filesystem::path& Sha
 {
 	VGScopedCPUStat("Build Pipeline");
 
-	VGLog(Rendering) << "Building pipeline for shader " << ShaderPath.filename() << ".";
+	VGLog(Rendering) << "Building pipeline for shader '" << ShaderPath.filename().generic_wstring() << "'.";
 
 	const auto& Filename = ShaderPath.filename().generic_wstring();
 
 	if (ShaderPath.has_extension())
 	{
-		VGLogWarning(Rendering) << "Improper shader path " << ShaderPath.filename() << ", do not include extension.";
-
-		auto ShaderPathFixed = ShaderPath;
-		ShaderPathFixed.replace_extension("");
-
-		CreateShaders(Device, ShaderPathFixed);
+		VGLogWarning(Rendering) << "Improper shader path '" << ShaderPath.filename().generic_wstring() << "', do not include extension.";
 	}
 
-	else
-	{
-		CreateShaders(Device, ShaderPath);
-	}
-
+	CreateShaders(Device, ShaderPath);
 	CreateRootSignature(Device);
 	CreateDescriptorTables(Device);
 	CreateInputLayout();

@@ -5,6 +5,7 @@
 #include <Rendering/Base.h>
 #include <Rendering/Resource.h>
 #include <Rendering/ResourceManager.h>
+#include <Rendering/PipelineState.h>
 
 #include <D3D12MemAlloc.h>
 
@@ -12,6 +13,7 @@
 #include <string_view>
 #include <array>
 #include <utility>
+#include <vector>
 
 #include <d3d12.h>
 #include <dxgi1_6.h>
@@ -83,6 +85,8 @@ private:
 	ResourcePtr<ID3D12DescriptorHeap> RenderTargetHeap;
 	ResourcePtr<ID3D12DescriptorHeap> DepthStencilHeap;
 	// #TODO: Compute heaps?
+
+	std::vector<PipelineState> PipelineStates;
 
 	ResourcePtr<IDXGIAdapter1> GetAdapter(ResourcePtr<IDXGIFactory7>& Factory, bool Software);
 

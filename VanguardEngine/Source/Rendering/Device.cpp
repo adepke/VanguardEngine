@@ -2,6 +2,10 @@
 
 #include <Rendering/Device.h>
 #include <Rendering/ResourceManager.h>
+#include <Core/Config.h>
+
+#include <filesystem>
+#include <algorithm>
 
 #include <wrl/client.h>
 
@@ -109,6 +113,27 @@ void RenderDevice::SetupRenderTargets()
 void RenderDevice::ReloadShaders()
 {
 	VGScopedCPUStat("Reload Shaders");
+
+	VGLog(Rendering) << "Reloading shaders.";
+
+	PipelineStates.clear();
+
+	std::vector<std::wstring> BuiltShaders;
+
+	for (const auto& Entry : std::filesystem::directory_iterator{ Config::Get().ShaderPath })
+	{
+		auto ShaderName = Entry.path().filename().replace_extension("").generic_wstring();
+		ShaderName = ShaderName.substr(0, ShaderName.size() - 3);  // Remove the shader type extension.
+		
+		if (std::find(BuiltShaders.begin(), BuiltShaders.end(), ShaderName) == BuiltShaders.end())
+		{
+			PipelineState Pipeline{};
+			Pipeline.Build(*this, Entry.path().parent_path() / ShaderName);
+			PipelineStates.push_back(std::move(Pipeline));
+
+			BuiltShaders.push_back(std::move(ShaderName));
+		}
+	}
 }
 
 void RenderDevice::ResetFrame(size_t FrameID)
