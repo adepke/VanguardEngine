@@ -66,7 +66,7 @@ void RenderDevice::SetNames()
 		ComputeCommandAllocator[Index]->SetName(VGText("Compute Command Allocator"));
 		ComputeCommandList[Index]->SetName(VGText("Compute Command List"));
 	}
-
+	
 	for (auto Index = 0; Index < FrameCount; ++Index)
 	{
 		ResourceHeaps[Index]->SetName(VGText("Resource Heap"));
@@ -532,6 +532,8 @@ void RenderDevice::SetResolution(size_t Width, size_t Height, bool InFullscreen)
 	Fullscreen = InFullscreen;
 
 	// #TODO: Fullscreen.
+
+	FinalRenderTargets = {};  // Release the render targets.
 
 	auto Result = SwapChain->ResizeBuffers(FrameCount, Width, Height, DXGI_FORMAT_UNKNOWN, 0);
 	if (FAILED(Result))
