@@ -50,6 +50,7 @@ void EngineBoot()
 #endif
 
 	auto Device = std::make_unique<RenderDevice>(static_cast<HWND>(MainWindow->GetHandle()), false, EnableDebugging);
+	Device->SetResolution(800, 600, false);
 	Renderer::Get().Initialize(std::move(Device));
 }
 
