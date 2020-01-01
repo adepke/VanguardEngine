@@ -38,5 +38,5 @@ Config::Config()
 	nlohmann::json EngineConfig;
 	EngineConfigStream >> EngineConfig;
 
-	ShaderPath = EngineConfig["Paths"]["ShaderPath"].get<std::string>();
+	ShaderPath = EngineRoot / EngineConfig["Paths"]["ShaderPath"].get<std::string>();
 }
