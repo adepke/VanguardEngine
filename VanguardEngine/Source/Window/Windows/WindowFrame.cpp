@@ -41,6 +41,10 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 		return 0;
 
+	case WM_SIZE:
+		// #TODO: Resizing.
+		return ::DefWindowProc(hWnd, msg, wParam, lParam);
+
 	case WM_DPICHANGED:
 		// #TODO: DPI awareness.
 		return ::DefWindowProc(hWnd, msg, wParam, lParam);
