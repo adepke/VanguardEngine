@@ -9,6 +9,42 @@
 
 #include <wrl/client.h>
 
+void DescriptorHeap::Initialize(RenderDevice& Device, D3D12_DESCRIPTOR_HEAP_TYPE Type, size_t Descriptors)
+{
+	D3D12_DESCRIPTOR_HEAP_DESC HeapDesc{};
+	HeapDesc.Type = Type;
+	HeapDesc.NumDescriptors = Descriptors;
+	HeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;  // #TODO: Shader visible?
+	HeapDesc.NodeMask = 0;
+
+	auto Result = Device.Device->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(Heap.Indirect()));
+	if (FAILED(Result))
+	{
+		VGLogFatal(Rendering) << "Failed to create descriptor heap for type '" << Type << "' with " << Descriptors << " descriptors: " << Result;
+	}
+
+	HeapStart = Heap->GetCPUDescriptorHandleForHeapStart().ptr;
+	DescriptorSize = Device.Device->GetDescriptorHandleIncrementSize(Type);
+	FreeDescriptors = Descriptors;
+}
+
+D3D12_CPU_DESCRIPTOR_HANDLE DescriptorHeap::Allocate(RenderDevice& Device)
+{
+	VGEnsure(FreeDescriptors > 0, "Ran out of descriptor heap memory.");
+	--FreeDescriptors;
+
+	const auto OldPointer = HeapStart + FreeOffset;
+
+	FreeOffset += DescriptorSize;
+
+	return { OldPointer };
+}
+
+void DescriptorHeap::SetName(std::wstring_view Name)
+{
+	Heap->SetName(Name.data());
+}
+
 ResourcePtr<IDXGIAdapter1> RenderDevice::GetAdapter(ResourcePtr<IDXGIFactory7>& Factory, bool Software)
 {
 	VGScopedCPUStat("Render Device Get Adapter");
@@ -70,15 +106,15 @@ void RenderDevice::SetNames()
 		ComputeCommandAllocator[Index]->SetName(VGText("Compute Command Allocator"));
 		ComputeCommandList[Index]->SetName(VGText("Compute Command List"));
 	}
-	
+
 	for (auto Index = 0; Index < FrameCount; ++Index)
 	{
-		ResourceHeaps[Index]->SetName(VGText("Resource Heap"));
-		SamplerHeaps[Index]->SetName(VGText("Sampler Heap"));
+		ResourceHeaps[Index].SetName(VGText("Resource Heap"));
+		SamplerHeaps[Index].SetName(VGText("Sampler Heap"));
 	}
 
-	RenderTargetHeap->SetName(VGText("Render Target Heap"));
-	DepthStencilHeap->SetName(VGText("Depth Stencil Heap"));
+	RenderTargetHeap.SetName(VGText("Render Target Heap"));
+	DepthStencilHeap.SetName(VGText("Depth Stencil Heap"));
 }
 
 void RenderDevice::SetupDescriptorHeaps()
@@ -87,8 +123,12 @@ void RenderDevice::SetupDescriptorHeaps()
 
 	for (auto Index = 0; Index < FrameCount; ++Index)
 	{
-
+		ResourceHeaps[Index].Initialize(*this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, ResourceDescriptors);
+		SamplerHeaps[Index].Initialize(*this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, SamplerDescriptors);
 	}
+
+	RenderTargetHeap.Initialize(*this, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, RenderTargetDescriptors);
+	DepthStencilHeap.Initialize(*this, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, DepthStencilDescriptors);
 }
 
 void RenderDevice::SetupRenderTargets()
@@ -105,8 +145,9 @@ void RenderDevice::SetupRenderTargets()
 			VGLogFatal(Rendering) << "Failed to get swap chain buffer for frame " << Index << ": " << Result;
 		}
 
-		// #TODO: Create rtv.
-		//Device->CreateRenderTargetView(FinalRenderTargets[Index], nullptr, )
+		auto RTV = RenderTargetHeap.Allocate(*this);
+		Device->CreateRenderTargetView(FinalRenderTargets[Index].Get(), nullptr, RTV);
+		FinalRenderTargetViews[Index] = RTV;
 	}
 }
 

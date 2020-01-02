@@ -18,7 +18,23 @@
 #include <d3d12.h>
 #include <dxgi1_6.h>
 
+class RenderDevice;
 struct ResourceDescription;
+
+struct DescriptorHeap
+{
+private:
+	ResourcePtr<ID3D12DescriptorHeap> Heap;
+	size_t HeapStart = 0;
+	size_t DescriptorSize = 0;
+	size_t FreeOffset = 0;
+	size_t FreeDescriptors = 0;
+
+public:
+	void Initialize(RenderDevice& Device, D3D12_DESCRIPTOR_HEAP_TYPE Type, size_t Descriptors);
+	D3D12_CPU_DESCRIPTOR_HANDLE Allocate(RenderDevice& Device);
+	void SetName(std::wstring_view Name);
+};
 
 enum class SyncType
 {
@@ -31,6 +47,7 @@ class RenderDevice
 {
 	friend class Renderer;
 	friend class ResourceManager;
+	friend struct DescriptorHeap;
 	friend struct PipelineState;
 
 public:
@@ -65,6 +82,7 @@ private:
 	size_t Frame = 0;  // Stores the actual frame number. Refers to the current CPU frame being run, stepped after finishing CPU pass.
 
 	std::array<ResourcePtr<ID3D12Resource>, FrameCount> FinalRenderTargets;  // Render targets bound to the swap chain.
+	std::array<D3D12_CPU_DESCRIPTOR_HANDLE, FrameCount> FinalRenderTargetViews;
 
 	ResourcePtr<ID3D12Fence> CopyFence;
 	HANDLE CopyFenceEvent;
@@ -79,13 +97,17 @@ private:
 	std::array<std::shared_ptr<GPUBuffer>, FrameCount> FrameBuffers;  // Per-frame shared dynamic heap.
 	std::array<size_t, FrameCount> FrameBufferOffsets = {};
 
-	// #NOTE: Shader-visible descriptors require per-frame heaps.
-	std::array<ResourcePtr<ID3D12DescriptorHeap>, FrameCount> ResourceHeaps;  // CBV/SRV/UAV
-	std::array<ResourcePtr<ID3D12DescriptorHeap>, FrameCount> SamplerHeaps;
-	ResourcePtr<ID3D12DescriptorHeap> RenderTargetHeap;
-	ResourcePtr<ID3D12DescriptorHeap> DepthStencilHeap;
-	// #TODO: Compute heaps?
+	static constexpr size_t ResourceDescriptors = 64;
+	static constexpr size_t SamplerDescriptors = 64;
+	static constexpr size_t RenderTargetDescriptors = FrameCount * 8;
+	static constexpr size_t DepthStencilDescriptors = FrameCount * 8;
 
+	// #NOTE: Shader-visible descriptors require per-frame heaps.
+	std::array<DescriptorHeap, FrameCount> ResourceHeaps;  // CBV/SRV/UAV
+	std::array<DescriptorHeap, FrameCount> SamplerHeaps;
+	DescriptorHeap RenderTargetHeap;
+	DescriptorHeap DepthStencilHeap;
+	
 	std::vector<PipelineState> PipelineStates;
 
 	ResourcePtr<IDXGIAdapter1> GetAdapter(ResourcePtr<IDXGIFactory7>& Factory, bool Software);

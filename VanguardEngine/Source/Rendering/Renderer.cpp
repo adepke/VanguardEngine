@@ -23,20 +23,38 @@ void Renderer::SetRenderTargets(ID3D12GraphicsCommandList* CommandList, size_t F
 {
 	D3D12_CPU_DESCRIPTOR_HANDLE RenderTargetHandle{};
 
-	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> RenderTargets;
-
-	// #TEMP
-	D3D12_CPU_DESCRIPTOR_HANDLE RtvHeapHandle;
-	size_t RenderTargetHeapSize;
+	// Split into two vectors so that we can trivially pass to the command list.
+	std::vector<ID3D12Resource*> RenderTargets;
+	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> RenderTargetViews;
 
 	// Final render target (bound to swap chain).
 	RenderTargets.push_back({});
-	RenderTargets[0] = { RtvHeapHandle.ptr + Frame * RenderTargetHeapSize };
+	RenderTargetViews.push_back({});
+	RenderTargets[0] = Device->FinalRenderTargets[Frame].Get();
+	RenderTargetViews[0] = { Device->FinalRenderTargetViews[Frame].ptr };
 
-	CommandList->OMSetRenderTargets(RenderTargets.size(), RenderTargets.data(), false, nullptr);
+	VGAssert(RenderTargets.size() == RenderTargetViews.size(), "Size mismatch in render targets and render target views");
+
+	std::vector<D3D12_RESOURCE_BARRIER> Barriers;
+	Barriers.reserve(RenderTargets.size());
+
+	for (const auto& Target : RenderTargets)
+	{
+		D3D12_RESOURCE_BARRIER Barrier;
+		Barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+		Barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+		Barrier.Transition.pResource = Target;
+		Barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+		Barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
+		Barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
+	}
+
+	CommandList->ResourceBarrier(Barriers.size(), Barriers.data());
+
+	CommandList->OMSetRenderTargets(RenderTargetViews.size(), RenderTargetViews.data(), false, nullptr);
 
 	constexpr float ClearColor[] = { 0.f, 0.f, 0.f, 1.f };
-	CommandList->ClearRenderTargetView(RenderTargets[0], ClearColor, 0, nullptr);
+	CommandList->ClearRenderTargetView(RenderTargetViews[0], ClearColor, 0, nullptr);
 }
 
 void Renderer::Initialize(std::unique_ptr<RenderDevice>&& InDevice)
@@ -135,4 +153,6 @@ void Renderer::Render(entt::registry& Registry)
 	ID3D12CommandList* DirectLists[] = { DrawList };
 
 	Device->DirectCommandQueue->ExecuteCommandLists(1, DirectLists);
+
+	Device->SwapChain->Present(Device->VSync, 0);
 }
