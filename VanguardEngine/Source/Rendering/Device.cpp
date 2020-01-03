@@ -109,6 +109,15 @@ void RenderDevice::SetNames()
 
 	for (auto Index = 0; Index < FrameCount; ++Index)
 	{
+		FinalRenderTargets[Index]->SetName(VGText("Final Render Target"));
+	}
+
+	CopyFence->SetName(VGText("Copy Fence"));
+	DirectFence->SetName(VGText("Direct Fence"));
+	ComputeFence->SetName(VGText("Compute Fence"));
+
+	for (auto Index = 0; Index < FrameCount; ++Index)
+	{
 		ResourceHeaps[Index].SetName(VGText("Resource Heap"));
 		SamplerHeaps[Index].SetName(VGText("Sampler Heap"));
 	}
