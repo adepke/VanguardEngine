@@ -9,13 +9,20 @@
 class RenderDevice;
 struct ID3D12GraphicsCommandList;
 
+enum class RenderPass
+{
+	Main,
+};
+
 class Renderer
 {
 public:
 	std::unique_ptr<RenderDevice> Device;
 
 private:
-	void SetRenderTargets(ID3D12GraphicsCommandList* CommandList, size_t Frame);
+	auto GetPassRenderTargets(RenderPass Pass);
+	void BeginRenderPass(RenderPass Pass);
+	void EndRenderPass(RenderPass Pass);
 
 public:
 	static inline Renderer& Get() noexcept
