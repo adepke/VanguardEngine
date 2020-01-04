@@ -79,6 +79,7 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& Path, ShaderT
 	}
 
 	ID3DBlob* Blob;
+	ID3DBlob* ErrorBlob;
 
 	auto Flags = 0;
 
@@ -86,10 +87,10 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& Path, ShaderT
 	Flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
 #endif
 
-	auto Result = D3DCompileFromFile(Path.c_str(), nullptr, nullptr, "main", CompileTarget, Flags, 0, &Blob, nullptr);
+	auto Result = D3DCompileFromFile(Path.c_str(), nullptr, nullptr, "main", CompileTarget, Flags, 0, &Blob, &ErrorBlob);
 	if (FAILED(Result))
 	{
-		VGLogError(Rendering) << "Failed to compile shader at '" << Path.generic_wstring() << "': " << Result;
+		VGLogError(Rendering) << "Failed to compile shader at '" << Path.generic_wstring() << "': " << Result << " | Error Blob: " << static_cast<char*>(ErrorBlob->GetBufferPointer());
 		return {};
 	}
 
