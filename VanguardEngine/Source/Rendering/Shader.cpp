@@ -78,8 +78,8 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& Path, ShaderT
 	case ShaderType::Compute: CompileTarget = "cs_5_0"; break;
 	}
 
-	ID3DBlob* Blob;
-	ID3DBlob* ErrorBlob;
+	ResourcePtr<ID3DBlob> Blob;
+	ResourcePtr<ID3DBlob> ErrorBlob;
 
 	auto Flags = 0;
 
@@ -87,7 +87,7 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& Path, ShaderT
 	Flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
 #endif
 
-	auto Result = D3DCompileFromFile(Path.c_str(), nullptr, nullptr, "main", CompileTarget, Flags, 0, &Blob, &ErrorBlob);
+	auto Result = D3DCompileFromFile(Path.c_str(), nullptr, nullptr, "main", CompileTarget, Flags, 0, Blob.Indirect(), ErrorBlob.Indirect());
 	if (FAILED(Result))
 	{
 		VGLogError(Rendering) << "Failed to compile shader at '" << Path.generic_wstring() << "': " << Result << " | Error Blob: " << static_cast<char*>(ErrorBlob->GetBufferPointer());
@@ -98,10 +98,10 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& Path, ShaderT
 	ResultShader->Bytecode.resize(Blob->GetBufferSize());
 
 	std::memcpy(ResultShader->Bytecode.data(), Blob->GetBufferPointer(), Blob->GetBufferSize());
-
-	ResultShader->Blob = std::move(ResourcePtr<ID3DBlob>{ Blob });
 	
-	ReflectShader(ResultShader, Blob, Path.filename().generic_wstring());
+	ReflectShader(ResultShader, Blob.Get(), Path.filename().generic_wstring());
+
+	ResultShader->Blob = std::move(Blob);
 
 	return std::move(ResultShader);
 }
