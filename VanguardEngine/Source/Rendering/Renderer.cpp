@@ -172,12 +172,9 @@ void Renderer::Render(entt::registry& Registry)
 			});
 	}
 
-	auto* DrawList = Device->DirectCommandList[FrameIndex].Get();
-
-	// Sync the copy engine so we're sure that all the resources are ready on the GPU. In the future this can be split up into separate sync groups (pre, main, post, etc.) to reduce idle time.
-	Device->Sync(SyncType::Copy, Device->Frame);
-
 	BeginRenderPass(RenderPass::Main);
+
+	auto* DrawList = Device->DirectCommandList[FrameIndex].Get();
 
 	{
 		VGScopedCPUStat("Main Pass");
@@ -217,6 +214,9 @@ void Renderer::Render(entt::registry& Registry)
 	}
 
 	EndRenderPass(RenderPass::Main);
+
+	// Sync the copy engine so we're sure that all the resources are ready on the GPU. In the future this can be split up into separate sync groups (pre, main, post, etc.) to reduce idle time.
+	Device->Sync(SyncType::Copy, Device->Frame);
 
 	DrawList->Close();
 
