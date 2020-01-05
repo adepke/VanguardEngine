@@ -60,10 +60,10 @@ public:
 	static constexpr uint32_t FrameCount = 3;  // #TODO: Determine at runtime.
 
 private:
-	const D3D_FEATURE_LEVEL FeatureLevel = D3D_FEATURE_LEVEL_11_0;
+	const D3D_FEATURE_LEVEL FeatureLevel = D3D_FEATURE_LEVEL_12_1;
 
 	// #NOTE: Ordering of these variables is significant for proper destruction!
-	ResourcePtr<ID3D12Device> Device;
+	ResourcePtr<ID3D12Device3> Device;
 	ResourcePtr<IDXGIAdapter1> Adapter;
 
 	ResourcePtr<ID3D12CommandQueue> CopyCommandQueue;
