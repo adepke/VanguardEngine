@@ -127,6 +127,7 @@ void Renderer::Initialize(std::unique_ptr<RenderDevice>&& InDevice)
 
 	Device = std::move(InDevice);
 
+	Device->CheckFeatureSupport();
 	Device->ReloadShaders();
 }
 
@@ -206,8 +207,7 @@ void Renderer::Render(entt::registry& Registry)
 
 				//DrawList->OMSetStencilRef();  // #TODO: Stencil ref.
 
-				//DrawList->SetPipelineState();  // #TODO: Pipeline state.
-				DrawList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+				// #TODO: Bind the pipeline.
 
 				DrawList->DrawIndexedInstanced(Mesh.IndexBuffer->Description.Size / sizeof(uint32_t), 1, 0, 0, 0);
 			});
@@ -231,6 +231,6 @@ void Renderer::Render(entt::registry& Registry)
 	{
 		VGScopedCPUStat("Present");
 
-		Device->SwapChain->Present(Device->VSync, 0);
+		Device->SwapChain->Present(Device->VSync, 0);  // #TODO: This is probably presenting the wrong frame!
 	}
 }

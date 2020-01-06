@@ -2,16 +2,28 @@
 
 #pragma once
 
+#include <Rendering/Material.h>
 #include <Rendering/Device.h>
 #include <Rendering/Resource.h>
 
 #include <memory>
+#include <vector>
 #include <cstring>
+
+struct Material;
 
 // #TODO: Array of mesh materials bound to vertex/index offsets to enable multiple materials per mesh.
 struct MeshComponent
 {
-	// #TODO: Material
+	struct Subset
+	{
+		size_t VertexOffset = 0;  // Offset into the vertex buffer.
+		size_t Vertices = 0;
+
+		std::shared_ptr<Material> Mat;
+	};
+
+	std::vector<Subset> Subsets;
 
 	std::shared_ptr<GPUBuffer> VertexBuffer;
 	std::shared_ptr<GPUBuffer> IndexBuffer;

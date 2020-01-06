@@ -9,42 +9,6 @@
 
 #include <wrl/client.h>
 
-void DescriptorHeap::Initialize(RenderDevice& Device, D3D12_DESCRIPTOR_HEAP_TYPE Type, size_t Descriptors)
-{
-	D3D12_DESCRIPTOR_HEAP_DESC HeapDesc{};
-	HeapDesc.Type = Type;
-	HeapDesc.NumDescriptors = Descriptors;
-	HeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;  // #TODO: Shader visible?
-	HeapDesc.NodeMask = 0;
-
-	auto Result = Device.Device->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(Heap.Indirect()));
-	if (FAILED(Result))
-	{
-		VGLogFatal(Rendering) << "Failed to create descriptor heap for type '" << Type << "' with " << Descriptors << " descriptors: " << Result;
-	}
-
-	HeapStart = Heap->GetCPUDescriptorHandleForHeapStart().ptr;
-	DescriptorSize = Device.Device->GetDescriptorHandleIncrementSize(Type);
-	FreeDescriptors = Descriptors;
-}
-
-D3D12_CPU_DESCRIPTOR_HANDLE DescriptorHeap::Allocate(RenderDevice& Device)
-{
-	VGEnsure(FreeDescriptors > 0, "Ran out of descriptor heap memory.");
-	--FreeDescriptors;
-
-	const auto OldPointer = HeapStart + FreeOffset;
-
-	FreeOffset += DescriptorSize;
-
-	return { OldPointer };
-}
-
-void DescriptorHeap::SetName(std::wstring_view Name)
-{
-	Heap->SetName(Name.data());
-}
-
 ResourcePtr<IDXGIAdapter1> RenderDevice::GetAdapter(ResourcePtr<IDXGIFactory7>& Factory, bool Software)
 {
 	VGScopedCPUStat("Render Device Get Adapter");
@@ -509,6 +473,124 @@ RenderDevice::~RenderDevice()
 	::CloseHandle(CopyFenceEvent);
 	::CloseHandle(DirectFenceEvent);
 	::CloseHandle(ComputeFenceEvent);
+}
+
+void RenderDevice::CheckFeatureSupport()
+{
+	D3D12_FEATURE_DATA_D3D12_OPTIONS Options{};
+	auto Result = Device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &Options, sizeof(Options));
+	if (FAILED(Result))
+	{
+		VGLogError(Rendering) << "Failed to check feature support for category 'options': " << Result;
+	}
+
+	else
+	{
+		switch (Options.ResourceBindingTier)
+		{
+		case D3D12_RESOURCE_BINDING_TIER_1: VGLog(Rendering) << "Device supports resource binding tier 1."; break;
+		case D3D12_RESOURCE_BINDING_TIER_2: VGLog(Rendering) << "Device supports resource binding tier 2."; break;
+		case D3D12_RESOURCE_BINDING_TIER_3: VGLog(Rendering) << "Device supports resource binding tier 3."; break;
+		default:
+			if (Options.ResourceBindingTier > D3D12_RESOURCE_BINDING_TIER_3)
+			{
+				VGLog(Rendering) << "Device supports resource binding tier newer than 3.";
+			}
+
+			else
+			{
+				VGLogWarning(Rendering) << "Unable to determine device resource binding tier.";
+			}
+		}
+	}
+
+	D3D12_FEATURE_DATA_FEATURE_LEVELS FeatureLevels{};
+	Result = Device->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS, &FeatureLevels, sizeof(FeatureLevels));
+	if (FAILED(Result))
+	{
+		VGLogError(Rendering) << "Failed to check feature support for category 'feature levels': " << Result;
+	}
+
+	else
+	{
+		VGLog(Rendering) << "Device has " << FeatureLevels.NumFeatureLevels << " feature levels.";
+
+		switch (FeatureLevels.MaxSupportedFeatureLevel)
+		{
+		case D3D_FEATURE_LEVEL_11_0: VGLog(Rendering) << "Device max feature level is 11.0."; break;
+		case D3D_FEATURE_LEVEL_11_1: VGLog(Rendering) << "Device max feature level is 11.1."; break;
+		case D3D_FEATURE_LEVEL_12_0: VGLog(Rendering) << "Device max feature level is 12.0."; break;
+		case D3D_FEATURE_LEVEL_12_1: VGLog(Rendering) << "Device max feature level is 12.1."; break;
+		default:
+			if (FeatureLevels.MaxSupportedFeatureLevel < D3D_FEATURE_LEVEL_11_0)
+			{
+				VGLog(Rendering) << "Device max feature level is prior to 11.0.";
+			}
+
+			else
+			{
+				VGLog(Rendering) << "Device max feature level is newer than 12.1.";
+			}
+		}
+	}
+
+	D3D12_FEATURE_DATA_SHADER_MODEL ShaderModel{};
+	Result = Device->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &ShaderModel, sizeof(ShaderModel));
+	if (FAILED(Result))
+	{
+		VGLogError(Rendering) << "Failed to check feature support for category 'shader model': " << Result;
+	}
+
+	else
+	{
+		switch (ShaderModel.HighestShaderModel)
+		{
+		case D3D_SHADER_MODEL_5_1: VGLog(Rendering) << "Device supports shader model 5.1."; break;
+		case D3D_SHADER_MODEL_6_0: VGLog(Rendering) << "Device supports shader model 6.0."; break;
+		case D3D_SHADER_MODEL_6_1: VGLog(Rendering) << "Device supports shader model 6.1."; break;
+		case D3D_SHADER_MODEL_6_2: VGLog(Rendering) << "Device supports shader model 6.2."; break;
+		case D3D_SHADER_MODEL_6_3: VGLog(Rendering) << "Device supports shader model 6.3."; break;
+		case D3D_SHADER_MODEL_6_4: VGLog(Rendering) << "Device supports shader model 6.4."; break;
+		case D3D_SHADER_MODEL_6_5: VGLog(Rendering) << "Device supports shader model 6.5."; break;
+		default:
+			if (ShaderModel.HighestShaderModel > D3D_SHADER_MODEL_6_5)
+			{
+				VGLog(Rendering) << "Device supports shader model newer than 6.5.";
+			}
+
+			else
+			{
+				VGLogWarning(Rendering) << "Unable to determine device shader model support.";
+			}
+		}
+	}
+
+	D3D12_FEATURE_DATA_ROOT_SIGNATURE RootSignature{};
+	Result = Device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &RootSignature, sizeof(RootSignature));
+	if (FAILED(Result))
+	{
+		VGLogError(Rendering) << "Failed to check feature support for category 'root signature': " << Result;
+	}
+
+	else
+	{
+		switch (RootSignature.HighestVersion)
+		{
+		case D3D_ROOT_SIGNATURE_VERSION_1:  // Fall through.
+		case D3D_ROOT_SIGNATURE_VERSION_1_0: VGLog(Rendering) << "Device supports root signature 1.0."; break;
+		case D3D_ROOT_SIGNATURE_VERSION_1_1: VGLog(Rendering) << "Device supports root signature 1.1."; break;
+		default:
+			if (RootSignature.HighestVersion > D3D_ROOT_SIGNATURE_VERSION_1_1)
+			{
+				VGLog(Rendering) << "Device supports root signature newer than 1.1.";
+			}
+
+			else
+			{
+				VGLogWarning(Rendering) << "Unable to determine device root signature support.";
+			}
+		}
+	}
 }
 
 std::shared_ptr<GPUBuffer> RenderDevice::Allocate(const ResourceDescription& Description, const std::wstring_view Name)

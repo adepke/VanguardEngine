@@ -21,21 +21,6 @@
 class RenderDevice;
 struct ResourceDescription;
 
-struct DescriptorHeap
-{
-private:
-	ResourcePtr<ID3D12DescriptorHeap> Heap;
-	size_t HeapStart = 0;
-	size_t DescriptorSize = 0;
-	size_t FreeOffset = 0;
-	size_t FreeDescriptors = 0;
-
-public:
-	void Initialize(RenderDevice& Device, D3D12_DESCRIPTOR_HEAP_TYPE Type, size_t Descriptors);
-	D3D12_CPU_DESCRIPTOR_HANDLE Allocate(RenderDevice& Device);
-	void SetName(std::wstring_view Name);
-};
-
 enum class SyncType
 {
 	Copy,
@@ -45,11 +30,6 @@ enum class SyncType
 
 class RenderDevice
 {
-	friend class Renderer;
-	friend class ResourceManager;
-	friend struct DescriptorHeap;
-	friend struct PipelineState;
-
 public:
 	bool Debugging = false;
 	bool VSync = false;
@@ -81,8 +61,7 @@ private:
 	ResourcePtr<IDXGISwapChain3> SwapChain;
 	size_t Frame = 0;  // Stores the actual frame number. Refers to the current CPU frame being run, stepped after finishing CPU pass.
 
-	std::array<ResourcePtr<ID3D12Resource>, FrameCount> FinalRenderTargets;  // Render targets bound to the swap chain.
-	std::array<D3D12_CPU_DESCRIPTOR_HANDLE, FrameCount> FinalRenderTargetViews;
+	std::array<std::shared_ptr<GPUTexture>, FrameCount> BackBufferTextures;  // Render targets bound to the swap chain.
 
 	ResourcePtr<ID3D12Fence> CopyFence;
 	HANDLE CopyFenceEvent;
@@ -127,6 +106,11 @@ private:
 public:
 	RenderDevice(HWND InWindow, bool Software, bool EnableDebugging);
 	~RenderDevice();
+
+	auto* Get() const noexcept { return Device.Get(); }
+
+	// Logs various data about the device's feature support. Not needed in optimized builds.
+	void CheckFeatureSupport();
 
 	std::shared_ptr<GPUBuffer> Allocate(const ResourceDescription& Description, const std::wstring_view Name);
 	void Write(std::shared_ptr<GPUBuffer>& Buffer, const std::vector<uint8_t>& Source, size_t BufferOffset = 0);

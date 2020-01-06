@@ -11,15 +11,28 @@
 
 class RenderDevice;
 
-struct PipelineState
+struct PipelineStateDescription
+{
+	std::filesystem::path ShaderPath;
+	D3D12_BLEND_DESC BlendDescription;
+	D3D12_RASTERIZER_DESC RasterizerDescription;
+	D3D12_DEPTH_STENCIL_DESC DepthStencilDescription;
+	D3D12_PRIMITIVE_TOPOLOGY_TYPE Topology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+};
+
+class PipelineState
 {
 private:
+	PipelineStateDescription Description;
+
 	void CreateShaders(RenderDevice& Device, const std::filesystem::path& ShaderPath);
 	void CreateRootSignature(RenderDevice& Device);
 	void CreateDescriptorTables(RenderDevice& Device);
 	void CreateInputLayout();
 
 public:
+	size_t Hash = 0;
+	ResourcePtr<ID3D12PipelineState> Pipeline;
 	ResourcePtr<ID3D12RootSignature> RootSignature;
 	D3D12_INPUT_LAYOUT_DESC InputLayout;
 	std::unique_ptr<Shader> VertexShader;
@@ -30,7 +43,19 @@ public:
 	//ResourcePtr<> BlendState;  // #TODO: Blend state.
 	//ResourcePtr<> RasterizerState;  // #TODO: Rasterizer state.
 	//ResourcePtr<> DepthStencilState;  // #TODO: Depth stencil state.
-	D3D12_PRIMITIVE_TOPOLOGY_TYPE Topology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 
-	void Build(RenderDevice& Device, const std::filesystem::path& ShaderPath);
+	void Build(RenderDevice& Device, const PipelineStateDescription& InDescription, ID3D12PipelineLibrary* Library);
+	void Bind(ID3D12GraphicsCommandList* CommandList);
 };
+
+namespace std
+{
+	template <>
+	struct hash<PipelineState>
+	{
+		size_t operator()(const PipelineState& Target) const noexcept
+		{
+			return 0;  // #TODO: PipelineState hashing.
+		}
+	};
+}

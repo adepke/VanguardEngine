@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <cctype>
 #include <optional>
+#include <sstream>
 
 void PipelineState::CreateShaders(RenderDevice& Device, const std::filesystem::path& ShaderPath)
 {
@@ -87,24 +88,44 @@ void PipelineState::CreateRootSignature(RenderDevice& Device)
 	D3D12_FEATURE_DATA_ROOT_SIGNATURE RootSignatureFeatureData{};
 	RootSignatureFeatureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
 
-	if (FAILED(Device.Device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &RootSignatureFeatureData, sizeof(RootSignatureFeatureData))))
+	if (FAILED(Device.Get()->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &RootSignatureFeatureData, sizeof(RootSignatureFeatureData))))
 	{
 		VGLogFatal(Rendering) << "Adapter doesn't support root signature version 1.1";
 	}
 
-	constexpr auto RootSignatureFlags =
-		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |  // We need the input assembler.
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+	auto RootSignatureFlags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;  // We need the input assembler.
+
+	if (!VertexShader)
+	{
+		RootSignatureFlags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS;
+	}
+
+	if (!PixelShader)
+	{
+		RootSignatureFlags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
+	}
+
+	if (!HullShader)
+	{
+		RootSignatureFlags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS;
+	}
+
+	if (!DomainShader)
+	{
+		RootSignatureFlags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS;
+	}
+
+	if (!GeometryShader)
+	{
+		RootSignatureFlags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+	}
 
 	D3D12_VERSIONED_ROOT_SIGNATURE_DESC RootSignatureDesc{};
 	RootSignatureDesc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
-	//RootSignatureDesc.Desc_1_1.NumParameters = ? ;  // #TODO: Comes from reflection.
-	//RootSignatureDesc.Desc_1_1.pParameters = ? ;  // #TODO: Comes from reflection.
+	//RootSignatureDesc.Desc_1_1.NumParameters = ?;  // #TODO: Comes from reflection.
+	//RootSignatureDesc.Desc_1_1.pParameters = ?;  // #TODO: Comes from reflection.
 	RootSignatureDesc.Desc_1_1.NumStaticSamplers = 0;
-	RootSignatureDesc.Desc_1_1.pStaticSamplers = nullptr;
+	RootSignatureDesc.Desc_1_1.pStaticSamplers = nullptr;  // #TODO: Static samplers.
 	RootSignatureDesc.Desc_1_1.Flags = RootSignatureFlags;
 
 	ID3DBlob* RootSignatureBlob;
@@ -116,7 +137,7 @@ void PipelineState::CreateRootSignature(RenderDevice& Device)
 		VGLogFatal(Rendering) << "Failed to serialize root signature: " << Result;
 	}
 
-	Result = Device.Device->CreateRootSignature(0, RootSignatureBlob->GetBufferPointer(), RootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(RootSignature.Indirect()));
+	Result = Device.Get()->CreateRootSignature(0, RootSignatureBlob->GetBufferPointer(), RootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(RootSignature.Indirect()));
 	if (FAILED(Result))
 	{
 		VGLogFatal(Rendering) << "Failed to create root signature: " << Result;
@@ -133,11 +154,13 @@ void PipelineState::CreateInputLayout()
 	VGScopedCPUStat("Create Input Layout");
 }
 
-void PipelineState::Build(RenderDevice& Device, const std::filesystem::path& ShaderPath)
+void PipelineState::Build(RenderDevice& Device, const PipelineStateDescription& InDescription, ID3D12PipelineLibrary* Library)
 {
 	VGScopedCPUStat("Build Pipeline");
 
-	VGLog(Rendering) << "Building pipeline for shader '" << ShaderPath.filename().generic_wstring() << "'.";
+	Description = InDescription;
+
+	VGLog(Rendering) << "Building pipeline for shader '" << InDescription.ShaderPath.filename().generic_wstring() << "'.";
 
 	const auto& Filename = ShaderPath.filename().generic_wstring();
 
@@ -146,8 +169,53 @@ void PipelineState::Build(RenderDevice& Device, const std::filesystem::path& Sha
 		VGLogWarning(Rendering) << "Improper shader path '" << ShaderPath.filename().generic_wstring() << "', do not include extension.";
 	}
 
-	CreateShaders(Device, ShaderPath);
+	CreateShaders(Device, Description.ShaderPath);
 	CreateRootSignature(Device);
 	CreateDescriptorTables(Device);
 	CreateInputLayout();
+
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC Desc{};
+
+	Hash = std::hash{ *this }();
+	std::wstringstream NameStream;
+	NameStream << Hash;
+	const auto* NameString = NameStream.str().c_str();
+
+	auto Result = Library->LoadGraphicsPipeline(NameString, &Desc, IID_PPV_ARGS(Pipeline.Indirect()));
+	if (Result == E_INVALIDARG)
+	{
+		VGLog(Rendering) << "Did not find pipeline hash in library, creating new pipeline.";
+
+		D3D12_PIPELINE_STATE_STREAM_DESC StreamDesc{};
+
+		Result = Device.Get()->CreatePipelineState(&StreamDesc, IID_PPV_ARGS(Pipeline.Indirect()));
+		if (FAILED(Result))
+		{
+			VGLogFatal(Rendering) << "Failed to create pipeline state: " << Result;
+		}
+
+		Result = Library->StorePipeline(NameString, Pipeline.Get());
+		if (FAILED(Result))
+		{
+			VGLogFatal(Rendering) << "Failed to store pipeline in library: " << Result;
+		}
+	}
+
+	else if (FAILED(Result))
+	{
+		VGLogFatal(Rendering) << "Failed to load pipeline from library: " << Result;
+	}
+
+	else
+	{
+		VGLog(Rendering) << "Loaded pipeline from library.";
+	}
+}
+
+void PipelineState::Bind(ID3D12GraphicsCommandList* CommandList)
+{
+	CommandList->IASetPrimitiveTopology(Description.Topology);
+	CommandList->SetGraphicsRootSignature(RootSignature.Get());
+	//CommandList->SetGraphicsRootDescriptorTable()  // #TODO: Set the descriptor table?
+	CommandList->SetPipelineState(Pipeline.Get());
 }

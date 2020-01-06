@@ -48,3 +48,15 @@ struct Shader
 };
 
 std::unique_ptr<Shader> CompileShader(const std::filesystem::path& Path, ShaderType Type);
+
+namespace std
+{
+	template <>
+	struct hash<Shader>
+	{
+		size_t operator()(const Shader& Target) const noexcept
+		{
+			return std::hash{ Target.Bytecode }();
+		}
+	};
+}
