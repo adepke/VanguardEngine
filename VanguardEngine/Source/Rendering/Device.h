@@ -76,10 +76,10 @@ private:
 	std::array<std::shared_ptr<GPUBuffer>, FrameCount> FrameBuffers;  // Per-frame shared dynamic heap.
 	std::array<size_t, FrameCount> FrameBufferOffsets = {};
 
-	static constexpr size_t ResourceDescriptors = 64;
-	static constexpr size_t SamplerDescriptors = 64;
-	static constexpr size_t RenderTargetDescriptors = FrameCount * 8;
-	static constexpr size_t DepthStencilDescriptors = FrameCount * 8;
+	static constexpr size_t ResourceDescriptors = 1024;
+	static constexpr size_t SamplerDescriptors = 1024;
+	static constexpr size_t RenderTargetDescriptors = 1024;
+	static constexpr size_t DepthStencilDescriptors = 1024;
 
 	// #NOTE: Shader-visible descriptors require per-frame heaps.
 	std::array<DescriptorHeap, FrameCount> ResourceHeaps;  // CBV/SRV/UAV
