@@ -121,6 +121,20 @@ void Renderer::EndRenderPass(RenderPass Pass)
 	Device->DirectCommandList[FrameIndex]->ResourceBarrier(Barriers.size(), Barriers.data());
 }
 
+void Renderer::SetDescriptorHeaps(CommandList& List)
+{
+	VGScopedCPUStat("Set Descriptor Heaps");
+
+	const auto FrameIndex = Device->Frame % RenderDevice::FrameCount;
+
+	std::vector<ID3D12DescriptorHeap*> Heaps;
+
+	Heaps.push_back(Device->ResourceHeaps[FrameIndex].Native());
+	Heaps.push_back(Device->SamplerHeaps[FrameIndex].Native());
+
+	List.Native()->SetDescriptorHeaps(Heaps.size(), Heaps.data());
+}
+
 void Renderer::Initialize(std::unique_ptr<RenderDevice>&& InDevice)
 {
 	VGScopedCPUStat("Renderer Initialize");
@@ -173,9 +187,12 @@ void Renderer::Render(entt::registry& Registry)
 			});
 	}
 
+	// Global to all render passes.
+	SetDescriptorHeaps(Device->DirectCommandList[FrameIndex]);
+
 	BeginRenderPass(RenderPass::Main);
 
-	auto* DrawList = Device->DirectCommandList[FrameIndex].Get();
+	auto* DrawList = Device->DirectCommandList[FrameIndex].Native();
 
 	{
 		VGScopedCPUStat("Main Pass");

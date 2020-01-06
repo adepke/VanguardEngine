@@ -13,6 +13,8 @@ private:
 	size_t TotalDescriptors = 0;
 
 public:
+	auto* Native() const noexcept { return Heap.Get(); }
+
 	void Initialize(RenderDevice& Device, D3D12_DESCRIPTOR_HEAP_TYPE Type, size_t Descriptors);
 	D3D12_CPU_DESCRIPTOR_HANDLE Allocate(RenderDevice& Device);
 

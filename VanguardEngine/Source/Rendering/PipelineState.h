@@ -44,7 +44,7 @@ public:
 	//ResourcePtr<> RasterizerState;  // #TODO: Rasterizer state.
 	//ResourcePtr<> DepthStencilState;  // #TODO: Depth stencil state.
 
-	auto* Native() const noexcept { return Pipeline.Get(); };
+	auto* Native() const noexcept { return Pipeline.Get(); }
 
 	void Build(RenderDevice& Device, const PipelineStateDescription& InDescription, ID3D12PipelineLibrary* Library);
 	void Bind(ID3D12GraphicsCommandList* CommandList);
