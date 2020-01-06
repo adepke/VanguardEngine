@@ -9,7 +9,7 @@ protected:
 	ResourcePtr<ID3D12GraphicsCommandList5> List;
 
 public:
-	auto* Get() const noexcept { return List.Get(); };
+	auto* Native() const noexcept { return List.Get(); };
 
 	void Create(D3D12_COMMAND_LIST_TYPE Type);
 

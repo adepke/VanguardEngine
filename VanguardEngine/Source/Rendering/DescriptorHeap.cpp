@@ -10,7 +10,7 @@ void DescriptorHeap::Initialize(RenderDevice& Device, D3D12_DESCRIPTOR_HEAP_TYPE
 	HeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;  // #TODO: Shader visible?
 	HeapDesc.NodeMask = 0;
 
-	auto Result = Device.Get()->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(Heap.Indirect()));
+	auto Result = Device.Native()->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(Heap.Indirect()));
 	if (FAILED(Result))
 	{
 		VGLogFatal(Rendering) << "Failed to create descriptor heap for type '" << Type << "' with " << Descriptors << " descriptors: " << Result;
@@ -18,7 +18,7 @@ void DescriptorHeap::Initialize(RenderDevice& Device, D3D12_DESCRIPTOR_HEAP_TYPE
 
 	CPUHeapStart = Heap->GetCPUDescriptorHandleForHeapStart().ptr;
 	GPUHeapStart = Heap->GetGPUDescriptorHandleForHeapStart().ptr;
-	DescriptorSize = Device.Get()->GetDescriptorHandleIncrementSize(Type);
+	DescriptorSize = Device.Native()->GetDescriptorHandleIncrementSize(Type);
 	TotalDescriptors = Descriptors;
 }
 

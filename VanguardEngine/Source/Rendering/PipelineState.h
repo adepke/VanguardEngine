@@ -23,6 +23,7 @@ struct PipelineStateDescription
 class PipelineState
 {
 private:
+	ResourcePtr<ID3D12PipelineState> Pipeline;
 	PipelineStateDescription Description;
 
 	void CreateShaders(RenderDevice& Device, const std::filesystem::path& ShaderPath);
@@ -32,7 +33,6 @@ private:
 
 public:
 	size_t Hash = 0;
-	ResourcePtr<ID3D12PipelineState> Pipeline;
 	ResourcePtr<ID3D12RootSignature> RootSignature;
 	D3D12_INPUT_LAYOUT_DESC InputLayout;
 	std::unique_ptr<Shader> VertexShader;
@@ -43,6 +43,8 @@ public:
 	//ResourcePtr<> BlendState;  // #TODO: Blend state.
 	//ResourcePtr<> RasterizerState;  // #TODO: Rasterizer state.
 	//ResourcePtr<> DepthStencilState;  // #TODO: Depth stencil state.
+
+	auto* Native() const noexcept { return Pipeline.Get(); };
 
 	void Build(RenderDevice& Device, const PipelineStateDescription& InDescription, ID3D12PipelineLibrary* Library);
 	void Bind(ID3D12GraphicsCommandList* CommandList);

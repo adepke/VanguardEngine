@@ -88,7 +88,7 @@ void PipelineState::CreateRootSignature(RenderDevice& Device)
 	D3D12_FEATURE_DATA_ROOT_SIGNATURE RootSignatureFeatureData{};
 	RootSignatureFeatureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
 
-	if (FAILED(Device.Get()->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &RootSignatureFeatureData, sizeof(RootSignatureFeatureData))))
+	if (FAILED(Device.Native()->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &RootSignatureFeatureData, sizeof(RootSignatureFeatureData))))
 	{
 		VGLogFatal(Rendering) << "Adapter doesn't support root signature version 1.1";
 	}
@@ -137,7 +137,7 @@ void PipelineState::CreateRootSignature(RenderDevice& Device)
 		VGLogFatal(Rendering) << "Failed to serialize root signature: " << Result;
 	}
 
-	Result = Device.Get()->CreateRootSignature(0, RootSignatureBlob->GetBufferPointer(), RootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(RootSignature.Indirect()));
+	Result = Device.Native()->CreateRootSignature(0, RootSignatureBlob->GetBufferPointer(), RootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(RootSignature.Indirect()));
 	if (FAILED(Result))
 	{
 		VGLogFatal(Rendering) << "Failed to create root signature: " << Result;
@@ -188,7 +188,7 @@ void PipelineState::Build(RenderDevice& Device, const PipelineStateDescription& 
 
 		D3D12_PIPELINE_STATE_STREAM_DESC StreamDesc{};
 
-		Result = Device.Get()->CreatePipelineState(&StreamDesc, IID_PPV_ARGS(Pipeline.Indirect()));
+		Result = Device.Native()->CreatePipelineState(&StreamDesc, IID_PPV_ARGS(Pipeline.Indirect()));
 		if (FAILED(Result))
 		{
 			VGLogFatal(Rendering) << "Failed to create pipeline state: " << Result;

@@ -104,7 +104,7 @@ public:
 	RenderDevice(HWND InWindow, bool Software, bool EnableDebugging);
 	~RenderDevice();
 
-	auto* Get() const noexcept { return Device.Get(); }
+	auto* Native() const noexcept { return Device.Get(); }
 
 	// Logs various data about the device's feature support. Not needed in optimized builds.
 	void CheckFeatureSupport();
