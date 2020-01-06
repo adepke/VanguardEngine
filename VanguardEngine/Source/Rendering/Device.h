@@ -48,15 +48,15 @@ private:
 
 	ResourcePtr<ID3D12CommandQueue> CopyCommandQueue;
 	ResourcePtr<ID3D12CommandAllocator> CopyCommandAllocator[FrameCount];
-	ResourcePtr<ID3D12GraphicsCommandList4> CopyCommandList[FrameCount];
+	ResourcePtr<CommandList> CopyCommandList[FrameCount];
 
 	ResourcePtr<ID3D12CommandQueue> DirectCommandQueue;
 	ResourcePtr<ID3D12CommandAllocator> DirectCommandAllocator[FrameCount];  // #TODO: One per worker thread.
-	ResourcePtr<ID3D12GraphicsCommandList4> DirectCommandList[FrameCount];  // #TODO: One per worker thread.
+	ResourcePtr<CommandList> DirectCommandList[FrameCount];  // #TODO: One per worker thread.
 
 	ResourcePtr<ID3D12CommandQueue> ComputeCommandQueue;
 	ResourcePtr<ID3D12CommandAllocator> ComputeCommandAllocator[FrameCount];  // #TODO: One per worker thread.
-	ResourcePtr<ID3D12GraphicsCommandList4> ComputeCommandList[FrameCount];  // #TODO: One per worker thread.
+	ResourcePtr<CommandList> ComputeCommandList[FrameCount];  // #TODO: One per worker thread.
 
 	ResourcePtr<IDXGISwapChain3> SwapChain;
 	size_t Frame = 0;  // Stores the actual frame number. Refers to the current CPU frame being run, stepped after finishing CPU pass.
@@ -97,9 +97,6 @@ private:
 	void SetupDescriptorHeaps();
 	void SetupRenderTargets();
 
-	// Builds pipelines.
-	void ReloadShaders();
-
 	// Resets command lists and allocators.
 	void ResetFrame(size_t FrameID);
 
@@ -111,6 +108,9 @@ public:
 
 	// Logs various data about the device's feature support. Not needed in optimized builds.
 	void CheckFeatureSupport();
+
+	// Builds pipelines.
+	void ReloadShaders();
 
 	std::shared_ptr<GPUBuffer> Allocate(const ResourceDescription& Description, const std::wstring_view Name);
 	void Write(std::shared_ptr<GPUBuffer>& Buffer, const std::vector<uint8_t>& Source, size_t BufferOffset = 0);

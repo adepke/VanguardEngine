@@ -281,22 +281,12 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 
 	for (int Index = 0; Index < FrameCount; ++Index)
 	{
-		Result = Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(CopyCommandAllocator[Index].Indirect()));
-		if (FAILED(Result))
-		{
-			VGLogFatal(Rendering) << "Failed to create copy command allocator for frame " << Index << ": " << Result;
-		}
-
-		Result = Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COPY, CopyCommandAllocator[Index].Get(), nullptr, IID_PPV_ARGS(CopyCommandList[Index].Indirect()));
-		if (FAILED(Result))
-		{
-			VGLogFatal(Rendering) << "Failed to create copy command list for frame " << Index << ": " << Result;
-		}
+		CopyCommandList[Index]->Create(D3D12_COMMAND_LIST_TYPE_COPY);
 
 		// Close all lists except the current frame's list.
 		if (Index > 0)
 		{
-			static_cast<ID3D12GraphicsCommandList*>(CopyCommandList[Index].Get())->Close();
+			CopyCommandList[Index]->Get()->Close();
 		}
 	}
 
@@ -316,22 +306,12 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 
 	for (int Index = 0; Index < FrameCount; ++Index)
 	{
-		Result = Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(DirectCommandAllocator[Index].Indirect()));
-		if (FAILED(Result))
-		{
-			VGLogFatal(Rendering) << "Failed to create direct command allocator for frame " << Index << ": " << Result;
-		}
-
-		Result = Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, DirectCommandAllocator[Index].Get(), nullptr, IID_PPV_ARGS(DirectCommandList[Index].Indirect()));
-		if (FAILED(Result))
-		{
-			VGLogFatal(Rendering) << "Failed to create direct command list for frame " << Index << ": " << Result;
-		}
+		CopyCommandList[Index]->Create(D3D12_COMMAND_LIST_TYPE_DIRECT);
 
 		// Close all lists except the current frame's list.
 		if (Index > 0)
 		{
-			static_cast<ID3D12GraphicsCommandList*>(DirectCommandList[Index].Get())->Close();
+			DirectCommandList[Index]->Get()->Close();
 		}
 	}
 
@@ -351,22 +331,12 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 
 	for (int Index = 0; Index < FrameCount; ++Index)
 	{
-		Result = Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(ComputeCommandAllocator[Index].Indirect()));
-		if (FAILED(Result))
-		{
-			VGLogFatal(Rendering) << "Failed to create compute command allocator for frame " << Index << ": " << Result;
-		}
-
-		Result = Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, ComputeCommandAllocator[Index].Get(), nullptr, IID_PPV_ARGS(ComputeCommandList[Index].Indirect()));
-		if (FAILED(Result))
-		{
-			VGLogFatal(Rendering) << "Failed to create compute command list for frame " << Index << ": " << Result;
-		}
+		CopyCommandList[Index]->Create(D3D12_COMMAND_LIST_TYPE_COMPUTE);
 
 		// Close all lists except the current frame's list.
 		if (Index > 0)
 		{
-			static_cast<ID3D12GraphicsCommandList*>(ComputeCommandList[Index].Get())->Close();
+			ComputeCommandList[Index]->Get()->Close();
 		}
 	}
 
