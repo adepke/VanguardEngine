@@ -53,21 +53,18 @@ void RenderDevice::SetNames()
 	CopyCommandQueue->SetName(VGText("Copy Command Queue"));
 	for (auto Index = 0; Index < FrameCount; ++Index)
 	{
-		CopyCommandAllocator[Index]->SetName(VGText("Copy Command Allocator"));
 		CopyCommandList[Index]->SetName(VGText("Copy Command List"));
 	}
 
 	DirectCommandQueue->SetName(VGText("Direct Command Queue"));
 	for (auto Index = 0; Index < FrameCount; ++Index)
 	{
-		DirectCommandAllocator[Index]->SetName(VGText("Direct Command Allocator"));
 		DirectCommandList[Index]->SetName(VGText("Direct Command List"));
 	}
 
 	ComputeCommandQueue->SetName(VGText("Compute Command Queue"));
 	for (auto Index = 0; Index < FrameCount; ++Index)
 	{
-		ComputeCommandAllocator[Index]->SetName(VGText("Compute Command Allocator"));
 		ComputeCommandList[Index]->SetName(VGText("Compute Command List"));
 	}
 
@@ -115,11 +112,12 @@ void RenderDevice::SetupRenderTargets()
 			VGLogFatal(Rendering) << "Failed to get swap chain buffer for frame " << Index << ": " << Result;
 		}
 
-		BackBufferTextures[Index] = std::move(AllocatorManager->AllocateFromAPIBuffer(, IntermediateResource, VGText("Back Buffer")));
+		// #TEMP
+		//BackBufferTextures[Index] = std::move(AllocatorManager->AllocateFromAPIBuffer(, IntermediateResource, VGText("Back Buffer")));
 		
 		const auto RTV = std::static_pointer_cast<GPUTexture>(BackBufferTextures[Index])->RTV;
 
-		Device->CreateRenderTargetView(BackBufferTextures[Index]->Resource->GetResource(), nullptr, RTV);
+		Device->CreateRenderTargetView(BackBufferTextures[Index]->Resource->GetResource(), nullptr, D3D12_CPU_DESCRIPTOR_HANDLE{ RTV });
 	}
 }
 
@@ -155,7 +153,7 @@ void RenderDevice::ResetFrame(size_t FrameID)
 
 	const auto FrameIndex = FrameID % FrameCount;
 
-	Result = CopyCommandList[FrameIndex]->Reset();
+	auto Result = CopyCommandList[FrameIndex]->Reset();
 	if (FAILED(Result))
 	{
 		VGLogError(Rendering) << "Failed to reset copy command list for frame " << FrameIndex << ": " << Result;
@@ -527,7 +525,6 @@ void RenderDevice::CheckFeatureSupport()
 	{
 		switch (RootSignature.HighestVersion)
 		{
-		case D3D_ROOT_SIGNATURE_VERSION_1:  // Fall through.
 		case D3D_ROOT_SIGNATURE_VERSION_1_0: VGLog(Rendering) << "Device supports root signature 1.0."; break;
 		case D3D_ROOT_SIGNATURE_VERSION_1_1: VGLog(Rendering) << "Device supports root signature 1.1."; break;
 		default:

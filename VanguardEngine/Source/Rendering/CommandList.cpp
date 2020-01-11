@@ -18,6 +18,12 @@ void CommandList::Create(RenderDevice& Device, D3D12_COMMAND_LIST_TYPE Type)
 	}
 }
 
+void CommandList::SetName(std::wstring_view Name)
+{
+	Allocator->SetName(Name.data());
+	List->SetName(Name.data());
+}
+
 HRESULT CommandList::Close()
 {
 	return List->Close();

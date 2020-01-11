@@ -36,7 +36,7 @@ auto Renderer::GetPassRenderTargets(RenderPass Pass)
 		RenderTargets.push_back({});
 		RenderTargetViews.push_back({});
 		RenderTargets[0] = Device->GetBackBuffer()->Resource->GetResource();
-		RenderTargetViews[0] = { std::static_pointer_cast<GPUTexture>(Device->GetBackBuffer())->RTV.ptr };
+		RenderTargetViews[0] = { static_cast<GPUTexture*>(Device->GetBackBuffer())->RTV };
 		break;
 	}
 
@@ -179,7 +179,7 @@ void Renderer::Render(entt::registry& Registry)
 	}
 
 	// Global to all render passes.
-	SetDescriptorHeaps(Device->GetDirectList());
+	SetDescriptorHeaps(*Device->GetDirectList());
 
 	BeginRenderPass(RenderPass::Main);
 

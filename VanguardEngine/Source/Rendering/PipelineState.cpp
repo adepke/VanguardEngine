@@ -160,13 +160,13 @@ void PipelineState::Build(RenderDevice& Device, const PipelineStateDescription& 
 
 	Description = InDescription;
 
-	VGLog(Rendering) << "Building pipeline for shader '" << InDescription.ShaderPath.filename().generic_wstring() << "'.";
+	VGLog(Rendering) << "Building pipeline for shader '" << Description.ShaderPath.filename().generic_wstring() << "'.";
 
-	const auto& Filename = ShaderPath.filename().generic_wstring();
+	const auto& Filename = Description.ShaderPath.filename().generic_wstring();
 
-	if (ShaderPath.has_extension())
+	if (Description.ShaderPath.has_extension())
 	{
-		VGLogWarning(Rendering) << "Improper shader path '" << ShaderPath.filename().generic_wstring() << "', do not include extension.";
+		VGLogWarning(Rendering) << "Improper shader path '" << Description.ShaderPath.filename().generic_wstring() << "', do not include extension.";
 	}
 
 	CreateShaders(Device, Description.ShaderPath);

@@ -21,10 +21,9 @@
 #include <Core/Windows/DirectX12Minimal.h>
 #include <dxgi1_6.h>
 
-#if defined _WINDOWS_ && !defined WIN32_LEAN_AND_MEAN
 // #TEMP
-//static_assert(false, "INCLUDED FULL WINDOWS HEADER");
-#endif
+#undef min
+#undef max
 
 class RenderDevice;
 struct ResourceDescription;

@@ -216,18 +216,18 @@ void ResourceManager::Write(RenderDevice& Device, std::shared_ptr<GPUBuffer>& Bu
 	{
 		VGScopedCPUStat("Write Static");
 
-		const auto FrameID = Device.Frame % FrameCount;
+		const auto FrameIndex = Device.GetFrameIndex();
 
-		std::memcpy(static_cast<uint8_t*>(UploadPtrs[FrameID]) + UploadOffsets[FrameID], Source.data(), Source.size());
-
-		// #TODO: Resource barrier?
-
-		auto* TargetCommandList = static_cast<ID3D12GraphicsCommandList*>(Device.CopyCommandList[FrameID].Get());
-		TargetCommandList->CopyBufferRegion(Buffer->Resource->GetResource(), BufferOffset, UploadResources[FrameID]->GetResource(), UploadOffsets[FrameID], Source.size());
+		std::memcpy(static_cast<uint8_t*>(UploadPtrs[FrameIndex]) + UploadOffsets[FrameIndex], Source.data(), Source.size());
 
 		// #TODO: Resource barrier?
 
-		UploadOffsets[FrameID] += Source.size();
+		auto* TargetCommandList = Device.GetCopyList()->Native();
+		TargetCommandList->CopyBufferRegion(Buffer->Resource->GetResource(), BufferOffset, UploadResources[FrameIndex]->GetResource(), UploadOffsets[FrameID], Source.size());
+
+		// #TODO: Resource barrier?
+
+		UploadOffsets[FrameIndex] += Source.size();
 	}
 
 	else

@@ -20,6 +20,7 @@ public:
 	auto* Native() const noexcept { return List.Get(); }
 
 	void Create(RenderDevice& Device, D3D12_COMMAND_LIST_TYPE Type);
+	void SetName(std::wstring_view Name);
 
 	void AddResourceBarrier(const std::shared_ptr<GPUBuffer>& Resource, TransitionBarrier Barrier);
 
