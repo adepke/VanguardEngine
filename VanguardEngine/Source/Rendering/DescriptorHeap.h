@@ -2,7 +2,11 @@
 
 #pragma once
 
-#include <d3d12.h>
+#include <Rendering/Base.h>
+
+#include <Core/Windows/DirectX12Minimal.h>
+
+class RenderDevice;
 
 class DescriptorHeap
 {

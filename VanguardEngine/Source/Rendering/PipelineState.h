@@ -7,7 +7,7 @@
 
 #include <filesystem>
 
-#include <d3d12.h>
+#include <Core/Windows/DirectX12Minimal.h>
 
 class RenderDevice;
 

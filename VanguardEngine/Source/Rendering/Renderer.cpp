@@ -5,6 +5,7 @@
 #include <Core/CoreComponents.h>
 #include <Rendering/RenderComponents.h>
 #include <Rendering/RenderSystems.h>
+#include <Rendering/CommandList.h>
 
 //#include <entt/entt.hpp>  // #TODO: Include from here instead of in the header.
 

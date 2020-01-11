@@ -2,7 +2,9 @@
 
 #pragma once
 
+#include <Core/Windows/DirectX12Minimal.h>
+
 struct TransitionBarrier
 {
-	ResourceState State;
+	D3D12_RESOURCE_STATES State;
 };

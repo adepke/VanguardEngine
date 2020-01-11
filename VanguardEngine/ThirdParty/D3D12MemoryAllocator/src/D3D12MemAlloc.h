@@ -331,6 +331,8 @@ Features deliberately excluded from the scope of this library:
 // If using this library on a platform different than Windows PC, you should
 // include D3D12-compatible header before this library on your own and define this macro.
 #ifndef D3D12MA_D3D12_HEADERS_ALREADY_INCLUDED
+	//#define _INC_WINDOWS
+	//#define COM_NO_WINDOWS_H
     #include <d3d12.h>
     #include <dxgi.h>
 #endif
@@ -485,9 +487,6 @@ public:
     */
     LPCWSTR GetName() const { return m_Name; }
 
-	// Manually sets the resource to a buffer allocated internally by the rendering API.
-	void SetResourceManual(ID3D12Resource* Resource) { m_Resource = Resource; m_Type = TYPE_APIINTERNAL; }
-
 private:
     friend class AllocatorPimpl;
     friend class BlockVector;
@@ -537,6 +536,7 @@ private:
     void InitPlaced(AllocatorPimpl* allocator, UINT64 size, UINT64 offset, UINT64 alignment, NormalBlock* block);
     void InitHeap(AllocatorPimpl* allocator, UINT64 size, D3D12_HEAP_TYPE heapType, ID3D12Heap* heap);
     void SetResource(ID3D12Resource* resource, const D3D12_RESOURCE_DESC* pResourceDesc);
+	void SetResourceManual(ID3D12Resource* resource);  // Used only for setting the resource to a pointer allocated by the render API.
     void FreeName();
 
     D3D12MA_CLASS_NO_COPY(Allocation)
@@ -729,6 +729,12 @@ public:
         Allocation** ppAllocation,
         REFIID riidResource,
         void** ppvResource);
+
+	// Used only for creating a resource from an existing ID3D12Resource allocated by the rendering API.
+	HRESULT CreateResourceManual(
+		ID3D12Resource* Resource,
+		Allocation** ppAllocation
+	);
 
     /* \brief Allocates memory without creating any resource placed in it.
 

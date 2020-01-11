@@ -5,7 +5,7 @@
 #include <memory>
 #include <vector>
 
-struct PipelineState;
+class PipelineState;
 struct GPUTexture;
 
 // #TODO: Physically based rendering.

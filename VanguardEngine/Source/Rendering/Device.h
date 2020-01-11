@@ -18,8 +18,13 @@
 #include <vector>
 #include <limits>
 
-#include <d3d12.h>
+#include <Core/Windows/DirectX12Minimal.h>
 #include <dxgi1_6.h>
+
+#if defined _WINDOWS_ && !defined WIN32_LEAN_AND_MEAN
+// #TEMP
+//static_assert(false, "INCLUDED FULL WINDOWS HEADER");
+#endif
 
 class RenderDevice;
 struct ResourceDescription;

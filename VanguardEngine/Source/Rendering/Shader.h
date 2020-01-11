@@ -8,7 +8,7 @@
 #include <memory>
 #include <filesystem>
 
-#include <d3dcommon.h>
+#include <Core/Windows/DirectX12Minimal.h>
 
 struct ShaderReflection
 {
@@ -56,7 +56,10 @@ namespace std
 	{
 		size_t operator()(const Shader& Target) const noexcept
 		{
-			return std::hash<Shader>{ Target.Bytecode }();
+			// #TEMP
+			return 0;
+
+			//return std::hash{ Target.Bytecode }();
 		}
 	};
 }
