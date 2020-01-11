@@ -176,7 +176,9 @@ void PipelineState::Build(RenderDevice& Device, const PipelineStateDescription& 
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC Desc{};
 
-	Hash = std::hash<PipelineState>{ *this }();
+	// #TEMP
+	Hash = 0;
+	//Hash = std::hash<PipelineState>{ *this }();
 	std::wstringstream NameStream;
 	NameStream << Hash;
 	const auto* NameString = NameStream.str().c_str();

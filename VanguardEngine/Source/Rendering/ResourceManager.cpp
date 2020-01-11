@@ -223,7 +223,7 @@ void ResourceManager::Write(RenderDevice& Device, std::shared_ptr<GPUBuffer>& Bu
 		// #TODO: Resource barrier?
 
 		auto* TargetCommandList = Device.GetCopyList()->Native();
-		TargetCommandList->CopyBufferRegion(Buffer->Resource->GetResource(), BufferOffset, UploadResources[FrameIndex]->GetResource(), UploadOffsets[FrameID], Source.size());
+		TargetCommandList->CopyBufferRegion(Buffer->Resource->GetResource(), BufferOffset, UploadResources[FrameIndex]->GetResource(), UploadOffsets[FrameIndex], Source.size());
 
 		// #TODO: Resource barrier?
 

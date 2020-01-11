@@ -16,13 +16,15 @@ protected:
 	ResourcePtr<ID3D12CommandAllocator> Allocator;
 	ResourcePtr<ID3D12GraphicsCommandList5> List;
 
+	std::vector<TransitionBarrier> TransitionBarriers;
+
 public:
 	auto* Native() const noexcept { return List.Get(); }
 
 	void Create(RenderDevice& Device, D3D12_COMMAND_LIST_TYPE Type);
 	void SetName(std::wstring_view Name);
 
-	void AddResourceBarrier(const std::shared_ptr<GPUBuffer>& Resource, TransitionBarrier Barrier);
+	void AddResourceBarrier(TransitionBarrier Barrier);
 
 	HRESULT Close();
 	HRESULT Reset();

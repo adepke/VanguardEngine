@@ -104,8 +104,6 @@ private:
 	// Resets command lists and allocators.
 	void ResetFrame(size_t FrameID);
 
-	size_t GetFrameIndex() const noexcept { return Frame % RenderDevice::FrameCount; }
-
 public:
 	RenderDevice(HWND InWindow, bool Software, bool EnableDebugging);
 	~RenderDevice();
@@ -129,6 +127,7 @@ public:
 
 	// Blocking, waits for the gpu to finish the next frame before returning. Marks the current frame as finished submitting and can move on to the next frame.
 	void FrameStep();
+	size_t GetFrameIndex() const noexcept { return Frame % RenderDevice::FrameCount; }
 
 	auto* GetCopyQueue() const noexcept { return CopyCommandQueue.Get(); }
 	auto* GetCopyList() const noexcept { return CopyCommandList[GetFrameIndex()].Get(); }

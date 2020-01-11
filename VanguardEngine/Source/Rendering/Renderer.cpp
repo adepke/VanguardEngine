@@ -67,7 +67,8 @@ void Renderer::BeginRenderPass(RenderPass Pass)
 		Barriers.push_back(std::move(Barrier));
 	}
 
-	Device->GetDirectList()->ResourceBarrier(Barriers.size(), Barriers.data());
+	// #TODO: Replace with render graph barriers.
+	Device->GetDirectList()->Native()->ResourceBarrier(Barriers.size(), Barriers.data());
 
 	std::vector<D3D12_RENDER_PASS_RENDER_TARGET_DESC> RenderPassTargets;
 	RenderTargets.reserve(RenderTargetViews.size());
@@ -86,14 +87,14 @@ void Renderer::BeginRenderPass(RenderPass Pass)
 		RenderPassTargets.push_back(std::move(PassDesc));
 	}
 
-	Device->GetDirectList()->BeginRenderPass(RenderTargets.size(), RenderPassTargets.data(), nullptr, D3D12_RENDER_PASS_FLAG_NONE);  // #TODO: Some passes need D3D12_RENDER_PASS_FLAG_ALLOW_UAV_WRITES.
+	Device->GetDirectList()->Native()->BeginRenderPass(RenderTargets.size(), RenderPassTargets.data(), nullptr, D3D12_RENDER_PASS_FLAG_NONE);  // #TODO: Some passes need D3D12_RENDER_PASS_FLAG_ALLOW_UAV_WRITES.
 }
 
 void Renderer::EndRenderPass(RenderPass Pass)
 {
 	VGScopedCPUStat("End Render Pass");
 
-	Device->GetDirectList()->EndRenderPass();
+	Device->GetDirectList()->Native()->EndRenderPass();
 
 	auto [RenderTargets, RenderTargetViews] = GetPassRenderTargets(Pass);
 
@@ -113,7 +114,8 @@ void Renderer::EndRenderPass(RenderPass Pass)
 		Barriers.push_back(std::move(Barrier));
 	}
 
-	Device->GetDirectList()->ResourceBarrier(Barriers.size(), Barriers.data());
+	// #TODO: Replace with render graph barriers.
+	Device->GetDirectList()->Native()->ResourceBarrier(Barriers.size(), Barriers.data());
 }
 
 void Renderer::SetDescriptorHeaps(CommandList& List)
@@ -144,7 +146,7 @@ void Renderer::Render(entt::registry& Registry)
 
 	Device->GetCopyList()->Close();
 	
-	ID3D12CommandList* CopyLists[] = { Device->GetCopyList() };
+	ID3D12CommandList* CopyLists[] = { Device->GetCopyList()->Native() };
 
 	{
 		VGScopedCPUStat("Execute Copy");
@@ -183,7 +185,7 @@ void Renderer::Render(entt::registry& Registry)
 
 	BeginRenderPass(RenderPass::Main);
 
-	auto* DrawList = Device->GetDirectList();
+	auto* DrawList = Device->GetDirectList()->Native();
 
 	{
 		VGScopedCPUStat("Main Pass");

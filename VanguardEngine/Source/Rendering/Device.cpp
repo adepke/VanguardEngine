@@ -138,8 +138,14 @@ void RenderDevice::ReloadShaders()
 		
 		if (std::find(BuiltShaders.begin(), BuiltShaders.end(), ShaderName) == BuiltShaders.end())
 		{
+			PipelineStateDescription Desc{};
+			Desc.ShaderPath = Entry.path().parent_path() / ShaderName;
+			Desc.BlendDescription;  // #TEMP
+			Desc.RasterizerDescription;  // #TEMP
+			Desc.DepthStencilDescription;  // #TEMP
+
 			PipelineState Pipeline{};
-			Pipeline.Build(*this, Entry.path().parent_path() / ShaderName);
+			Pipeline.Build(*this, Desc, nullptr);  // #TEMP: Pipeline library.
 			PipelineStates.push_back(std::move(Pipeline));
 
 			BuiltShaders.push_back(std::move(ShaderName));
