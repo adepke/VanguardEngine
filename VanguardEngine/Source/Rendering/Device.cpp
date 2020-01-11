@@ -262,7 +262,7 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 
 	for (int Index = 0; Index < FrameCount; ++Index)
 	{
-		CopyCommandList[Index]->Create(Device.Get(), D3D12_COMMAND_LIST_TYPE_COPY);
+		CopyCommandList[Index]->Create(*this, D3D12_COMMAND_LIST_TYPE_COPY);
 
 		// Close all lists except the current frame's list.
 		if (Index > 0)
@@ -287,7 +287,7 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 
 	for (int Index = 0; Index < FrameCount; ++Index)
 	{
-		CopyCommandList[Index]->Create(Device.Get(), D3D12_COMMAND_LIST_TYPE_DIRECT);
+		CopyCommandList[Index]->Create(*this, D3D12_COMMAND_LIST_TYPE_DIRECT);
 
 		// Close all lists except the current frame's list.
 		if (Index > 0)
@@ -312,7 +312,7 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 
 	for (int Index = 0; Index < FrameCount; ++Index)
 	{
-		CopyCommandList[Index]->Create(Device.Get(), D3D12_COMMAND_LIST_TYPE_COMPUTE);
+		CopyCommandList[Index]->Create(*this, D3D12_COMMAND_LIST_TYPE_COMPUTE);
 
 		// Close all lists except the current frame's list.
 		if (Index > 0)
