@@ -6,6 +6,8 @@
 #include <Rendering/Resource.h>
 #include <Rendering/ResourceManager.h>
 #include <Rendering/PipelineState.h>
+#include <Rendering/DescriptorHeap.h>
+#include <Rendering/CommandList.h>
 
 #include <D3D12MemAlloc.h>
 
@@ -14,6 +16,7 @@
 #include <array>
 #include <utility>
 #include <vector>
+#include <limits>
 
 #include <d3d12.h>
 #include <dxgi1_6.h>
@@ -47,15 +50,12 @@ private:
 	ResourcePtr<IDXGIAdapter1> Adapter;
 
 	ResourcePtr<ID3D12CommandQueue> CopyCommandQueue;
-	ResourcePtr<ID3D12CommandAllocator> CopyCommandAllocator[FrameCount];
 	ResourcePtr<CommandList> CopyCommandList[FrameCount];
 
 	ResourcePtr<ID3D12CommandQueue> DirectCommandQueue;
-	ResourcePtr<ID3D12CommandAllocator> DirectCommandAllocator[FrameCount];  // #TODO: One per worker thread.
 	ResourcePtr<CommandList> DirectCommandList[FrameCount];  // #TODO: One per worker thread.
 
 	ResourcePtr<ID3D12CommandQueue> ComputeCommandQueue;
-	ResourcePtr<ID3D12CommandAllocator> ComputeCommandAllocator[FrameCount];  // #TODO: One per worker thread.
 	ResourcePtr<CommandList> ComputeCommandList[FrameCount];  // #TODO: One per worker thread.
 
 	ResourcePtr<IDXGISwapChain3> SwapChain;
@@ -86,7 +86,7 @@ private:
 	std::array<DescriptorHeap, FrameCount> SamplerHeaps;
 	DescriptorHeap RenderTargetHeap;
 	DescriptorHeap DepthStencilHeap;
-	
+
 	std::vector<PipelineState> PipelineStates;
 
 	ResourcePtr<IDXGIAdapter1> GetAdapter(ResourcePtr<IDXGIFactory7>& Factory, bool Software);
@@ -99,6 +99,8 @@ private:
 
 	// Resets command lists and allocators.
 	void ResetFrame(size_t FrameID);
+
+	size_t GetFrameIndex() const noexcept { return Frame % RenderDevice::FrameCount; }
 
 public:
 	RenderDevice(HWND InWindow, bool Software, bool EnableDebugging);
@@ -119,10 +121,21 @@ public:
 	std::pair<std::shared_ptr<GPUBuffer>, size_t> FrameAllocate(size_t Size);
 
 	// Sync the specified GPU engine to FrameID. Blocking.
-	void Sync(SyncType Type, size_t FrameID);
+	void Sync(SyncType Type, size_t FrameID = std::numeric_limits<size_t>::max());
 
 	// Blocking, waits for the gpu to finish the next frame before returning. Marks the current frame as finished submitting and can move on to the next frame.
 	void FrameStep();
+
+	auto* GetCopyQueue() const noexcept { return CopyCommandQueue.Get(); }
+	auto* GetCopyList() const noexcept { return CopyCommandList[GetFrameIndex()].Get(); }
+	auto* GetDirectQueue() const noexcept { return DirectCommandQueue.Get(); }
+	auto* GetDirectList() const noexcept { return DirectCommandList[GetFrameIndex()].Get(); }
+	auto* GetComputeQueue() const noexcept { return ComputeCommandQueue.Get(); }
+	auto* GetComputeList() const noexcept { return ComputeCommandList[GetFrameIndex()].Get(); }
+	auto* GetSwapChain() const noexcept { return SwapChain.Get(); }
+	auto* GetBackBuffer() const noexcept { return BackBufferTextures[GetFrameIndex()].get(); }
+	auto& GetResourceHeap() const noexcept { return ResourceHeaps[GetFrameIndex()]; }
+	auto& GetSamplerHeap() const noexcept { return SamplerHeaps[GetFrameIndex()]; }
 
 	void SetResolution(size_t Width, size_t Height, bool InFullscreen);
 };

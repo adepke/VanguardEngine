@@ -9,6 +9,39 @@
 
 #include <cstring>
 
+void ResourceManager::CreateBindings(const std::shared_ptr<GPUBuffer>& Buffer, const ResourceDescription& Description)
+{
+	// Create view based on bind flags.
+
+	if (Description.BindFlags & BindFlag::ConstantBuffer)
+	{
+		D3D12_CONSTANT_BUFFER_VIEW_DESC ViewDesc{};
+		ViewDesc.BufferLocation = Buffer->Resource->GetResource()->GetGPUVirtualAddress();
+		ViewDesc.SizeInBytes = static_cast<UINT>(FinalSize);
+
+		// #TODO: Device->CreateConstantBufferView
+	}
+
+	if (Description.BindFlags & BindFlag::ShaderResource)
+	{
+		D3D12_SHADER_RESOURCE_VIEW_DESC ViewDesc{};
+		ViewDesc.Buffer.FirstElement = 0;
+		ViewDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
+
+		// #TODO: Raw, structured, and typed buffer.
+	}
+
+	if (Description.BindFlags & BindFlag::UnorderedAccess)
+	{
+		D3D12_UNORDERED_ACCESS_VIEW_DESC ViewDesc{};
+		ViewDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+
+		// #TODO: Raw, structured, and typed buffer.
+	}
+
+	// #TODO: Render target view, etc.
+}
+
 void ResourceManager::Initialize(RenderDevice& Device, size_t BufferedFrames)
 {
 	VGScopedCPUStat("Resource Manager Initialize");
@@ -155,37 +188,24 @@ std::shared_ptr<GPUBuffer> ResourceManager::Allocate(RenderDevice& Device, const
 		}
 	}
 
-	// Create view based on bind flags.
-
-	if (Description.BindFlags & BindFlag::ConstantBuffer)
-	{
-		D3D12_CONSTANT_BUFFER_VIEW_DESC ViewDesc{};
-		ViewDesc.BufferLocation = Allocation->Resource->GetResource()->GetGPUVirtualAddress();
-		ViewDesc.SizeInBytes = static_cast<UINT>(FinalSize);
-
-		// #TODO: Device->CreateConstantBufferView
-	}
-
-	if (Description.BindFlags & BindFlag::ShaderResource)
-	{
-		D3D12_SHADER_RESOURCE_VIEW_DESC ViewDesc{};
-		ViewDesc.Buffer.FirstElement = 0;
-		ViewDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
-
-		// #TODO: Raw, structured, and typed buffer.
-	}
-
-	if (Description.BindFlags & BindFlag::UnorderedAccess)
-	{
-		D3D12_UNORDERED_ACCESS_VIEW_DESC ViewDesc{};
-		ViewDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
-
-		// #TODO: Raw, structured, and typed buffer.
-	}
-
-	// #TODO: Render target view, etc.
+	CreateBindings(Description);
 
 	return std::move(Allocation);
+}
+
+std::shared_ptr<GPUBuffer> ResourceManager::AllocateFromAPIBuffer(const ResourceDescription& Description, void* Buffer, const std::wstring_view Name)
+{
+	// #TEMP
+	return {};
+
+	/*
+	D3D12MA::Allocation ManualAllocationHandle;
+
+	// #TODO: Create a texture instead of a buffer if applicable.
+	auto Allocation = std::make_shared<GPUBuffer>(ResourcePtr<D3D12MA::Allocation>{ AllocationHandle }, Description);
+
+	return std::move(Allocation);
+	*/
 }
 
 void ResourceManager::Write(RenderDevice& Device, std::shared_ptr<GPUBuffer>& Buffer, const std::vector<uint8_t>& Source, size_t BufferOffset)

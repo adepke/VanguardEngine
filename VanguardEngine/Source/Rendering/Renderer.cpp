@@ -25,8 +25,6 @@ auto Renderer::GetPassRenderTargets(RenderPass Pass)
 
 	// #TODO: Replace with render graph.
 
-	const auto FrameIndex = Device->Frame % RenderDevice::FrameCount;
-
 	// Split into two vectors so that we can trivially pass to the command list.
 	std::vector<ID3D12Resource*> RenderTargets;
 	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> RenderTargetViews;
@@ -36,8 +34,8 @@ auto Renderer::GetPassRenderTargets(RenderPass Pass)
 	case RenderPass::Main:
 		RenderTargets.push_back({});
 		RenderTargetViews.push_back({});
-		RenderTargets[0] = Device->FinalRenderTargets[FrameIndex].Get();
-		RenderTargetViews[0] = { Device->FinalRenderTargetViews[FrameIndex].ptr };
+		RenderTargets[0] = Device->GetBackBuffer()->Resource->GetResource();
+		RenderTargetViews[0] = { std::static_pointer_cast<GPUTexture>(Device->GetBackBuffer())->RTV.ptr };
 		break;
 	}
 
@@ -49,8 +47,6 @@ auto Renderer::GetPassRenderTargets(RenderPass Pass)
 void Renderer::BeginRenderPass(RenderPass Pass)
 {
 	VGScopedCPUStat("Begin Render Pass");
-
-	const auto FrameIndex = Device->Frame % RenderDevice::FrameCount;
 
 	auto [RenderTargets, RenderTargetViews] = GetPassRenderTargets(Pass);
 
@@ -70,7 +66,7 @@ void Renderer::BeginRenderPass(RenderPass Pass)
 		Barriers.push_back(std::move(Barrier));
 	}
 
-	Device->DirectCommandList[FrameIndex]->ResourceBarrier(Barriers.size(), Barriers.data());
+	Device->GetDirectList()->ResourceBarrier(Barriers.size(), Barriers.data());
 
 	std::vector<D3D12_RENDER_PASS_RENDER_TARGET_DESC> RenderPassTargets;
 	RenderTargets.reserve(RenderTargetViews.size());
@@ -89,16 +85,14 @@ void Renderer::BeginRenderPass(RenderPass Pass)
 		RenderPassTargets.push_back(std::move(PassDesc));
 	}
 
-	Device->DirectCommandList[FrameIndex]->BeginRenderPass(RenderTargets.size(), RenderPassTargets.data(), nullptr, D3D12_RENDER_PASS_FLAG_NONE);  // #TODO: Some passes need D3D12_RENDER_PASS_FLAG_ALLOW_UAV_WRITES.
+	Device->GetDirectList()->BeginRenderPass(RenderTargets.size(), RenderPassTargets.data(), nullptr, D3D12_RENDER_PASS_FLAG_NONE);  // #TODO: Some passes need D3D12_RENDER_PASS_FLAG_ALLOW_UAV_WRITES.
 }
 
 void Renderer::EndRenderPass(RenderPass Pass)
 {
 	VGScopedCPUStat("End Render Pass");
 
-	const auto FrameIndex = Device->Frame % RenderDevice::FrameCount;
-
-	Device->DirectCommandList[FrameIndex]->EndRenderPass();
+	Device->GetDirectList()->EndRenderPass();
 
 	auto [RenderTargets, RenderTargetViews] = GetPassRenderTargets(Pass);
 
@@ -118,19 +112,17 @@ void Renderer::EndRenderPass(RenderPass Pass)
 		Barriers.push_back(std::move(Barrier));
 	}
 
-	Device->DirectCommandList[FrameIndex]->ResourceBarrier(Barriers.size(), Barriers.data());
+	Device->GetDirectList()->ResourceBarrier(Barriers.size(), Barriers.data());
 }
 
 void Renderer::SetDescriptorHeaps(CommandList& List)
 {
 	VGScopedCPUStat("Set Descriptor Heaps");
 
-	const auto FrameIndex = Device->Frame % RenderDevice::FrameCount;
-
 	std::vector<ID3D12DescriptorHeap*> Heaps;
 
-	Heaps.push_back(Device->ResourceHeaps[FrameIndex].Native());
-	Heaps.push_back(Device->SamplerHeaps[FrameIndex].Native());
+	Heaps.push_back(Device->GetResourceHeap().Native());
+	Heaps.push_back(Device->GetSamplerHeap().Native());
 
 	List.Native()->SetDescriptorHeaps(Heaps.size(), Heaps.data());
 }
@@ -149,16 +141,14 @@ void Renderer::Render(entt::registry& Registry)
 {
 	VGScopedCPUStat("Render");
 
-	const auto FrameIndex = Device->Frame % RenderDevice::FrameCount;
-
-	static_cast<ID3D12GraphicsCommandList*>(Device->CopyCommandList[FrameIndex].Get())->Close();
+	Device->GetCopyList()->Close();
 	
-	ID3D12CommandList* CopyLists[] = { Device->CopyCommandList[FrameIndex].Get() };
+	ID3D12CommandList* CopyLists[] = { Device->GetCopyList() };
 
 	{
 		VGScopedCPUStat("Execute Copy");
 
-		Device->CopyCommandQueue->ExecuteCommandLists(1, CopyLists);
+		Device->GetCopyQueue()->ExecuteCommandLists(1, CopyLists);
 	}
 
 	// #TODO: Culling.
@@ -188,11 +178,11 @@ void Renderer::Render(entt::registry& Registry)
 	}
 
 	// Global to all render passes.
-	SetDescriptorHeaps(Device->DirectCommandList[FrameIndex]);
+	SetDescriptorHeaps(Device->GetDirectList());
 
 	BeginRenderPass(RenderPass::Main);
 
-	auto* DrawList = Device->DirectCommandList[FrameIndex].Native();
+	auto* DrawList = Device->GetDirectList();
 
 	{
 		VGScopedCPUStat("Main Pass");
@@ -233,7 +223,7 @@ void Renderer::Render(entt::registry& Registry)
 	EndRenderPass(RenderPass::Main);
 
 	// Sync the copy engine so we're sure that all the resources are ready on the GPU. In the future this can be split up into separate sync groups (pre, main, post, etc.) to reduce idle time.
-	Device->Sync(SyncType::Copy, Device->Frame);
+	Device->Sync(SyncType::Copy);
 
 	DrawList->Close();
 
@@ -242,12 +232,12 @@ void Renderer::Render(entt::registry& Registry)
 	{
 		VGScopedCPUStat("Execute Direct");
 
-		Device->DirectCommandQueue->ExecuteCommandLists(1, DirectLists);
+		Device->GetDirectQueue()->ExecuteCommandLists(1, DirectLists);
 	}
 
 	{
 		VGScopedCPUStat("Present");
 
-		Device->SwapChain->Present(Device->VSync, 0);  // #TODO: This is probably presenting the wrong frame!
+		Device->GetSwapChain()->Present(Device->VSync, 0);  // #TODO: This is probably presenting the wrong frame!
 	}
 }

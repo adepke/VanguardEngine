@@ -56,7 +56,7 @@ namespace std
 	{
 		size_t operator()(const Shader& Target) const noexcept
 		{
-			return std::hash{ Target.Bytecode }();
+			return std::hash<Shader>{ Target.Bytecode }();
 		}
 	};
 }

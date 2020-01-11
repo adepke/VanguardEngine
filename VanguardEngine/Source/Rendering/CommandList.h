@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <d3d12.h>
+
 struct CommandList
 {
 protected:
@@ -14,4 +16,7 @@ public:
 	void Create(D3D12_COMMAND_LIST_TYPE Type);
 
 	void AddResourceBarrier(const std::shared_ptr<GPUBuffer>& Resource, TransitionBarrier Barrier);
+
+	HRESULT Close();
+	HRESULT Reset();
 };

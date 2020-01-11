@@ -22,7 +22,7 @@ void DescriptorHeap::Initialize(RenderDevice& Device, D3D12_DESCRIPTOR_HEAP_TYPE
 	TotalDescriptors = Descriptors;
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE DescriptorHeap::Allocate(RenderDevice& Device)
+D3D12_CPU_DESCRIPTOR_HANDLE DescriptorHeap::Allocate()
 {
 	VGEnsure(AllocatedDescriptors < TotalDescriptors, "Ran out of descriptor heap memory.");
 	AllocatedDescriptors++;

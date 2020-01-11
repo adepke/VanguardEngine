@@ -16,3 +16,19 @@ void CommandList::Create(D3D12_COMMAND_LIST_TYPE Type)
 		VGLogFatal(Rendering) << "Failed to create command list: " << Result;
 	}
 }
+
+HRESULT CommandList::Close()
+{
+	return List->Close();
+}
+
+HRESULT CommandList::Reset()
+{
+	auto Result = Allocator->Reset();
+	if (FAILED(Result))
+	{
+		return Result;
+	}
+
+	return List->Reset(Allocator.Get(), nullptr);
+}

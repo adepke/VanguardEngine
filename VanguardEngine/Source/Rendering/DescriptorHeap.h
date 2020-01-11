@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <d3d12.h>
+
 class DescriptorHeap
 {
 private:
@@ -16,7 +18,7 @@ public:
 	auto* Native() const noexcept { return Heap.Get(); }
 
 	void Initialize(RenderDevice& Device, D3D12_DESCRIPTOR_HEAP_TYPE Type, size_t Descriptors);
-	D3D12_CPU_DESCRIPTOR_HANDLE Allocate(RenderDevice& Device);
+	D3D12_CPU_DESCRIPTOR_HANDLE Allocate();
 
 	// How do we handle GPU descriptors?
 

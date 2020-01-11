@@ -43,6 +43,7 @@ struct GPUBuffer
 {
 	ResourcePtr<D3D12MA::Allocation> Resource;
 	ResourceDescription Description;
+	D3D12_RESOURCE_STATES State;
 
 	CPUHandle CBV = 0;
 	CPUHandle SRV = 0;

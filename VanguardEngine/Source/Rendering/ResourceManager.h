@@ -28,6 +28,8 @@ private:
 	std::vector<size_t> UploadOffsets;
 	std::vector<void*> UploadPtrs;
 
+	void CreateBindings(const std::shared_ptr<GPUBuffer>& Buffer, const ResourceDescription& Description);
+
 public:
 	ResourceManager() = default;
 	ResourceManager(const ResourceManager&) = delete;
@@ -39,6 +41,9 @@ public:
 	void Initialize(RenderDevice& Device, size_t BufferedFrames);
 
 	std::shared_ptr<GPUBuffer> Allocate(RenderDevice& Device, const ResourceDescription& Description, const std::wstring_view Name);
+	
+	// Used for allocations from render API internal buffers such as the swap chain surface. Description is needed for bindings.
+	std::shared_ptr<GPUBuffer> AllocateFromAPIBuffer(const ResourceDescription& Description, void* Buffer, const std::wstring_view Name);
 
 	// Source data can be discarded immediately.
 	void Write(RenderDevice& Device, std::shared_ptr<GPUBuffer>& Buffer, const std::vector<uint8_t>& Source, size_t BufferOffset = 0);

@@ -71,11 +71,6 @@ void RenderDevice::SetNames()
 		ComputeCommandList[Index]->SetName(VGText("Compute Command List"));
 	}
 
-	for (auto Index = 0; Index < FrameCount; ++Index)
-	{
-		FinalRenderTargets[Index]->SetName(VGText("Final Render Target"));
-	}
-
 	CopyFence->SetName(VGText("Copy Fence"));
 	DirectFence->SetName(VGText("Direct Fence"));
 	ComputeFence->SetName(VGText("Compute Fence"));
@@ -112,15 +107,19 @@ void RenderDevice::SetupRenderTargets()
 
 	for (auto Index = 0; Index < FrameCount; ++Index)
 	{
-		Result = SwapChain->GetBuffer(Index, IID_PPV_ARGS(FinalRenderTargets[Index].Indirect()));
+		ID3D12Resource* IntermediateResource;
+
+		Result = SwapChain->GetBuffer(Index, IID_PPV_ARGS(&IntermediateResource));
 		if (FAILED(Result))
 		{
 			VGLogFatal(Rendering) << "Failed to get swap chain buffer for frame " << Index << ": " << Result;
 		}
 
-		auto RTV = RenderTargetHeap.Allocate(*this);
-		Device->CreateRenderTargetView(FinalRenderTargets[Index].Get(), nullptr, RTV);
-		FinalRenderTargetViews[Index] = RTV;
+		BackBufferTextures[Index] = std::move(AllocatorManager->AllocateFromAPIBuffer(, IntermediateResource, VGText("Back Buffer")));
+		
+		const auto RTV = std::static_pointer_cast<GPUTexture>(BackBufferTextures[Index])->RTV;
+
+		Device->CreateRenderTargetView(BackBufferTextures[Index]->Resource->GetResource(), nullptr, RTV);
 	}
 }
 
@@ -156,25 +155,13 @@ void RenderDevice::ResetFrame(size_t FrameID)
 
 	const auto FrameIndex = FrameID % FrameCount;
 
-	auto Result = CopyCommandAllocator[FrameIndex]->Reset();
-	if (FAILED(Result))
-	{
-		VGLogError(Rendering) << "Failed to reset copy command allocator for frame " << FrameIndex << ": " << Result;
-	}
-
-	Result = static_cast<ID3D12GraphicsCommandList*>(CopyCommandList[FrameIndex].Get())->Reset(CopyCommandAllocator[FrameIndex].Get(), nullptr);
+	Result = CopyCommandList[FrameIndex]->Reset();
 	if (FAILED(Result))
 	{
 		VGLogError(Rendering) << "Failed to reset copy command list for frame " << FrameIndex << ": " << Result;
 	}
 
-	Result = DirectCommandAllocator[FrameIndex]->Reset();
-	if (FAILED(Result))
-	{
-		VGLogError(Rendering) << "Failed to reset direct command allocator for frame " << FrameIndex << ": " << Result;
-	}
-
-	Result = static_cast<ID3D12GraphicsCommandList*>(DirectCommandList[FrameIndex].Get())->Reset(DirectCommandAllocator[FrameIndex].Get(), nullptr);
+	Result = DirectCommandList[FrameIndex]->Reset();
 	if (FAILED(Result))
 	{
 		VGLogError(Rendering) << "Failed to reset direct command list for frame " << FrameIndex << ": " << Result;
@@ -182,13 +169,7 @@ void RenderDevice::ResetFrame(size_t FrameID)
 
 	// #TODO: Implement compute.
 	/*
-	Result = ComputeCommandAllocator[FrameIndex]->Reset();
-	if (FAILED(Result))
-	{
-		VGLogError(Rendering) << "Failed to reset compute command allocator for frame " << FrameIndex << ": " << Result;
-	}
-
-	Result = static_cast<ID3D12GraphicsCommandList*>(ComputeCommandList[FrameIndex].Get())->Reset(ComputeCommandAllocator[FrameIndex].Get(), nullptr);
+	Result = ComputeCommandList[FrameIndex]->Reset();
 	if (FAILED(Result))
 	{
 		VGLogError(Rendering) << "Failed to reset compute command list for frame " << FrameIndex << ": " << Result;
@@ -286,7 +267,7 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		// Close all lists except the current frame's list.
 		if (Index > 0)
 		{
-			CopyCommandList[Index]->Get()->Close();
+			CopyCommandList[Index]->Native()->Close();
 		}
 	}
 
@@ -311,7 +292,7 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		// Close all lists except the current frame's list.
 		if (Index > 0)
 		{
-			DirectCommandList[Index]->Get()->Close();
+			DirectCommandList[Index]->Native()->Close();
 		}
 	}
 
@@ -336,14 +317,14 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		// Close all lists except the current frame's list.
 		if (Index > 0)
 		{
-			ComputeCommandList[Index]->Get()->Close();
+			ComputeCommandList[Index]->Native()->Close();
 		}
 	}
 
 	DXGI_SWAP_CHAIN_DESC1 SwapChainDescription{};
 	SwapChainDescription.Width = static_cast<UINT>(RenderWidth);
 	SwapChainDescription.Height = static_cast<UINT>(RenderHeight);
-	SwapChainDescription.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	SwapChainDescription.Format = DXGI_FORMAT_B8G8R8A8_UNORM;  // Non-HDR. #TODO: Support HDR.
 	SwapChainDescription.BufferCount = FrameCount;
 	SwapChainDescription.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 	SwapChainDescription.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
@@ -609,7 +590,7 @@ void RenderDevice::Sync(SyncType Type, size_t FrameID)
 		break;
 	}
 
-	const auto FrameIndex = FrameID % FrameCount;
+	const auto FrameIndex = FrameID == std::numeric_limits<size_t>::max() ? GetFrameIndex() : FrameID % FrameCount;
 
 	auto Result = SyncQueue->Signal(SyncFence, FrameIndex);
 	if (FAILED(Result))
@@ -660,7 +641,7 @@ void RenderDevice::SetResolution(size_t Width, size_t Height, bool InFullscreen)
 
 	// #TODO: Fullscreen.
 
-	FinalRenderTargets = {};  // Release the render targets.
+	BackBufferTextures = {};  // Release the render targets.
 
 	auto Result = SwapChain->ResizeBuffers(FrameCount, Width, Height, DXGI_FORMAT_UNKNOWN, 0);
 	if (FAILED(Result))

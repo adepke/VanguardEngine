@@ -485,6 +485,9 @@ public:
     */
     LPCWSTR GetName() const { return m_Name; }
 
+	// Manually sets the resource to a buffer allocated internally by the rendering API.
+	void SetResourceManual(ID3D12Resource* Resource) { m_Resource = Resource; m_Type = TYPE_APIINTERNAL; }
+
 private:
     friend class AllocatorPimpl;
     friend class BlockVector;
@@ -497,6 +500,7 @@ private:
         TYPE_COMMITTED,
         TYPE_PLACED,
         TYPE_HEAP,
+		TYPE_APIINTERNAL,
         TYPE_COUNT
     } m_Type;
     UINT64 m_Size;
