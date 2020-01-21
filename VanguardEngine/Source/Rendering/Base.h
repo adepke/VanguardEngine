@@ -9,7 +9,7 @@
 
 using namespace DirectX;
 
-using CPUHandle = uint64_t;
+using DescriptorHandle = uint64_t;
 
 struct Vertex
 {

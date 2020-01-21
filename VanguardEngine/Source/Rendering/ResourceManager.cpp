@@ -3,13 +3,15 @@
 #include <Rendering/ResourceManager.h>
 #include <Rendering/Device.h>
 #include <Rendering/Resource.h>
+#include <Rendering/Buffer.h>
+#include <Rendering/Texture.h>
 #include <Utility/AlignedSize.h>
 
 #include <D3D12MemAlloc.h>
 
 #include <cstring>
 
-void ResourceManager::CreateBindings(const std::shared_ptr<GPUBuffer>& Buffer, const ResourceDescription& Description)
+void ResourceManager::CreateResourceViews(std::shared_ptr<Resource>& Target)
 {
 	// Create view based on bind flags.
 
@@ -42,7 +44,22 @@ void ResourceManager::CreateBindings(const std::shared_ptr<GPUBuffer>& Buffer, c
 	// #TODO: Render target view, etc.
 }
 
-void ResourceManager::Initialize(RenderDevice& Device, size_t BufferedFrames)
+void ResourceManager::NameResource(std::shared_ptr<Resource>& Target, const std::wstring_view Name)
+{
+#if !BUILD_RELEASE
+	if (Device.Debugging)
+	{
+		Allocation->Resource->SetName(Name.data());  // Set the name in the allocator.
+		const auto Result = Allocation->Resource->GetResource()->SetName(Name.data());  // Set the name in the API.
+		if (FAILED(Result))
+		{
+			VGLogWarning(Rendering) << "Failed to set resource name to: '" << Name << "': " << Result;
+		}
+	}
+#endif
+}
+
+void ResourceManager::Initialize(RenderDevice* Device, size_t BufferedFrames)
 {
 	VGScopedCPUStat("Resource Manager Initialize");
 
@@ -92,21 +109,13 @@ void ResourceManager::Initialize(RenderDevice& Device, size_t BufferedFrames)
 			VGLogError(Rendering) << "Failed to map upload resource: " << Result;
 		}
 
-#if !BUILD_RELEASE
-		constexpr auto* Name = VGText("Upload Heap");
-		AllocationHandle->SetName(Name);  // Set the name in the allocator.
-		Result = AllocationHandle->GetResource()->SetName(Name);  // Set the name in the API.
-		if (FAILED(Result))
-		{
-			VGLogWarning(Rendering) << "Failed to set upload resource name to: '" << Name << "':" << Result;
-		}
-#endif
-
 		UploadResources[Index] = std::move(ResourcePtr<D3D12MA::Allocation>{ AllocationHandle });
+
+		NameResource(UploadResources[Index], VGText("Upload Heap"));
 	}
 }
 
-std::shared_ptr<GPUBuffer> ResourceManager::Allocate(RenderDevice& Device, const ResourceDescription& Description, const std::wstring_view Name)
+std::shared_ptr<Resource> ResourceManager::Allocate(const ResourceDescription& Description, const std::wstring_view Name)
 {
 	VGScopedCPUStat("Resource Manager Allocate");
 
@@ -175,25 +184,15 @@ std::shared_ptr<GPUBuffer> ResourceManager::Allocate(RenderDevice& Device, const
 	}
 
 	// #TODO: Create a texture instead of a buffer if applicable.
-	auto Allocation = std::make_shared<GPUBuffer>(ResourcePtr<D3D12MA::Allocation>{ AllocationHandle }, Description);
+	auto Allocation = std::make_shared<Buffer>(ResourcePtr<D3D12MA::Allocation>{ AllocationHandle }, Description);
 
-	// Name the resource.
-	if (Device.Debugging)
-	{
-		Allocation->Resource->SetName(Name.data());  // Set the name in the allocator.
-		const auto Result = Allocation->Resource->GetResource()->SetName(Name.data());  // Set the name in the API.
-		if (FAILED(Result))
-		{
-			VGLogWarning(Rendering) << "Failed to set resource name to: '" << Name << "':" << Result;
-		}
-	}
-
-	CreateBindings(Description);
+	CreateResourceViews(Allocation);
+	NameResource(Allocation, std::move(Name));
 
 	return std::move(Allocation);
 }
 
-std::shared_ptr<GPUBuffer> ResourceManager::AllocateFromAPIBuffer(const ResourceDescription& Description, void* Buffer, const std::wstring_view Name)
+std::shared_ptr<Resource> ResourceManager::AllocateFromExternal(const ResourceDescription& Description, void* Buffer, const std::wstring_view Name)
 {
 	// #TEMP
 	return {};
@@ -208,7 +207,7 @@ std::shared_ptr<GPUBuffer> ResourceManager::AllocateFromAPIBuffer(const Resource
 	*/
 }
 
-void ResourceManager::Write(RenderDevice& Device, std::shared_ptr<GPUBuffer>& Buffer, const std::vector<uint8_t>& Source, size_t BufferOffset)
+void ResourceManager::Write(std::shared_ptr<Resource>& Target, const std::vector<uint8_t>& Source, size_t BufferOffset);
 {
 	VGScopedCPUStat("Resource Manager Write");
 
@@ -259,5 +258,4 @@ void ResourceManager::CleanupFrameResources(size_t Frame)
 	VGScopedCPUStat("Cleanup Frame Resources");
 
 	UploadOffsets[Frame % FrameCount] = 0;
-	++CurrentFrame;
 }

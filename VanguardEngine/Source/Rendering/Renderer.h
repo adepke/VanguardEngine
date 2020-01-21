@@ -17,7 +17,7 @@ enum class RenderPass
 class Renderer
 {
 public:
-	std::unique_ptr<RenderDevice> Device;
+	std::shared_ptr<RenderDevice> Device;
 
 private:
 	auto GetPassRenderTargets(RenderPass Pass);

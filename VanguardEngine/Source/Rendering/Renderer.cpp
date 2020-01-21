@@ -130,7 +130,7 @@ void Renderer::SetDescriptorHeaps(CommandList& List)
 	List.Native()->SetDescriptorHeaps(Heaps.size(), Heaps.data());
 }
 
-void Renderer::Initialize(std::unique_ptr<RenderDevice>&& InDevice)
+void Renderer::Initialize(std::shared_ptr<RenderDevice>&& InDevice)
 {
 	VGScopedCPUStat("Renderer Initialize");
 
@@ -183,6 +183,7 @@ void Renderer::Render(entt::registry& Registry)
 	// Global to all render passes.
 	SetDescriptorHeaps(*Device->GetDirectList());
 
+	// #TEMP: After barrier, but before anything related to pass.
 	BeginRenderPass(RenderPass::Main);
 
 	auto* DrawList = Device->GetDirectList()->Native();
@@ -223,6 +224,7 @@ void Renderer::Render(entt::registry& Registry)
 			});
 	}
 
+	// #TEMP: After execute?
 	EndRenderPass(RenderPass::Main);
 
 	// Sync the copy engine so we're sure that all the resources are ready on the GPU. In the future this can be split up into separate sync groups (pre, main, post, etc.) to reduce idle time.

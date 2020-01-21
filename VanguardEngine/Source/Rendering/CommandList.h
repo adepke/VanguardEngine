@@ -13,7 +13,7 @@ struct GPUBuffer;
 struct CommandList
 {
 protected:
-	ResourcePtr<ID3D12CommandAllocator> Allocator;
+	ResourcePtr<ID3D12CommandAllocator> Allocator;  // #TODO: Potentially share allocators? Something to look into in the future.
 	ResourcePtr<ID3D12GraphicsCommandList5> List;
 
 	std::vector<TransitionBarrier> TransitionBarriers;
