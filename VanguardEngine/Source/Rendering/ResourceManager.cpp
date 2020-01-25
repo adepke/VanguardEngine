@@ -11,46 +11,83 @@
 
 #include <cstring>
 
-void ResourceManager::CreateResourceViews(std::shared_ptr<Resource>& Target)
+void ResourceManager::CreateResourceViews(std::shared_ptr<Buffer>& Target)
 {
-	// Create view based on bind flags.
-
-	if (Description.BindFlags & BindFlag::ConstantBuffer)
+	if (Target->Description.BindFlags & BindFlag::ConstantBuffer)
 	{
-		D3D12_CONSTANT_BUFFER_VIEW_DESC ViewDesc{};
-		ViewDesc.BufferLocation = Buffer->Resource->GetResource()->GetGPUVirtualAddress();
-		ViewDesc.SizeInBytes = static_cast<UINT>(FinalSize);
+		Target->CBV = Device->GetResourceHeap().Allocate();
 
-		// #TODO: Device->CreateConstantBufferView
+		D3D12_CONSTANT_BUFFER_VIEW_DESC ViewDesc{};
+		ViewDesc.BufferLocation = Target->Native()->GetGPUVirtualAddress();
+		ViewDesc.SizeInBytes = static_cast<UINT>(Target->Description.Size);
+
+		Device->Native()->CreateConstantBufferView(&ViewDesc, *Target->CBV);
 	}
 
-	if (Description.BindFlags & BindFlag::ShaderResource)
+	if (Target->Description.BindFlags & BindFlag::ShaderResource)
 	{
+		Target->SRV = Device->GetResourceHeap().Allocate();
+
 		D3D12_SHADER_RESOURCE_VIEW_DESC ViewDesc{};
 		ViewDesc.Buffer.FirstElement = 0;
 		ViewDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
 
 		// #TODO: Raw, structured, and typed buffer.
+
+		Device->Native()->CreateShaderResourceView(Target->Native(), &ViewDesc, *Target->SRV);
 	}
 
-	if (Description.BindFlags & BindFlag::UnorderedAccess)
+	if (Target->Description.BindFlags & BindFlag::UnorderedAccess)
 	{
+		Target->UAV = Device->GetResourceHeap().Allocate();
+
 		D3D12_UNORDERED_ACCESS_VIEW_DESC ViewDesc{};
 		ViewDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
 
 		// #TODO: Raw, structured, and typed buffer.
+
+		ID3D12Resource* CounterBuffer = nullptr;
+		if (Target->CounterBuffer)
+		{
+			CounterBuffer = (*Target->CounterBuffer)->GetResource();
+		}
+
+		Device->Native()->CreateUnorderedAccessView(Target->Native(), CounterBuffer, &ViewDesc, *Target->UAV);
+	}
+}
+
+void ResourceManager::CreateResourceViews(std::shared_ptr<Texture>& Target)
+{
+	if (Target->Description.BindFlags & BindFlag::RenderTarget)
+	{
+		Target->RTV = Device->GetRenderTargetHeap().Allocate();
+
+		D3D12_RENDER_TARGET_VIEW_DESC ViewDesc{};
+		// #TODO: Fill out the description.
+
+		Device->Native()->CreateRenderTargetView(Target->Native(), &ViewDesc, *Target->RTV);
 	}
 
-	// #TODO: Render target view, etc.
+	if (Target->Description.BindFlags & BindFlag::DepthStencil)
+	{
+		Target->DSV = Device->GetDepthStencilHeap().Allocate();
+
+		D3D12_DEPTH_STENCIL_VIEW_DESC ViewDesc{};
+		// #TODO: Fill out the description.
+
+		Device->Native()->CreateDepthStencilView(Target->Native(), &ViewDesc, *Target->DSV);
+	}
+
+	// #TODO: SRV, UAV.
 }
 
 void ResourceManager::NameResource(std::shared_ptr<Resource>& Target, const std::wstring_view Name)
 {
 #if !BUILD_RELEASE
-	if (Device.Debugging)
+	if (Device->Debugging)
 	{
-		Allocation->Resource->SetName(Name.data());  // Set the name in the allocator.
-		const auto Result = Allocation->Resource->GetResource()->SetName(Name.data());  // Set the name in the API.
+		Target->Allocation->SetName(Name.data());  // Set the name in the allocator.
+		const auto Result = Target->Native()->SetName(Name.data());  // Set the name in the API.
 		if (FAILED(Result))
 		{
 			VGLogWarning(Rendering) << "Failed to set resource name to: '" << Name << "': " << Result;
@@ -93,7 +130,7 @@ void ResourceManager::Initialize(RenderDevice* Device, size_t BufferedFrames)
 		ID3D12Resource* RawResource = nullptr;
 		D3D12MA::Allocation* AllocationHandle = nullptr;
 
-		auto Result = Device.Allocator->CreateResource(&AllocationDesc, &ResourceDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, &AllocationHandle, IID_PPV_ARGS(&RawResource));
+		auto Result = Device->Allocator->CreateResource(&AllocationDesc, &ResourceDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, &AllocationHandle, IID_PPV_ARGS(&RawResource));
 		if (FAILED(Result))
 		{
 			VGLogError(Rendering) << "Failed to allocate write upload resource: " << Result;
@@ -115,7 +152,7 @@ void ResourceManager::Initialize(RenderDevice* Device, size_t BufferedFrames)
 	}
 }
 
-std::shared_ptr<Resource> ResourceManager::Allocate(const ResourceDescription& Description, const std::wstring_view Name)
+std::shared_ptr<Buffer> ResourceManager::AllocateResource(const BufferDescription& Description, const std::wstring_view Name)
 {
 	VGScopedCPUStat("Resource Manager Allocate");
 
@@ -128,6 +165,58 @@ std::shared_ptr<Resource> ResourceManager::Allocate(const ResourceDescription& D
 	ResourceDesc.Width = FinalSize;
 	ResourceDesc.Height = 1;
 	ResourceDesc.DepthOrArraySize = 1;
+	ResourceDesc.Format = Description.Format ? *Description.Format : DXGI_FORMAT_UNKNOWN;
+	ResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+	ResourceDesc.MipLevels = 1;
+	ResourceDesc.SampleDesc.Count = 1;
+	ResourceDesc.SampleDesc.Quality = 0;
+	ResourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+	if (Description.BindFlags & BindFlag::UnorderedAccess)
+	{
+		ResourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+	}
+
+	D3D12MA::ALLOCATION_DESC AllocationDesc{};
+	AllocationDesc.HeapType = Description.UpdateRate == ResourceFrequency::Static ? D3D12_HEAP_TYPE_DEFAULT : D3D12_HEAP_TYPE_UPLOAD;
+	AllocationDesc.Flags = D3D12MA::ALLOCATION_FLAG_NONE;
+
+	auto ResourceState = Description.InitialState;
+
+	if (Description.UpdateRate == ResourceFrequency::Dynamic)
+	{
+		ResourceState = D3D12_RESOURCE_STATE_GENERIC_READ;
+	}
+
+	ID3D12Resource* RawResource = nullptr;
+	D3D12MA::Allocation* AllocationHandle = nullptr;
+
+	auto Result = Device.Allocator->CreateResource(&AllocationDesc, &ResourceDesc, ResourceState, nullptr, &AllocationHandle, IID_PPV_ARGS(&RawResource));
+	if (FAILED(Result))
+	{
+		VGLogError(Rendering) << "Failed to allocate buffer: " << Result;
+
+		return nullptr;
+	}
+
+	auto Allocation = std::make_shared<Buffer>(ResourcePtr<D3D12MA::Allocation>{ AllocationHandle }, Description);
+
+	CreateResourceViews(Allocation);
+	NameResource(std::static_pointer_cast<Resource>(Allocation), std::move(Name));
+
+	return std::move(Allocation);
+}
+
+std::shared_ptr<Texture> ResourceManager::AllocateResource(const TextureDescription& Description, const std::wstring_view Name)
+{
+	VGScopedCPUStat("Resource Manager Allocate");
+
+	D3D12_RESOURCE_DESC ResourceDesc{};
+	ResourceDesc.Alignment = 0;
+	ResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	ResourceDesc.Width = Description.Width;
+	ResourceDesc.Height = Description.Height;
+	ResourceDesc.DepthOrArraySize = Description.Depth;
 	ResourceDesc.Format = DXGI_FORMAT_UNKNOWN;
 	ResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 	ResourceDesc.MipLevels = 1;
@@ -143,6 +232,11 @@ std::shared_ptr<Resource> ResourceManager::Allocate(const ResourceDescription& D
 	if (Description.BindFlags & BindFlag::DepthStencil)
 	{
 		ResourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+
+		if ((Description.BindFlags & BindFlag::ShaderResource) == 0)
+		{
+			ResourceDesc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
+		}
 	}
 
 	if (Description.BindFlags & BindFlag::UnorderedAccess)
@@ -160,16 +254,11 @@ std::shared_ptr<Resource> ResourceManager::Allocate(const ResourceDescription& D
 		AllocationDesc.Flags |= D3D12MA::ALLOCATION_FLAG_COMMITTED;
 	}
 
-	auto ResourceState = D3D12_RESOURCE_STATE_COMMON;
-	
+	auto ResourceState = Description.InitialState;
+
 	if (Description.UpdateRate == ResourceFrequency::Dynamic)
 	{
 		ResourceState = D3D12_RESOURCE_STATE_GENERIC_READ;
-	}
-
-	else
-	{
-		// #TODO: Set the specific state based on the bind flags or leave it in common and require a resource barrier?
 	}
 
 	ID3D12Resource* RawResource = nullptr;
@@ -178,16 +267,15 @@ std::shared_ptr<Resource> ResourceManager::Allocate(const ResourceDescription& D
 	auto Result = Device.Allocator->CreateResource(&AllocationDesc, &ResourceDesc, ResourceState, nullptr, &AllocationHandle, IID_PPV_ARGS(&RawResource));
 	if (FAILED(Result))
 	{
-		VGLogError(Rendering) << "Failed to allocate resource: " << Result;
+		VGLogError(Rendering) << "Failed to allocate texture: " << Result;
 
 		return nullptr;
 	}
 
-	// #TODO: Create a texture instead of a buffer if applicable.
-	auto Allocation = std::make_shared<Buffer>(ResourcePtr<D3D12MA::Allocation>{ AllocationHandle }, Description);
+	auto Allocation = std::make_shared<Texture>(ResourcePtr<D3D12MA::Allocation>{ AllocationHandle }, Description);
 
 	CreateResourceViews(Allocation);
-	NameResource(Allocation, std::move(Name));
+	NameResource(std::static_pointer_cast<Resource>(Allocation), std::move(Name));
 
 	return std::move(Allocation);
 }
@@ -207,11 +295,11 @@ std::shared_ptr<Resource> ResourceManager::AllocateFromExternal(const ResourceDe
 	*/
 }
 
-void ResourceManager::Write(std::shared_ptr<Resource>& Target, const std::vector<uint8_t>& Source, size_t BufferOffset);
+void ResourceManager::Write(std::shared_ptr<Resource>& Target, const std::vector<uint8_t>& Source, size_t BufferOffset)
 {
 	VGScopedCPUStat("Resource Manager Write");
 
-	if (Buffer->Description.UpdateRate == ResourceFrequency::Static)
+	if (Target->Description.UpdateRate == ResourceFrequency::Static)
 	{
 		VGScopedCPUStat("Write Static");
 
@@ -222,7 +310,7 @@ void ResourceManager::Write(std::shared_ptr<Resource>& Target, const std::vector
 		// #TODO: Resource barrier?
 
 		auto* TargetCommandList = Device.GetCopyList()->Native();
-		TargetCommandList->CopyBufferRegion(Buffer->Resource->GetResource(), BufferOffset, UploadResources[FrameIndex]->GetResource(), UploadOffsets[FrameIndex], Source.size());
+		TargetCommandList->CopyBufferRegion(Target->Resource->GetResource(), BufferOffset, UploadResources[FrameIndex]->GetResource(), UploadOffsets[FrameIndex], Source.size());
 
 		// #TODO: Resource barrier?
 
@@ -237,7 +325,7 @@ void ResourceManager::Write(std::shared_ptr<Resource>& Target, const std::vector
 
 		D3D12_RANGE MapRange{ BufferOffset, BufferOffset + Source.size() };
 
-		auto Result = Buffer->Resource->GetResource()->Map(0, &MapRange, &MappedPtr);
+		auto Result = Target->Native()->Map(0, &MapRange, &MappedPtr);
 		if (FAILED(Result))
 		{
 			VGLogError(Rendering) << "Failed to map buffer resource during resource write: " << Result;
@@ -247,9 +335,7 @@ void ResourceManager::Write(std::shared_ptr<Resource>& Target, const std::vector
 
 		std::memcpy(MappedPtr, Source.data(), Source.size());
 
-		D3D12_RANGE UnmapRange{ 0, 0 };
-
-		Buffer->Resource->GetResource()->Unmap(0, &UnmapRange);
+		Buffer->Resource->GetResource()->Unmap(0, nullptr);
 	}
 }
 

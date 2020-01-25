@@ -9,10 +9,15 @@
 #include <vector>
 #include <memory>
 #include <string_view>
+#include <type_traits>
 
 class RenderDevice;
-struct ResourceDescription;
 struct Resource;
+struct Buffer;
+struct Texture;
+struct ResourceDescription;
+struct BufferDescription;
+struct TextureDescription;
 
 namespace D3D12MA
 {
@@ -30,7 +35,8 @@ private:
 	std::vector<size_t> UploadOffsets;
 	std::vector<void*> UploadPtrs;
 
-	void CreateResourceViews(std::shared_ptr<Resource>& Target);
+	void CreateResourceViews(std::shared_ptr<Buffer>& Target);
+	void CreateResourceViews(std::shared_ptr<Texture>& Target);
 	void NameResource(std::shared_ptr<Resource>& Target, const std::wstring_view Name);
 
 public:
@@ -43,7 +49,8 @@ public:
 
 	void Initialize(RenderDevice* Device, size_t BufferedFrames);
 
-	std::shared_ptr<Resource> Allocate(const ResourceDescription& Description, const std::wstring_view Name);
+	std::shared_ptr<Buffer> AllocateResource(const BufferDescription& Description, const std::wstring_view Name);
+	std::shared_ptr<Texture> AllocateResource(const TextureDescription& Description, const std::wstring_view Name);
 	
 	// Used for creating allocations from external systems, such as the render API internal buffers (swap chain surface). Description is needed for bindings.
 	std::shared_ptr<Resource> AllocateFromExternal(const ResourceDescription& Description, void* Buffer, const std::wstring_view Name);

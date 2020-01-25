@@ -4,7 +4,7 @@
 
 #include <Rendering/Material.h>
 #include <Rendering/Device.h>
-#include <Rendering/Resource.h>
+#include <Rendering/Buffer.h>
 
 #include <memory>
 #include <vector>
@@ -45,7 +45,7 @@ inline MeshComponent CreateMeshComponent(RenderDevice& Device, const std::vector
 
 	MeshComponent Result;
 
-	ResourceDescription VertexDescription{};
+	BufferDescription VertexDescription{};
 	VertexDescription.Size = VertexPositions.size();
 	VertexDescription.Stride = sizeof(Vertex);
 	VertexDescription.UpdateRate = ResourceFrequency::Static;
@@ -59,7 +59,7 @@ inline MeshComponent CreateMeshComponent(RenderDevice& Device, const std::vector
 	std::memcpy(VertexResource.data(), VertexPositions.data(), VertexResource.size());
 	Device.Write(Result.VertexBuffer, VertexResource);
 
-	ResourceDescription IndexDescription{};
+	BufferDescription IndexDescription{};
 	IndexDescription.Size = Indices.size();
 	IndexDescription.Stride = sizeof(uint32_t);
 	IndexDescription.UpdateRate = ResourceFrequency::Static;

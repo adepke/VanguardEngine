@@ -3,7 +3,7 @@
 #pragma once
 
 #include <Rendering/Base.h>
-#include <Rendering/ResourceBarrier.h>
+#include <Rendering/Barrier.h>
 
 #include <Core/Windows/DirectX12Minimal.h>
 

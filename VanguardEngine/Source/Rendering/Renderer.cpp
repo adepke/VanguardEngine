@@ -2,6 +2,8 @@
 
 #include <Rendering/Renderer.h>
 #include <Rendering/Device.h>
+#include <Rendering/Buffer.h>
+#include <Rendering/Texture.h>
 #include <Core/CoreComponents.h>
 #include <Rendering/RenderComponents.h>
 #include <Rendering/RenderSystems.h>
@@ -130,7 +132,7 @@ void Renderer::SetDescriptorHeaps(CommandList& List)
 	List.Native()->SetDescriptorHeaps(Heaps.size(), Heaps.data());
 }
 
-void Renderer::Initialize(std::shared_ptr<RenderDevice>&& InDevice)
+void Renderer::Initialize(std::unique_ptr<RenderDevice>&& InDevice)
 {
 	VGScopedCPUStat("Renderer Initialize");
 

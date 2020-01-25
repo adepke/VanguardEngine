@@ -37,6 +37,8 @@ enum class SyncType
 
 class RenderDevice
 {
+	friend class ResourceManager;
+
 public:
 	bool Debugging = false;
 	bool VSync = false;
@@ -65,7 +67,7 @@ private:
 	ResourcePtr<IDXGISwapChain3> SwapChain;
 	size_t Frame = 0;  // Stores the actual frame number. Refers to the current CPU frame being run, stepped after finishing CPU pass.
 
-	std::array<std::shared_ptr<GPUTexture>, FrameCount> BackBufferTextures;  // Render targets bound to the swap chain.
+	std::array<std::shared_ptr<Texture>, FrameCount> BackBufferTextures;  // Render targets bound to the swap chain.
 
 	ResourcePtr<ID3D12Fence> CopyFence;
 	HANDLE CopyFenceEvent;
@@ -137,8 +139,10 @@ public:
 	auto* GetComputeList() const noexcept { return ComputeCommandList[GetFrameIndex()].Get(); }
 	auto* GetSwapChain() const noexcept { return SwapChain.Get(); }
 	auto* GetBackBuffer() const noexcept { return BackBufferTextures[GetFrameIndex()].get(); }
-	auto& GetResourceHeap() const noexcept { return ResourceHeaps[GetFrameIndex()]; }
-	auto& GetSamplerHeap() const noexcept { return SamplerHeaps[GetFrameIndex()]; }
+	auto& GetResourceHeap() noexcept { return ResourceHeaps[GetFrameIndex()]; }
+	auto& GetSamplerHeap() noexcept { return SamplerHeaps[GetFrameIndex()]; }
+	auto& GetRenderTargetHeap() noexcept { return RenderTargetHeap; }
+	auto& GetDepthStencilHeap() noexcept { return DepthStencilHeap; }
 
 	void SetResolution(size_t Width, size_t Height, bool InFullscreen);
 };

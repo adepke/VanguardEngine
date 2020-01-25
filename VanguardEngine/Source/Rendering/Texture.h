@@ -4,17 +4,22 @@
 
 #include <Rendering/Resource.h>
 
+#include <vector>
 #include <optional>
 
-struct Texture2D : Resource
+struct TextureDescription : ResourceDescription
 {
 	uint32_t Width;
 	uint32_t Height;
-	DXGI_FORMAT Format = DXGI_FORMAT_UNKNOWN;
-
-	DescriptorHandle SRV;
-	std::optional<DescriptorHandle> RTV;
-	std::optional<DescriptorHandle> DSV;
+	uint32_t Depth = 1;
 };
 
-// #TODO: Implement Texture3D.
+struct Texture : Resource
+{
+	TextureDescription Description;
+
+	std::optional<D3D12_CPU_DESCRIPTOR_HANDLE> RTV;
+	std::optional<D3D12_CPU_DESCRIPTOR_HANDLE> DSV;
+	std::optional<D3D12_CPU_DESCRIPTOR_HANDLE> SRV;
+	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> UAV;
+};

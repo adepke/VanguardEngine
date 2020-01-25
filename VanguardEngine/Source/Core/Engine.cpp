@@ -49,7 +49,7 @@ void EngineBoot()
 	constexpr auto EnableDebugging = false;
 #endif
 
-	auto Device = std::make_shared<RenderDevice>(static_cast<HWND>(MainWindow->GetHandle()), false, EnableDebugging);
+	auto Device = std::make_unique<RenderDevice>(static_cast<HWND>(MainWindow->GetHandle()), false, EnableDebugging);
 	Device->SetResolution(800, 600, false);
 	Renderer::Get().Initialize(std::move(Device));
 }

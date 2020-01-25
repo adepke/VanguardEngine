@@ -2,6 +2,8 @@
 
 #include <Rendering/Device.h>
 #include <Rendering/ResourceManager.h>
+#include <Rendering/Buffer.h>
+#include <Rendering/Texture.h>
 #include <Core/Config.h>
 
 #include <filesystem>
@@ -114,10 +116,8 @@ void RenderDevice::SetupRenderTargets()
 
 		// #TEMP
 		//BackBufferTextures[Index] = std::move(AllocatorManager->AllocateFromAPIBuffer(, IntermediateResource, VGText("Back Buffer")));
-		
-		const auto RTV = std::static_pointer_cast<GPUTexture>(BackBufferTextures[Index])->RTV;
 
-		Device->CreateRenderTargetView(BackBufferTextures[Index]->Resource->GetResource(), nullptr, D3D12_CPU_DESCRIPTOR_HANDLE{ RTV });
+		Device->CreateRenderTargetView(BackBufferTextures[Index]->Native(), nullptr, BackBufferTextures[Index]->RTV);
 	}
 }
 

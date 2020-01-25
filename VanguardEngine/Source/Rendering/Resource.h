@@ -32,29 +32,30 @@ enum AccessFlag
 
 struct ResourceDescription
 {
-	size_t Size;
-	size_t Stride;
 	ResourceFrequency UpdateRate;
 	uint32_t BindFlags = 0;  // Determines the view type(s) created.
 	uint32_t AccessFlags = 0;
-	D3D12_RESOURCE_STATES InitialState;
+	D3D12_RESOURCE_STATES InitialState;  // Ignored if the update rate is Dynamic.
 };
+
+class ResourceManager;
 
 struct Resource
 {
+	friend class ResourceManager;
+
 protected:
 	ResourcePtr<D3D12MA::Allocation> Allocation;
 
 public:
-	ResourceDescription Description;
 	D3D12_RESOURCE_STATES State;
 
-	Resource(ResourcePtr<D3D12MA::Allocation>&& InAllocation, const ResourceDescription& InDesc) : Allocation(std::move(InAllocation)), Description(InDesc) { State = Description.InitialState; }
+	Resource() = delete;
 	Resource(const Resource&) = delete;
 	Resource(Resource&&) noexcept = default;
 
 	Resource& operator=(const Resource&) = delete;
 	Resource& operator=(Resource&&) noexcept = default;
 
-	auto* Native() const noexcept { return Allocation.Get(); }
+	auto* Native() const noexcept { return Allocation->GetResource(); }
 };

@@ -9,8 +9,6 @@
 
 using namespace DirectX;
 
-using DescriptorHandle = uint64_t;
-
 struct Vertex
 {
 	XMFLOAT3 Position;

@@ -9,6 +9,7 @@
 class RenderDevice;
 struct CommandList;
 
+// #TODO: Placeholder, replace with render graph.
 enum class RenderPass
 {
 	Main,
@@ -17,7 +18,7 @@ enum class RenderPass
 class Renderer
 {
 public:
-	std::shared_ptr<RenderDevice> Device;
+	std::unique_ptr<RenderDevice> Device;
 
 private:
 	auto GetPassRenderTargets(RenderPass Pass);
