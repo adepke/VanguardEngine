@@ -205,7 +205,7 @@ std::shared_ptr<Buffer> ResourceManager::AllocateBuffer(const BufferDescription&
 	Allocation->State = ResourceState;
 
 	CreateResourceViews(Allocation);
-	NameResource(Allocation->Allocation, std::move(Name));
+	NameResource(Allocation->Allocation, Name);
 
 	return std::move(Allocation);
 }
@@ -284,7 +284,7 @@ std::shared_ptr<Texture> ResourceManager::AllocateTexture(const TextureDescripti
 	Allocation->State = ResourceState;
 
 	CreateResourceViews(Allocation);
-	NameResource(Allocation->Allocation, std::move(Name));
+	NameResource(Allocation->Allocation, Name);
 
 	return std::move(Allocation);
 }

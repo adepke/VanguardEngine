@@ -70,7 +70,7 @@ void Renderer::BeginRenderPass(RenderPass Pass)
 	}
 
 	// #TODO: Replace with render graph barriers.
-	Device->GetDirectList()->Native()->ResourceBarrier(Barriers.size(), Barriers.data());
+	Device->GetDirectList()->Native()->ResourceBarrier(static_cast<UINT>(Barriers.size()), Barriers.data());
 
 	std::vector<D3D12_RENDER_PASS_RENDER_TARGET_DESC> RenderPassTargets;
 	RenderTargets.reserve(RenderTargetViews.size());
@@ -89,7 +89,7 @@ void Renderer::BeginRenderPass(RenderPass Pass)
 		RenderPassTargets.push_back(std::move(PassDesc));
 	}
 
-	Device->GetDirectList()->Native()->BeginRenderPass(RenderTargets.size(), RenderPassTargets.data(), nullptr, D3D12_RENDER_PASS_FLAG_NONE);  // #TODO: Some passes need D3D12_RENDER_PASS_FLAG_ALLOW_UAV_WRITES.
+	Device->GetDirectList()->Native()->BeginRenderPass(static_cast<UINT>(RenderTargets.size()), RenderPassTargets.data(), nullptr, D3D12_RENDER_PASS_FLAG_NONE);  // #TODO: Some passes need D3D12_RENDER_PASS_FLAG_ALLOW_UAV_WRITES.
 }
 
 void Renderer::EndRenderPass(RenderPass Pass)
@@ -117,7 +117,7 @@ void Renderer::EndRenderPass(RenderPass Pass)
 	}
 
 	// #TODO: Replace with render graph barriers.
-	Device->GetDirectList()->Native()->ResourceBarrier(Barriers.size(), Barriers.data());
+	Device->GetDirectList()->Native()->ResourceBarrier(static_cast<UINT>(Barriers.size()), Barriers.data());
 }
 
 void Renderer::SetDescriptorHeaps(CommandList& List)
@@ -129,7 +129,7 @@ void Renderer::SetDescriptorHeaps(CommandList& List)
 	Heaps.push_back(Device->GetResourceHeap().Native());
 	Heaps.push_back(Device->GetSamplerHeap().Native());
 
-	List.Native()->SetDescriptorHeaps(Heaps.size(), Heaps.data());
+	List.Native()->SetDescriptorHeaps(static_cast<UINT>(Heaps.size()), Heaps.data());
 }
 
 void Renderer::Initialize(std::unique_ptr<RenderDevice>&& InDevice)
@@ -200,16 +200,16 @@ void Renderer::Render(entt::registry& Registry)
 				// Vertex Buffer.
 				VertexViews.push_back({});
 				VertexViews[0].BufferLocation = Mesh.VertexBuffer->Native()->GetGPUVirtualAddress();
-				VertexViews[0].SizeInBytes = Mesh.VertexBuffer->Description.Size;
-				VertexViews[0].StrideInBytes = Mesh.VertexBuffer->Description.Stride;
+				VertexViews[0].SizeInBytes = static_cast<UINT>(Mesh.VertexBuffer->Description.Size);
+				VertexViews[0].StrideInBytes = static_cast<UINT>(Mesh.VertexBuffer->Description.Stride);
 
 				// Instance Buffer.
 				VertexViews.push_back({});
 				VertexViews[1].BufferLocation = InstanceBuffer.first->Native()->GetGPUVirtualAddress() + InstanceBuffer.second;
-				VertexViews[1].SizeInBytes = InstanceBuffer.first->Description.Size;
-				VertexViews[1].StrideInBytes = InstanceBuffer.first->Description.Stride;
+				VertexViews[1].SizeInBytes = static_cast<UINT>(InstanceBuffer.first->Description.Size);
+				VertexViews[1].StrideInBytes = static_cast<UINT>(InstanceBuffer.first->Description.Stride);
 
-				DrawList->IASetVertexBuffers(0, VertexViews.size(), VertexViews.data());  // #TODO: Slot?
+				DrawList->IASetVertexBuffers(0, static_cast<UINT>(VertexViews.size()), VertexViews.data());  // #TODO: Slot?
 
 				D3D12_INDEX_BUFFER_VIEW IndexView{};
 				IndexView.BufferLocation = Mesh.IndexBuffer->Native()->GetGPUVirtualAddress();

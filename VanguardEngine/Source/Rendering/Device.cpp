@@ -155,12 +155,12 @@ void RenderDevice::ReloadShaders()
 
 std::shared_ptr<Buffer> RenderDevice::CreateResource(const BufferDescription& Description, const std::wstring_view Name)
 {
-	return std::move(AllocatorManager.AllocateBuffer(Description, std::move(Name)));
+	return std::move(AllocatorManager.AllocateBuffer(Description, Name));
 }
 
 std::shared_ptr<Texture> RenderDevice::CreateResource(const TextureDescription& Description, const std::wstring_view Name)
 {
-	return std::move(AllocatorManager.AllocateTexture(Description, std::move(Name)));
+	return std::move(AllocatorManager.AllocateTexture(Description, Name));
 }
 
 void RenderDevice::WriteResource(std::shared_ptr<Buffer>& Target, const std::vector<uint8_t>& Source, size_t TargetOffset)
@@ -656,7 +656,7 @@ void RenderDevice::SetResolution(size_t Width, size_t Height, bool InFullscreen)
 
 	BackBufferTextures = {};  // Release the render targets.
 
-	auto Result = SwapChain->ResizeBuffers(FrameCount, Width, Height, DXGI_FORMAT_UNKNOWN, 0);
+	auto Result = SwapChain->ResizeBuffers(static_cast<UINT>(FrameCount), static_cast<UINT>(Width), static_cast<UINT>(Height), DXGI_FORMAT_UNKNOWN, 0);
 	if (FAILED(Result))
 	{
 		VGLogFatal(Rendering) << "Failed to resize swap chain buffers: " << Result;
