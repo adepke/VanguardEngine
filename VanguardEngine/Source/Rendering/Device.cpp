@@ -168,9 +168,9 @@ void RenderDevice::WriteResource(std::shared_ptr<Buffer>& Target, const std::vec
 	AllocatorManager.WriteBuffer(Target, Source, TargetOffset);
 }
 
-void RenderDevice::WriteResource(std::shared_ptr<Texture>& Target, const std::vector<uint8_t>& Source, size_t TargetOffset)
+void RenderDevice::WriteResource(std::shared_ptr<Texture>& Target, const std::vector<uint8_t>& Source)
 {
-	AllocatorManager.WriteTexture(Target, Source, TargetOffset);
+	AllocatorManager.WriteTexture(Target, Source);
 }
 
 void RenderDevice::ResetFrame(size_t FrameID)
@@ -427,7 +427,7 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		Description.BindFlags = BindFlag::ConstantBuffer;  // #TODO: Correct?
 		Description.AccessFlags = AccessFlag::CPUWrite;
 
-		FrameBuffers[Index] = std::move(AllocatorManager.Allocate(*this, Description, VGText("Frame Buffer")));
+		FrameBuffers[Index] = std::move(AllocatorManager.AllocateBuffer(Description, VGText("Frame Buffer")));
 	}
 
 	SetupDescriptorHeaps();

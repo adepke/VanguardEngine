@@ -50,7 +50,7 @@ protected:
 public:
 	D3D12_RESOURCE_STATES State;
 
-	Resource() = delete;
+	Resource() = default;  // #TODO: Prevent creation outside of the resource manager.
 	Resource(const Resource&) = delete;
 	Resource(Resource&&) noexcept = default;
 

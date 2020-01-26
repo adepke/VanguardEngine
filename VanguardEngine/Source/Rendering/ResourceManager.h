@@ -57,7 +57,7 @@ public:
 
 	// Source data can be discarded immediately.
 	void WriteBuffer(std::shared_ptr<Buffer>& Target, const std::vector<uint8_t>& Source, size_t TargetOffset = 0);
-	void WriteTexture(std::shared_ptr<Texture>& Target, const std::vector<uint8_t>& Source, size_t TargetOffset = 0);
+	void WriteTexture(std::shared_ptr<Texture>& Target, const std::vector<uint8_t>& Source);
 
 	void CleanupFrameResources(size_t Frame);
 };

@@ -199,7 +199,10 @@ std::shared_ptr<Buffer> ResourceManager::AllocateBuffer(const BufferDescription&
 		return nullptr;
 	}
 
-	auto Allocation = std::make_shared<Buffer>(ResourcePtr<D3D12MA::Allocation>{ AllocationHandle }, Description);
+	auto Allocation = std::make_shared<Buffer>();
+	Allocation->Description = Description;
+	Allocation->Allocation = std::move(ResourcePtr<D3D12MA::Allocation>{ AllocationHandle });
+	Allocation->State = ResourceState;
 
 	CreateResourceViews(Allocation);
 	NameResource(Allocation->Allocation, std::move(Name));
@@ -212,7 +215,7 @@ std::shared_ptr<Texture> ResourceManager::AllocateTexture(const TextureDescripti
 	VGScopedCPUStat("Resource Manager Allocate");
 
 	// Early validation.
-	VGAssert((Description.UpdateRate & ResourceFrequency::Dynamic) == 0, "Failed to create texture, cannot have dynamic update rate.");
+	VGAssert(Description.UpdateRate != ResourceFrequency::Dynamic, "Failed to create texture, cannot have dynamic update rate.");
 
 	D3D12_RESOURCE_DESC ResourceDesc{};
 	ResourceDesc.Alignment = 0;
@@ -275,7 +278,10 @@ std::shared_ptr<Texture> ResourceManager::AllocateTexture(const TextureDescripti
 		return nullptr;
 	}
 
-	auto Allocation = std::make_shared<Texture>(ResourcePtr<D3D12MA::Allocation>{ AllocationHandle }, Description);
+	auto Allocation = std::make_shared<Texture>();
+	Allocation->Description = Description;
+	Allocation->Allocation = std::move(ResourcePtr<D3D12MA::Allocation>{ AllocationHandle });
+	Allocation->State = ResourceState;
 
 	CreateResourceViews(Allocation);
 	NameResource(Allocation->Allocation, std::move(Name));
@@ -347,11 +353,11 @@ void ResourceManager::WriteBuffer(std::shared_ptr<Buffer>& Target, const std::ve
 	}
 }
 
-void ResourceManager::WriteTexture(std::shared_ptr<Texture>& Target, const std::vector<uint8_t>& Source, size_t TargetOffset)
+void ResourceManager::WriteTexture(std::shared_ptr<Texture>& Target, const std::vector<uint8_t>& Source)
 {
 	VGScopedCPUStat("Resource Write");
 
-	VGAssert(Target->Description.Size + TargetOffset <= Source.size(), "Failed to write to texture, source is larger than target.");
+	VGAssert(Target->Description.Width * Target->Description.Height * Target->Description.Depth <= Source.size(), "Failed to write to texture, source is larger than target.");
 
 	const auto FrameIndex = Device->GetFrameIndex();
 
@@ -360,7 +366,7 @@ void ResourceManager::WriteTexture(std::shared_ptr<Texture>& Target, const std::
 	// #TODO: Resource barrier?
 
 	auto* TargetCommandList = Device->GetCopyList()->Native();
-	TargetCommandList->CopyBufferRegion(Target->Native(), TargetOffset, UploadResources[FrameIndex]->GetResource(), UploadOffsets[FrameIndex], Source.size());
+	TargetCommandList->CopyBufferRegion(Target->Native(), 0, UploadResources[FrameIndex]->GetResource(), UploadOffsets[FrameIndex], Source.size());
 
 	// #TODO: Resource barrier?
 

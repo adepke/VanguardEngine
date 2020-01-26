@@ -37,7 +37,7 @@ auto Renderer::GetPassRenderTargets(RenderPass Pass)
 	case RenderPass::Main:
 		RenderTargets.push_back({});
 		RenderTargetViews.push_back({});
-		RenderTargets[0] = Device->GetBackBuffer()->Resource->GetResource();
+		RenderTargets[0] = Device->GetBackBuffer()->Native();
 		RenderTargetViews[0] = { *Device->GetBackBuffer()->RTV };
 		break;
 	}
@@ -178,7 +178,7 @@ void Renderer::Render(entt::registry& Registry)
 				InstanceData.resize(sizeof(EntityInstance));
 				std::memcpy(InstanceData.data(), &Instance, InstanceData.size());
 
-				Device->Write(InstanceBuffer.first, InstanceData, InstanceBuffer.second);
+				Device->WriteResource(InstanceBuffer.first, InstanceData, InstanceBuffer.second);
 			});
 	}
 
@@ -199,20 +199,20 @@ void Renderer::Render(entt::registry& Registry)
 
 				// Vertex Buffer.
 				VertexViews.push_back({});
-				VertexViews[0].BufferLocation = Mesh.VertexBuffer->Resource->GetResource()->GetGPUVirtualAddress();
+				VertexViews[0].BufferLocation = Mesh.VertexBuffer->Native()->GetGPUVirtualAddress();
 				VertexViews[0].SizeInBytes = Mesh.VertexBuffer->Description.Size;
 				VertexViews[0].StrideInBytes = Mesh.VertexBuffer->Description.Stride;
 
 				// Instance Buffer.
 				VertexViews.push_back({});
-				VertexViews[1].BufferLocation = InstanceBuffer.first->Resource->GetResource()->GetGPUVirtualAddress() + InstanceBuffer.second;
+				VertexViews[1].BufferLocation = InstanceBuffer.first->Native()->GetGPUVirtualAddress() + InstanceBuffer.second;
 				VertexViews[1].SizeInBytes = InstanceBuffer.first->Description.Size;
 				VertexViews[1].StrideInBytes = InstanceBuffer.first->Description.Stride;
 
 				DrawList->IASetVertexBuffers(0, VertexViews.size(), VertexViews.data());  // #TODO: Slot?
 
 				D3D12_INDEX_BUFFER_VIEW IndexView{};
-				IndexView.BufferLocation = Mesh.IndexBuffer->Resource->GetResource()->GetGPUVirtualAddress();
+				IndexView.BufferLocation = Mesh.IndexBuffer->Native()->GetGPUVirtualAddress();
 				IndexView.SizeInBytes = Mesh.IndexBuffer->Description.Size;
 				IndexView.Format = DXGI_FORMAT_R32_UINT;
 

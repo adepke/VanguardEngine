@@ -124,7 +124,7 @@ public:
 	std::shared_ptr<Buffer> CreateResource(const BufferDescription& Description, const std::wstring_view Name);
 	std::shared_ptr<Texture> CreateResource(const TextureDescription& Description, const std::wstring_view Name);
 	void WriteResource(std::shared_ptr<Buffer>& Target, const std::vector<uint8_t>& Source, size_t TargetOffset = 0);
-	void WriteResource(std::shared_ptr<Texture>& Target, const std::vector<uint8_t>& Source, size_t TargetOffset = 0);
+	void WriteResource(std::shared_ptr<Texture>& Target, const std::vector<uint8_t>& Source);
 
 	// Allocate a block of CPU write-only, GPU read-only memory from the per-frame dynamic heap.
 	std::pair<std::shared_ptr<Buffer>, size_t> FrameAllocate(size_t Size);
