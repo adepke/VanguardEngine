@@ -6,10 +6,10 @@
 
 #include <Core/Windows/DirectX12Minimal.h>
 
-struct GPUBuffer;
+struct Buffer;
 
 struct TransitionBarrier
 {
-	std::weak_ptr<GPUBuffer> Resource;
+	std::weak_ptr<Buffer> Resource;
 	D3D12_RESOURCE_STATES State;
 };

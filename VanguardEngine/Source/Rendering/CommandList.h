@@ -8,7 +8,6 @@
 #include <Core/Windows/DirectX12Minimal.h>
 
 class RenderDevice;
-struct GPUBuffer;
 
 struct CommandList
 {

@@ -117,7 +117,7 @@ void RenderDevice::SetupRenderTargets()
 		// #TEMP
 		//BackBufferTextures[Index] = std::move(AllocatorManager->AllocateFromAPIBuffer(, IntermediateResource, VGText("Back Buffer")));
 
-		Device->CreateRenderTargetView(BackBufferTextures[Index]->Native(), nullptr, BackBufferTextures[Index]->RTV);
+		Device->CreateRenderTargetView(BackBufferTextures[Index]->Native(), nullptr, *BackBufferTextures[Index]->RTV);
 	}
 }
 
@@ -151,6 +151,26 @@ void RenderDevice::ReloadShaders()
 			BuiltShaders.push_back(std::move(ShaderName));
 		}
 	}
+}
+
+std::shared_ptr<Buffer> RenderDevice::CreateResource(const BufferDescription& Description, const std::wstring_view Name)
+{
+	return std::move(AllocatorManager.AllocateBuffer(Description, std::move(Name)));
+}
+
+std::shared_ptr<Texture> RenderDevice::CreateResource(const TextureDescription& Description, const std::wstring_view Name)
+{
+	return std::move(AllocatorManager.AllocateTexture(Description, std::move(Name)));
+}
+
+void RenderDevice::WriteResource(std::shared_ptr<Buffer>& Target, const std::vector<uint8_t>& Source, size_t TargetOffset)
+{
+	AllocatorManager.WriteBuffer(Target, Source, TargetOffset);
+}
+
+void RenderDevice::WriteResource(std::shared_ptr<Texture>& Target, const std::vector<uint8_t>& Source, size_t TargetOffset)
+{
+	AllocatorManager.WriteTexture(Target, Source, TargetOffset);
 }
 
 void RenderDevice::ResetFrame(size_t FrameID)
@@ -248,7 +268,7 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		VGLogFatal(Rendering) << "Failed to create device allocator: " << Result;
 	}
 
-	AllocatorManager.Initialize(*this, FrameCount);
+	AllocatorManager.Initialize(this, FrameCount);
 
 	// Copy
 
@@ -400,7 +420,7 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 	// Allocate frame buffers.
 	for (auto Index = 0; Index < FrameCount; ++Index)
 	{
-		ResourceDescription Description{};
+		BufferDescription Description{};
 		Description.Size = FrameBufferSize;
 		Description.Stride = 1;
 		Description.UpdateRate = ResourceFrequency::Dynamic;
@@ -547,17 +567,7 @@ void RenderDevice::CheckFeatureSupport()
 	}
 }
 
-std::shared_ptr<GPUBuffer> RenderDevice::Allocate(const ResourceDescription& Description, const std::wstring_view Name)
-{
-	return std::move(AllocatorManager.Allocate(*this, Description, Name));
-}
-
-void RenderDevice::Write(std::shared_ptr<GPUBuffer>& Buffer, const std::vector<uint8_t>& Source, size_t BufferOffset)
-{
-	AllocatorManager.Write(*this, Buffer, Source, BufferOffset);
-}
-
-std::pair<std::shared_ptr<GPUBuffer>, size_t> RenderDevice::FrameAllocate(size_t Size)
+std::pair<std::shared_ptr<Buffer>, size_t> RenderDevice::FrameAllocate(size_t Size)
 {
 	const auto FrameIndex = Frame % FrameCount;
 

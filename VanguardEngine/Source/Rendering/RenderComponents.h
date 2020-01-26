@@ -25,8 +25,8 @@ struct MeshComponent
 
 	std::vector<Subset> Subsets;
 
-	std::shared_ptr<GPUBuffer> VertexBuffer;
-	std::shared_ptr<GPUBuffer> IndexBuffer;
+	std::shared_ptr<Buffer> VertexBuffer;
+	std::shared_ptr<Buffer> IndexBuffer;
 };
 
 struct CameraComponent
@@ -52,12 +52,12 @@ inline MeshComponent CreateMeshComponent(RenderDevice& Device, const std::vector
 	VertexDescription.BindFlags = BindFlag::VertexBuffer | BindFlag::ShaderResource;
 	VertexDescription.AccessFlags = AccessFlag::CPUWrite;
 
-	Result.VertexBuffer = std::move(Device.Allocate(VertexDescription, VGText("Vertex Buffer")));
+	Result.VertexBuffer = std::move(Device.CreateResource(VertexDescription, VGText("Vertex Buffer")));
 
 	std::vector<uint8_t> VertexResource{};
 	VertexResource.resize(sizeof(Vertex) * VertexPositions.size());
 	std::memcpy(VertexResource.data(), VertexPositions.data(), VertexResource.size());
-	Device.Write(Result.VertexBuffer, VertexResource);
+	Device.WriteResource(Result.VertexBuffer, VertexResource);
 
 	BufferDescription IndexDescription{};
 	IndexDescription.Size = Indices.size();
@@ -66,12 +66,12 @@ inline MeshComponent CreateMeshComponent(RenderDevice& Device, const std::vector
 	IndexDescription.BindFlags = BindFlag::IndexBuffer | BindFlag::ShaderResource;
 	IndexDescription.AccessFlags = AccessFlag::CPUWrite;
 
-	Result.IndexBuffer = std::move(Device.Allocate(IndexDescription, VGText("Index Buffer")));
+	Result.IndexBuffer = std::move(Device.CreateResource(IndexDescription, VGText("Index Buffer")));
 
 	std::vector<uint8_t> IndexResource{};
 	IndexResource.resize(sizeof(uint32_t) * Indices.size());
 	std::memcpy(IndexResource.data(), Indices.data(), IndexResource.size());
-	Device.Write(Result.IndexBuffer, IndexResource);
+	Device.WriteResource(Result.IndexBuffer, IndexResource);
 
 	return std::move(Result);
 }

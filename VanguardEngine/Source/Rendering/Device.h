@@ -26,7 +26,10 @@
 #undef max
 
 class RenderDevice;
-struct ResourceDescription;
+struct Buffer;
+struct Texture;
+struct BufferDescription;
+struct TextureDescription;
 
 enum class SyncType
 {
@@ -79,7 +82,7 @@ private:
 	ResourcePtr<D3D12MA::Allocator> Allocator;
 	ResourceManager AllocatorManager;
 
-	std::array<std::shared_ptr<GPUBuffer>, FrameCount> FrameBuffers;  // Per-frame shared dynamic heap.
+	std::array<std::shared_ptr<Buffer>, FrameCount> FrameBuffers;  // Per-frame shared dynamic heap.
 	std::array<size_t, FrameCount> FrameBufferOffsets = {};
 
 	static constexpr size_t ResourceDescriptors = 1024;
@@ -118,11 +121,13 @@ public:
 	// Builds pipelines.
 	void ReloadShaders();
 
-	std::shared_ptr<GPUBuffer> Allocate(const ResourceDescription& Description, const std::wstring_view Name);
-	void Write(std::shared_ptr<GPUBuffer>& Buffer, const std::vector<uint8_t>& Source, size_t BufferOffset = 0);
+	std::shared_ptr<Buffer> CreateResource(const BufferDescription& Description, const std::wstring_view Name);
+	std::shared_ptr<Texture> CreateResource(const TextureDescription& Description, const std::wstring_view Name);
+	void WriteResource(std::shared_ptr<Buffer>& Target, const std::vector<uint8_t>& Source, size_t TargetOffset = 0);
+	void WriteResource(std::shared_ptr<Texture>& Target, const std::vector<uint8_t>& Source, size_t TargetOffset = 0);
 
 	// Allocate a block of CPU write-only, GPU read-only memory from the per-frame dynamic heap.
-	std::pair<std::shared_ptr<GPUBuffer>, size_t> FrameAllocate(size_t Size);
+	std::pair<std::shared_ptr<Buffer>, size_t> FrameAllocate(size_t Size);
 
 	// Sync the specified GPU engine to FrameID. Blocking.
 	void Sync(SyncType Type, size_t FrameID = std::numeric_limits<size_t>::max());

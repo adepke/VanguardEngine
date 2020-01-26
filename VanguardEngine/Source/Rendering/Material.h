@@ -6,7 +6,7 @@
 #include <vector>
 
 class PipelineState;
-struct GPUTexture;
+struct Texture;
 
 // #TODO: Physically based rendering.
 struct Material
@@ -14,5 +14,5 @@ struct Material
 	// #TODO: Support variable pipeline.
 	//std::shared_ptr<PipelineState> Pipeline;
 
-	std::shared_ptr<GPUTexture> DiffuseMap;
+	std::shared_ptr<Texture> DiffuseMap;
 };

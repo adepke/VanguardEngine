@@ -37,7 +37,7 @@ private:
 
 	void CreateResourceViews(std::shared_ptr<Buffer>& Target);
 	void CreateResourceViews(std::shared_ptr<Texture>& Target);
-	void NameResource(std::shared_ptr<Resource>& Target, const std::wstring_view Name);
+	void NameResource(ResourcePtr<D3D12MA::Allocation>& Target, const std::wstring_view Name);
 
 public:
 	ResourceManager() = default;
@@ -49,14 +49,15 @@ public:
 
 	void Initialize(RenderDevice* Device, size_t BufferedFrames);
 
-	std::shared_ptr<Buffer> AllocateResource(const BufferDescription& Description, const std::wstring_view Name);
-	std::shared_ptr<Texture> AllocateResource(const TextureDescription& Description, const std::wstring_view Name);
+	std::shared_ptr<Buffer> AllocateBuffer(const BufferDescription& Description, const std::wstring_view Name);
+	std::shared_ptr<Texture> AllocateTexture(const TextureDescription& Description, const std::wstring_view Name);
 	
 	// Used for creating allocations from external systems, such as the render API internal buffers (swap chain surface). Description is needed for bindings.
 	std::shared_ptr<Resource> AllocateFromExternal(const ResourceDescription& Description, void* Buffer, const std::wstring_view Name);
 
 	// Source data can be discarded immediately.
-	void Write(std::shared_ptr<Resource>& Target, const std::vector<uint8_t>& Source, size_t BufferOffset = 0);
+	void WriteBuffer(std::shared_ptr<Buffer>& Target, const std::vector<uint8_t>& Source, size_t TargetOffset = 0);
+	void WriteTexture(std::shared_ptr<Texture>& Target, const std::vector<uint8_t>& Source, size_t TargetOffset = 0);
 
 	void CleanupFrameResources(size_t Frame);
 };

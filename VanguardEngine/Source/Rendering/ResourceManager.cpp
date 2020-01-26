@@ -81,13 +81,13 @@ void ResourceManager::CreateResourceViews(std::shared_ptr<Texture>& Target)
 	// #TODO: SRV, UAV.
 }
 
-void ResourceManager::NameResource(std::shared_ptr<Resource>& Target, const std::wstring_view Name)
+void ResourceManager::NameResource(ResourcePtr<D3D12MA::Allocation>& Target, const std::wstring_view Name)
 {
 #if !BUILD_RELEASE
 	if (Device->Debugging)
 	{
-		Target->Allocation->SetName(Name.data());  // Set the name in the allocator.
-		const auto Result = Target->Native()->SetName(Name.data());  // Set the name in the API.
+		Target->SetName(Name.data());  // Set the name in the allocator.
+		const auto Result = Target->GetResource()->SetName(Name.data());  // Set the name in the API.
 		if (FAILED(Result))
 		{
 			VGLogWarning(Rendering) << "Failed to set resource name to: '" << Name << "': " << Result;
@@ -152,7 +152,7 @@ void ResourceManager::Initialize(RenderDevice* Device, size_t BufferedFrames)
 	}
 }
 
-std::shared_ptr<Buffer> ResourceManager::AllocateResource(const BufferDescription& Description, const std::wstring_view Name)
+std::shared_ptr<Buffer> ResourceManager::AllocateBuffer(const BufferDescription& Description, const std::wstring_view Name)
 {
 	VGScopedCPUStat("Resource Manager Allocate");
 
@@ -191,7 +191,7 @@ std::shared_ptr<Buffer> ResourceManager::AllocateResource(const BufferDescriptio
 	ID3D12Resource* RawResource = nullptr;
 	D3D12MA::Allocation* AllocationHandle = nullptr;
 
-	auto Result = Device.Allocator->CreateResource(&AllocationDesc, &ResourceDesc, ResourceState, nullptr, &AllocationHandle, IID_PPV_ARGS(&RawResource));
+	auto Result = Device->Allocator->CreateResource(&AllocationDesc, &ResourceDesc, ResourceState, nullptr, &AllocationHandle, IID_PPV_ARGS(&RawResource));
 	if (FAILED(Result))
 	{
 		VGLogError(Rendering) << "Failed to allocate buffer: " << Result;
@@ -202,14 +202,17 @@ std::shared_ptr<Buffer> ResourceManager::AllocateResource(const BufferDescriptio
 	auto Allocation = std::make_shared<Buffer>(ResourcePtr<D3D12MA::Allocation>{ AllocationHandle }, Description);
 
 	CreateResourceViews(Allocation);
-	NameResource(std::static_pointer_cast<Resource>(Allocation), std::move(Name));
+	NameResource(Allocation->Allocation, std::move(Name));
 
 	return std::move(Allocation);
 }
 
-std::shared_ptr<Texture> ResourceManager::AllocateResource(const TextureDescription& Description, const std::wstring_view Name)
+std::shared_ptr<Texture> ResourceManager::AllocateTexture(const TextureDescription& Description, const std::wstring_view Name)
 {
 	VGScopedCPUStat("Resource Manager Allocate");
+
+	// Early validation.
+	VGAssert((Description.UpdateRate & ResourceFrequency::Dynamic) == 0, "Failed to create texture, cannot have dynamic update rate.");
 
 	D3D12_RESOURCE_DESC ResourceDesc{};
 	ResourceDesc.Alignment = 0;
@@ -264,7 +267,7 @@ std::shared_ptr<Texture> ResourceManager::AllocateResource(const TextureDescript
 	ID3D12Resource* RawResource = nullptr;
 	D3D12MA::Allocation* AllocationHandle = nullptr;
 
-	auto Result = Device.Allocator->CreateResource(&AllocationDesc, &ResourceDesc, ResourceState, nullptr, &AllocationHandle, IID_PPV_ARGS(&RawResource));
+	auto Result = Device->Allocator->CreateResource(&AllocationDesc, &ResourceDesc, ResourceState, nullptr, &AllocationHandle, IID_PPV_ARGS(&RawResource));
 	if (FAILED(Result))
 	{
 		VGLogError(Rendering) << "Failed to allocate texture: " << Result;
@@ -275,7 +278,7 @@ std::shared_ptr<Texture> ResourceManager::AllocateResource(const TextureDescript
 	auto Allocation = std::make_shared<Texture>(ResourcePtr<D3D12MA::Allocation>{ AllocationHandle }, Description);
 
 	CreateResourceViews(Allocation);
-	NameResource(std::static_pointer_cast<Resource>(Allocation), std::move(Name));
+	NameResource(Allocation->Allocation, std::move(Name));
 
 	return std::move(Allocation);
 }
@@ -289,28 +292,30 @@ std::shared_ptr<Resource> ResourceManager::AllocateFromExternal(const ResourceDe
 	D3D12MA::Allocation ManualAllocationHandle;
 
 	// #TODO: Create a texture instead of a buffer if applicable.
-	auto Allocation = std::make_shared<GPUBuffer>(ResourcePtr<D3D12MA::Allocation>{ AllocationHandle }, Description);
+	auto Allocation = std::make_shared<Buffer>(ResourcePtr<D3D12MA::Allocation>{ AllocationHandle }, Description);
 
 	return std::move(Allocation);
 	*/
 }
 
-void ResourceManager::Write(std::shared_ptr<Resource>& Target, const std::vector<uint8_t>& Source, size_t BufferOffset)
+void ResourceManager::WriteBuffer(std::shared_ptr<Buffer>& Target, const std::vector<uint8_t>& Source, size_t TargetOffset)
 {
-	VGScopedCPUStat("Resource Manager Write");
+	VGScopedCPUStat("Resource Write");
 
 	if (Target->Description.UpdateRate == ResourceFrequency::Static)
 	{
 		VGScopedCPUStat("Write Static");
 
-		const auto FrameIndex = Device.GetFrameIndex();
+		VGAssert(Target->Description.Size + TargetOffset <= Source.size(), "Failed to write to static buffer, source buffer is larger than target.");
+
+		const auto FrameIndex = Device->GetFrameIndex();
 
 		std::memcpy(static_cast<uint8_t*>(UploadPtrs[FrameIndex]) + UploadOffsets[FrameIndex], Source.data(), Source.size());
 
 		// #TODO: Resource barrier?
 
-		auto* TargetCommandList = Device.GetCopyList()->Native();
-		TargetCommandList->CopyBufferRegion(Target->Resource->GetResource(), BufferOffset, UploadResources[FrameIndex]->GetResource(), UploadOffsets[FrameIndex], Source.size());
+		auto* TargetCommandList = Device->GetCopyList()->Native();
+		TargetCommandList->CopyBufferRegion(Target->Native(), TargetOffset, UploadResources[FrameIndex]->GetResource(), UploadOffsets[FrameIndex], Source.size());
 
 		// #TODO: Resource barrier?
 
@@ -321,9 +326,12 @@ void ResourceManager::Write(std::shared_ptr<Resource>& Target, const std::vector
 	{
 		VGScopedCPUStat("Write Dynamic");
 
+		VGAssert(Target->Description.AccessFlags & AccessFlag::CPUWrite, "Failed to write to dynamic buffer, no CPU write access.");
+		VGAssert(Target->Description.Size + TargetOffset <= Source.size(), "Failed to write to dynamic buffer, source is larger than target.");
+
 		void* MappedPtr = nullptr;
 
-		D3D12_RANGE MapRange{ BufferOffset, BufferOffset + Source.size() };
+		D3D12_RANGE MapRange{ TargetOffset, TargetOffset + Source.size() };
 
 		auto Result = Target->Native()->Map(0, &MapRange, &MappedPtr);
 		if (FAILED(Result))
@@ -335,8 +343,28 @@ void ResourceManager::Write(std::shared_ptr<Resource>& Target, const std::vector
 
 		std::memcpy(MappedPtr, Source.data(), Source.size());
 
-		Buffer->Resource->GetResource()->Unmap(0, nullptr);
+		Target->Native()->Unmap(0, nullptr);
 	}
+}
+
+void ResourceManager::WriteTexture(std::shared_ptr<Texture>& Target, const std::vector<uint8_t>& Source, size_t TargetOffset)
+{
+	VGScopedCPUStat("Resource Write");
+
+	VGAssert(Target->Description.Size + TargetOffset <= Source.size(), "Failed to write to texture, source is larger than target.");
+
+	const auto FrameIndex = Device->GetFrameIndex();
+
+	std::memcpy(static_cast<uint8_t*>(UploadPtrs[FrameIndex]) + UploadOffsets[FrameIndex], Source.data(), Source.size());
+
+	// #TODO: Resource barrier?
+
+	auto* TargetCommandList = Device->GetCopyList()->Native();
+	TargetCommandList->CopyBufferRegion(Target->Native(), TargetOffset, UploadResources[FrameIndex]->GetResource(), UploadOffsets[FrameIndex], Source.size());
+
+	// #TODO: Resource barrier?
+
+	UploadOffsets[FrameIndex] += Source.size();
 }
 
 void ResourceManager::CleanupFrameResources(size_t Frame)

@@ -38,7 +38,7 @@ auto Renderer::GetPassRenderTargets(RenderPass Pass)
 		RenderTargets.push_back({});
 		RenderTargetViews.push_back({});
 		RenderTargets[0] = Device->GetBackBuffer()->Resource->GetResource();
-		RenderTargetViews[0] = { static_cast<GPUTexture*>(Device->GetBackBuffer())->RTV };
+		RenderTargetViews[0] = { *Device->GetBackBuffer()->RTV };
 		break;
 	}
 
@@ -163,7 +163,7 @@ void Renderer::Render(entt::registry& Registry)
 	// Number of entities with MeshComponent and TransformComponent
 	const auto RenderCount = 0;
 
-	std::pair<std::shared_ptr<GPUBuffer>, size_t> InstanceBuffer;
+	std::pair<std::shared_ptr<Buffer>, size_t> InstanceBuffer;
 
 	{
 		VGScopedCPUStat("Generate Instance Buffer");
