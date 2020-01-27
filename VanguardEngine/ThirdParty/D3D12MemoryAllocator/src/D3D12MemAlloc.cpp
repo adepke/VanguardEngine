@@ -4266,7 +4266,10 @@ void Allocation::Release()
 
     FreeName();
 
-    D3D12MA_DELETE(m_Allocator->GetAllocs(), this);
+	if (m_Allocator)
+	{
+		D3D12MA_DELETE(m_Allocator->GetAllocs(), this);
+	}
 }
 
 UINT64 Allocation::GetOffset() const
@@ -4310,6 +4313,12 @@ void Allocation::SetName(LPCWSTR Name)
         m_Name = D3D12MA_NEW_ARRAY(m_Allocator->GetAllocs(), WCHAR, nameCharCount);
         memcpy(m_Name, Name, nameCharCount * sizeof(WCHAR));
     }
+}
+
+void Allocation::CreateManual(ID3D12Resource* resource)
+{
+	m_Resource = resource;
+	m_Type = TYPE_COUNT;  // This is used to prevent nullptr dereference during Release().
 }
 
 Allocation::Allocation()

@@ -289,19 +289,27 @@ std::shared_ptr<Texture> ResourceManager::AllocateTexture(const TextureDescripti
 	return std::move(Allocation);
 }
 
-std::shared_ptr<Resource> ResourceManager::AllocateFromExternal(const ResourceDescription& Description, void* Buffer, const std::wstring_view Name)
+std::shared_ptr<Texture> ResourceManager::ResourceFromSwapChain(void* Surface, const std::wstring_view Name)
 {
-	// #TEMP
-	return {};
+	TextureDescription Description{};
+	Description.UpdateRate = ResourceFrequency::Static;
+	Description.BindFlags = BindFlag::RenderTarget;
+	Description.AccessFlags = AccessFlag::GPUWrite;
+	Description.InitialState = D3D12_RESOURCE_STATE_RENDER_TARGET;
+	Description.Width = Device->RenderWidth;
+	Description.Height = Device->RenderHeight;
+	Description.Depth = 1;
 
-	/*
-	D3D12MA::Allocation ManualAllocationHandle;
+	auto Allocation = std::make_shared<Texture>();
+	Allocation->Description = Description;
+	Allocation->Allocation = std::move(ResourcePtr<D3D12MA::Allocation>{});
+	Allocation->Allocation->CreateManual(static_cast<ID3D12Resource*>(Surface));
+	Allocation->State = Description.InitialState;
 
-	// #TODO: Create a texture instead of a buffer if applicable.
-	auto Allocation = std::make_shared<Buffer>(ResourcePtr<D3D12MA::Allocation>{ AllocationHandle }, Description);
+	CreateResourceViews(Allocation);
+	NameResource(Allocation->Allocation, Name);
 
 	return std::move(Allocation);
-	*/
 }
 
 void ResourceManager::WriteBuffer(std::shared_ptr<Buffer>& Target, const std::vector<uint8_t>& Source, size_t TargetOffset)

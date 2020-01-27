@@ -114,8 +114,7 @@ void RenderDevice::SetupRenderTargets()
 			VGLogFatal(Rendering) << "Failed to get swap chain buffer for frame " << Index << ": " << Result;
 		}
 
-		// #TEMP
-		//BackBufferTextures[Index] = std::move(AllocatorManager->AllocateFromAPIBuffer(, IntermediateResource, VGText("Back Buffer")));
+		BackBufferTextures[Index] = std::move(AllocatorManager.ResourceFromSwapChain(static_cast<void*>(IntermediateResource), VGText("Back Buffer")));
 
 		Device->CreateRenderTargetView(BackBufferTextures[Index]->Native(), nullptr, *BackBufferTextures[Index]->RTV);
 	}

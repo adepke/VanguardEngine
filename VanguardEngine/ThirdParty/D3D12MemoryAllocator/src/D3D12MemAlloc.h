@@ -487,6 +487,8 @@ public:
     */
     LPCWSTR GetName() const { return m_Name; }
 
+	void CreateManual(ID3D12Resource* resource);
+
 private:
     friend class AllocatorPimpl;
     friend class BlockVector;
@@ -536,7 +538,6 @@ private:
     void InitPlaced(AllocatorPimpl* allocator, UINT64 size, UINT64 offset, UINT64 alignment, NormalBlock* block);
     void InitHeap(AllocatorPimpl* allocator, UINT64 size, D3D12_HEAP_TYPE heapType, ID3D12Heap* heap);
     void SetResource(ID3D12Resource* resource, const D3D12_RESOURCE_DESC* pResourceDesc);
-	void SetResourceManual(ID3D12Resource* resource);  // Used only for setting the resource to a pointer allocated by the render API.
     void FreeName();
 
     D3D12MA_CLASS_NO_COPY(Allocation)
@@ -729,12 +730,6 @@ public:
         Allocation** ppAllocation,
         REFIID riidResource,
         void** ppvResource);
-
-	// Used only for creating a resource from an existing ID3D12Resource allocated by the rendering API.
-	HRESULT CreateResourceManual(
-		ID3D12Resource* Resource,
-		Allocation** ppAllocation
-	);
 
     /* \brief Allocates memory without creating any resource placed in it.
 

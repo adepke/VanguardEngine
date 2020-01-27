@@ -52,8 +52,8 @@ public:
 	std::shared_ptr<Buffer> AllocateBuffer(const BufferDescription& Description, const std::wstring_view Name);
 	std::shared_ptr<Texture> AllocateTexture(const TextureDescription& Description, const std::wstring_view Name);
 	
-	// Used for creating allocations from external systems, such as the render API internal buffers (swap chain surface). Description is needed for bindings.
-	std::shared_ptr<Resource> AllocateFromExternal(const ResourceDescription& Description, void* Buffer, const std::wstring_view Name);
+	// Creates a texture from the swap chain surface.
+	std::shared_ptr<Texture> ResourceFromSwapChain(void* Surface, const std::wstring_view Name);
 
 	// Source data can be discarded immediately.
 	void WriteBuffer(std::shared_ptr<Buffer>& Target, const std::vector<uint8_t>& Source, size_t TargetOffset = 0);
