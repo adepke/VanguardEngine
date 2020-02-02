@@ -22,6 +22,8 @@ struct PipelineStateDescription
 
 class PipelineState
 {
+	friend class CommandList;
+
 private:
 	ResourcePtr<ID3D12PipelineState> Pipeline;
 	PipelineStateDescription Description;

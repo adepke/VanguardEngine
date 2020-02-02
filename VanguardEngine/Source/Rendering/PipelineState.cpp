@@ -174,13 +174,20 @@ void PipelineState::Build(RenderDevice& Device, const PipelineStateDescription& 
 	CreateDescriptorTables(Device);
 	CreateInputLayout();
 
+	if (!VertexShader)
+	{
+		VGLogError(Rendering) << "Missing required vertex shader for graphics pipeline state.";
+
+		return;
+	}
+
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC Desc{};
 	Desc.pRootSignature = RootSignature.Get();
 	Desc.VS = { VertexShader->Bytecode.data(), VertexShader->Bytecode.size() };
-	Desc.PS = { PixelShader->Bytecode.data(), PixelShader->Bytecode.size() };
-	Desc.DS = { DomainShader->Bytecode.data(), DomainShader->Bytecode.size() };
-	Desc.HS = { HullShader->Bytecode.data(), HullShader->Bytecode.size() };
-	Desc.GS = { GeometryShader->Bytecode.data(), GeometryShader->Bytecode.size() };
+	Desc.PS = { PixelShader ? PixelShader->Bytecode.data() : nullptr, PixelShader ? PixelShader->Bytecode.size() : 0 };
+	Desc.DS = { DomainShader ? DomainShader->Bytecode.data() : nullptr, DomainShader ? DomainShader->Bytecode.size() : 0 };
+	Desc.HS = { HullShader ? HullShader->Bytecode.data() : nullptr, HullShader ? HullShader->Bytecode.size() : 0 };
+	Desc.GS = { GeometryShader ? GeometryShader->Bytecode.data() : nullptr, GeometryShader ? GeometryShader->Bytecode.size() : 0 };
 	Desc.StreamOutput;
 	Desc.BlendState = Description.BlendDescription;
 	Desc.SampleMask;
