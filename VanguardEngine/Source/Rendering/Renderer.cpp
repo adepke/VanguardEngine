@@ -139,7 +139,7 @@ void Renderer::Initialize(std::unique_ptr<RenderDevice>&& InDevice)
 	Device = std::move(InDevice);
 
 	Device->CheckFeatureSupport();
-	Device->ReloadShaders();
+	PipelineStates = std::move(Device->ReloadShaders());
 }
 
 void Renderer::Render(entt::registry& Registry)

@@ -8,6 +8,7 @@
 #include <Core/Windows/DirectX12Minimal.h>
 
 class RenderDevice;
+class PipelineState;
 
 struct CommandList
 {
@@ -23,6 +24,7 @@ public:
 	void Create(RenderDevice& Device, D3D12_COMMAND_LIST_TYPE Type);
 	void SetName(std::wstring_view Name);
 
+	void BindPipelineState(PipelineState& State);
 	void AddResourceBarrier(TransitionBarrier Barrier);
 
 	HRESULT Close();

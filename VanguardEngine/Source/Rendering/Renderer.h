@@ -3,6 +3,7 @@
 #pragma once
 
 #include <Core/Base.h>
+#include <Rendering/PipelineState.h>
 
 #include <entt/entt.hpp>  // #TODO: Don't include, forward and include in the source.
 
@@ -19,6 +20,8 @@ class Renderer
 {
 public:
 	std::unique_ptr<RenderDevice> Device;
+
+	std::vector<PipelineState> PipelineStates;
 
 private:
 	auto GetPassRenderTargets(RenderPass Pass);

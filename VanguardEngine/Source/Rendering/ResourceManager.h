@@ -19,11 +19,6 @@ struct ResourceDescription;
 struct BufferDescription;
 struct TextureDescription;
 
-namespace D3D12MA
-{
-	class Allocation;
-}
-
 class ResourceManager
 {
 private:

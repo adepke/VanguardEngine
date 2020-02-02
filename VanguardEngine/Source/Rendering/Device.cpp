@@ -120,14 +120,13 @@ void RenderDevice::SetupRenderTargets()
 	}
 }
 
-void RenderDevice::ReloadShaders()
+std::vector<PipelineState> RenderDevice::ReloadShaders()
 {
 	VGScopedCPUStat("Reload Shaders");
 
 	VGLog(Rendering) << "Reloading shaders.";
 
-	PipelineStates.clear();
-
+	std::vector<PipelineState> PipelineStates;
 	std::vector<std::wstring> BuiltShaders;
 
 	for (const auto& Entry : std::filesystem::directory_iterator{ Config::Get().ShaderPath })
@@ -144,12 +143,14 @@ void RenderDevice::ReloadShaders()
 			Desc.DepthStencilDescription;  // #TEMP
 
 			PipelineState Pipeline{};
-			Pipeline.Build(*this, Desc, nullptr);  // #TEMP: Pipeline library.
+			Pipeline.Build(*this, Desc);  // #TODO: Pipeline libraries.
 			PipelineStates.push_back(std::move(Pipeline));
 
 			BuiltShaders.push_back(std::move(ShaderName));
 		}
 	}
+
+	return std::move(PipelineStates);
 }
 
 std::shared_ptr<Buffer> RenderDevice::CreateResource(const BufferDescription& Description, const std::wstring_view Name)

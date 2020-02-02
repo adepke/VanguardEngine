@@ -154,7 +154,7 @@ void PipelineState::CreateInputLayout()
 	VGScopedCPUStat("Create Input Layout");
 }
 
-void PipelineState::Build(RenderDevice& Device, const PipelineStateDescription& InDescription, ID3D12PipelineLibrary* Library)
+void PipelineState::Build(RenderDevice& Device, const PipelineStateDescription& InDescription)
 {
 	VGScopedCPUStat("Build Pipeline");
 
@@ -175,49 +175,31 @@ void PipelineState::Build(RenderDevice& Device, const PipelineStateDescription& 
 	CreateInputLayout();
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC Desc{};
+	Desc.pRootSignature = RootSignature.Get();
+	Desc.VS = { VertexShader->Bytecode.data(), VertexShader->Bytecode.size() };
+	Desc.PS = { PixelShader->Bytecode.data(), PixelShader->Bytecode.size() };
+	Desc.DS = { DomainShader->Bytecode.data(), DomainShader->Bytecode.size() };
+	Desc.HS = { HullShader->Bytecode.data(), HullShader->Bytecode.size() };
+	Desc.GS = { GeometryShader->Bytecode.data(), GeometryShader->Bytecode.size() };
+	Desc.StreamOutput;
+	Desc.BlendState = Description.BlendDescription;
+	Desc.SampleMask;
+	Desc.RasterizerState = Description.RasterizerDescription;
+	Desc.DepthStencilState = Description.DepthStencilDescription;
+	Desc.InputLayout;
+	Desc.IBStripCutValue;
+	Desc.PrimitiveTopologyType;
+	Desc.NumRenderTargets;
+	Desc.RTVFormats;
+	Desc.DSVFormat;
+	Desc.SampleDesc;
+	Desc.NodeMask = 0;
+	Desc.CachedPSO;
+	Desc.Flags;
 
-	// #TEMP
-	Hash = 0;
-	//Hash = std::hash<PipelineState>{ *this }();
-	std::wstringstream NameStream;
-	NameStream << Hash;
-	const auto* NameString = NameStream.str().c_str();
-
-	auto Result = Library->LoadGraphicsPipeline(NameString, &Desc, IID_PPV_ARGS(Pipeline.Indirect()));
-	if (Result == E_INVALIDARG)
+	const auto Result = Device.Native()->CreateGraphicsPipelineState(&Desc, IID_PPV_ARGS(Pipeline.Indirect()));
+	if (FAILED(Result))
 	{
-		VGLog(Rendering) << "Did not find pipeline hash in library, creating new pipeline.";
-
-		D3D12_PIPELINE_STATE_STREAM_DESC StreamDesc{};
-
-		Result = Device.Native()->CreatePipelineState(&StreamDesc, IID_PPV_ARGS(Pipeline.Indirect()));
-		if (FAILED(Result))
-		{
-			VGLogFatal(Rendering) << "Failed to create pipeline state: " << Result;
-		}
-
-		Result = Library->StorePipeline(NameString, Pipeline.Get());
-		if (FAILED(Result))
-		{
-			VGLogFatal(Rendering) << "Failed to store pipeline in library: " << Result;
-		}
+		VGLogFatal(Rendering) << "Failed to create pipeline state: " << Result;
 	}
-
-	else if (FAILED(Result))
-	{
-		VGLogFatal(Rendering) << "Failed to load pipeline from library: " << Result;
-	}
-
-	else
-	{
-		VGLog(Rendering) << "Loaded pipeline from library.";
-	}
-}
-
-void PipelineState::Bind(ID3D12GraphicsCommandList* CommandList)
-{
-	CommandList->IASetPrimitiveTopology(Description.Topology);
-	CommandList->SetGraphicsRootSignature(RootSignature.Get());
-	//CommandList->SetGraphicsRootDescriptorTable()  // #TODO: Set the descriptor table?
-	CommandList->SetPipelineState(Pipeline.Get());
 }

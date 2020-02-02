@@ -46,8 +46,7 @@ public:
 
 	auto* Native() const noexcept { return Pipeline.Get(); }
 
-	void Build(RenderDevice& Device, const PipelineStateDescription& InDescription, ID3D12PipelineLibrary* Library);
-	void Bind(ID3D12GraphicsCommandList* CommandList);
+	void Build(RenderDevice& Device, const PipelineStateDescription& InDescription);
 };
 
 namespace std

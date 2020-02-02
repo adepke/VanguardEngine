@@ -328,14 +328,14 @@ Features deliberately excluded from the scope of this library:
     #define D3D12MA_DXGI_1_4 1
 #endif
 
-// If using this library on a platform different than Windows PC, you should
-// include D3D12-compatible header before this library on your own and define this macro.
-#ifndef D3D12MA_D3D12_HEADERS_ALREADY_INCLUDED
-	//#define _INC_WINDOWS
-	//#define COM_NO_WINDOWS_H
-    #include <d3d12.h>
-    #include <dxgi.h>
-#endif
+#define NOMINMAX
+#include <Windows.h>
+
+#define _INC_WINDOWS
+//#define COM_NO_WINDOWS_H
+
+#include <d3d12.h>
+#include <dxgi.h>
 
 /// \cond INTERNAL
 

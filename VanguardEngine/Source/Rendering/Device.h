@@ -21,10 +21,6 @@
 #include <Core/Windows/DirectX12Minimal.h>
 #include <dxgi1_6.h>
 
-// #TEMP
-#undef min
-#undef max
-
 class RenderDevice;
 struct Buffer;
 struct Texture;
@@ -96,8 +92,6 @@ private:
 	DescriptorHeap RenderTargetHeap;
 	DescriptorHeap DepthStencilHeap;
 
-	std::vector<PipelineState> PipelineStates;
-
 	ResourcePtr<IDXGIAdapter1> GetAdapter(ResourcePtr<IDXGIFactory7>& Factory, bool Software);
 
 	// Name the D3D objects.
@@ -119,7 +113,7 @@ public:
 	void CheckFeatureSupport();
 
 	// Builds pipelines.
-	void ReloadShaders();
+	std::vector<PipelineState> ReloadShaders();
 
 	std::shared_ptr<Buffer> CreateResource(const BufferDescription& Description, const std::wstring_view Name);
 	std::shared_ptr<Texture> CreateResource(const TextureDescription& Description, const std::wstring_view Name);

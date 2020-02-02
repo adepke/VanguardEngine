@@ -3,7 +3,7 @@
 #pragma once
 
 #if (defined(__d3d12_h__) || defined(__d3dcommon_h__)) && !defined(DIRECTX12MINIMAL)
-// #TEMP
+// #TEMP: We can't use this until D3D12MemoryAllocator doesn't include d3d12 files manually.
 //#error "Included DirectX12 files manually, include this file instead."
 #endif
 
@@ -18,3 +18,4 @@
 
 #include <d3d12.h>
 #include <d3dcommon.h>
+#include <dxgi.h>

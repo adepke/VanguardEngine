@@ -2,6 +2,7 @@
 
 #include <Rendering/CommandList.h>
 #include <Rendering/Device.h>
+#include <Rendering/PipelineState.h>
 
 void CommandList::Create(RenderDevice& Device, D3D12_COMMAND_LIST_TYPE Type)
 {
@@ -22,6 +23,14 @@ void CommandList::SetName(std::wstring_view Name)
 {
 	Allocator->SetName(Name.data());
 	List->SetName(Name.data());
+}
+
+void CommandList::BindPipelineState(PipelineState& State)
+{
+	List->IASetPrimitiveTopology(State.Description.Topology);
+	List->SetGraphicsRootSignature(State.RootSignature.Get());
+	//List->SetGraphicsRootDescriptorTable()  // #TODO: Set the descriptor table?
+	List->SetPipelineState(State.Native());
 }
 
 void CommandList::AddResourceBarrier(TransitionBarrier Barrier)
