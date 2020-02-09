@@ -31,7 +31,7 @@ private:
 	void CreateShaders(RenderDevice& Device, const std::filesystem::path& ShaderPath);
 	void CreateRootSignature(RenderDevice& Device);
 	void CreateDescriptorTables(RenderDevice& Device);
-	void CreateInputLayout();
+	void CreateInputLayout(std::vector<D3D12_INPUT_ELEMENT_DESC>& InputElements);
 
 public:
 	size_t Hash = 0;

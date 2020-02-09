@@ -153,11 +153,9 @@ void PipelineState::CreateDescriptorTables(RenderDevice& Device)
 	VGScopedCPUStat("Create Descriptor Tables");
 }
 
-void PipelineState::CreateInputLayout()
+void PipelineState::CreateInputLayout(std::vector<D3D12_INPUT_ELEMENT_DESC>& InputElements)
 {
 	VGScopedCPUStat("Create Input Layout");
-
-	std::vector<D3D12_INPUT_ELEMENT_DESC> InputElements;
 
 	for (auto& Element : VertexShader->Reflection.InputElements)
 	{
@@ -192,10 +190,13 @@ void PipelineState::Build(RenderDevice& Device, const PipelineStateDescription& 
 		VGLogWarning(Rendering) << "Improper shader path '" << Description.ShaderPath.filename().generic_wstring() << "', do not include extension.";
 	}
 
+	// Data that must be kept alive until the pipeline is created.
+	std::vector<D3D12_INPUT_ELEMENT_DESC> InputElements;
+
 	CreateShaders(Device, Description.ShaderPath);
 	CreateRootSignature(Device);
 	CreateDescriptorTables(Device);
-	CreateInputLayout();
+	CreateInputLayout(InputElements);
 
 	if (!VertexShader)
 	{
