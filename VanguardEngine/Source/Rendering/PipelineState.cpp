@@ -7,6 +7,7 @@
 #include <cctype>
 #include <optional>
 #include <sstream>
+#include <vector>
 
 void PipelineState::CreateShaders(RenderDevice& Device, const std::filesystem::path& ShaderPath)
 {
@@ -120,12 +121,15 @@ void PipelineState::CreateRootSignature(RenderDevice& Device)
 		RootSignatureFlags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 	}
 
+	std::vector<D3D12_ROOT_PARAMETER1> RootParameters;
+	// #TEMP: Fill out root parameters.
+
 	D3D12_VERSIONED_ROOT_SIGNATURE_DESC RootSignatureDesc{};
 	RootSignatureDesc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
-	//RootSignatureDesc.Desc_1_1.NumParameters = ?;  // #TODO: Comes from reflection.
-	//RootSignatureDesc.Desc_1_1.pParameters = ?;  // #TODO: Comes from reflection.
+	RootSignatureDesc.Desc_1_1.NumParameters = static_cast<UINT>(RootParameters.size());
+	RootSignatureDesc.Desc_1_1.pParameters = RootParameters.data();
 	RootSignatureDesc.Desc_1_1.NumStaticSamplers = 0;
-	RootSignatureDesc.Desc_1_1.pStaticSamplers = nullptr;  // #TODO: Static samplers.
+	RootSignatureDesc.Desc_1_1.pStaticSamplers = nullptr;  // #TODO: Support static samplers.
 	RootSignatureDesc.Desc_1_1.Flags = RootSignatureFlags;
 
 	ID3DBlob* RootSignatureBlob;
@@ -152,6 +156,25 @@ void PipelineState::CreateDescriptorTables(RenderDevice& Device)
 void PipelineState::CreateInputLayout()
 {
 	VGScopedCPUStat("Create Input Layout");
+
+	std::vector<D3D12_INPUT_ELEMENT_DESC> InputElements;
+
+	for (auto& Element : VertexShader->Reflection.InputElements)
+	{
+		D3D12_INPUT_ELEMENT_DESC InputDesc{};
+		InputDesc.SemanticName = Element.SemanticName.c_str();
+		InputDesc.SemanticIndex = static_cast<UINT>(Element.SemanticIndex);
+		InputDesc.Format = Element.Format;
+		InputDesc.InputSlot = 0;
+		InputDesc.AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+		InputDesc.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+		InputDesc.InstanceDataStepRate = 0;
+
+		InputElements.push_back(std::move(InputDesc));
+	}
+
+	InputLayout.pInputElementDescs = InputElements.data();
+	InputLayout.NumElements = static_cast<UINT>(InputElements.size());
 }
 
 void PipelineState::Build(RenderDevice& Device, const PipelineStateDescription& InDescription)
@@ -193,7 +216,7 @@ void PipelineState::Build(RenderDevice& Device, const PipelineStateDescription& 
 	Desc.SampleMask;
 	Desc.RasterizerState = Description.RasterizerDescription;
 	Desc.DepthStencilState = Description.DepthStencilDescription;
-	Desc.InputLayout;
+	Desc.InputLayout = InputLayout;
 	Desc.IBStripCutValue;
 	Desc.PrimitiveTopologyType;
 	Desc.NumRenderTargets;

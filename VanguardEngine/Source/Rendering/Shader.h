@@ -12,6 +12,13 @@
 
 struct ShaderReflection
 {
+	struct InputElement
+	{
+		std::string SemanticName;
+		size_t SemanticIndex;
+		DXGI_FORMAT Format;
+	};
+
 	struct ConstantBuffer
 	{
 		std::string Name;
@@ -24,6 +31,7 @@ struct ShaderReflection
 		size_t BindCount;
 	};
 
+	std::vector<InputElement> InputElements;
 	std::vector<ConstantBuffer> ConstantBuffers;
 	std::vector<Resource> ResourceBindings;
 	size_t InstructionCount = 0;

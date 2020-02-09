@@ -28,6 +28,22 @@ void ReflectShader(std::unique_ptr<Shader>& InShader, ID3DBlob* Blob, const std:
 		return;
 	}
 
+	InShader->Reflection.InputElements.reserve(ShaderDesc.InputParameters);
+	for (auto Index = 0; Index < ShaderDesc.InputParameters; ++Index)
+	{
+		D3D12_SIGNATURE_PARAMETER_DESC ParameterDesc;
+
+		Result = ShaderReflection->GetInputParameterDesc(Index, &ParameterDesc);
+		if (FAILED(Result))
+		{
+			VGLogError(Rendering) << "Shader reflection for '" << Name << "' failed internally: " << Result;
+			return;
+		}
+
+		// #TEMP: Determine format.
+		InShader->Reflection.InputElements.push_back({ ParameterDesc.SemanticName, ParameterDesc.SemanticIndex });
+	}
+
 	InShader->Reflection.ConstantBuffers.reserve(ShaderDesc.ConstantBuffers);
 	for (auto Index = 0; Index < ShaderDesc.ConstantBuffers; ++Index)
 	{

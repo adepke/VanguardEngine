@@ -22,7 +22,7 @@ struct PipelineStateDescription
 
 class PipelineState
 {
-	friend class CommandList;
+	friend struct CommandList;
 
 private:
 	ResourcePtr<ID3D12PipelineState> Pipeline;
@@ -42,9 +42,6 @@ public:
 	std::unique_ptr<Shader> HullShader;
 	std::unique_ptr<Shader> DomainShader;
 	std::unique_ptr<Shader> GeometryShader;
-	//ResourcePtr<> BlendState;  // #TODO: Blend state.
-	//ResourcePtr<> RasterizerState;  // #TODO: Rasterizer state.
-	//ResourcePtr<> DepthStencilState;  // #TODO: Depth stencil state.
 
 	auto* Native() const noexcept { return Pipeline.Get(); }
 
