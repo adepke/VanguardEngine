@@ -121,8 +121,8 @@ void PipelineState::CreateRootSignature(RenderDevice& Device)
 		RootSignatureFlags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 	}
 
+	// #TODO: Generate parameters from reflection data.
 	std::vector<D3D12_ROOT_PARAMETER1> RootParameters;
-	// #TEMP: Fill out root parameters.
 
 	D3D12_VERSIONED_ROOT_SIGNATURE_DESC RootSignatureDesc{};
 	RootSignatureDesc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
@@ -171,7 +171,7 @@ void PipelineState::CreateInputLayout(std::vector<D3D12_INPUT_ELEMENT_DESC>& Inp
 		InputElements.push_back(std::move(InputDesc));
 	}
 
-	InputLayout.pInputElementDescs = InputElements.data();
+	InputLayout.pInputElementDescs = InputElements.size() ? InputElements.data() : nullptr;
 	InputLayout.NumElements = static_cast<UINT>(InputElements.size());
 }
 
