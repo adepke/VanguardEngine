@@ -34,7 +34,6 @@ private:
 	void CreateInputLayout(std::vector<D3D12_INPUT_ELEMENT_DESC>& InputElements);
 
 public:
-	size_t Hash = 0;
 	ResourcePtr<ID3D12RootSignature> RootSignature;
 	D3D12_INPUT_LAYOUT_DESC InputLayout;
 	std::unique_ptr<Shader> VertexShader;
@@ -47,15 +46,3 @@ public:
 
 	void Build(RenderDevice& Device, const PipelineStateDescription& InDescription);
 };
-
-namespace std
-{
-	template <>
-	struct hash<PipelineState>
-	{
-		size_t operator()(const PipelineState& Target) const noexcept
-		{
-			return 0;  // #TODO: PipelineState hashing.
-		}
-	};
-}
