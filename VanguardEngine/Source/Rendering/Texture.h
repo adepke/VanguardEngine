@@ -9,9 +9,10 @@
 
 struct TextureDescription : ResourceDescription
 {
-	uint32_t Width;
-	uint32_t Height;
+	uint32_t Width = 1;
+	uint32_t Height = 1;
 	uint32_t Depth = 1;
+	DXGI_FORMAT Format;
 };
 
 struct Texture : Resource

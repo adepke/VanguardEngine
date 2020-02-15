@@ -76,7 +76,25 @@ void ResourceManager::CreateResourceViews(std::shared_ptr<Texture>& Target)
 		Target->RTV = Device->GetRenderTargetHeap().Allocate();
 
 		D3D12_RENDER_TARGET_VIEW_DESC ViewDesc{};
-		// #TODO: Fill out the description.
+		ViewDesc.Format = Target->Description.Format;
+		switch (Target->Native()->GetDesc().Dimension)  // #TODO: Support texture arrays and multisample textures.
+		{
+		case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
+			ViewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE1D;
+			ViewDesc.Texture1D.MipSlice = 0;  // #TODO: Support texture mips.
+			break;
+		case D3D12_RESOURCE_DIMENSION_TEXTURE2D:
+			ViewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+			ViewDesc.Texture2D.MipSlice = 0;
+			ViewDesc.Texture2D.PlaneSlice = 0;
+			break;
+		case D3D12_RESOURCE_DIMENSION_TEXTURE3D:
+			ViewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE3D;
+			ViewDesc.Texture3D.MipSlice = 0;
+			ViewDesc.Texture3D.FirstWSlice = 0;
+			ViewDesc.Texture3D.WSize = -1;
+			break;
+		}
 
 		Device->Native()->CreateRenderTargetView(Target->Native(), &ViewDesc, *Target->RTV);
 	}
@@ -86,7 +104,19 @@ void ResourceManager::CreateResourceViews(std::shared_ptr<Texture>& Target)
 		Target->DSV = Device->GetDepthStencilHeap().Allocate();
 
 		D3D12_DEPTH_STENCIL_VIEW_DESC ViewDesc{};
-		// #TODO: Fill out the description.
+		ViewDesc.Format = Target->Description.Format;
+		switch (Target->Native()->GetDesc().Dimension)  // #TODO: Support texture arrays and multisample textures.
+		{
+		case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
+			ViewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE1D;
+			ViewDesc.Texture1D.MipSlice = 0;  // #TODO: Support texture mips.
+			break;
+		case D3D12_RESOURCE_DIMENSION_TEXTURE2D:
+			ViewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+			ViewDesc.Texture2D.MipSlice = 0;
+			break;
+		}
+		ViewDesc.Flags = D3D12_DSV_FLAG_NONE;  // #TODO: Depth stencil flags.
 
 		Device->Native()->CreateDepthStencilView(Target->Native(), &ViewDesc, *Target->DSV);
 	}
@@ -232,11 +262,11 @@ std::shared_ptr<Texture> ResourceManager::AllocateTexture(const TextureDescripti
 
 	D3D12_RESOURCE_DESC ResourceDesc{};
 	ResourceDesc.Alignment = 0;
-	ResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	ResourceDesc.Dimension = Description.Height > 1 ? (Description.Depth > 1 ? D3D12_RESOURCE_DIMENSION_TEXTURE3D : D3D12_RESOURCE_DIMENSION_TEXTURE2D) : D3D12_RESOURCE_DIMENSION_TEXTURE1D;
 	ResourceDesc.Width = Description.Width;
 	ResourceDesc.Height = Description.Height;
 	ResourceDesc.DepthOrArraySize = Description.Depth;
-	ResourceDesc.Format = DXGI_FORMAT_UNKNOWN;
+	ResourceDesc.Format = Description.Format;
 	ResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 	ResourceDesc.MipLevels = 1;
 	ResourceDesc.SampleDesc.Count = 1;
@@ -250,11 +280,19 @@ std::shared_ptr<Texture> ResourceManager::AllocateTexture(const TextureDescripti
 
 	if (Description.BindFlags & BindFlag::DepthStencil)
 	{
-		ResourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
-
-		if ((Description.BindFlags & BindFlag::ShaderResource) == 0)
+		if (Description.Depth > 0)
 		{
-			ResourceDesc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
+			VGLogWarning(Rendering) << "3D textures cannot have depth stencil binding.";
+		}
+
+		else
+		{
+			ResourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+
+			if ((Description.BindFlags & BindFlag::ShaderResource) == 0)
+			{
+				ResourceDesc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
+			}
 		}
 	}
 
