@@ -31,11 +31,10 @@ private:
 	void CreateShaders(RenderDevice& Device, const std::filesystem::path& ShaderPath);
 	void CreateRootSignature(RenderDevice& Device);
 	void CreateDescriptorTables(RenderDevice& Device);
-	void CreateInputLayout(std::vector<D3D12_INPUT_ELEMENT_DESC>& InputElements);
+	D3D12_INPUT_LAYOUT_DESC CreateInputLayout(std::vector<D3D12_INPUT_ELEMENT_DESC>& InputElements);
 
 public:
 	ResourcePtr<ID3D12RootSignature> RootSignature;
-	D3D12_INPUT_LAYOUT_DESC InputLayout;
 	std::unique_ptr<Shader> VertexShader;
 	std::unique_ptr<Shader> PixelShader;
 	std::unique_ptr<Shader> HullShader;

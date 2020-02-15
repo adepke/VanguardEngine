@@ -1,3 +1,5 @@
+#include "Default_RS.hlsi"
+
 struct Input
 {
 	float3 Position : POSITION;
@@ -10,6 +12,7 @@ struct Output
 	float4 Color : COLOR;
 };
 
+[RootSignature(RS)]
 Output main(Input In)
 {
 	Output Out;

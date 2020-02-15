@@ -103,7 +103,7 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& Path, ShaderT
 	Flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
 #endif
 
-	auto Result = D3DCompileFromFile(Path.c_str(), nullptr, nullptr, "main", CompileTarget, Flags, 0, Blob.Indirect(), ErrorBlob.Indirect());
+	auto Result = D3DCompileFromFile(Path.c_str(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", CompileTarget, Flags, 0, Blob.Indirect(), ErrorBlob.Indirect());
 	if (FAILED(Result))
 	{
 		VGLogError(Rendering) << "Failed to compile shader at '" << Path.generic_wstring() << "': " << Result << " | Error Blob: " << static_cast<char*>(ErrorBlob->GetBufferPointer());

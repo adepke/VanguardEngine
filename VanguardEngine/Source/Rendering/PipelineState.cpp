@@ -51,6 +51,11 @@ void PipelineState::CreateShaders(RenderDevice& Device, const std::filesystem::p
 				Type = ShaderType::Geometry;
 			}
 
+			else if (FindType(VGText("_RS")))
+			{
+				Type = std::nullopt;  // Root signature, we don't need to do anything.
+			}
+
 			else
 			{
 				VGLogError(Rendering) << "Failed to determine shader type for shader " << Entry.path().filename().generic_wstring() << ".";
@@ -86,65 +91,10 @@ void PipelineState::CreateRootSignature(RenderDevice& Device)
 {
 	VGScopedCPUStat("Create Root Signature");
 
-	D3D12_FEATURE_DATA_ROOT_SIGNATURE RootSignatureFeatureData{};
-	RootSignatureFeatureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-
-	if (FAILED(Device.Native()->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &RootSignatureFeatureData, sizeof(RootSignatureFeatureData))))
-	{
-		VGLogFatal(Rendering) << "Adapter doesn't support root signature version 1.1";
-	}
-
-	auto RootSignatureFlags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT;  // We need the input assembler.
-
-	if (!VertexShader)
-	{
-		RootSignatureFlags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS;
-	}
-
-	if (!PixelShader)
-	{
-		RootSignatureFlags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
-	}
-
-	if (!HullShader)
-	{
-		RootSignatureFlags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS;
-	}
-
-	if (!DomainShader)
-	{
-		RootSignatureFlags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS;
-	}
-
-	if (!GeometryShader)
-	{
-		RootSignatureFlags |= D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-	}
-
-	// #TODO: Generate parameters from reflection data.
-	std::vector<D3D12_ROOT_PARAMETER1> RootParameters;
-
-	D3D12_VERSIONED_ROOT_SIGNATURE_DESC RootSignatureDesc{};
-	RootSignatureDesc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
-	RootSignatureDesc.Desc_1_1.NumParameters = static_cast<UINT>(RootParameters.size());
-	RootSignatureDesc.Desc_1_1.pParameters = RootParameters.data();
-	RootSignatureDesc.Desc_1_1.NumStaticSamplers = 0;
-	RootSignatureDesc.Desc_1_1.pStaticSamplers = nullptr;  // #TODO: Support static samplers.
-	RootSignatureDesc.Desc_1_1.Flags = RootSignatureFlags;
-
-	ID3DBlob* RootSignatureBlob;
-	ID3DBlob* ErrorBlob;
-
-	auto Result = D3D12SerializeVersionedRootSignature(&RootSignatureDesc, &RootSignatureBlob, &ErrorBlob);
+	const auto Result = Device.Native()->CreateRootSignature(0, VertexShader->Bytecode.data(), VertexShader->Bytecode.size(), IID_PPV_ARGS(RootSignature.Indirect()));
 	if (FAILED(Result))
 	{
-		VGLogFatal(Rendering) << "Failed to serialize root signature: " << Result;
-	}
-
-	Result = Device.Native()->CreateRootSignature(0, RootSignatureBlob->GetBufferPointer(), RootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(RootSignature.Indirect()));
-	if (FAILED(Result))
-	{
-		VGLogFatal(Rendering) << "Failed to create root signature: " << Result;
+		VGLogError(Rendering) << "Failed to create root signature: " << Result;
 	}
 }
 
@@ -153,7 +103,7 @@ void PipelineState::CreateDescriptorTables(RenderDevice& Device)
 	VGScopedCPUStat("Create Descriptor Tables");
 }
 
-void PipelineState::CreateInputLayout(std::vector<D3D12_INPUT_ELEMENT_DESC>& InputElements)
+D3D12_INPUT_LAYOUT_DESC PipelineState::CreateInputLayout(std::vector<D3D12_INPUT_ELEMENT_DESC>& InputElements)
 {
 	VGScopedCPUStat("Create Input Layout");
 
@@ -164,15 +114,14 @@ void PipelineState::CreateInputLayout(std::vector<D3D12_INPUT_ELEMENT_DESC>& Inp
 		InputDesc.SemanticIndex = static_cast<UINT>(Element.SemanticIndex);
 		InputDesc.Format = Element.Format;
 		InputDesc.InputSlot = 0;
-		InputDesc.AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
-		InputDesc.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+		InputDesc.AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;  // #TODO: String search to determine if this is a unique element or not.
+		InputDesc.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;  // #TODO: Handle per instance data.
 		InputDesc.InstanceDataStepRate = 0;
 
 		InputElements.push_back(std::move(InputDesc));
 	}
 
-	InputLayout.pInputElementDescs = InputElements.size() ? InputElements.data() : nullptr;
-	InputLayout.NumElements = static_cast<UINT>(InputElements.size());
+	return { InputElements.size() ? InputElements.data() : nullptr, static_cast<UINT>(InputElements.size()) };
 }
 
 void PipelineState::Build(RenderDevice& Device, const PipelineStateDescription& InDescription)
@@ -196,7 +145,7 @@ void PipelineState::Build(RenderDevice& Device, const PipelineStateDescription& 
 	CreateShaders(Device, Description.ShaderPath);
 	CreateRootSignature(Device);
 	CreateDescriptorTables(Device);
-	CreateInputLayout(InputElements);
+	auto InputLayout = std::move(CreateInputLayout(InputElements));
 
 	if (!VertexShader)
 	{
