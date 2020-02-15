@@ -117,7 +117,7 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& Path, ShaderT
 	
 	ReflectShader(ResultShader, Blob.Get(), Path.filename().generic_wstring());
 
-	ResultShader->Blob = std::move(Blob);
+	ResultShader->SetBlob(std::move(Blob));
 
 	return std::move(ResultShader);
 }

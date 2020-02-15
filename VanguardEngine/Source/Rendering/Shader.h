@@ -52,7 +52,10 @@ struct Shader
 	std::vector<uint8_t> Bytecode;
 	ShaderReflection Reflection;
 
-	ResourcePtr<ID3DBlob> Blob;  // Stored for proper cleanup only. Do not access.
+	void SetBlob(ResourcePtr<ID3DBlob>&& InBlob) { Blob = std::move(InBlob); }
+
+private:
+	ResourcePtr<ID3DBlob> Blob;  // Stored for proper cleanup only.
 };
 
 std::unique_ptr<Shader> CompileShader(const std::filesystem::path& Path, ShaderType Type);
