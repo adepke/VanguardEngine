@@ -19,7 +19,7 @@ void ResourceManager::CreateResourceViews(std::shared_ptr<Buffer>& Target)
 
 		D3D12_CONSTANT_BUFFER_VIEW_DESC ViewDesc{};
 		ViewDesc.BufferLocation = Target->Native()->GetGPUVirtualAddress();
-		ViewDesc.SizeInBytes = static_cast<UINT>(Target->Description.Size);
+		ViewDesc.SizeInBytes = static_cast<UINT>(Target->Description.Size * Target->Description.Stride);
 
 		Device->Native()->CreateConstantBufferView(&ViewDesc, *Target->CBV);
 	}
@@ -29,10 +29,13 @@ void ResourceManager::CreateResourceViews(std::shared_ptr<Buffer>& Target)
 		Target->SRV = Device->GetResourceHeap().Allocate();
 
 		D3D12_SHADER_RESOURCE_VIEW_DESC ViewDesc{};
+		ViewDesc.Format = Target->Description.Format ? *Target->Description.Format : DXGI_FORMAT_UNKNOWN;  // Structured buffers don't have a format.
+		ViewDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+		ViewDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 		ViewDesc.Buffer.FirstElement = 0;
-		ViewDesc.Buffer.Flags = D3D12_BUFFER_SRV_FLAG_RAW;
-
-		// #TODO: Raw, structured, and typed buffer.
+		ViewDesc.Buffer.NumElements = static_cast<UINT>(Target->Description.Size);
+		ViewDesc.Buffer.StructureByteStride = !Target->Description.Format || *Target->Description.Format == DXGI_FORMAT_UNKNOWN ? static_cast<UINT>(Target->Description.Stride) : 0;  // Structured buffers must have a stride.
+		ViewDesc.Buffer.Flags = Target->Description.Format == DXGI_FORMAT_R32_TYPELESS ? D3D12_BUFFER_SRV_FLAG_RAW : D3D12_BUFFER_SRV_FLAG_NONE;  // Byte address buffers (32 bit typeless) need the raw flag.
 
 		Device->Native()->CreateShaderResourceView(Target->Native(), &ViewDesc, *Target->SRV);
 	}
@@ -42,9 +45,19 @@ void ResourceManager::CreateResourceViews(std::shared_ptr<Buffer>& Target)
 		Target->UAV = Device->GetResourceHeap().Allocate();
 
 		D3D12_UNORDERED_ACCESS_VIEW_DESC ViewDesc{};
+		ViewDesc.Format = Target->Description.Format ? *Target->Description.Format : DXGI_FORMAT_UNKNOWN;  // Structured buffers don't have a format.
 		ViewDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+		ViewDesc.Buffer.FirstElement = 0;
+		ViewDesc.Buffer.NumElements = static_cast<UINT>(Target->Description.Size);
+		ViewDesc.Buffer.StructureByteStride = !Target->Description.Format || *Target->Description.Format == DXGI_FORMAT_UNKNOWN ? static_cast<UINT>(Target->Description.Stride) : 0;  // Structured buffers must have a stride.
+		ViewDesc.Buffer.CounterOffsetInBytes = 0;  // #TODO: Counter offset.
+		ViewDesc.Buffer.Flags = Target->Description.Format == DXGI_FORMAT_R32_TYPELESS ? D3D12_BUFFER_UAV_FLAG_RAW : D3D12_BUFFER_UAV_FLAG_NONE;  // Byte address buffers (32 bit typeless) need the raw flag.
 
-		// #TODO: Raw, structured, and typed buffer.
+		if (Target->CounterBuffer && Target->Description.Format && Target->Description.Format != DXGI_FORMAT_UNKNOWN)
+		{
+			VGLogWarning(Rendering) << "Buffer format must be unknown if using a counter buffer.";
+			ViewDesc.Format = DXGI_FORMAT_UNKNOWN;
+		}
 
 		ID3D12Resource* CounterBuffer = nullptr;
 		if (Target->CounterBuffer)

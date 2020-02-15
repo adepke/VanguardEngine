@@ -10,7 +10,7 @@
 
 struct BufferDescription : ResourceDescription
 {
-	size_t Size;
+	size_t Size;  // Element count. Size * Stride = Byte count.
 	size_t Stride;
 	std::optional<DXGI_FORMAT> Format;
 };
