@@ -23,8 +23,8 @@ class ResourceManager
 {
 private:
 	// #TODO: Weak pointer instead of raw pointer?
-	RenderDevice* Device;
-	size_t FrameCount;
+	RenderDevice* Device = nullptr;
+	size_t FrameCount = 0;
 	
 	std::vector<ResourcePtr<D3D12MA::Allocation>> UploadResources;
 	std::vector<size_t> UploadOffsets;
