@@ -8,6 +8,7 @@
 #include <optional>
 #include <sstream>
 #include <vector>
+#include <limits>
 
 void PipelineState::CreateShaders(RenderDevice& Device, const std::filesystem::path& ShaderPath)
 {
