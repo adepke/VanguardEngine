@@ -40,8 +40,49 @@ void ReflectShader(std::unique_ptr<Shader>& InShader, ID3DBlob* Blob, const std:
 			return;
 		}
 
-		// #TEMP: Determine format.
-		InShader->Reflection.InputElements.push_back({ ParameterDesc.SemanticName, ParameterDesc.SemanticIndex });
+		DXGI_FORMAT Format = DXGI_FORMAT_UNKNOWN;
+
+		if (ParameterDesc.Mask == 1)
+		{
+			switch (ParameterDesc.ComponentType)
+			{
+			case D3D_REGISTER_COMPONENT_UINT32: Format = DXGI_FORMAT_R32_UINT; break;
+			case D3D_REGISTER_COMPONENT_SINT32: Format = DXGI_FORMAT_R32_SINT; break;
+			case D3D_REGISTER_COMPONENT_FLOAT32: Format = DXGI_FORMAT_R32_FLOAT; break;
+			}
+		}
+
+		else if (ParameterDesc.Mask < 4)
+		{
+			switch (ParameterDesc.ComponentType)
+			{
+			case D3D_REGISTER_COMPONENT_UINT32: Format = DXGI_FORMAT_R32G32_UINT; break;
+			case D3D_REGISTER_COMPONENT_SINT32: Format = DXGI_FORMAT_R32G32_SINT; break;
+			case D3D_REGISTER_COMPONENT_FLOAT32: Format = DXGI_FORMAT_R32G32_FLOAT; break;
+			}
+		}
+
+		else if (ParameterDesc.Mask < 8)
+		{
+			switch (ParameterDesc.ComponentType)
+			{
+			case D3D_REGISTER_COMPONENT_UINT32: Format = DXGI_FORMAT_R32G32B32_UINT; break;
+			case D3D_REGISTER_COMPONENT_SINT32: Format = DXGI_FORMAT_R32G32B32_SINT; break;
+			case D3D_REGISTER_COMPONENT_FLOAT32: Format = DXGI_FORMAT_R32G32B32_FLOAT; break;
+			}
+		}
+
+		else if (ParameterDesc.Mask < 16)
+		{
+			switch (ParameterDesc.ComponentType)
+			{
+			case D3D_REGISTER_COMPONENT_UINT32: Format = DXGI_FORMAT_R32G32B32A32_UINT; break;
+			case D3D_REGISTER_COMPONENT_SINT32: Format = DXGI_FORMAT_R32G32B32A32_SINT; break;
+			case D3D_REGISTER_COMPONENT_FLOAT32: Format = DXGI_FORMAT_R32G32B32A32_FLOAT; break;
+			}
+		}
+
+		InShader->Reflection.InputElements.push_back({ ParameterDesc.SemanticName, ParameterDesc.SemanticIndex, Format });
 	}
 
 	InShader->Reflection.ConstantBuffers.reserve(ShaderDesc.ConstantBuffers);
