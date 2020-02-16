@@ -161,21 +161,29 @@ void PipelineState::Build(RenderDevice& Device, const PipelineStateDescription& 
 	Desc.DS = { DomainShader ? DomainShader->Bytecode.data() : nullptr, DomainShader ? DomainShader->Bytecode.size() : 0 };
 	Desc.HS = { HullShader ? HullShader->Bytecode.data() : nullptr, HullShader ? HullShader->Bytecode.size() : 0 };
 	Desc.GS = { GeometryShader ? GeometryShader->Bytecode.data() : nullptr, GeometryShader ? GeometryShader->Bytecode.size() : 0 };
-	Desc.StreamOutput;
+	Desc.StreamOutput = { nullptr, 0, nullptr, 0, 0 };  // Don't support GPU out streaming.
 	Desc.BlendState = Description.BlendDescription;
-	Desc.SampleMask;
+	Desc.SampleMask = std::numeric_limits<UINT>::max();
 	Desc.RasterizerState = Description.RasterizerDescription;
 	Desc.DepthStencilState = Description.DepthStencilDescription;
 	Desc.InputLayout = InputLayout;
-	Desc.IBStripCutValue;
-	Desc.PrimitiveTopologyType;
-	Desc.NumRenderTargets;
-	Desc.RTVFormats;
-	Desc.DSVFormat;
-	Desc.SampleDesc;
+	Desc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;  // Don't support strip topology cuts.
+	switch (Description.Topology)  // #TODO: Support patch topology, which is needed for hull and domain shaders.
+	{
+	case D3D_PRIMITIVE_TOPOLOGY_UNDEFINED: Desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_UNDEFINED; break;
+	case D3D_PRIMITIVE_TOPOLOGY_POINTLIST: Desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT; break;
+	case D3D_PRIMITIVE_TOPOLOGY_LINELIST:
+	case D3D_PRIMITIVE_TOPOLOGY_LINESTRIP: Desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE; break;
+	case D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST:
+	case D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP: Desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE; break;
+	}
+	Desc.NumRenderTargets = 1;  // #TODO: Pull from render graph?
+	Desc.RTVFormats[0] = DXGI_FORMAT_R10G10B10A2_UNORM;
+	Desc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	Desc.SampleDesc = { 1, 0 };  // #TODO: Support multi-sampling.
 	Desc.NodeMask = 0;
-	Desc.CachedPSO;
-	Desc.Flags;
+	Desc.CachedPSO = { nullptr, 0 };  // #TODO: Pipeline caching.
+	Desc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;  // #TODO: Add debugging flag if we're a software adapter.
 
 	const auto Result = Device.Native()->CreateGraphicsPipelineState(&Desc, IID_PPV_ARGS(Pipeline.Indirect()));
 	if (FAILED(Result))

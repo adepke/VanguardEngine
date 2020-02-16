@@ -77,7 +77,7 @@ void ResourceManager::CreateResourceViews(std::shared_ptr<Texture>& Target)
 
 		D3D12_RENDER_TARGET_VIEW_DESC ViewDesc{};
 		ViewDesc.Format = Target->Description.Format;
-		switch (Target->Native()->GetDesc().Dimension)  // #TODO: Support texture arrays and multisample textures.
+		switch (Target->Native()->GetDesc().Dimension)  // #TODO: Support texture arrays and multi-sample textures.
 		{
 		case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
 			ViewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE1D;
@@ -105,7 +105,7 @@ void ResourceManager::CreateResourceViews(std::shared_ptr<Texture>& Target)
 
 		D3D12_DEPTH_STENCIL_VIEW_DESC ViewDesc{};
 		ViewDesc.Format = Target->Description.Format;
-		switch (Target->Native()->GetDesc().Dimension)  // #TODO: Support texture arrays and multisample textures.
+		switch (Target->Native()->GetDesc().Dimension)  // #TODO: Support texture arrays and multi-sample textures.
 		{
 		case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
 			ViewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE1D;
@@ -127,7 +127,7 @@ void ResourceManager::CreateResourceViews(std::shared_ptr<Texture>& Target)
 
 		D3D12_SHADER_RESOURCE_VIEW_DESC ViewDesc{};
 		ViewDesc.Format = Target->Description.Format;
-		switch (Target->Native()->GetDesc().Dimension)  // #TODO: Support texture arrays and multisample textures.
+		switch (Target->Native()->GetDesc().Dimension)  // #TODO: Support texture arrays and multi-sample textures.
 		{
 		case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
 			ViewDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1D;
