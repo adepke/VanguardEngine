@@ -121,7 +121,43 @@ void ResourceManager::CreateResourceViews(std::shared_ptr<Texture>& Target)
 		Device->Native()->CreateDepthStencilView(Target->Native(), &ViewDesc, *Target->DSV);
 	}
 
-	// #TODO: SRV, UAV.
+	if (Target->Description.BindFlags & BindFlag::ShaderResource)
+	{
+		Target->SRV = Device->GetResourceHeap().Allocate();
+
+		D3D12_SHADER_RESOURCE_VIEW_DESC ViewDesc{};
+		ViewDesc.Format = Target->Description.Format;
+		switch (Target->Native()->GetDesc().Dimension)  // #TODO: Support texture arrays and multisample textures.
+		{
+		case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
+			ViewDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1D;
+			ViewDesc.Texture1D.MostDetailedMip = 0;
+			ViewDesc.Texture2D.MipLevels = -1;  // #TODO: Support texture mips.
+			ViewDesc.Texture2D.ResourceMinLODClamp = 0.f;
+			break;
+		case D3D12_RESOURCE_DIMENSION_TEXTURE2D:
+			ViewDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+			ViewDesc.Texture2D.MostDetailedMip = 0;
+			ViewDesc.Texture2D.MipLevels = -1;
+			ViewDesc.Texture2D.PlaneSlice = 0;
+			ViewDesc.Texture2D.ResourceMinLODClamp = 0.f;
+			break;
+		case D3D12_RESOURCE_DIMENSION_TEXTURE3D:
+			ViewDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
+			ViewDesc.Texture3D.MostDetailedMip = 0;
+			ViewDesc.Texture3D.MipLevels = -1;
+			ViewDesc.Texture3D.ResourceMinLODClamp = 0.f;
+			break;
+		}
+		ViewDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+		Device->Native()->CreateShaderResourceView(Target->Native(), &ViewDesc, *Target->SRV);
+	}
+
+	if (Target->Description.BindFlags & BindFlag::UnorderedAccess)
+	{
+		// #TODO: Texture UAVs.
+	}
 }
 
 void ResourceManager::NameResource(ResourcePtr<D3D12MA::Allocation>& Target, const std::wstring_view Name)
