@@ -114,9 +114,9 @@ D3D12_INPUT_LAYOUT_DESC PipelineState::CreateInputLayout(std::vector<D3D12_INPUT
 		InputDesc.SemanticIndex = static_cast<UINT>(Element.SemanticIndex);
 		InputDesc.Format = Element.Format;
 		InputDesc.InputSlot = 0;
-		InputDesc.AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;  // #TODO: String search to determine if this is a unique element or not.
-		InputDesc.InputSlotClass = D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;  // #TODO: Handle per instance data.
-		InputDesc.InstanceDataStepRate = 0;
+		InputDesc.AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+		InputDesc.InputSlotClass = Element.SemanticName.find("INSTANCE") != std::string::npos ? D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA : D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+		InputDesc.InstanceDataStepRate = InputDesc.InputSlotClass == D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA ? 0 : 1;
 
 		InputElements.push_back(std::move(InputDesc));
 	}
