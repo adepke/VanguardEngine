@@ -1,4 +1,4 @@
-#include "Default_RS.hlsi"
+#include "Default_RS.hlsli"
 
 struct Input
 {
