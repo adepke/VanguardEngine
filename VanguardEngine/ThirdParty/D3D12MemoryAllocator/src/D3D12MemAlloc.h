@@ -351,6 +351,8 @@ Features deliberately excluded from the scope of this library:
 
 /// \endcond
 
+class ResourceManager;
+
 namespace D3D12MA
 {
 
@@ -493,9 +495,10 @@ private:
     friend class AllocatorPimpl;
     friend class BlockVector;
     friend class JsonWriter;
+	friend class ::ResourceManager;
     template<typename T> friend void D3D12MA_DELETE(const ALLOCATION_CALLBACKS&, T*);
 
-    AllocatorPimpl* m_Allocator;
+    AllocatorPimpl* m_Allocator = nullptr;
     enum Type
     {
         TYPE_COMMITTED,

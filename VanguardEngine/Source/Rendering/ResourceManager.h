@@ -42,7 +42,7 @@ public:
 	ResourceManager& operator=(const ResourceManager&) = delete;
 	ResourceManager& operator=(ResourceManager&&) noexcept = delete;
 
-	void Initialize(RenderDevice* Device, size_t BufferedFrames);
+	void Initialize(RenderDevice* InDevice, size_t BufferedFrames);
 
 	std::shared_ptr<Buffer> AllocateBuffer(const BufferDescription& Description, const std::wstring_view Name);
 	std::shared_ptr<Texture> AllocateTexture(const TextureDescription& Description, const std::wstring_view Name);

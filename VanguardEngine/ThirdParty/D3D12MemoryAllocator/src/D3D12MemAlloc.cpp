@@ -4307,7 +4307,7 @@ void Allocation::SetName(LPCWSTR Name)
 {
     FreeName();
 
-    if(Name)
+    if(Name && m_Allocator)
     {
         const size_t nameCharCount = wcslen(Name) + 1;
         m_Name = D3D12MA_NEW_ARRAY(m_Allocator->GetAllocs(), WCHAR, nameCharCount);
@@ -4394,7 +4394,7 @@ void Allocation::SetResource(ID3D12Resource* resource, const D3D12_RESOURCE_DESC
 
 void Allocation::FreeName()
 {
-    if(m_Name)
+    if(m_Name && m_Allocator)
     {
         const size_t nameCharCount = wcslen(m_Name) + 1;
         D3D12MA_DELETE_ARRAY(m_Allocator->GetAllocs(), m_Name, nameCharCount);

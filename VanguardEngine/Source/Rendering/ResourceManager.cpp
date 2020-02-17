@@ -175,10 +175,11 @@ void ResourceManager::NameResource(ResourcePtr<D3D12MA::Allocation>& Target, con
 #endif
 }
 
-void ResourceManager::Initialize(RenderDevice* Device, size_t BufferedFrames)
+void ResourceManager::Initialize(RenderDevice* InDevice, size_t BufferedFrames)
 {
 	VGScopedCPUStat("Resource Manager Initialize");
 
+	Device = InDevice;
 	FrameCount = BufferedFrames;
 
 	UploadResources.resize(FrameCount);
@@ -386,10 +387,11 @@ std::shared_ptr<Texture> ResourceManager::ResourceFromSwapChain(void* Surface, c
 	Description.Width = Device->RenderWidth;
 	Description.Height = Device->RenderHeight;
 	Description.Depth = 1;
+	Description.Format = /*DXGI_FORMAT_R10G10B10A2_UNORM*/ DXGI_FORMAT_B8G8R8A8_UNORM;
 
 	auto Allocation = std::make_shared<Texture>();
 	Allocation->Description = Description;
-	Allocation->Allocation = std::move(ResourcePtr<D3D12MA::Allocation>{});
+	Allocation->Allocation = std::move(ResourcePtr<D3D12MA::Allocation>{ new D3D12MA::Allocation });
 	Allocation->Allocation->CreateManual(static_cast<ID3D12Resource*>(Surface));
 	Allocation->State = Description.InitialState;
 
@@ -415,7 +417,7 @@ void ResourceManager::WriteBuffer(std::shared_ptr<Buffer>& Target, const std::ve
 
 		// #TODO: Resource barrier?
 
-		auto* TargetCommandList = Device->GetCopyList()->Native();
+		auto* TargetCommandList = Device->GetCopyList().Native();
 		TargetCommandList->CopyBufferRegion(Target->Native(), TargetOffset, UploadResources[FrameIndex]->GetResource(), UploadOffsets[FrameIndex], Source.size());
 
 		// #TODO: Resource barrier?
@@ -428,7 +430,7 @@ void ResourceManager::WriteBuffer(std::shared_ptr<Buffer>& Target, const std::ve
 		VGScopedCPUStat("Write Dynamic");
 
 		VGAssert(Target->Description.AccessFlags & AccessFlag::CPUWrite, "Failed to write to dynamic buffer, no CPU write access.");
-		VGAssert(Target->Description.Size + TargetOffset <= Source.size(), "Failed to write to dynamic buffer, source is larger than target.");
+		VGAssert(Target->Description.Size + TargetOffset >= Source.size(), "Failed to write to dynamic buffer, source is larger than target.");
 
 		void* MappedPtr = nullptr;
 
@@ -460,7 +462,7 @@ void ResourceManager::WriteTexture(std::shared_ptr<Texture>& Target, const std::
 
 	// #TODO: Resource barrier?
 
-	auto* TargetCommandList = Device->GetCopyList()->Native();
+	auto* TargetCommandList = Device->GetCopyList().Native();
 	TargetCommandList->CopyBufferRegion(Target->Native(), 0, UploadResources[FrameIndex]->GetResource(), UploadOffsets[FrameIndex], Source.size());
 
 	// #TODO: Resource barrier?
