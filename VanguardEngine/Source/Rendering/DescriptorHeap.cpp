@@ -8,7 +8,7 @@ void DescriptorHeap::Initialize(RenderDevice& Device, D3D12_DESCRIPTOR_HEAP_TYPE
 	D3D12_DESCRIPTOR_HEAP_DESC HeapDesc{};
 	HeapDesc.Type = Type;
 	HeapDesc.NumDescriptors = static_cast<UINT>(Descriptors);
-	HeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;  // #TODO: Shader visible?
+	HeapDesc.Flags = Type == D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV || Type == D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER ? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE : D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
 	HeapDesc.NodeMask = 0;
 
 	auto Result = Device.Native()->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(Heap.Indirect()));
