@@ -403,11 +403,9 @@ std::shared_ptr<Texture> ResourceManager::ResourceFromSwapChain(void* Surface, c
 
 void ResourceManager::WriteBuffer(std::shared_ptr<Buffer>& Target, const std::vector<uint8_t>& Source, size_t TargetOffset)
 {
-	VGScopedCPUStat("Resource Write");
-
 	if (Target->Description.UpdateRate == ResourceFrequency::Static)
 	{
-		VGScopedCPUStat("Write Static");
+		VGScopedCPUStat("Buffer Write Static");
 
 		VGAssert(Target->Description.Size + TargetOffset <= Source.size(), "Failed to write to static buffer, source buffer is larger than target.");
 
@@ -427,7 +425,7 @@ void ResourceManager::WriteBuffer(std::shared_ptr<Buffer>& Target, const std::ve
 
 	else
 	{
-		VGScopedCPUStat("Write Dynamic");
+		VGScopedCPUStat("Buffer Write Dynamic");
 
 		VGAssert(Target->Description.AccessFlags & AccessFlag::CPUWrite, "Failed to write to dynamic buffer, no CPU write access.");
 		VGAssert(Target->Description.Size + TargetOffset >= Source.size(), "Failed to write to dynamic buffer, source is larger than target.");
@@ -452,7 +450,7 @@ void ResourceManager::WriteBuffer(std::shared_ptr<Buffer>& Target, const std::ve
 
 void ResourceManager::WriteTexture(std::shared_ptr<Texture>& Target, const std::vector<uint8_t>& Source)
 {
-	VGScopedCPUStat("Resource Write");
+	VGScopedCPUStat("Texture Write");
 
 	VGAssert(Target->Description.Width * Target->Description.Height * Target->Description.Depth <= Source.size(), "Failed to write to texture, source is larger than target.");
 
