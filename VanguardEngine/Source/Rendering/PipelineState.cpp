@@ -179,7 +179,7 @@ void PipelineState::Build(RenderDevice& Device, const PipelineStateDescription& 
 	case D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP: Desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE; break;
 	}
 	Desc.NumRenderTargets = 1;  // #TODO: Pull from render graph?
-	Desc.RTVFormats[0] = DXGI_FORMAT_R10G10B10A2_UNORM;
+	Desc.RTVFormats[0] = /*DXGI_FORMAT_R10G10B10A2_UNORM*/ DXGI_FORMAT_B8G8R8A8_UNORM;
 	Desc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 	Desc.SampleDesc = { 1, 0 };  // #TODO: Support multi-sampling.
 	Desc.NodeMask = 0;

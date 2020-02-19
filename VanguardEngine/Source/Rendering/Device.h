@@ -8,6 +8,7 @@
 #include <Rendering/PipelineState.h>
 #include <Rendering/DescriptorHeap.h>
 #include <Rendering/CommandList.h>
+#include <Rendering/Material.h>
 
 #include <D3D12MemAlloc.h>
 
@@ -21,7 +22,6 @@
 #include <Core/Windows/DirectX12Minimal.h>
 #include <dxgi1_6.h>
 
-class RenderDevice;
 struct Buffer;
 struct Texture;
 struct BufferDescription;
@@ -55,13 +55,13 @@ private:
 	ResourcePtr<IDXGIAdapter1> Adapter;
 
 	ResourcePtr<ID3D12CommandQueue> CopyCommandQueue;
-	ResourcePtr<CommandList> CopyCommandList[FrameCount];
+	CommandList CopyCommandList[FrameCount];
 
 	ResourcePtr<ID3D12CommandQueue> DirectCommandQueue;
-	ResourcePtr<CommandList> DirectCommandList[FrameCount];  // #TODO: One per worker thread.
+	CommandList DirectCommandList[FrameCount];  // #TODO: One per worker thread.
 
 	ResourcePtr<ID3D12CommandQueue> ComputeCommandQueue;
-	ResourcePtr<CommandList> ComputeCommandList[FrameCount];  // #TODO: One per worker thread.
+	CommandList ComputeCommandList[FrameCount];  // #TODO: One per worker thread.
 
 	ResourcePtr<IDXGISwapChain3> SwapChain;
 	size_t Frame = 0;  // Stores the actual frame number. Refers to the current CPU frame being run, stepped after finishing CPU pass.
@@ -112,8 +112,8 @@ public:
 	// Logs various data about the device's feature support. Not needed in optimized builds.
 	void CheckFeatureSupport();
 
-	// Builds pipelines.
-	std::vector<PipelineState> ReloadShaders();
+	// Compiles shaders, builds pipelines.
+	std::vector<Material> ReloadMaterials();
 
 	std::shared_ptr<Buffer> CreateResource(const BufferDescription& Description, const std::wstring_view Name);
 	std::shared_ptr<Texture> CreateResource(const TextureDescription& Description, const std::wstring_view Name);
@@ -131,11 +131,11 @@ public:
 	size_t GetFrameIndex() const noexcept { return Frame % RenderDevice::FrameCount; }
 
 	auto* GetCopyQueue() const noexcept { return CopyCommandQueue.Get(); }
-	auto* GetCopyList() const noexcept { return CopyCommandList[GetFrameIndex()].Get(); }
+	auto& GetCopyList() noexcept { return CopyCommandList[GetFrameIndex()]; }
 	auto* GetDirectQueue() const noexcept { return DirectCommandQueue.Get(); }
-	auto* GetDirectList() const noexcept { return DirectCommandList[GetFrameIndex()].Get(); }
+	auto& GetDirectList() noexcept { return DirectCommandList[GetFrameIndex()]; }
 	auto* GetComputeQueue() const noexcept { return ComputeCommandQueue.Get(); }
-	auto* GetComputeList() const noexcept { return ComputeCommandList[GetFrameIndex()].Get(); }
+	auto& GetComputeList() noexcept { return ComputeCommandList[GetFrameIndex()]; }
 	auto* GetSwapChain() const noexcept { return SwapChain.Get(); }
 	auto* GetBackBuffer() const noexcept { return BackBufferTextures[GetFrameIndex()].get(); }
 	auto& GetResourceHeap() noexcept { return ResourceHeaps[GetFrameIndex()]; }

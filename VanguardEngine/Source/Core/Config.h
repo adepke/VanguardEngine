@@ -4,13 +4,13 @@
 
 #include <filesystem>
 
-static std::filesystem::path EngineConfigPath{ "Config/Engine.json" };
+static const std::filesystem::path EngineConfigPath{ "Config/Engine.json" };
 
 class Config
 {
 public:
 	std::filesystem::path EngineRoot;
-	std::filesystem::path ShaderPath;
+	std::filesystem::path MaterialsPath;
 
 public:
 	static inline Config& Get() noexcept

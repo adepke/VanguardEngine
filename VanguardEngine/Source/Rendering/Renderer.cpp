@@ -70,7 +70,7 @@ void Renderer::BeginRenderPass(RenderPass Pass)
 	}
 
 	// #TODO: Replace with render graph barriers.
-	Device->GetDirectList()->Native()->ResourceBarrier(static_cast<UINT>(Barriers.size()), Barriers.data());
+	Device->GetDirectList().Native()->ResourceBarrier(static_cast<UINT>(Barriers.size()), Barriers.data());
 
 	std::vector<D3D12_RENDER_PASS_RENDER_TARGET_DESC> RenderPassTargets;
 	RenderTargets.reserve(RenderTargetViews.size());
@@ -89,14 +89,14 @@ void Renderer::BeginRenderPass(RenderPass Pass)
 		RenderPassTargets.push_back(std::move(PassDesc));
 	}
 
-	Device->GetDirectList()->Native()->BeginRenderPass(static_cast<UINT>(RenderTargets.size()), RenderPassTargets.data(), nullptr, D3D12_RENDER_PASS_FLAG_NONE);  // #TODO: Some passes need D3D12_RENDER_PASS_FLAG_ALLOW_UAV_WRITES.
+	Device->GetDirectList().Native()->BeginRenderPass(static_cast<UINT>(RenderTargets.size()), RenderPassTargets.data(), nullptr, D3D12_RENDER_PASS_FLAG_NONE);  // #TODO: Some passes need D3D12_RENDER_PASS_FLAG_ALLOW_UAV_WRITES.
 }
 
 void Renderer::EndRenderPass(RenderPass Pass)
 {
 	VGScopedCPUStat("End Render Pass");
 
-	Device->GetDirectList()->Native()->EndRenderPass();
+	Device->GetDirectList().Native()->EndRenderPass();
 
 	auto [RenderTargets, RenderTargetViews] = GetPassRenderTargets(Pass);
 
@@ -117,7 +117,7 @@ void Renderer::EndRenderPass(RenderPass Pass)
 	}
 
 	// #TODO: Replace with render graph barriers.
-	Device->GetDirectList()->Native()->ResourceBarrier(static_cast<UINT>(Barriers.size()), Barriers.data());
+	Device->GetDirectList().Native()->ResourceBarrier(static_cast<UINT>(Barriers.size()), Barriers.data());
 }
 
 void Renderer::SetDescriptorHeaps(CommandList& List)
@@ -139,16 +139,16 @@ void Renderer::Initialize(std::unique_ptr<RenderDevice>&& InDevice)
 	Device = std::move(InDevice);
 
 	Device->CheckFeatureSupport();
-	PipelineStates = std::move(Device->ReloadShaders());
+	Materials = std::move(Device->ReloadMaterials());
 }
 
 void Renderer::Render(entt::registry& Registry)
 {
 	VGScopedCPUStat("Render");
 
-	Device->GetCopyList()->Close();
+	Device->GetCopyList().Close();
 	
-	ID3D12CommandList* CopyLists[] = { Device->GetCopyList()->Native() };
+	ID3D12CommandList* CopyLists[] = { Device->GetCopyList().Native() };
 
 	{
 		VGScopedCPUStat("Execute Copy");
@@ -161,7 +161,7 @@ void Renderer::Render(entt::registry& Registry)
 	// #TODO: Sort by material.
 	
 	// Number of entities with MeshComponent and TransformComponent
-	const auto RenderCount = 0;
+	const auto RenderCount = 10;
 
 	std::pair<std::shared_ptr<Buffer>, size_t> InstanceBuffer;
 
@@ -170,7 +170,8 @@ void Renderer::Render(entt::registry& Registry)
 
 		InstanceBuffer = std::move(Device->FrameAllocate(sizeof(EntityInstance) * RenderCount));
 
-		Registry.view<const TransformComponent, const MeshComponent>().each([this, &InstanceBuffer](auto Entity, const auto& Transform, const auto&)
+		size_t Index = 0;
+		Registry.view<const TransformComponent, const MeshComponent>().each([this, &InstanceBuffer, &Index](auto Entity, const auto& Transform, const auto&)
 			{
 				EntityInstance Instance{ Transform };
 
@@ -178,22 +179,24 @@ void Renderer::Render(entt::registry& Registry)
 				InstanceData.resize(sizeof(EntityInstance));
 				std::memcpy(InstanceData.data(), &Instance, InstanceData.size());
 
-				Device->WriteResource(InstanceBuffer.first, InstanceData, InstanceBuffer.second);
+				Device->WriteResource(InstanceBuffer.first, InstanceData, InstanceBuffer.second + (Index * sizeof(EntityInstance)));
+
+				++Index;
 			});
 	}
 
 	// Global to all render passes.
-	SetDescriptorHeaps(*Device->GetDirectList());
+	SetDescriptorHeaps(Device->GetDirectList());
 
 	// #TEMP: After barrier, but before anything related to pass.
 	BeginRenderPass(RenderPass::Main);
 
-	auto* DrawList = Device->GetDirectList()->Native();
+	auto* DrawList = Device->GetDirectList().Native();
 
 	{
 		VGScopedCPUStat("Main Pass");
 
-		Registry.view<const TransformComponent, const MeshComponent>().each([&InstanceBuffer, DrawList](auto Entity, const auto&, const auto& Mesh)
+		Registry.view<const TransformComponent, const MeshComponent>().each([&InstanceBuffer, DrawList, this](auto Entity, const auto&, const auto& Mesh)
 			{
 				std::vector<D3D12_VERTEX_BUFFER_VIEW> VertexViews;
 
@@ -218,9 +221,10 @@ void Renderer::Render(entt::registry& Registry)
 
 				DrawList->IASetIndexBuffer(&IndexView);
 
-				//DrawList->OMSetStencilRef();  // #TODO: Stencil ref.
+				DrawList->OMSetStencilRef(0);  // #TODO: Stencil ref.
 
-				// #TODO: Bind the pipeline.
+				// #TEMP: Experimenting with pipeline binding.
+				Device->GetDirectList().BindPipelineState(*Materials[0].Pipeline);
 
 				DrawList->DrawIndexedInstanced(Mesh.IndexBuffer->Description.Size / sizeof(uint32_t), 1, 0, 0, 0);
 			});
@@ -229,10 +233,10 @@ void Renderer::Render(entt::registry& Registry)
 	// #TEMP: After execute?
 	EndRenderPass(RenderPass::Main);
 
+	DrawList->Close();
+
 	// Sync the copy engine so we're sure that all the resources are ready on the GPU. In the future this can be split up into separate sync groups (pre, main, post, etc.) to reduce idle time.
 	Device->Sync(SyncType::Copy);
-
-	DrawList->Close();
 
 	ID3D12CommandList* DirectLists[] = { DrawList };
 

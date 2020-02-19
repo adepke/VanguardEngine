@@ -4,12 +4,15 @@
 #include <Rendering/ResourceManager.h>
 #include <Rendering/Buffer.h>
 #include <Rendering/Texture.h>
+#include <Rendering/Material.h>
 #include <Core/Config.h>
 
 #include <filesystem>
 #include <algorithm>
+#include <fstream>
 
 #include <wrl/client.h>
+#include <json.hpp>  // Needed for materials.
 
 ResourcePtr<IDXGIAdapter1> RenderDevice::GetAdapter(ResourcePtr<IDXGIFactory7>& Factory, bool Software)
 {
@@ -55,19 +58,19 @@ void RenderDevice::SetNames()
 	CopyCommandQueue->SetName(VGText("Copy Command Queue"));
 	for (auto Index = 0; Index < FrameCount; ++Index)
 	{
-		CopyCommandList[Index]->SetName(VGText("Copy Command List"));
+		CopyCommandList[Index].SetName(VGText("Copy Command List"));
 	}
 
 	DirectCommandQueue->SetName(VGText("Direct Command Queue"));
 	for (auto Index = 0; Index < FrameCount; ++Index)
 	{
-		DirectCommandList[Index]->SetName(VGText("Direct Command List"));
+		DirectCommandList[Index].SetName(VGText("Direct Command List"));
 	}
 
 	ComputeCommandQueue->SetName(VGText("Compute Command Queue"));
 	for (auto Index = 0; Index < FrameCount; ++Index)
 	{
-		ComputeCommandList[Index]->SetName(VGText("Compute Command List"));
+		ComputeCommandList[Index].SetName(VGText("Compute Command List"));
 	}
 
 	CopyFence->SetName(VGText("Copy Fence"));
@@ -120,37 +123,73 @@ void RenderDevice::SetupRenderTargets()
 	}
 }
 
-std::vector<PipelineState> RenderDevice::ReloadShaders()
+std::vector<Material> RenderDevice::ReloadMaterials()
 {
-	VGScopedCPUStat("Reload Shaders");
+	VGScopedCPUStat("Reload Materials");
 
-	VGLog(Rendering) << "Reloading shaders.";
+	VGLog(Rendering) << "Reloading materials.";
 
-	std::vector<PipelineState> PipelineStates;
-	std::vector<std::wstring> BuiltShaders;
+	std::vector<Material> Materials;
 
-	for (const auto& Entry : std::filesystem::directory_iterator{ Config::Get().ShaderPath })
+	for (const auto& Entry : std::filesystem::directory_iterator{ Config::Get().MaterialsPath })
 	{
-		auto ShaderName = Entry.path().filename().replace_extension("").generic_wstring();
-		ShaderName = ShaderName.substr(0, ShaderName.size() - 3);  // Remove the shader type extension.
-		
-		if (std::find(BuiltShaders.begin(), BuiltShaders.end(), ShaderName) == BuiltShaders.end())
+		// #TODO: Move to standardized asset loading pipeline.
+
+		std::ifstream MaterialStream{ Entry };
+
+		if (!MaterialStream.is_open())
 		{
-			PipelineStateDescription Desc{};
-			Desc.ShaderPath = Entry.path().parent_path() / ShaderName;
-			Desc.BlendDescription;  // #TEMP
-			Desc.RasterizerDescription;  // #TEMP
-			Desc.DepthStencilDescription;  // #TEMP
-
-			PipelineState Pipeline{};
-			Pipeline.Build(*this, Desc);  // #TODO: Pipeline libraries.
-			PipelineStates.push_back(std::move(Pipeline));
-
-			BuiltShaders.push_back(std::move(ShaderName));
+			VGLogError(Rendering) << "Failed to open material asset at '" << Entry.path().generic_wstring() << "'.";
+			continue;
 		}
+
+		nlohmann::json MaterialData;
+		MaterialStream >> MaterialData;
+
+		Material NewMat{};
+
+		auto MaterialShaders = MaterialData["Shaders"].get<std::string>();
+		NewMat.BackFaceCulling = MaterialData["BackFaceCulling"].get<bool>();
+
+		PipelineStateDescription Desc{};
+		Desc.ShaderPath = Config::Get().EngineRoot / MaterialShaders;
+		Desc.BlendDescription.AlphaToCoverageEnable = false;
+		Desc.BlendDescription.IndependentBlendEnable = false;
+		Desc.BlendDescription.RenderTarget[0] = {};  // Default blending for now.
+		Desc.RasterizerDescription.FillMode = D3D12_FILL_MODE_SOLID;  // #TODO: Support wire frame rendering.
+		Desc.RasterizerDescription.CullMode = NewMat.BackFaceCulling ? D3D12_CULL_MODE_BACK : D3D12_CULL_MODE_NONE;
+		Desc.RasterizerDescription.FrontCounterClockwise = false;
+		Desc.RasterizerDescription.DepthBias = 0;
+		Desc.RasterizerDescription.DepthBiasClamp = 0.f;
+		Desc.RasterizerDescription.SlopeScaledDepthBias = 0.f;
+		Desc.RasterizerDescription.DepthClipEnable = true;
+		Desc.RasterizerDescription.MultisampleEnable = false;  // #TODO: Support multi-sampling.
+		Desc.RasterizerDescription.AntialiasedLineEnable = false;  // #TODO: Support anti-aliasing.
+		Desc.RasterizerDescription.ForcedSampleCount = 0;
+		Desc.RasterizerDescription.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+		Desc.DepthStencilDescription.DepthEnable = true;
+		Desc.DepthStencilDescription.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+		Desc.DepthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+		Desc.DepthStencilDescription.StencilEnable = false;  // #TODO: Support stencil.
+		Desc.DepthStencilDescription.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
+		Desc.DepthStencilDescription.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
+		Desc.DepthStencilDescription.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+		Desc.DepthStencilDescription.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+		Desc.DepthStencilDescription.FrontFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
+		Desc.DepthStencilDescription.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+		Desc.DepthStencilDescription.BackFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+		Desc.DepthStencilDescription.BackFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+		Desc.DepthStencilDescription.BackFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
+		Desc.DepthStencilDescription.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+		Desc.Topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+
+		NewMat.Pipeline = std::make_unique<PipelineState>();
+		NewMat.Pipeline->Build(*this, Desc);  // #TODO: Pipeline libraries.
+
+		Materials.push_back(std::move(NewMat));
 	}
 
-	return std::move(PipelineStates);
+	return std::move(Materials);
 }
 
 std::shared_ptr<Buffer> RenderDevice::CreateResource(const BufferDescription& Description, const std::wstring_view Name)
@@ -179,13 +218,13 @@ void RenderDevice::ResetFrame(size_t FrameID)
 
 	const auto FrameIndex = FrameID % FrameCount;
 
-	auto Result = CopyCommandList[FrameIndex]->Reset();
+	auto Result = CopyCommandList[FrameIndex].Reset();
 	if (FAILED(Result))
 	{
 		VGLogError(Rendering) << "Failed to reset copy command list for frame " << FrameIndex << ": " << Result;
 	}
 
-	Result = DirectCommandList[FrameIndex]->Reset();
+	Result = DirectCommandList[FrameIndex].Reset();
 	if (FAILED(Result))
 	{
 		VGLogError(Rendering) << "Failed to reset direct command list for frame " << FrameIndex << ": " << Result;
@@ -193,7 +232,7 @@ void RenderDevice::ResetFrame(size_t FrameID)
 
 	// #TODO: Implement compute.
 	/*
-	Result = ComputeCommandList[FrameIndex]->Reset();
+	Result = ComputeCommandList[FrameIndex].Reset();
 	if (FAILED(Result))
 	{
 		VGLogError(Rendering) << "Failed to reset compute command list for frame " << FrameIndex << ": " << Result;
@@ -286,12 +325,12 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 
 	for (int Index = 0; Index < FrameCount; ++Index)
 	{
-		CopyCommandList[Index]->Create(*this, D3D12_COMMAND_LIST_TYPE_COPY);
+		CopyCommandList[Index].Create(*this, D3D12_COMMAND_LIST_TYPE_COPY);
 
 		// Close all lists except the current frame's list.
 		if (Index > 0)
 		{
-			CopyCommandList[Index]->Native()->Close();
+			CopyCommandList[Index].Native()->Close();
 		}
 	}
 
@@ -311,12 +350,12 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 
 	for (int Index = 0; Index < FrameCount; ++Index)
 	{
-		CopyCommandList[Index]->Create(*this, D3D12_COMMAND_LIST_TYPE_DIRECT);
+		DirectCommandList[Index].Create(*this, D3D12_COMMAND_LIST_TYPE_DIRECT);
 
 		// Close all lists except the current frame's list.
 		if (Index > 0)
 		{
-			DirectCommandList[Index]->Native()->Close();
+			DirectCommandList[Index].Native()->Close();
 		}
 	}
 
@@ -336,12 +375,12 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 
 	for (int Index = 0; Index < FrameCount; ++Index)
 	{
-		CopyCommandList[Index]->Create(*this, D3D12_COMMAND_LIST_TYPE_COMPUTE);
+		ComputeCommandList[Index].Create(*this, D3D12_COMMAND_LIST_TYPE_COMPUTE);
 
 		// Close all lists except the current frame's list.
 		if (Index > 0)
 		{
-			ComputeCommandList[Index]->Native()->Close();
+			ComputeCommandList[Index].Native()->Close();
 		}
 	}
 
@@ -415,7 +454,9 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		VGLogFatal(Rendering) << "Failed to create compute fence event: " << GetPlatformError();
 	}
 
-	constexpr auto FrameBufferSize = 1024 * 1024 * 64;
+	SetupDescriptorHeaps();
+
+	constexpr auto FrameBufferSize = 1024 * 64;
 
 	// Allocate frame buffers.
 	for (auto Index = 0; Index < FrameCount; ++Index)
@@ -430,7 +471,6 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		FrameBuffers[Index] = std::move(AllocatorManager.AllocateBuffer(Description, VGText("Frame Buffer")));
 	}
 
-	SetupDescriptorHeaps();
 	SetupRenderTargets();
 
 	if (Debugging)
