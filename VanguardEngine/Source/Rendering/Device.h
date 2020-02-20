@@ -4,6 +4,7 @@
 
 #include <Rendering/Base.h>
 #include <Rendering/Resource.h>
+#include <Rendering/Adapter.h>  // #TODO: Including this before D3D12MemAlloc.h causes an array of errors, this needs to be fixed.
 #include <Rendering/ResourceManager.h>
 #include <Rendering/PipelineState.h>
 #include <Rendering/DescriptorHeap.h>
@@ -18,9 +19,6 @@
 #include <utility>
 #include <vector>
 #include <limits>
-
-#include <Core/Windows/DirectX12Minimal.h>
-#include <dxgi1_6.h>
 
 struct Buffer;
 struct Texture;
@@ -52,7 +50,7 @@ private:
 
 	// #NOTE: Ordering of these variables is significant for proper destruction!
 	ResourcePtr<ID3D12Device3> Device;
-	ResourcePtr<IDXGIAdapter1> Adapter;
+	Adapter RenderAdapter;
 
 	ResourcePtr<ID3D12CommandQueue> CopyCommandQueue;
 	CommandList CopyCommandList[FrameCount];
@@ -91,8 +89,6 @@ private:
 	std::array<DescriptorHeap, FrameCount> SamplerHeaps;
 	DescriptorHeap RenderTargetHeap;
 	DescriptorHeap DepthStencilHeap;
-
-	ResourcePtr<IDXGIAdapter1> GetAdapter(ResourcePtr<IDXGIFactory7>& Factory, bool Software);
 
 	// Name the D3D objects.
 	void SetNames();
