@@ -13,6 +13,8 @@
 
 void ResourceManager::CreateResourceViews(std::shared_ptr<Buffer>& Target)
 {
+	VGScopedCPUStat("Create Buffer Views");
+
 	if (Target->Description.BindFlags & BindFlag::ConstantBuffer)
 	{
 		Target->CBV = Device->GetResourceHeap().Allocate();
@@ -71,6 +73,8 @@ void ResourceManager::CreateResourceViews(std::shared_ptr<Buffer>& Target)
 
 void ResourceManager::CreateResourceViews(std::shared_ptr<Texture>& Target)
 {
+	VGScopedCPUStat("Create Texture Views");
+
 	if (Target->Description.BindFlags & BindFlag::RenderTarget)
 	{
 		Target->RTV = Device->GetRenderTargetHeap().Allocate();
@@ -234,7 +238,7 @@ void ResourceManager::Initialize(RenderDevice* InDevice, size_t BufferedFrames)
 
 std::shared_ptr<Buffer> ResourceManager::AllocateBuffer(const BufferDescription& Description, const std::wstring_view Name)
 {
-	VGScopedCPUStat("Resource Manager Allocate");
+	VGScopedCPUStat("Allocate Buffer");
 
 	const auto Alignment = Description.BindFlags & BindFlag::ConstantBuffer ? D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT : D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
 	const auto FinalSize = AlignedSize(Description.Size, static_cast<size_t>(Alignment));
@@ -292,7 +296,7 @@ std::shared_ptr<Buffer> ResourceManager::AllocateBuffer(const BufferDescription&
 
 std::shared_ptr<Texture> ResourceManager::AllocateTexture(const TextureDescription& Description, const std::wstring_view Name)
 {
-	VGScopedCPUStat("Resource Manager Allocate");
+	VGScopedCPUStat("Allocate Texture");
 
 	// Early validation.
 	VGAssert(Description.UpdateRate != ResourceFrequency::Dynamic, "Failed to create texture, cannot have dynamic update rate.");
@@ -377,15 +381,17 @@ std::shared_ptr<Texture> ResourceManager::AllocateTexture(const TextureDescripti
 	return std::move(Allocation);
 }
 
-std::shared_ptr<Texture> ResourceManager::ResourceFromSwapChain(void* Surface, const std::wstring_view Name)
+std::shared_ptr<Texture> ResourceManager::TextureFromSwapChain(void* Surface, const std::wstring_view Name)
 {
+	VGScopedCPUStat("Texture From Swap Chain");
+
 	TextureDescription Description{};
 	Description.UpdateRate = ResourceFrequency::Static;
 	Description.BindFlags = BindFlag::RenderTarget;
 	Description.AccessFlags = AccessFlag::GPUWrite;
 	Description.InitialState = D3D12_RESOURCE_STATE_RENDER_TARGET;
-	Description.Width = Device->RenderWidth;
-	Description.Height = Device->RenderHeight;
+	Description.Width = static_cast<uint32_t>(Device->RenderWidth);
+	Description.Height = static_cast<uint32_t>(Device->RenderHeight);
 	Description.Depth = 1;
 	Description.Format = /*DXGI_FORMAT_R10G10B10A2_UNORM*/ DXGI_FORMAT_B8G8R8A8_UNORM;
 
@@ -407,16 +413,19 @@ void ResourceManager::WriteBuffer(std::shared_ptr<Buffer>& Target, const std::ve
 	{
 		VGScopedCPUStat("Buffer Write Static");
 
+		VGAssert(Target->Description.AccessFlags & AccessFlag::CPUWrite, "Failed to write to static buffer, no CPU write access.");
 		VGAssert(Target->Description.Size + TargetOffset <= Source.size(), "Failed to write to static buffer, source buffer is larger than target.");
 
 		const auto FrameIndex = Device->GetFrameIndex();
+
+		VGAssert(UploadOffsets[FrameIndex] + Source.size() <= UploadResources[FrameIndex]->GetResource()->GetDesc().Width, "Failed to write to static buffer, exhausted frame upload heap.");
 
 		std::memcpy(static_cast<uint8_t*>(UploadPtrs[FrameIndex]) + UploadOffsets[FrameIndex], Source.data(), Source.size());
 
 		// #TODO: Resource barrier?
 
 		auto* TargetCommandList = Device->GetCopyList().Native();
-		TargetCommandList->CopyBufferRegion(Target->Native(), TargetOffset, UploadResources[FrameIndex]->GetResource(), UploadOffsets[FrameIndex], Source.size());
+		TargetCommandList->CopyBufferRegion(Target->Native(), TargetOffset, UploadResources[FrameIndex]->GetResource(), UploadOffsets[FrameIndex], Source.size());  // #TODO: If we have offsets of 0, use CopyResource.
 
 		// #TODO: Resource barrier?
 
@@ -452,16 +461,43 @@ void ResourceManager::WriteTexture(std::shared_ptr<Texture>& Target, const std::
 {
 	VGScopedCPUStat("Texture Write");
 
+	VGAssert(Target->Description.AccessFlags & AccessFlag::CPUWrite, "Failed to write to texture, no CPU write access.");
 	VGAssert(Target->Description.Width * Target->Description.Height * Target->Description.Depth <= Source.size(), "Failed to write to texture, source is larger than target.");
 
 	const auto FrameIndex = Device->GetFrameIndex();
 
+	VGAssert(UploadOffsets[FrameIndex] + Source.size() <= UploadResources[FrameIndex]->GetResource()->GetDesc().Width, "Failed to write to texture, exhausted frame upload heap.");
+
 	std::memcpy(static_cast<uint8_t*>(UploadPtrs[FrameIndex]) + UploadOffsets[FrameIndex], Source.data(), Source.size());
+
+	D3D12_TEXTURE_COPY_LOCATION SourceCopyDesc{};
+	SourceCopyDesc.pResource = UploadResources[FrameIndex]->GetResource();
+	SourceCopyDesc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+	SourceCopyDesc.PlacedFootprint.Offset = UploadOffsets[FrameIndex];
+	SourceCopyDesc.PlacedFootprint.Footprint.Format = Target->Description.Format;
+	SourceCopyDesc.PlacedFootprint.Footprint.Width = Target->Description.Width;  // #TODO: Support custom copy sizes.
+	SourceCopyDesc.PlacedFootprint.Footprint.Height = Target->Description.Height;
+	SourceCopyDesc.PlacedFootprint.Footprint.Depth = Target->Description.Depth;
+	SourceCopyDesc.PlacedFootprint.Footprint.RowPitch = D3D12_TEXTURE_DATA_PITCH_ALIGNMENT * 256;  // #TODO: Properly determine this number from the source data?
+
+	D3D12_TEXTURE_COPY_LOCATION TargetCopyDesc{};
+	TargetCopyDesc.pResource = Target->Native();
+	TargetCopyDesc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+	TargetCopyDesc.SubresourceIndex = 0;
+
+	// #TODO: Support custom copy sizes.
+	D3D12_BOX SourceBox{};
+	SourceBox.left = 0;
+	SourceBox.top = 0;
+	SourceBox.front = 0;
+	SourceBox.right = Target->Description.Width;
+	SourceBox.bottom = Target->Description.Height;
+	SourceBox.back = Target->Description.Depth;
 
 	// #TODO: Resource barrier?
 
 	auto* TargetCommandList = Device->GetCopyList().Native();
-	TargetCommandList->CopyBufferRegion(Target->Native(), 0, UploadResources[FrameIndex]->GetResource(), UploadOffsets[FrameIndex], Source.size());
+	TargetCommandList->CopyTextureRegion(&TargetCopyDesc, 0, 0, 0, &SourceCopyDesc, &SourceBox);  // #TODO: If we have offsets of 0, use CopyResource.
 
 	// #TODO: Resource barrier?
 

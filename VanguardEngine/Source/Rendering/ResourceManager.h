@@ -48,7 +48,7 @@ public:
 	std::shared_ptr<Texture> AllocateTexture(const TextureDescription& Description, const std::wstring_view Name);
 	
 	// Creates a texture from the swap chain surface.
-	std::shared_ptr<Texture> ResourceFromSwapChain(void* Surface, const std::wstring_view Name);
+	std::shared_ptr<Texture> TextureFromSwapChain(void* Surface, const std::wstring_view Name);
 
 	// Source data can be discarded immediately.
 	void WriteBuffer(std::shared_ptr<Buffer>& Target, const std::vector<uint8_t>& Source, size_t TargetOffset = 0);
