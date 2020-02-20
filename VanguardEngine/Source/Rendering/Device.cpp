@@ -474,7 +474,7 @@ void RenderDevice::CheckFeatureSupport()
 		}
 	}
 
-	D3D12_FEATURE_DATA_FEATURE_LEVELS FeatureLevels{};
+	D3D12_FEATURE_DATA_FEATURE_LEVELS FeatureLevels{ 1, &FeatureLevel };
 	Result = Device->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS, &FeatureLevels, sizeof(FeatureLevels));
 	if (FAILED(Result))
 	{
@@ -483,8 +483,6 @@ void RenderDevice::CheckFeatureSupport()
 
 	else
 	{
-		VGLog(Rendering) << "Device has " << FeatureLevels.NumFeatureLevels << " feature levels.";
-
 		switch (FeatureLevels.MaxSupportedFeatureLevel)
 		{
 		case D3D_FEATURE_LEVEL_11_0: VGLog(Rendering) << "Device max feature level is 11.0."; break;
@@ -504,7 +502,7 @@ void RenderDevice::CheckFeatureSupport()
 		}
 	}
 
-	D3D12_FEATURE_DATA_SHADER_MODEL ShaderModel{};
+	D3D12_FEATURE_DATA_SHADER_MODEL ShaderModel{ D3D_SHADER_MODEL_6_5 };
 	Result = Device->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &ShaderModel, sizeof(ShaderModel));
 	if (FAILED(Result))
 	{
@@ -535,7 +533,7 @@ void RenderDevice::CheckFeatureSupport()
 		}
 	}
 
-	D3D12_FEATURE_DATA_ROOT_SIGNATURE RootSignature{};
+	D3D12_FEATURE_DATA_ROOT_SIGNATURE RootSignature{ D3D_ROOT_SIGNATURE_VERSION_1_1 };
 	Result = Device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &RootSignature, sizeof(RootSignature));
 	if (FAILED(Result))
 	{
