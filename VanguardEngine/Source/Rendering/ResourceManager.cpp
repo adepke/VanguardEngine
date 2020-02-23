@@ -219,7 +219,7 @@ void ResourceManager::Initialize(RenderDevice* InDevice, size_t BufferedFrames)
 		{
 			VGLogError(Rendering) << "Failed to allocate write upload resource: " << Result;
 
-			return;
+			continue;
 		}
 
 		D3D12_RANGE Range{ 0, 0 };
@@ -228,6 +228,8 @@ void ResourceManager::Initialize(RenderDevice* InDevice, size_t BufferedFrames)
 		if (FAILED(Result))
 		{
 			VGLogError(Rendering) << "Failed to map upload resource: " << Result;
+
+			continue;
 		}
 
 		UploadResources[Index] = std::move(ResourcePtr<D3D12MA::Allocation>{ AllocationHandle });
