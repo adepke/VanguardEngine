@@ -58,7 +58,7 @@ void EngineLoop()
 {
 	entt::registry TempReg;
 
-	for (auto Index = 0; Index < 10; ++Index)
+	for (int Index = 0; Index < 10; ++Index)
 	{
 		auto Mesh{ CreateMeshComponent(*Renderer::Get().Device, std::vector<Vertex>{ Vertex{}, Vertex{}, Vertex{} }, std::vector<uint32_t>{ 0, 1, 2 }) };
 

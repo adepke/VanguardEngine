@@ -192,7 +192,7 @@ void ResourceManager::Initialize(RenderDevice* InDevice, size_t BufferedFrames)
 
 	constexpr auto UploadResourceSize = 1024 * 1024 * 64;
 
-	for (auto Index = 0; Index < FrameCount; ++Index)
+	for (uint32_t Index = 0; Index < FrameCount; ++Index)
 	{
 		D3D12_RESOURCE_DESC ResourceDesc{};
 		ResourceDesc.Alignment = 0;

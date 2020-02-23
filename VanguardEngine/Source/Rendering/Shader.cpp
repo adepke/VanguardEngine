@@ -29,7 +29,7 @@ void ReflectShader(std::unique_ptr<Shader>& InShader, ID3DBlob* Blob, const std:
 	}
 
 	InShader->Reflection.InputElements.reserve(ShaderDesc.InputParameters);
-	for (auto Index = 0; Index < ShaderDesc.InputParameters; ++Index)
+	for (uint32_t Index = 0; Index < ShaderDesc.InputParameters; ++Index)
 	{
 		D3D12_SIGNATURE_PARAMETER_DESC ParameterDesc;
 
@@ -86,7 +86,7 @@ void ReflectShader(std::unique_ptr<Shader>& InShader, ID3DBlob* Blob, const std:
 	}
 
 	InShader->Reflection.ConstantBuffers.reserve(ShaderDesc.ConstantBuffers);
-	for (auto Index = 0; Index < ShaderDesc.ConstantBuffers; ++Index)
+	for (uint32_t Index = 0; Index < ShaderDesc.ConstantBuffers; ++Index)
 	{
 		auto* ConstantBufferReflection = ShaderReflection->GetConstantBufferByIndex(Index);
 		D3D12_SHADER_BUFFER_DESC BufferDesc;
@@ -101,7 +101,7 @@ void ReflectShader(std::unique_ptr<Shader>& InShader, ID3DBlob* Blob, const std:
 	}
 
 	InShader->Reflection.ResourceBindings.reserve(ShaderDesc.BoundResources);
-	for (auto Index = 0; Index < ShaderDesc.BoundResources; ++Index)
+	for (uint32_t Index = 0; Index < ShaderDesc.BoundResources; ++Index)
 	{
 		D3D12_SHADER_INPUT_BIND_DESC BindDesc;
 		Result = ShaderReflection->GetResourceBindingDesc(Index, &BindDesc);

@@ -21,19 +21,19 @@ void RenderDevice::SetNames()
 	Device->SetName(VGText("Primary Render Device"));
 
 	CopyCommandQueue->SetName(VGText("Copy Command Queue"));
-	for (auto Index = 0; Index < FrameCount; ++Index)
+	for (uint32_t Index = 0; Index < FrameCount; ++Index)
 	{
 		CopyCommandList[Index].SetName(VGText("Copy Command List"));
 	}
 
 	DirectCommandQueue->SetName(VGText("Direct Command Queue"));
-	for (auto Index = 0; Index < FrameCount; ++Index)
+	for (uint32_t Index = 0; Index < FrameCount; ++Index)
 	{
 		DirectCommandList[Index].SetName(VGText("Direct Command List"));
 	}
 
 	ComputeCommandQueue->SetName(VGText("Compute Command Queue"));
-	for (auto Index = 0; Index < FrameCount; ++Index)
+	for (uint32_t Index = 0; Index < FrameCount; ++Index)
 	{
 		ComputeCommandList[Index].SetName(VGText("Compute Command List"));
 	}
@@ -42,7 +42,7 @@ void RenderDevice::SetNames()
 	DirectFence->SetName(VGText("Direct Fence"));
 	ComputeFence->SetName(VGText("Compute Fence"));
 
-	for (auto Index = 0; Index < FrameCount; ++Index)
+	for (uint32_t Index = 0; Index < FrameCount; ++Index)
 	{
 		ResourceHeaps[Index].SetName(VGText("Resource Heap"));
 		SamplerHeaps[Index].SetName(VGText("Sampler Heap"));
@@ -56,7 +56,7 @@ void RenderDevice::SetupDescriptorHeaps()
 {
 	VGScopedCPUStat("Setup Descriptor Heaps");
 
-	for (auto Index = 0; Index < FrameCount; ++Index)
+	for (uint32_t Index = 0; Index < FrameCount; ++Index)
 	{
 		ResourceHeaps[Index].Initialize(*this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, ResourceDescriptors);
 		SamplerHeaps[Index].Initialize(*this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, SamplerDescriptors);
@@ -72,7 +72,7 @@ void RenderDevice::SetupRenderTargets()
 
 	HRESULT Result;
 
-	for (auto Index = 0; Index < FrameCount; ++Index)
+	for (uint32_t Index = 0; Index < FrameCount; ++Index)
 	{
 		ID3D12Resource* IntermediateResource;
 
@@ -414,7 +414,7 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 	constexpr auto FrameBufferSize = 1024 * 64;
 
 	// Allocate frame buffers.
-	for (auto Index = 0; Index < FrameCount; ++Index)
+	for (uint32_t Index = 0; Index < FrameCount; ++Index)
 	{
 		BufferDescription Description{};
 		Description.Size = FrameBufferSize;
