@@ -5,7 +5,6 @@
 #include <Rendering/Base.h>
 
 #include <Core/Windows/DirectX12Minimal.h>
-#include <dxgi1_6.h>
 
 class Adapter
 {
