@@ -243,9 +243,9 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		VGLogFatal(Rendering) << "Failed to create render device factory: " << Result;
 	}
 
-	RenderAdapter.Initialize(Factory, FeatureLevel, Software);
+	RenderAdapter.Initialize(Factory, TargetFeatureLevel, Software);
 
-	Result = D3D12CreateDevice(RenderAdapter.Native(), FeatureLevel, IID_PPV_ARGS(Device.Indirect()));
+	Result = D3D12CreateDevice(RenderAdapter.Native(), TargetFeatureLevel, IID_PPV_ARGS(Device.Indirect()));
 	if (FAILED(Result))
 	{
 		VGLogFatal(Rendering) << "Failed to create render device: " << Result;
@@ -474,7 +474,7 @@ void RenderDevice::CheckFeatureSupport()
 		}
 	}
 
-	D3D12_FEATURE_DATA_FEATURE_LEVELS FeatureLevels{ 1, &FeatureLevel };
+	D3D12_FEATURE_DATA_FEATURE_LEVELS FeatureLevels{ 1, &TargetFeatureLevel };
 	Result = Device->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS, &FeatureLevels, sizeof(FeatureLevels));
 	if (FAILED(Result))
 	{
@@ -502,7 +502,7 @@ void RenderDevice::CheckFeatureSupport()
 		}
 	}
 
-	D3D12_FEATURE_DATA_SHADER_MODEL ShaderModel{ D3D_SHADER_MODEL_6_5 };
+	D3D12_FEATURE_DATA_SHADER_MODEL ShaderModel{ D3D_SHADER_MODEL_6_5 };  // Highest shader model available.
 	Result = Device->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &ShaderModel, sizeof(ShaderModel));
 	if (FAILED(Result))
 	{

@@ -46,7 +46,8 @@ public:
 	static constexpr uint32_t FrameCount = 3;  // #TODO: Determine at runtime.
 
 private:
-	const D3D_FEATURE_LEVEL FeatureLevel = D3D_FEATURE_LEVEL_12_1;
+	const D3D_FEATURE_LEVEL TargetFeatureLevel = D3D_FEATURE_LEVEL_12_1;
+	const D3D_SHADER_MODEL TargetShaderModel = D3D_SHADER_MODEL_6_3;
 
 	// #NOTE: Ordering of these variables is significant for proper destruction!
 	ResourcePtr<ID3D12Device3> Device;
