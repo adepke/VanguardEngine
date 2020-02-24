@@ -33,11 +33,6 @@ void CommandList::BindPipelineState(PipelineState& State)
 	List->SetPipelineState(State.Native());
 }
 
-void CommandList::AddResourceBarrier(TransitionBarrier Barrier)
-{
-	TransitionBarriers.push_back(std::move(Barrier));
-}
-
 HRESULT CommandList::Close()
 {
 	return List->Close();
@@ -45,8 +40,6 @@ HRESULT CommandList::Close()
 
 HRESULT CommandList::Reset()
 {
-	TransitionBarriers.clear();
-
 	auto Result = Allocator->Reset();
 	if (FAILED(Result))
 	{
