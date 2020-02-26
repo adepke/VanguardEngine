@@ -483,19 +483,19 @@ void RenderDevice::CheckFeatureSupport()
 	{
 		switch (FeatureLevels.MaxSupportedFeatureLevel)
 		{
-		case D3D_FEATURE_LEVEL_11_0: VGLog(Rendering) << "Device max feature level is 11.0."; break;
-		case D3D_FEATURE_LEVEL_11_1: VGLog(Rendering) << "Device max feature level is 11.1."; break;
-		case D3D_FEATURE_LEVEL_12_0: VGLog(Rendering) << "Device max feature level is 12.0."; break;
-		case D3D_FEATURE_LEVEL_12_1: VGLog(Rendering) << "Device max feature level is 12.1."; break;
+		case D3D_FEATURE_LEVEL_11_0: VGLog(Rendering) << "Device supports feature level 11.0."; break;
+		case D3D_FEATURE_LEVEL_11_1: VGLog(Rendering) << "Device supports feature level 11.1."; break;
+		case D3D_FEATURE_LEVEL_12_0: VGLog(Rendering) << "Device supports feature level 12.0."; break;
+		case D3D_FEATURE_LEVEL_12_1: VGLog(Rendering) << "Device supports feature level 12.1."; break;
 		default:
 			if (FeatureLevels.MaxSupportedFeatureLevel < D3D_FEATURE_LEVEL_11_0)
 			{
-				VGLog(Rendering) << "Device max feature level is prior to 11.0.";
+				VGLog(Rendering) << "Device supports feature level prior to 11.0.";
 			}
 
 			else
 			{
-				VGLog(Rendering) << "Device max feature level is newer than 12.1.";
+				VGLog(Rendering) << "Device supports feature level newer than 12.1.";
 			}
 		}
 	}
