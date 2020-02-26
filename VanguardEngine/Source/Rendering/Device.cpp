@@ -83,8 +83,6 @@ void RenderDevice::SetupRenderTargets()
 		}
 
 		BackBufferTextures[Index] = std::move(AllocatorManager.TextureFromSwapChain(static_cast<void*>(IntermediateResource), VGText("Back Buffer")));
-
-		Device->CreateRenderTargetView(BackBufferTextures[Index]->Native(), nullptr, *BackBufferTextures[Index]->RTV);
 	}
 }
 
