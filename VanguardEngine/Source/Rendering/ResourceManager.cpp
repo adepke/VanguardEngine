@@ -136,8 +136,8 @@ void ResourceManager::CreateResourceViews(std::shared_ptr<Texture>& Target)
 		case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
 			ViewDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1D;
 			ViewDesc.Texture1D.MostDetailedMip = 0;
-			ViewDesc.Texture2D.MipLevels = -1;  // #TODO: Support texture mips.
-			ViewDesc.Texture2D.ResourceMinLODClamp = 0.f;
+			ViewDesc.Texture1D.MipLevels = -1;  // #TODO: Support texture mips.
+			ViewDesc.Texture1D.ResourceMinLODClamp = 0.f;
 			break;
 		case D3D12_RESOURCE_DIMENSION_TEXTURE2D:
 			ViewDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
