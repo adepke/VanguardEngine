@@ -144,9 +144,6 @@ void PipelineState::Build(RenderDevice& Device, const PipelineStateDescription& 
 	std::vector<D3D12_INPUT_ELEMENT_DESC> InputElements;
 
 	CreateShaders(Device, Description.ShaderPath);
-	CreateRootSignature(Device);
-	CreateDescriptorTables(Device);
-	auto InputLayout = std::move(CreateInputLayout(InputElements));
 
 	if (!VertexShader)
 	{
@@ -154,6 +151,10 @@ void PipelineState::Build(RenderDevice& Device, const PipelineStateDescription& 
 
 		return;
 	}
+
+	CreateRootSignature(Device);
+	CreateDescriptorTables(Device);
+	auto InputLayout = std::move(CreateInputLayout(InputElements));
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC Desc{};
 	Desc.pRootSignature = RootSignature.Get();
