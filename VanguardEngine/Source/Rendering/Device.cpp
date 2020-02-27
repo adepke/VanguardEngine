@@ -283,7 +283,7 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		// Close all lists except the current frame's list.
 		if (Index > 0)
 		{
-			CopyCommandList[Index].Native()->Close();
+			CopyCommandList[Index].Close();
 		}
 	}
 
@@ -308,7 +308,7 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		// Close all lists except the current frame's list.
 		if (Index > 0)
 		{
-			DirectCommandList[Index].Native()->Close();
+			DirectCommandList[Index].Close();
 		}
 	}
 
@@ -333,7 +333,7 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		// Close all lists except the current frame's list.
 		if (Index > 0)
 		{
-			ComputeCommandList[Index].Native()->Close();
+			ComputeCommandList[Index].Close();
 		}
 	}
 
