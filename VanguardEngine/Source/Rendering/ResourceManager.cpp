@@ -98,6 +98,8 @@ void ResourceManager::CreateResourceViews(std::shared_ptr<Texture>& Target)
 			ViewDesc.Texture3D.FirstWSlice = 0;
 			ViewDesc.Texture3D.WSize = -1;
 			break;
+		default:
+			VGLogError(Rendering) << "Render target views for textures in " << Target->Native()->GetDesc().Dimension << " dimension is unsupported.";
 		}
 
 		Device->Native()->CreateRenderTargetView(Target->Native(), &ViewDesc, *Target->RTV);
@@ -119,6 +121,8 @@ void ResourceManager::CreateResourceViews(std::shared_ptr<Texture>& Target)
 			ViewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
 			ViewDesc.Texture2D.MipSlice = 0;
 			break;
+		default:
+			VGLogError(Rendering) << "Depth stencil views for textures in " << Target->Native()->GetDesc().Dimension << " dimension is unsupported.";
 		}
 		ViewDesc.Flags = D3D12_DSV_FLAG_NONE;  // #TODO: Depth stencil flags.
 
@@ -152,6 +156,8 @@ void ResourceManager::CreateResourceViews(std::shared_ptr<Texture>& Target)
 			ViewDesc.Texture3D.MipLevels = -1;
 			ViewDesc.Texture3D.ResourceMinLODClamp = 0.f;
 			break;
+		default:
+			VGLogError(Rendering) << "Shader resource views for textures in " << Target->Native()->GetDesc().Dimension << " dimension is unsupported.";
 		}
 		ViewDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 
