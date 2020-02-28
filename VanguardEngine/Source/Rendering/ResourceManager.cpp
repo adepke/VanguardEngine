@@ -414,7 +414,7 @@ void ResourceManager::WriteBuffer(std::shared_ptr<Buffer>& Target, const std::ve
 		VGScopedCPUStat("Buffer Write Static");
 
 		VGAssert(Target->Description.AccessFlags & AccessFlag::CPUWrite, "Failed to write to static buffer, no CPU write access.");
-		VGAssert(Target->Description.Size + TargetOffset <= Source.size(), "Failed to write to static buffer, source buffer is larger than target.");
+		VGAssert((Target->Description.Size * Target->Description.Stride) - TargetOffset >= Source.size(), "Failed to write to static buffer, source buffer is larger than target.");
 
 		const auto FrameIndex = Device->GetFrameIndex();
 
@@ -437,7 +437,7 @@ void ResourceManager::WriteBuffer(std::shared_ptr<Buffer>& Target, const std::ve
 		VGScopedCPUStat("Buffer Write Dynamic");
 
 		VGAssert(Target->Description.AccessFlags & AccessFlag::CPUWrite, "Failed to write to dynamic buffer, no CPU write access.");
-		VGAssert(Target->Description.Size + TargetOffset >= Source.size(), "Failed to write to dynamic buffer, source is larger than target.");
+		VGAssert((Target->Description.Size * Target->Description.Stride) - TargetOffset >= Source.size(), "Failed to write to dynamic buffer, source is larger than target.");
 
 		void* MappedPtr = nullptr;
 
