@@ -16,6 +16,7 @@
 
 void RenderDevice::SetNames()
 {
+#if !BUILD_RELEASE
 	VGScopedCPUStat("Device Set Names");
 
 	Device->SetName(VGText("Primary Render Device"));
@@ -50,6 +51,7 @@ void RenderDevice::SetNames()
 
 	RenderTargetHeap.SetName(VGText("Render Target Heap"));
 	DepthStencilHeap.SetName(VGText("Depth Stencil Heap"));
+#endif
 }
 
 void RenderDevice::SetupDescriptorHeaps()
@@ -426,10 +428,7 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 
 	SetupRenderTargets();
 
-	if (Debugging)
-	{
-		SetNames();
-	}
+	SetNames();
 }
 
 RenderDevice::~RenderDevice()

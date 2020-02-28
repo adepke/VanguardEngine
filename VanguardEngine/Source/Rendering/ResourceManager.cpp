@@ -173,14 +173,11 @@ void ResourceManager::CreateResourceViews(std::shared_ptr<Texture>& Target)
 void ResourceManager::NameResource(ResourcePtr<D3D12MA::Allocation>& Target, const std::wstring_view Name)
 {
 #if !BUILD_RELEASE
-	if (Device->Debugging)
+	Target->SetName(Name.data());  // Set the name in the allocator.
+	const auto Result = Target->GetResource()->SetName(Name.data());  // Set the name in the API.
+	if (FAILED(Result))
 	{
-		Target->SetName(Name.data());  // Set the name in the allocator.
-		const auto Result = Target->GetResource()->SetName(Name.data());  // Set the name in the API.
-		if (FAILED(Result))
-		{
-			VGLogWarning(Rendering) << "Failed to set resource name to: '" << Name << "': " << Result;
-		}
+		VGLogWarning(Rendering) << "Failed to set resource name to: '" << Name << "': " << Result;
 	}
 #endif
 }
