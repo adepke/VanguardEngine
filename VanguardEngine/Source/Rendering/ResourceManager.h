@@ -50,7 +50,7 @@ public:
 	// Creates a texture from the swap chain surface.
 	std::shared_ptr<Texture> TextureFromSwapChain(void* Surface, const std::wstring_view Name);
 
-	// Source data can be discarded immediately.
+	// Source data can be discarded immediately. Offsets are in bytes.
 	void WriteBuffer(std::shared_ptr<Buffer>& Target, const std::vector<uint8_t>& Source, size_t TargetOffset = 0);
 	void WriteTexture(std::shared_ptr<Texture>& Target, const std::vector<uint8_t>& Source);
 
