@@ -348,7 +348,7 @@ std::shared_ptr<Texture> ResourceManager::AllocateTexture(const TextureDescripti
 	}
 
 	D3D12MA::ALLOCATION_DESC AllocationDesc{};
-	AllocationDesc.HeapType = Description.UpdateRate == ResourceFrequency::Static ? D3D12_HEAP_TYPE_DEFAULT : D3D12_HEAP_TYPE_UPLOAD;
+	AllocationDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
 	AllocationDesc.Flags = D3D12MA::ALLOCATION_FLAG_NONE;
 
 	if (Description.BindFlags & BindFlag::RenderTarget)
@@ -358,11 +358,6 @@ std::shared_ptr<Texture> ResourceManager::AllocateTexture(const TextureDescripti
 	}
 
 	auto ResourceState = Description.InitialState;
-
-	if (Description.UpdateRate == ResourceFrequency::Dynamic)
-	{
-		ResourceState = D3D12_RESOURCE_STATE_GENERIC_READ;
-	}
 
 	ID3D12Resource* RawResource = nullptr;
 	D3D12MA::Allocation* AllocationHandle = nullptr;
