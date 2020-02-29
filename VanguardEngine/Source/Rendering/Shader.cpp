@@ -28,8 +28,65 @@ void ReflectShader(std::unique_ptr<Shader>& InShader, ID3DBlob* Blob, const std:
 		return;
 	}
 
+	InShader->Reflection.InputElements.reserve(ShaderDesc.InputParameters);
+	for (uint32_t Index = 0; Index < ShaderDesc.InputParameters; ++Index)
+	{
+		D3D12_SIGNATURE_PARAMETER_DESC ParameterDesc;
+
+		Result = ShaderReflection->GetInputParameterDesc(Index, &ParameterDesc);
+		if (FAILED(Result))
+		{
+			VGLogError(Rendering) << "Shader reflection for '" << Name << "' failed internally: " << Result;
+			return;
+		}
+
+		DXGI_FORMAT Format = DXGI_FORMAT_UNKNOWN;
+
+		if (ParameterDesc.Mask == 1)
+		{
+			switch (ParameterDesc.ComponentType)
+			{
+			case D3D_REGISTER_COMPONENT_UINT32: Format = DXGI_FORMAT_R32_UINT; break;
+			case D3D_REGISTER_COMPONENT_SINT32: Format = DXGI_FORMAT_R32_SINT; break;
+			case D3D_REGISTER_COMPONENT_FLOAT32: Format = DXGI_FORMAT_R32_FLOAT; break;
+			}
+		}
+
+		else if (ParameterDesc.Mask < 4)
+		{
+			switch (ParameterDesc.ComponentType)
+			{
+			case D3D_REGISTER_COMPONENT_UINT32: Format = DXGI_FORMAT_R32G32_UINT; break;
+			case D3D_REGISTER_COMPONENT_SINT32: Format = DXGI_FORMAT_R32G32_SINT; break;
+			case D3D_REGISTER_COMPONENT_FLOAT32: Format = DXGI_FORMAT_R32G32_FLOAT; break;
+			}
+		}
+
+		else if (ParameterDesc.Mask < 8)
+		{
+			switch (ParameterDesc.ComponentType)
+			{
+			case D3D_REGISTER_COMPONENT_UINT32: Format = DXGI_FORMAT_R32G32B32_UINT; break;
+			case D3D_REGISTER_COMPONENT_SINT32: Format = DXGI_FORMAT_R32G32B32_SINT; break;
+			case D3D_REGISTER_COMPONENT_FLOAT32: Format = DXGI_FORMAT_R32G32B32_FLOAT; break;
+			}
+		}
+
+		else if (ParameterDesc.Mask < 16)
+		{
+			switch (ParameterDesc.ComponentType)
+			{
+			case D3D_REGISTER_COMPONENT_UINT32: Format = DXGI_FORMAT_R32G32B32A32_UINT; break;
+			case D3D_REGISTER_COMPONENT_SINT32: Format = DXGI_FORMAT_R32G32B32A32_SINT; break;
+			case D3D_REGISTER_COMPONENT_FLOAT32: Format = DXGI_FORMAT_R32G32B32A32_FLOAT; break;
+			}
+		}
+
+		InShader->Reflection.InputElements.push_back({ ParameterDesc.SemanticName, ParameterDesc.SemanticIndex, Format });
+	}
+
 	InShader->Reflection.ConstantBuffers.reserve(ShaderDesc.ConstantBuffers);
-	for (auto Index = 0; Index < ShaderDesc.ConstantBuffers; ++Index)
+	for (uint32_t Index = 0; Index < ShaderDesc.ConstantBuffers; ++Index)
 	{
 		auto* ConstantBufferReflection = ShaderReflection->GetConstantBufferByIndex(Index);
 		D3D12_SHADER_BUFFER_DESC BufferDesc;
@@ -44,7 +101,7 @@ void ReflectShader(std::unique_ptr<Shader>& InShader, ID3DBlob* Blob, const std:
 	}
 
 	InShader->Reflection.ResourceBindings.reserve(ShaderDesc.BoundResources);
-	for (auto Index = 0; Index < ShaderDesc.BoundResources; ++Index)
+	for (uint32_t Index = 0; Index < ShaderDesc.BoundResources; ++Index)
 	{
 		D3D12_SHADER_INPUT_BIND_DESC BindDesc;
 		Result = ShaderReflection->GetResourceBindingDesc(Index, &BindDesc);
@@ -87,7 +144,7 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& Path, ShaderT
 	Flags |= D3DCOMPILE_DEBUG | D3DCOMPILE_SKIP_OPTIMIZATION;
 #endif
 
-	auto Result = D3DCompileFromFile(Path.c_str(), nullptr, nullptr, "main", CompileTarget, Flags, 0, Blob.Indirect(), ErrorBlob.Indirect());
+	auto Result = D3DCompileFromFile(Path.c_str(), nullptr, D3D_COMPILE_STANDARD_FILE_INCLUDE, "main", CompileTarget, Flags, 0, Blob.Indirect(), ErrorBlob.Indirect());
 	if (FAILED(Result))
 	{
 		VGLogError(Rendering) << "Failed to compile shader at '" << Path.generic_wstring() << "': " << Result << " | Error Blob: " << static_cast<char*>(ErrorBlob->GetBufferPointer());
@@ -101,7 +158,7 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& Path, ShaderT
 	
 	ReflectShader(ResultShader, Blob.Get(), Path.filename().generic_wstring());
 
-	ResultShader->Blob = std::move(Blob);
+	ResultShader->SetBlob(std::move(Blob));
 
 	return std::move(ResultShader);
 }

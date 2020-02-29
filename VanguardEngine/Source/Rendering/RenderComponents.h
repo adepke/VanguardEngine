@@ -2,19 +2,31 @@
 
 #pragma once
 
+#include <Rendering/Material.h>
 #include <Rendering/Device.h>
-#include <Rendering/Resource.h>
+#include <Rendering/Buffer.h>
 
 #include <memory>
+#include <vector>
 #include <cstring>
+
+struct Material;
 
 // #TODO: Array of mesh materials bound to vertex/index offsets to enable multiple materials per mesh.
 struct MeshComponent
 {
-	// #TODO: Material
+	struct Subset
+	{
+		size_t VertexOffset = 0;  // Offset into the vertex buffer.
+		size_t Vertices = 0;
 
-	std::shared_ptr<GPUBuffer> VertexBuffer;
-	std::shared_ptr<GPUBuffer> IndexBuffer;
+		std::shared_ptr<Material> Mat;
+	};
+
+	std::vector<Subset> Subsets;
+
+	std::shared_ptr<Buffer> VertexBuffer;
+	std::shared_ptr<Buffer> IndexBuffer;
 };
 
 struct CameraComponent
@@ -33,33 +45,33 @@ inline MeshComponent CreateMeshComponent(RenderDevice& Device, const std::vector
 
 	MeshComponent Result;
 
-	ResourceDescription VertexDescription{};
+	BufferDescription VertexDescription{};
 	VertexDescription.Size = VertexPositions.size();
 	VertexDescription.Stride = sizeof(Vertex);
 	VertexDescription.UpdateRate = ResourceFrequency::Static;
 	VertexDescription.BindFlags = BindFlag::VertexBuffer | BindFlag::ShaderResource;
 	VertexDescription.AccessFlags = AccessFlag::CPUWrite;
 
-	Result.VertexBuffer = std::move(Device.Allocate(VertexDescription, VGText("Vertex Buffer")));
+	Result.VertexBuffer = std::move(Device.CreateResource(VertexDescription, VGText("Vertex Buffer")));
 
 	std::vector<uint8_t> VertexResource{};
 	VertexResource.resize(sizeof(Vertex) * VertexPositions.size());
 	std::memcpy(VertexResource.data(), VertexPositions.data(), VertexResource.size());
-	Device.Write(Result.VertexBuffer, VertexResource);
+	Device.WriteResource(Result.VertexBuffer, VertexResource);
 
-	ResourceDescription IndexDescription{};
+	BufferDescription IndexDescription{};
 	IndexDescription.Size = Indices.size();
 	IndexDescription.Stride = sizeof(uint32_t);
 	IndexDescription.UpdateRate = ResourceFrequency::Static;
 	IndexDescription.BindFlags = BindFlag::IndexBuffer | BindFlag::ShaderResource;
 	IndexDescription.AccessFlags = AccessFlag::CPUWrite;
 
-	Result.IndexBuffer = std::move(Device.Allocate(IndexDescription, VGText("Index Buffer")));
+	Result.IndexBuffer = std::move(Device.CreateResource(IndexDescription, VGText("Index Buffer")));
 
 	std::vector<uint8_t> IndexResource{};
 	IndexResource.resize(sizeof(uint32_t) * Indices.size());
 	std::memcpy(IndexResource.data(), Indices.data(), IndexResource.size());
-	Device.Write(Result.IndexBuffer, IndexResource);
+	Device.WriteResource(Result.IndexBuffer, IndexResource);
 
 	return std::move(Result);
 }

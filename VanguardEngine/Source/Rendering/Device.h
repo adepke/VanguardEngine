@@ -4,8 +4,12 @@
 
 #include <Rendering/Base.h>
 #include <Rendering/Resource.h>
+#include <Rendering/Adapter.h>  // #TODO: Including this before D3D12MemAlloc.h causes an array of errors, this needs to be fixed.
 #include <Rendering/ResourceManager.h>
 #include <Rendering/PipelineState.h>
+#include <Rendering/DescriptorHeap.h>
+#include <Rendering/CommandList.h>
+#include <Rendering/Material.h>
 
 #include <D3D12MemAlloc.h>
 
@@ -14,27 +18,12 @@
 #include <array>
 #include <utility>
 #include <vector>
+#include <limits>
 
-#include <d3d12.h>
-#include <dxgi1_6.h>
-
-class RenderDevice;
-struct ResourceDescription;
-
-struct DescriptorHeap
-{
-private:
-	ResourcePtr<ID3D12DescriptorHeap> Heap;
-	size_t HeapStart = 0;
-	size_t DescriptorSize = 0;
-	size_t FreeOffset = 0;
-	size_t FreeDescriptors = 0;
-
-public:
-	void Initialize(RenderDevice& Device, D3D12_DESCRIPTOR_HEAP_TYPE Type, size_t Descriptors);
-	D3D12_CPU_DESCRIPTOR_HANDLE Allocate(RenderDevice& Device);
-	void SetName(std::wstring_view Name);
-};
+struct Buffer;
+struct Texture;
+struct BufferDescription;
+struct TextureDescription;
 
 enum class SyncType
 {
@@ -45,10 +34,7 @@ enum class SyncType
 
 class RenderDevice
 {
-	friend class Renderer;
 	friend class ResourceManager;
-	friend struct DescriptorHeap;
-	friend struct PipelineState;
 
 public:
 	bool Debugging = false;
@@ -60,29 +46,26 @@ public:
 	static constexpr uint32_t FrameCount = 3;  // #TODO: Determine at runtime.
 
 private:
-	const D3D_FEATURE_LEVEL FeatureLevel = D3D_FEATURE_LEVEL_12_1;
+	const D3D_FEATURE_LEVEL TargetFeatureLevel = D3D_FEATURE_LEVEL_12_1;
+	const D3D_SHADER_MODEL TargetShaderModel = D3D_SHADER_MODEL_6_3;
 
 	// #NOTE: Ordering of these variables is significant for proper destruction!
 	ResourcePtr<ID3D12Device3> Device;
-	ResourcePtr<IDXGIAdapter1> Adapter;
+	Adapter RenderAdapter;
 
 	ResourcePtr<ID3D12CommandQueue> CopyCommandQueue;
-	ResourcePtr<ID3D12CommandAllocator> CopyCommandAllocator[FrameCount];
-	ResourcePtr<ID3D12GraphicsCommandList4> CopyCommandList[FrameCount];
+	CommandList CopyCommandList[FrameCount];
 
 	ResourcePtr<ID3D12CommandQueue> DirectCommandQueue;
-	ResourcePtr<ID3D12CommandAllocator> DirectCommandAllocator[FrameCount];  // #TODO: One per worker thread.
-	ResourcePtr<ID3D12GraphicsCommandList4> DirectCommandList[FrameCount];  // #TODO: One per worker thread.
+	CommandList DirectCommandList[FrameCount];  // #TODO: One per worker thread.
 
 	ResourcePtr<ID3D12CommandQueue> ComputeCommandQueue;
-	ResourcePtr<ID3D12CommandAllocator> ComputeCommandAllocator[FrameCount];  // #TODO: One per worker thread.
-	ResourcePtr<ID3D12GraphicsCommandList4> ComputeCommandList[FrameCount];  // #TODO: One per worker thread.
+	CommandList ComputeCommandList[FrameCount];  // #TODO: One per worker thread.
 
 	ResourcePtr<IDXGISwapChain3> SwapChain;
 	size_t Frame = 0;  // Stores the actual frame number. Refers to the current CPU frame being run, stepped after finishing CPU pass.
 
-	std::array<ResourcePtr<ID3D12Resource>, FrameCount> FinalRenderTargets;  // Render targets bound to the swap chain.
-	std::array<D3D12_CPU_DESCRIPTOR_HANDLE, FrameCount> FinalRenderTargetViews;
+	std::array<std::shared_ptr<Texture>, FrameCount> BackBufferTextures;  // Render targets bound to the swap chain.
 
 	ResourcePtr<ID3D12Fence> CopyFence;
 	HANDLE CopyFenceEvent;
@@ -94,32 +77,25 @@ private:
 	ResourcePtr<D3D12MA::Allocator> Allocator;
 	ResourceManager AllocatorManager;
 
-	std::array<std::shared_ptr<GPUBuffer>, FrameCount> FrameBuffers;  // Per-frame shared dynamic heap.
+	std::array<std::shared_ptr<Buffer>, FrameCount> FrameBuffers;  // Per-frame shared dynamic heap.
 	std::array<size_t, FrameCount> FrameBufferOffsets = {};
 
-	static constexpr size_t ResourceDescriptors = 64;
-	static constexpr size_t SamplerDescriptors = 64;
-	static constexpr size_t RenderTargetDescriptors = FrameCount * 8;
-	static constexpr size_t DepthStencilDescriptors = FrameCount * 8;
+	static constexpr size_t ResourceDescriptors = 1024;
+	static constexpr size_t SamplerDescriptors = 1024;
+	static constexpr size_t RenderTargetDescriptors = 1024;
+	static constexpr size_t DepthStencilDescriptors = 1024;
 
 	// #NOTE: Shader-visible descriptors require per-frame heaps.
 	std::array<DescriptorHeap, FrameCount> ResourceHeaps;  // CBV/SRV/UAV
 	std::array<DescriptorHeap, FrameCount> SamplerHeaps;
 	DescriptorHeap RenderTargetHeap;
 	DescriptorHeap DepthStencilHeap;
-	
-	std::vector<PipelineState> PipelineStates;
-
-	ResourcePtr<IDXGIAdapter1> GetAdapter(ResourcePtr<IDXGIFactory7>& Factory, bool Software);
 
 	// Name the D3D objects.
 	void SetNames();
 
 	void SetupDescriptorHeaps();
 	void SetupRenderTargets();
-
-	// Builds pipelines.
-	void ReloadShaders();
 
 	// Resets command lists and allocators.
 	void ResetFrame(size_t FrameID);
@@ -128,17 +104,41 @@ public:
 	RenderDevice(HWND InWindow, bool Software, bool EnableDebugging);
 	~RenderDevice();
 
-	std::shared_ptr<GPUBuffer> Allocate(const ResourceDescription& Description, const std::wstring_view Name);
-	void Write(std::shared_ptr<GPUBuffer>& Buffer, const std::vector<uint8_t>& Source, size_t BufferOffset = 0);
+	auto* Native() const noexcept { return Device.Get(); }
+
+	// Logs various data about the device's feature support. Not needed in optimized builds.
+	void CheckFeatureSupport();
+
+	// Compiles shaders, builds pipelines.
+	std::vector<Material> ReloadMaterials();
+
+	std::shared_ptr<Buffer> CreateResource(const BufferDescription& Description, const std::wstring_view Name);
+	std::shared_ptr<Texture> CreateResource(const TextureDescription& Description, const std::wstring_view Name);
+	void WriteResource(std::shared_ptr<Buffer>& Target, const std::vector<uint8_t>& Source, size_t TargetOffset = 0);
+	void WriteResource(std::shared_ptr<Texture>& Target, const std::vector<uint8_t>& Source);
 
 	// Allocate a block of CPU write-only, GPU read-only memory from the per-frame dynamic heap.
-	std::pair<std::shared_ptr<GPUBuffer>, size_t> FrameAllocate(size_t Size);
+	std::pair<std::shared_ptr<Buffer>, size_t> FrameAllocate(size_t Size);
 
 	// Sync the specified GPU engine to FrameID. Blocking.
-	void Sync(SyncType Type, size_t FrameID);
+	void Sync(SyncType Type, size_t FrameID = std::numeric_limits<size_t>::max());
 
 	// Blocking, waits for the gpu to finish the next frame before returning. Marks the current frame as finished submitting and can move on to the next frame.
 	void FrameStep();
+	size_t GetFrameIndex() const noexcept { return Frame % RenderDevice::FrameCount; }
+
+	auto* GetCopyQueue() const noexcept { return CopyCommandQueue.Get(); }
+	auto& GetCopyList() noexcept { return CopyCommandList[GetFrameIndex()]; }
+	auto* GetDirectQueue() const noexcept { return DirectCommandQueue.Get(); }
+	auto& GetDirectList() noexcept { return DirectCommandList[GetFrameIndex()]; }
+	auto* GetComputeQueue() const noexcept { return ComputeCommandQueue.Get(); }
+	auto& GetComputeList() noexcept { return ComputeCommandList[GetFrameIndex()]; }
+	auto* GetSwapChain() const noexcept { return SwapChain.Get(); }
+	auto* GetBackBuffer() const noexcept { return BackBufferTextures[GetFrameIndex()].get(); }
+	auto& GetResourceHeap() noexcept { return ResourceHeaps[GetFrameIndex()]; }
+	auto& GetSamplerHeap() noexcept { return SamplerHeaps[GetFrameIndex()]; }
+	auto& GetRenderTargetHeap() noexcept { return RenderTargetHeap; }
+	auto& GetDepthStencilHeap() noexcept { return DepthStencilHeap; }
 
 	void SetResolution(size_t Width, size_t Height, bool InFullscreen);
 };

@@ -14,7 +14,7 @@ void ParseCommandLine()
 	int Count = 0;
 	auto** ArgV = CommandLineToArgvW(GetCommandLine(), &Count);
 
-	for (auto Index = 0; Index < Count; ++Index)
+	for (int Index = 0; Index < Count; ++Index)
 	{
 		GCommandLineArgs.push_back(ArgV[Index]);
 	}

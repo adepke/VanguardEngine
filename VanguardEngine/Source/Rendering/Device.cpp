@@ -2,121 +2,48 @@
 
 #include <Rendering/Device.h>
 #include <Rendering/ResourceManager.h>
+#include <Rendering/Buffer.h>
+#include <Rendering/Texture.h>
+#include <Rendering/Material.h>
 #include <Core/Config.h>
 
 #include <filesystem>
 #include <algorithm>
+#include <fstream>
 
 #include <wrl/client.h>
-
-void DescriptorHeap::Initialize(RenderDevice& Device, D3D12_DESCRIPTOR_HEAP_TYPE Type, size_t Descriptors)
-{
-	D3D12_DESCRIPTOR_HEAP_DESC HeapDesc{};
-	HeapDesc.Type = Type;
-	HeapDesc.NumDescriptors = Descriptors;
-	HeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;  // #TODO: Shader visible?
-	HeapDesc.NodeMask = 0;
-
-	auto Result = Device.Device->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(Heap.Indirect()));
-	if (FAILED(Result))
-	{
-		VGLogFatal(Rendering) << "Failed to create descriptor heap for type '" << Type << "' with " << Descriptors << " descriptors: " << Result;
-	}
-
-	HeapStart = Heap->GetCPUDescriptorHandleForHeapStart().ptr;
-	DescriptorSize = Device.Device->GetDescriptorHandleIncrementSize(Type);
-	FreeDescriptors = Descriptors;
-}
-
-D3D12_CPU_DESCRIPTOR_HANDLE DescriptorHeap::Allocate(RenderDevice& Device)
-{
-	VGEnsure(FreeDescriptors > 0, "Ran out of descriptor heap memory.");
-	--FreeDescriptors;
-
-	const auto OldPointer = HeapStart + FreeOffset;
-
-	FreeOffset += DescriptorSize;
-
-	return { OldPointer };
-}
-
-void DescriptorHeap::SetName(std::wstring_view Name)
-{
-	Heap->SetName(Name.data());
-}
-
-ResourcePtr<IDXGIAdapter1> RenderDevice::GetAdapter(ResourcePtr<IDXGIFactory7>& Factory, bool Software)
-{
-	VGScopedCPUStat("Render Device Get Adapter");
-
-	ResourcePtr<IDXGIAdapter1> Adapter;
-
-	if (Software)
-	{
-		Factory->EnumWarpAdapter(IID_PPV_ARGS(Adapter.Indirect()));
-	}
-
-	else
-	{
-		for (uint32_t Index = 0; Factory->EnumAdapterByGpuPreference(Index, DXGI_GPU_PREFERENCE_HIGH_PERFORMANCE, IID_PPV_ARGS(Adapter.Indirect())) != DXGI_ERROR_NOT_FOUND; ++Index)
-		{
-			DXGI_ADAPTER_DESC1 Description;
-			Adapter->GetDesc1(&Description);
-
-			if ((Description.Flags & DXGI_ADAPTER_FLAG_SOFTWARE) == DXGI_ADAPTER_FLAG_SOFTWARE)
-			{
-				continue;
-			}
-
-			// Check the device and feature level without creating it.
-			const auto CreateDeviceResult = D3D12CreateDevice(Adapter.Get(), FeatureLevel, __uuidof(ID3D12Device), nullptr);
-			if (SUCCEEDED(CreateDeviceResult))
-			{
-				break;
-			}
-		}
-	}
-
-	return std::move(Adapter);
-}
+#include <json.hpp>  // Needed for materials.
 
 void RenderDevice::SetNames()
 {
+#if !BUILD_RELEASE
 	VGScopedCPUStat("Device Set Names");
 
 	Device->SetName(VGText("Primary Render Device"));
 
 	CopyCommandQueue->SetName(VGText("Copy Command Queue"));
-	for (auto Index = 0; Index < FrameCount; ++Index)
+	for (uint32_t Index = 0; Index < FrameCount; ++Index)
 	{
-		CopyCommandAllocator[Index]->SetName(VGText("Copy Command Allocator"));
-		CopyCommandList[Index]->SetName(VGText("Copy Command List"));
+		CopyCommandList[Index].SetName(VGText("Copy Command List"));
 	}
 
 	DirectCommandQueue->SetName(VGText("Direct Command Queue"));
-	for (auto Index = 0; Index < FrameCount; ++Index)
+	for (uint32_t Index = 0; Index < FrameCount; ++Index)
 	{
-		DirectCommandAllocator[Index]->SetName(VGText("Direct Command Allocator"));
-		DirectCommandList[Index]->SetName(VGText("Direct Command List"));
+		DirectCommandList[Index].SetName(VGText("Direct Command List"));
 	}
 
 	ComputeCommandQueue->SetName(VGText("Compute Command Queue"));
-	for (auto Index = 0; Index < FrameCount; ++Index)
+	for (uint32_t Index = 0; Index < FrameCount; ++Index)
 	{
-		ComputeCommandAllocator[Index]->SetName(VGText("Compute Command Allocator"));
-		ComputeCommandList[Index]->SetName(VGText("Compute Command List"));
-	}
-
-	for (auto Index = 0; Index < FrameCount; ++Index)
-	{
-		FinalRenderTargets[Index]->SetName(VGText("Final Render Target"));
+		ComputeCommandList[Index].SetName(VGText("Compute Command List"));
 	}
 
 	CopyFence->SetName(VGText("Copy Fence"));
 	DirectFence->SetName(VGText("Direct Fence"));
 	ComputeFence->SetName(VGText("Compute Fence"));
 
-	for (auto Index = 0; Index < FrameCount; ++Index)
+	for (uint32_t Index = 0; Index < FrameCount; ++Index)
 	{
 		ResourceHeaps[Index].SetName(VGText("Resource Heap"));
 		SamplerHeaps[Index].SetName(VGText("Sampler Heap"));
@@ -124,13 +51,14 @@ void RenderDevice::SetNames()
 
 	RenderTargetHeap.SetName(VGText("Render Target Heap"));
 	DepthStencilHeap.SetName(VGText("Depth Stencil Heap"));
+#endif
 }
 
 void RenderDevice::SetupDescriptorHeaps()
 {
 	VGScopedCPUStat("Setup Descriptor Heaps");
 
-	for (auto Index = 0; Index < FrameCount; ++Index)
+	for (uint32_t Index = 0; Index < FrameCount; ++Index)
 	{
 		ResourceHeaps[Index].Initialize(*this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, ResourceDescriptors);
 		SamplerHeaps[Index].Initialize(*this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, SamplerDescriptors);
@@ -146,44 +74,107 @@ void RenderDevice::SetupRenderTargets()
 
 	HRESULT Result;
 
-	for (auto Index = 0; Index < FrameCount; ++Index)
+	for (uint32_t Index = 0; Index < FrameCount; ++Index)
 	{
-		Result = SwapChain->GetBuffer(Index, IID_PPV_ARGS(FinalRenderTargets[Index].Indirect()));
+		ID3D12Resource* IntermediateResource;
+
+		Result = SwapChain->GetBuffer(Index, IID_PPV_ARGS(&IntermediateResource));
 		if (FAILED(Result))
 		{
 			VGLogFatal(Rendering) << "Failed to get swap chain buffer for frame " << Index << ": " << Result;
 		}
 
-		auto RTV = RenderTargetHeap.Allocate(*this);
-		Device->CreateRenderTargetView(FinalRenderTargets[Index].Get(), nullptr, RTV);
-		FinalRenderTargetViews[Index] = RTV;
+		BackBufferTextures[Index] = std::move(AllocatorManager.TextureFromSwapChain(static_cast<void*>(IntermediateResource), VGText("Back Buffer")));
 	}
 }
 
-void RenderDevice::ReloadShaders()
+std::vector<Material> RenderDevice::ReloadMaterials()
 {
-	VGScopedCPUStat("Reload Shaders");
+	VGScopedCPUStat("Reload Materials");
 
-	VGLog(Rendering) << "Reloading shaders.";
+	VGLog(Rendering) << "Reloading materials.";
 
-	PipelineStates.clear();
+	std::vector<Material> Materials;
 
-	std::vector<std::wstring> BuiltShaders;
-
-	for (const auto& Entry : std::filesystem::directory_iterator{ Config::Get().ShaderPath })
+	for (const auto& Entry : std::filesystem::directory_iterator{ Config::Get().MaterialsPath })
 	{
-		auto ShaderName = Entry.path().filename().replace_extension("").generic_wstring();
-		ShaderName = ShaderName.substr(0, ShaderName.size() - 3);  // Remove the shader type extension.
-		
-		if (std::find(BuiltShaders.begin(), BuiltShaders.end(), ShaderName) == BuiltShaders.end())
-		{
-			PipelineState Pipeline{};
-			Pipeline.Build(*this, Entry.path().parent_path() / ShaderName);
-			PipelineStates.push_back(std::move(Pipeline));
+		// #TODO: Move to standardized asset loading pipeline.
 
-			BuiltShaders.push_back(std::move(ShaderName));
+		std::ifstream MaterialStream{ Entry };
+
+		if (!MaterialStream.is_open())
+		{
+			VGLogError(Rendering) << "Failed to open material asset at '" << Entry.path().generic_wstring() << "'.";
+			continue;
 		}
+
+		nlohmann::json MaterialData;
+		MaterialStream >> MaterialData;
+
+		Material NewMat{};
+
+		auto MaterialShaders = MaterialData["Shaders"].get<std::string>();
+		NewMat.BackFaceCulling = MaterialData["BackFaceCulling"].get<bool>();
+
+		PipelineStateDescription Desc{};
+		Desc.ShaderPath = Config::Get().EngineRoot / MaterialShaders;
+		Desc.BlendDescription.AlphaToCoverageEnable = false;
+		Desc.BlendDescription.IndependentBlendEnable = false;
+		Desc.BlendDescription.RenderTarget[0] = {};  // Default blending for now.
+		Desc.RasterizerDescription.FillMode = D3D12_FILL_MODE_SOLID;  // #TODO: Support wire frame rendering.
+		Desc.RasterizerDescription.CullMode = NewMat.BackFaceCulling ? D3D12_CULL_MODE_BACK : D3D12_CULL_MODE_NONE;
+		Desc.RasterizerDescription.FrontCounterClockwise = false;
+		Desc.RasterizerDescription.DepthBias = 0;
+		Desc.RasterizerDescription.DepthBiasClamp = 0.f;
+		Desc.RasterizerDescription.SlopeScaledDepthBias = 0.f;
+		Desc.RasterizerDescription.DepthClipEnable = true;
+		Desc.RasterizerDescription.MultisampleEnable = false;  // #TODO: Support multi-sampling.
+		Desc.RasterizerDescription.AntialiasedLineEnable = false;  // #TODO: Support anti-aliasing.
+		Desc.RasterizerDescription.ForcedSampleCount = 0;
+		Desc.RasterizerDescription.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+		Desc.DepthStencilDescription.DepthEnable = true;
+		Desc.DepthStencilDescription.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+		Desc.DepthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_LESS;
+		Desc.DepthStencilDescription.StencilEnable = false;  // #TODO: Support stencil.
+		Desc.DepthStencilDescription.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
+		Desc.DepthStencilDescription.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
+		Desc.DepthStencilDescription.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+		Desc.DepthStencilDescription.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+		Desc.DepthStencilDescription.FrontFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
+		Desc.DepthStencilDescription.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+		Desc.DepthStencilDescription.BackFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+		Desc.DepthStencilDescription.BackFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+		Desc.DepthStencilDescription.BackFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
+		Desc.DepthStencilDescription.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+		Desc.Topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+
+		NewMat.Pipeline = std::make_unique<PipelineState>();
+		NewMat.Pipeline->Build(*this, Desc);  // #TODO: Pipeline libraries.
+
+		Materials.push_back(std::move(NewMat));
 	}
+
+	return std::move(Materials);
+}
+
+std::shared_ptr<Buffer> RenderDevice::CreateResource(const BufferDescription& Description, const std::wstring_view Name)
+{
+	return std::move(AllocatorManager.AllocateBuffer(Description, Name));
+}
+
+std::shared_ptr<Texture> RenderDevice::CreateResource(const TextureDescription& Description, const std::wstring_view Name)
+{
+	return std::move(AllocatorManager.AllocateTexture(Description, Name));
+}
+
+void RenderDevice::WriteResource(std::shared_ptr<Buffer>& Target, const std::vector<uint8_t>& Source, size_t TargetOffset)
+{
+	AllocatorManager.WriteBuffer(Target, Source, TargetOffset);
+}
+
+void RenderDevice::WriteResource(std::shared_ptr<Texture>& Target, const std::vector<uint8_t>& Source)
+{
+	AllocatorManager.WriteTexture(Target, Source);
 }
 
 void RenderDevice::ResetFrame(size_t FrameID)
@@ -192,25 +183,13 @@ void RenderDevice::ResetFrame(size_t FrameID)
 
 	const auto FrameIndex = FrameID % FrameCount;
 
-	auto Result = CopyCommandAllocator[FrameIndex]->Reset();
-	if (FAILED(Result))
-	{
-		VGLogError(Rendering) << "Failed to reset copy command allocator for frame " << FrameIndex << ": " << Result;
-	}
-
-	Result = static_cast<ID3D12GraphicsCommandList*>(CopyCommandList[FrameIndex].Get())->Reset(CopyCommandAllocator[FrameIndex].Get(), nullptr);
+	auto Result = CopyCommandList[FrameIndex].Reset();
 	if (FAILED(Result))
 	{
 		VGLogError(Rendering) << "Failed to reset copy command list for frame " << FrameIndex << ": " << Result;
 	}
 
-	Result = DirectCommandAllocator[FrameIndex]->Reset();
-	if (FAILED(Result))
-	{
-		VGLogError(Rendering) << "Failed to reset direct command allocator for frame " << FrameIndex << ": " << Result;
-	}
-
-	Result = static_cast<ID3D12GraphicsCommandList*>(DirectCommandList[FrameIndex].Get())->Reset(DirectCommandAllocator[FrameIndex].Get(), nullptr);
+	Result = DirectCommandList[FrameIndex].Reset();
 	if (FAILED(Result))
 	{
 		VGLogError(Rendering) << "Failed to reset direct command list for frame " << FrameIndex << ": " << Result;
@@ -218,13 +197,7 @@ void RenderDevice::ResetFrame(size_t FrameID)
 
 	// #TODO: Implement compute.
 	/*
-	Result = ComputeCommandAllocator[FrameIndex]->Reset();
-	if (FAILED(Result))
-	{
-		VGLogError(Rendering) << "Failed to reset compute command allocator for frame " << FrameIndex << ": " << Result;
-	}
-
-	Result = static_cast<ID3D12GraphicsCommandList*>(ComputeCommandList[FrameIndex].Get())->Reset(ComputeCommandAllocator[FrameIndex].Get(), nullptr);
+	Result = ComputeCommandList[FrameIndex].Reset();
 	if (FAILED(Result))
 	{
 		VGLogError(Rendering) << "Failed to reset compute command list for frame " << FrameIndex << ": " << Result;
@@ -270,26 +243,16 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		VGLogFatal(Rendering) << "Failed to create render device factory: " << Result;
 	}
 
-	Adapter = std::move(GetAdapter(Factory, Software));
-	VGEnsure(Adapter.Get(), "Failed to find an adapter.");
+	RenderAdapter.Initialize(Factory, TargetFeatureLevel, Software);
 
-	DXGI_ADAPTER_DESC1 AdapterDesc;
-	Adapter->GetDesc1(&AdapterDesc);
-
-	VGLog(Rendering) << "Using adapter: " << AdapterDesc.Description;
-
-	// #TODO: Adapter events.
-	//Adapter->RegisterVideoMemoryBudgetChangeNotificationEvent();
-	//Adapter->RegisterHardwareContentProtectionTeardownStatusEvent();
-
-	Result = D3D12CreateDevice(Adapter.Get(), FeatureLevel, IID_PPV_ARGS(Device.Indirect()));
+	Result = D3D12CreateDevice(RenderAdapter.Native(), TargetFeatureLevel, IID_PPV_ARGS(Device.Indirect()));
 	if (FAILED(Result))
 	{
 		VGLogFatal(Rendering) << "Failed to create render device: " << Result;
 	}
 
 	D3D12MA::ALLOCATOR_DESC AllocatorDesc{};
-	AllocatorDesc.pAdapter = Adapter.Get();
+	AllocatorDesc.pAdapter = RenderAdapter.Native();
 	AllocatorDesc.pDevice = Device.Get();
 	AllocatorDesc.Flags = D3D12MA::ALLOCATOR_FLAG_NONE;
 
@@ -299,7 +262,7 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		VGLogFatal(Rendering) << "Failed to create device allocator: " << Result;
 	}
 
-	AllocatorManager.Initialize(*this, FrameCount);
+	AllocatorManager.Initialize(this, FrameCount);
 
 	// Copy
 
@@ -317,22 +280,12 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 
 	for (int Index = 0; Index < FrameCount; ++Index)
 	{
-		Result = Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COPY, IID_PPV_ARGS(CopyCommandAllocator[Index].Indirect()));
-		if (FAILED(Result))
-		{
-			VGLogFatal(Rendering) << "Failed to create copy command allocator for frame " << Index << ": " << Result;
-		}
-
-		Result = Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COPY, CopyCommandAllocator[Index].Get(), nullptr, IID_PPV_ARGS(CopyCommandList[Index].Indirect()));
-		if (FAILED(Result))
-		{
-			VGLogFatal(Rendering) << "Failed to create copy command list for frame " << Index << ": " << Result;
-		}
+		CopyCommandList[Index].Create(*this, D3D12_COMMAND_LIST_TYPE_COPY);
 
 		// Close all lists except the current frame's list.
 		if (Index > 0)
 		{
-			static_cast<ID3D12GraphicsCommandList*>(CopyCommandList[Index].Get())->Close();
+			CopyCommandList[Index].Close();
 		}
 	}
 
@@ -352,22 +305,12 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 
 	for (int Index = 0; Index < FrameCount; ++Index)
 	{
-		Result = Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(DirectCommandAllocator[Index].Indirect()));
-		if (FAILED(Result))
-		{
-			VGLogFatal(Rendering) << "Failed to create direct command allocator for frame " << Index << ": " << Result;
-		}
-
-		Result = Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, DirectCommandAllocator[Index].Get(), nullptr, IID_PPV_ARGS(DirectCommandList[Index].Indirect()));
-		if (FAILED(Result))
-		{
-			VGLogFatal(Rendering) << "Failed to create direct command list for frame " << Index << ": " << Result;
-		}
+		DirectCommandList[Index].Create(*this, D3D12_COMMAND_LIST_TYPE_DIRECT);
 
 		// Close all lists except the current frame's list.
 		if (Index > 0)
 		{
-			static_cast<ID3D12GraphicsCommandList*>(DirectCommandList[Index].Get())->Close();
+			DirectCommandList[Index].Close();
 		}
 	}
 
@@ -387,29 +330,19 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 
 	for (int Index = 0; Index < FrameCount; ++Index)
 	{
-		Result = Device->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_COMPUTE, IID_PPV_ARGS(ComputeCommandAllocator[Index].Indirect()));
-		if (FAILED(Result))
-		{
-			VGLogFatal(Rendering) << "Failed to create compute command allocator for frame " << Index << ": " << Result;
-		}
-
-		Result = Device->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_COMPUTE, ComputeCommandAllocator[Index].Get(), nullptr, IID_PPV_ARGS(ComputeCommandList[Index].Indirect()));
-		if (FAILED(Result))
-		{
-			VGLogFatal(Rendering) << "Failed to create compute command list for frame " << Index << ": " << Result;
-		}
+		ComputeCommandList[Index].Create(*this, D3D12_COMMAND_LIST_TYPE_COMPUTE);
 
 		// Close all lists except the current frame's list.
 		if (Index > 0)
 		{
-			static_cast<ID3D12GraphicsCommandList*>(ComputeCommandList[Index].Get())->Close();
+			ComputeCommandList[Index].Close();
 		}
 	}
 
 	DXGI_SWAP_CHAIN_DESC1 SwapChainDescription{};
 	SwapChainDescription.Width = static_cast<UINT>(RenderWidth);
 	SwapChainDescription.Height = static_cast<UINT>(RenderHeight);
-	SwapChainDescription.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	SwapChainDescription.Format = DXGI_FORMAT_B8G8R8A8_UNORM;  // Non-HDR. #TODO: Support HDR.
 	SwapChainDescription.BufferCount = FrameCount;
 	SwapChainDescription.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 	SwapChainDescription.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
@@ -476,28 +409,26 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		VGLogFatal(Rendering) << "Failed to create compute fence event: " << GetPlatformError();
 	}
 
-	constexpr auto FrameBufferSize = 1024 * 1024 * 64;
+	SetupDescriptorHeaps();
+
+	constexpr auto FrameBufferSize = 1024 * 64;
 
 	// Allocate frame buffers.
-	for (auto Index = 0; Index < FrameCount; ++Index)
+	for (uint32_t Index = 0; Index < FrameCount; ++Index)
 	{
-		ResourceDescription Description{};
+		BufferDescription Description{};
 		Description.Size = FrameBufferSize;
 		Description.Stride = 1;
 		Description.UpdateRate = ResourceFrequency::Dynamic;
 		Description.BindFlags = BindFlag::ConstantBuffer;  // #TODO: Correct?
 		Description.AccessFlags = AccessFlag::CPUWrite;
 
-		FrameBuffers[Index] = std::move(AllocatorManager.Allocate(*this, Description, VGText("Frame Buffer")));
+		FrameBuffers[Index] = std::move(AllocatorManager.AllocateBuffer(Description, VGText("Frame Buffer")));
 	}
 
-	SetupDescriptorHeaps();
 	SetupRenderTargets();
 
-	if (Debugging)
-	{
-		SetNames();
-	}
+	SetNames();
 }
 
 RenderDevice::~RenderDevice()
@@ -511,17 +442,122 @@ RenderDevice::~RenderDevice()
 	::CloseHandle(ComputeFenceEvent);
 }
 
-std::shared_ptr<GPUBuffer> RenderDevice::Allocate(const ResourceDescription& Description, const std::wstring_view Name)
+void RenderDevice::CheckFeatureSupport()
 {
-	return std::move(AllocatorManager.Allocate(*this, Description, Name));
+	D3D12_FEATURE_DATA_D3D12_OPTIONS Options{};
+	auto Result = Device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &Options, sizeof(Options));
+	if (FAILED(Result))
+	{
+		VGLogError(Rendering) << "Failed to check feature support for category 'options': " << Result;
+	}
+
+	else
+	{
+		switch (Options.ResourceBindingTier)
+		{
+		case D3D12_RESOURCE_BINDING_TIER_1: VGLog(Rendering) << "Device supports resource binding tier 1."; break;
+		case D3D12_RESOURCE_BINDING_TIER_2: VGLog(Rendering) << "Device supports resource binding tier 2."; break;
+		case D3D12_RESOURCE_BINDING_TIER_3: VGLog(Rendering) << "Device supports resource binding tier 3."; break;
+		default:
+			if (Options.ResourceBindingTier > D3D12_RESOURCE_BINDING_TIER_3)
+			{
+				VGLog(Rendering) << "Device supports resource binding tier newer than 3.";
+			}
+
+			else
+			{
+				VGLogWarning(Rendering) << "Unable to determine device resource binding tier.";
+			}
+		}
+	}
+
+	D3D12_FEATURE_DATA_FEATURE_LEVELS FeatureLevels{ 1, &TargetFeatureLevel };
+	Result = Device->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS, &FeatureLevels, sizeof(FeatureLevels));
+	if (FAILED(Result))
+	{
+		VGLogError(Rendering) << "Failed to check feature support for category 'feature levels': " << Result;
+	}
+
+	else
+	{
+		switch (FeatureLevels.MaxSupportedFeatureLevel)
+		{
+		case D3D_FEATURE_LEVEL_11_0: VGLog(Rendering) << "Device supports feature level 11.0."; break;
+		case D3D_FEATURE_LEVEL_11_1: VGLog(Rendering) << "Device supports feature level 11.1."; break;
+		case D3D_FEATURE_LEVEL_12_0: VGLog(Rendering) << "Device supports feature level 12.0."; break;
+		case D3D_FEATURE_LEVEL_12_1: VGLog(Rendering) << "Device supports feature level 12.1."; break;
+		default:
+			if (FeatureLevels.MaxSupportedFeatureLevel < D3D_FEATURE_LEVEL_11_0)
+			{
+				VGLog(Rendering) << "Device supports feature level prior to 11.0.";
+			}
+
+			else
+			{
+				VGLog(Rendering) << "Device supports feature level newer than 12.1.";
+			}
+		}
+	}
+
+	D3D12_FEATURE_DATA_SHADER_MODEL ShaderModel{ D3D_SHADER_MODEL_6_5 };  // Highest shader model available.
+	Result = Device->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &ShaderModel, sizeof(ShaderModel));
+	if (FAILED(Result))
+	{
+		VGLogError(Rendering) << "Failed to check feature support for category 'shader model': " << Result;
+	}
+
+	else
+	{
+		switch (ShaderModel.HighestShaderModel)
+		{
+		case D3D_SHADER_MODEL_5_1: VGLog(Rendering) << "Device supports shader model 5.1."; break;
+		case D3D_SHADER_MODEL_6_0: VGLog(Rendering) << "Device supports shader model 6.0."; break;
+		case D3D_SHADER_MODEL_6_1: VGLog(Rendering) << "Device supports shader model 6.1."; break;
+		case D3D_SHADER_MODEL_6_2: VGLog(Rendering) << "Device supports shader model 6.2."; break;
+		case D3D_SHADER_MODEL_6_3: VGLog(Rendering) << "Device supports shader model 6.3."; break;
+		case D3D_SHADER_MODEL_6_4: VGLog(Rendering) << "Device supports shader model 6.4."; break;
+		case D3D_SHADER_MODEL_6_5: VGLog(Rendering) << "Device supports shader model 6.5."; break;
+		default:
+			if (ShaderModel.HighestShaderModel > D3D_SHADER_MODEL_6_5)
+			{
+				VGLog(Rendering) << "Device supports shader model newer than 6.5.";
+			}
+
+			else
+			{
+				VGLogWarning(Rendering) << "Unable to determine device shader model support.";
+			}
+		}
+	}
+
+	D3D12_FEATURE_DATA_ROOT_SIGNATURE RootSignature{ D3D_ROOT_SIGNATURE_VERSION_1_1 };
+	Result = Device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &RootSignature, sizeof(RootSignature));
+	if (FAILED(Result))
+	{
+		VGLogError(Rendering) << "Failed to check feature support for category 'root signature': " << Result;
+	}
+
+	else
+	{
+		switch (RootSignature.HighestVersion)
+		{
+		case D3D_ROOT_SIGNATURE_VERSION_1_0: VGLog(Rendering) << "Device supports root signature 1.0."; break;
+		case D3D_ROOT_SIGNATURE_VERSION_1_1: VGLog(Rendering) << "Device supports root signature 1.1."; break;
+		default:
+			if (RootSignature.HighestVersion > D3D_ROOT_SIGNATURE_VERSION_1_1)
+			{
+				VGLog(Rendering) << "Device supports root signature newer than 1.1.";
+			}
+
+			else
+			{
+				VGLogWarning(Rendering) << "Unable to determine device root signature support.";
+			}
+		}
+	}
 }
 
-void RenderDevice::Write(std::shared_ptr<GPUBuffer>& Buffer, const std::vector<uint8_t>& Source, size_t BufferOffset)
-{
-	AllocatorManager.Write(*this, Buffer, Source, BufferOffset);
-}
-
-std::pair<std::shared_ptr<GPUBuffer>, size_t> RenderDevice::FrameAllocate(size_t Size)
+std::pair<std::shared_ptr<Buffer>, size_t> RenderDevice::FrameAllocate(size_t Size)
 {
 	const auto FrameIndex = Frame % FrameCount;
 
@@ -557,7 +593,7 @@ void RenderDevice::Sync(SyncType Type, size_t FrameID)
 		break;
 	}
 
-	const auto FrameIndex = FrameID % FrameCount;
+	const auto FrameIndex = FrameID == std::numeric_limits<size_t>::max() ? GetFrameIndex() : FrameID % FrameCount;
 
 	auto Result = SyncQueue->Signal(SyncFence, FrameIndex);
 	if (FAILED(Result))
@@ -608,9 +644,9 @@ void RenderDevice::SetResolution(size_t Width, size_t Height, bool InFullscreen)
 
 	// #TODO: Fullscreen.
 
-	FinalRenderTargets = {};  // Release the render targets.
+	BackBufferTextures = {};  // Release the render targets.
 
-	auto Result = SwapChain->ResizeBuffers(FrameCount, Width, Height, DXGI_FORMAT_UNKNOWN, 0);
+	auto Result = SwapChain->ResizeBuffers(static_cast<UINT>(FrameCount), static_cast<UINT>(Width), static_cast<UINT>(Height), DXGI_FORMAT_UNKNOWN, 0);
 	if (FAILED(Result))
 	{
 		VGLogFatal(Rendering) << "Failed to resize swap chain buffers: " << Result;

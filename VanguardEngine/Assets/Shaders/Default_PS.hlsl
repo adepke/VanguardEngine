@@ -1,3 +1,5 @@
+#include "Default_RS.hlsli"
+
 struct Input
 {
 	float4 Position : SV_POSITION;
@@ -9,6 +11,7 @@ struct Output
 	float4 Color;
 };
 
+[RootSignature(RS)]
 Output main(Input In) : SV_TARGET
 {
 	Output Out;

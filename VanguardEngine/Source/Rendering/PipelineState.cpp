@@ -6,6 +6,9 @@
 #include <algorithm>
 #include <cctype>
 #include <optional>
+#include <sstream>
+#include <vector>
+#include <limits>
 
 void PipelineState::CreateShaders(RenderDevice& Device, const std::filesystem::path& ShaderPath)
 {
@@ -49,6 +52,11 @@ void PipelineState::CreateShaders(RenderDevice& Device, const std::filesystem::p
 				Type = ShaderType::Geometry;
 			}
 
+			else if (FindType(VGText("_RS")))
+			{
+				Type = std::nullopt;  // Root signature, we don't need to do anything.
+			}
+
 			else
 			{
 				VGLogError(Rendering) << "Failed to determine shader type for shader " << Entry.path().filename().generic_wstring() << ".";
@@ -84,42 +92,10 @@ void PipelineState::CreateRootSignature(RenderDevice& Device)
 {
 	VGScopedCPUStat("Create Root Signature");
 
-	D3D12_FEATURE_DATA_ROOT_SIGNATURE RootSignatureFeatureData{};
-	RootSignatureFeatureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-
-	if (FAILED(Device.Device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &RootSignatureFeatureData, sizeof(RootSignatureFeatureData))))
-	{
-		VGLogFatal(Rendering) << "Adapter doesn't support root signature version 1.1";
-	}
-
-	constexpr auto RootSignatureFlags =
-		D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |  // We need the input assembler.
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
-		D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS;
-
-	D3D12_VERSIONED_ROOT_SIGNATURE_DESC RootSignatureDesc{};
-	RootSignatureDesc.Version = D3D_ROOT_SIGNATURE_VERSION_1_1;
-	//RootSignatureDesc.Desc_1_1.NumParameters = ? ;  // #TODO: Comes from reflection.
-	//RootSignatureDesc.Desc_1_1.pParameters = ? ;  // #TODO: Comes from reflection.
-	RootSignatureDesc.Desc_1_1.NumStaticSamplers = 0;
-	RootSignatureDesc.Desc_1_1.pStaticSamplers = nullptr;
-	RootSignatureDesc.Desc_1_1.Flags = RootSignatureFlags;
-
-	ID3DBlob* RootSignatureBlob;
-	ID3DBlob* ErrorBlob;
-
-	auto Result = D3D12SerializeVersionedRootSignature(&RootSignatureDesc, &RootSignatureBlob, &ErrorBlob);
+	const auto Result = Device.Native()->CreateRootSignature(0, VertexShader->Bytecode.data(), VertexShader->Bytecode.size(), IID_PPV_ARGS(RootSignature.Indirect()));
 	if (FAILED(Result))
 	{
-		VGLogFatal(Rendering) << "Failed to serialize root signature: " << Result;
-	}
-
-	Result = Device.Device->CreateRootSignature(0, RootSignatureBlob->GetBufferPointer(), RootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(RootSignature.Indirect()));
-	if (FAILED(Result))
-	{
-		VGLogFatal(Rendering) << "Failed to create root signature: " << Result;
+		VGLogError(Rendering) << "Failed to create root signature: " << Result;
 	}
 }
 
@@ -128,26 +104,92 @@ void PipelineState::CreateDescriptorTables(RenderDevice& Device)
 	VGScopedCPUStat("Create Descriptor Tables");
 }
 
-void PipelineState::CreateInputLayout()
+D3D12_INPUT_LAYOUT_DESC PipelineState::CreateInputLayout(std::vector<D3D12_INPUT_ELEMENT_DESC>& InputElements)
 {
 	VGScopedCPUStat("Create Input Layout");
+
+	for (auto& Element : VertexShader->Reflection.InputElements)
+	{
+		D3D12_INPUT_ELEMENT_DESC InputDesc{};
+		InputDesc.SemanticName = Element.SemanticName.c_str();
+		InputDesc.SemanticIndex = static_cast<UINT>(Element.SemanticIndex);
+		InputDesc.Format = Element.Format;
+		InputDesc.InputSlot = 0;
+		InputDesc.AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
+		InputDesc.InputSlotClass = Element.SemanticName.find("INSTANCE") != std::string::npos ? D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA : D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
+		InputDesc.InstanceDataStepRate = InputDesc.InputSlotClass == D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA ? 0 : 1;
+
+		InputElements.push_back(std::move(InputDesc));
+	}
+
+	return { InputElements.size() ? InputElements.data() : nullptr, static_cast<UINT>(InputElements.size()) };
 }
 
-void PipelineState::Build(RenderDevice& Device, const std::filesystem::path& ShaderPath)
+void PipelineState::Build(RenderDevice& Device, const PipelineStateDescription& InDescription)
 {
 	VGScopedCPUStat("Build Pipeline");
 
-	VGLog(Rendering) << "Building pipeline for shader '" << ShaderPath.filename().generic_wstring() << "'.";
+	Description = InDescription;
 
-	const auto& Filename = ShaderPath.filename().generic_wstring();
+	VGLog(Rendering) << "Building pipeline for shader '" << Description.ShaderPath.filename().generic_wstring() << "'.";
 
-	if (ShaderPath.has_extension())
+	const auto& Filename = Description.ShaderPath.filename().generic_wstring();
+
+	if (Description.ShaderPath.has_extension())
 	{
-		VGLogWarning(Rendering) << "Improper shader path '" << ShaderPath.filename().generic_wstring() << "', do not include extension.";
+		VGLogWarning(Rendering) << "Improper shader path '" << Description.ShaderPath.filename().generic_wstring() << "', do not include extension.";
 	}
 
-	CreateShaders(Device, ShaderPath);
+	// Data that must be kept alive until the pipeline is created.
+	std::vector<D3D12_INPUT_ELEMENT_DESC> InputElements;
+
+	CreateShaders(Device, Description.ShaderPath);
+
+	if (!VertexShader)
+	{
+		VGLogError(Rendering) << "Missing required vertex shader for graphics pipeline state.";
+
+		return;
+	}
+
 	CreateRootSignature(Device);
 	CreateDescriptorTables(Device);
-	CreateInputLayout();
+	auto InputLayout = std::move(CreateInputLayout(InputElements));
+
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC Desc{};
+	Desc.pRootSignature = RootSignature.Get();
+	Desc.VS = { VertexShader->Bytecode.data(), VertexShader->Bytecode.size() };
+	Desc.PS = { PixelShader ? PixelShader->Bytecode.data() : nullptr, PixelShader ? PixelShader->Bytecode.size() : 0 };
+	Desc.DS = { DomainShader ? DomainShader->Bytecode.data() : nullptr, DomainShader ? DomainShader->Bytecode.size() : 0 };
+	Desc.HS = { HullShader ? HullShader->Bytecode.data() : nullptr, HullShader ? HullShader->Bytecode.size() : 0 };
+	Desc.GS = { GeometryShader ? GeometryShader->Bytecode.data() : nullptr, GeometryShader ? GeometryShader->Bytecode.size() : 0 };
+	Desc.StreamOutput = { nullptr, 0, nullptr, 0, 0 };  // Don't support GPU out streaming.
+	Desc.BlendState = Description.BlendDescription;
+	Desc.SampleMask = std::numeric_limits<UINT>::max();
+	Desc.RasterizerState = Description.RasterizerDescription;
+	Desc.DepthStencilState = Description.DepthStencilDescription;
+	Desc.InputLayout = InputLayout;
+	Desc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;  // Don't support strip topology cuts.
+	switch (Description.Topology)  // #TODO: Support patch topology, which is needed for hull and domain shaders.
+	{
+	case D3D_PRIMITIVE_TOPOLOGY_UNDEFINED: Desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_UNDEFINED; break;
+	case D3D_PRIMITIVE_TOPOLOGY_POINTLIST: Desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT; break;
+	case D3D_PRIMITIVE_TOPOLOGY_LINELIST:
+	case D3D_PRIMITIVE_TOPOLOGY_LINESTRIP: Desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE; break;
+	case D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST:
+	case D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP: Desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE; break;
+	}
+	Desc.NumRenderTargets = 1;  // #TODO: Pull from render graph?
+	Desc.RTVFormats[0] = /*DXGI_FORMAT_R10G10B10A2_UNORM*/ DXGI_FORMAT_B8G8R8A8_UNORM;
+	Desc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	Desc.SampleDesc = { 1, 0 };  // #TODO: Support multi-sampling.
+	Desc.NodeMask = 0;
+	Desc.CachedPSO = { nullptr, 0 };  // #TODO: Pipeline caching.
+	Desc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;  // #TODO: Add debugging flag if we're a software adapter.
+
+	const auto Result = Device.Native()->CreateGraphicsPipelineState(&Desc, IID_PPV_ARGS(Pipeline.Indirect()));
+	if (FAILED(Result))
+	{
+		VGLogFatal(Rendering) << "Failed to create pipeline state: " << Result;
+	}
 }

@@ -9,24 +9,30 @@
 #include <vector>
 #include <memory>
 #include <string_view>
+#include <type_traits>
 
 class RenderDevice;
+struct Resource;
+struct Buffer;
+struct Texture;
 struct ResourceDescription;
-struct GPUBuffer;
-
-namespace D3D12MA
-{
-	class Allocation;
-}
+struct BufferDescription;
+struct TextureDescription;
 
 class ResourceManager
 {
 private:
-	size_t FrameCount;
-	size_t CurrentFrame = 0;
+	// #TODO: Weak pointer instead of raw pointer?
+	RenderDevice* Device = nullptr;
+	size_t FrameCount = 0;
+	
 	std::vector<ResourcePtr<D3D12MA::Allocation>> UploadResources;
 	std::vector<size_t> UploadOffsets;
 	std::vector<void*> UploadPtrs;
+
+	void CreateResourceViews(std::shared_ptr<Buffer>& Target);
+	void CreateResourceViews(std::shared_ptr<Texture>& Target);
+	void NameResource(ResourcePtr<D3D12MA::Allocation>& Target, const std::wstring_view Name);
 
 public:
 	ResourceManager() = default;
@@ -36,12 +42,17 @@ public:
 	ResourceManager& operator=(const ResourceManager&) = delete;
 	ResourceManager& operator=(ResourceManager&&) noexcept = delete;
 
-	void Initialize(RenderDevice& Device, size_t BufferedFrames);
+	void Initialize(RenderDevice* InDevice, size_t BufferedFrames);
 
-	std::shared_ptr<GPUBuffer> Allocate(RenderDevice& Device, const ResourceDescription& Description, const std::wstring_view Name);
+	std::shared_ptr<Buffer> AllocateBuffer(const BufferDescription& Description, const std::wstring_view Name);
+	std::shared_ptr<Texture> AllocateTexture(const TextureDescription& Description, const std::wstring_view Name);
+	
+	// Creates a texture from the swap chain surface.
+	std::shared_ptr<Texture> TextureFromSwapChain(void* Surface, const std::wstring_view Name);
 
-	// Source data can be discarded immediately.
-	void Write(RenderDevice& Device, std::shared_ptr<GPUBuffer>& Buffer, const std::vector<uint8_t>& Source, size_t BufferOffset = 0);
+	// Source data can be discarded immediately. Offsets are in bytes.
+	void WriteBuffer(std::shared_ptr<Buffer>& Target, const std::vector<uint8_t>& Source, size_t TargetOffset = 0);
+	void WriteTexture(std::shared_ptr<Texture>& Target, const std::vector<uint8_t>& Source);
 
 	void CleanupFrameResources(size_t Frame);
 };

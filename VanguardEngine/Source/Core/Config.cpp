@@ -9,6 +9,8 @@
 
 Config::Config()
 {
+	VGScopedCPUStat("Config Load");
+
 	auto CurrentPath = std::filesystem::current_path();
 
 	constexpr auto IsEngineRoot = [](const auto& Path)
@@ -38,5 +40,5 @@ Config::Config()
 	nlohmann::json EngineConfig;
 	EngineConfigStream >> EngineConfig;
 
-	ShaderPath = EngineRoot / EngineConfig["Paths"]["ShaderPath"].get<std::string>();
+	MaterialsPath = EngineRoot / EngineConfig["Assets"]["Materials"].get<std::string>();
 }

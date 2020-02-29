@@ -2,9 +2,12 @@
 
 #include <Rendering/Renderer.h>
 #include <Rendering/Device.h>
+#include <Rendering/Buffer.h>
+#include <Rendering/Texture.h>
 #include <Core/CoreComponents.h>
 #include <Rendering/RenderComponents.h>
 #include <Rendering/RenderSystems.h>
+#include <Rendering/CommandList.h>
 
 //#include <entt/entt.hpp>  // #TODO: Include from here instead of in the header.
 
@@ -25,8 +28,6 @@ auto Renderer::GetPassRenderTargets(RenderPass Pass)
 
 	// #TODO: Replace with render graph.
 
-	const auto FrameIndex = Device->Frame % RenderDevice::FrameCount;
-
 	// Split into two vectors so that we can trivially pass to the command list.
 	std::vector<ID3D12Resource*> RenderTargets;
 	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> RenderTargetViews;
@@ -36,8 +37,8 @@ auto Renderer::GetPassRenderTargets(RenderPass Pass)
 	case RenderPass::Main:
 		RenderTargets.push_back({});
 		RenderTargetViews.push_back({});
-		RenderTargets[0] = Device->FinalRenderTargets[FrameIndex].Get();
-		RenderTargetViews[0] = { Device->FinalRenderTargetViews[FrameIndex].ptr };
+		RenderTargets[0] = Device->GetBackBuffer()->Native();
+		RenderTargetViews[0] = { *Device->GetBackBuffer()->RTV };
 		break;
 	}
 
@@ -49,8 +50,6 @@ auto Renderer::GetPassRenderTargets(RenderPass Pass)
 void Renderer::BeginRenderPass(RenderPass Pass)
 {
 	VGScopedCPUStat("Begin Render Pass");
-
-	const auto FrameIndex = Device->Frame % RenderDevice::FrameCount;
 
 	auto [RenderTargets, RenderTargetViews] = GetPassRenderTargets(Pass);
 
@@ -70,7 +69,8 @@ void Renderer::BeginRenderPass(RenderPass Pass)
 		Barriers.push_back(std::move(Barrier));
 	}
 
-	Device->DirectCommandList[FrameIndex]->ResourceBarrier(Barriers.size(), Barriers.data());
+	// #TODO: Replace with render graph barriers.
+	Device->GetDirectList().Native()->ResourceBarrier(static_cast<UINT>(Barriers.size()), Barriers.data());
 
 	std::vector<D3D12_RENDER_PASS_RENDER_TARGET_DESC> RenderPassTargets;
 	RenderTargets.reserve(RenderTargetViews.size());
@@ -89,16 +89,14 @@ void Renderer::BeginRenderPass(RenderPass Pass)
 		RenderPassTargets.push_back(std::move(PassDesc));
 	}
 
-	Device->DirectCommandList[FrameIndex]->BeginRenderPass(RenderTargets.size(), RenderPassTargets.data(), nullptr, D3D12_RENDER_PASS_FLAG_NONE);  // #TODO: Some passes need D3D12_RENDER_PASS_FLAG_ALLOW_UAV_WRITES.
+	Device->GetDirectList().Native()->BeginRenderPass(static_cast<UINT>(RenderTargets.size()), RenderPassTargets.data(), nullptr, D3D12_RENDER_PASS_FLAG_NONE);  // #TODO: Some passes need D3D12_RENDER_PASS_FLAG_ALLOW_UAV_WRITES.
 }
 
 void Renderer::EndRenderPass(RenderPass Pass)
 {
 	VGScopedCPUStat("End Render Pass");
 
-	const auto FrameIndex = Device->Frame % RenderDevice::FrameCount;
-
-	Device->DirectCommandList[FrameIndex]->EndRenderPass();
+	Device->GetDirectList().Native()->EndRenderPass();
 
 	auto [RenderTargets, RenderTargetViews] = GetPassRenderTargets(Pass);
 
@@ -118,7 +116,20 @@ void Renderer::EndRenderPass(RenderPass Pass)
 		Barriers.push_back(std::move(Barrier));
 	}
 
-	Device->DirectCommandList[FrameIndex]->ResourceBarrier(Barriers.size(), Barriers.data());
+	// #TODO: Replace with render graph barriers.
+	Device->GetDirectList().Native()->ResourceBarrier(static_cast<UINT>(Barriers.size()), Barriers.data());
+}
+
+void Renderer::SetDescriptorHeaps(CommandList& List)
+{
+	VGScopedCPUStat("Set Descriptor Heaps");
+
+	std::vector<ID3D12DescriptorHeap*> Heaps;
+
+	Heaps.push_back(Device->GetResourceHeap().Native());
+	Heaps.push_back(Device->GetSamplerHeap().Native());
+
+	List.Native()->SetDescriptorHeaps(static_cast<UINT>(Heaps.size()), Heaps.data());
 }
 
 void Renderer::Initialize(std::unique_ptr<RenderDevice>&& InDevice)
@@ -127,23 +138,22 @@ void Renderer::Initialize(std::unique_ptr<RenderDevice>&& InDevice)
 
 	Device = std::move(InDevice);
 
-	Device->ReloadShaders();
+	Device->CheckFeatureSupport();
+	Materials = std::move(Device->ReloadMaterials());
 }
 
 void Renderer::Render(entt::registry& Registry)
 {
 	VGScopedCPUStat("Render");
 
-	const auto FrameIndex = Device->Frame % RenderDevice::FrameCount;
-
-	static_cast<ID3D12GraphicsCommandList*>(Device->CopyCommandList[FrameIndex].Get())->Close();
+	Device->GetCopyList().Close();
 	
-	ID3D12CommandList* CopyLists[] = { Device->CopyCommandList[FrameIndex].Get() };
+	ID3D12CommandList* CopyLists[] = { Device->GetCopyList().Native() };
 
 	{
 		VGScopedCPUStat("Execute Copy");
 
-		Device->CopyCommandQueue->ExecuteCommandLists(1, CopyLists);
+		Device->GetCopyQueue()->ExecuteCommandLists(1, CopyLists);
 	}
 
 	// #TODO: Culling.
@@ -151,16 +161,17 @@ void Renderer::Render(entt::registry& Registry)
 	// #TODO: Sort by material.
 	
 	// Number of entities with MeshComponent and TransformComponent
-	const auto RenderCount = 0;
+	const auto RenderCount = 10;
 
-	std::pair<std::shared_ptr<GPUBuffer>, size_t> InstanceBuffer;
+	std::pair<std::shared_ptr<Buffer>, size_t> InstanceBuffer;
 
 	{
 		VGScopedCPUStat("Generate Instance Buffer");
 
 		InstanceBuffer = std::move(Device->FrameAllocate(sizeof(EntityInstance) * RenderCount));
 
-		Registry.view<const TransformComponent, const MeshComponent>().each([this, &InstanceBuffer](auto Entity, const auto& Transform, const auto&)
+		size_t Index = 0;
+		Registry.view<const TransformComponent, const MeshComponent>().each([this, &InstanceBuffer, &Index](auto Entity, const auto& Transform, const auto&)
 			{
 				EntityInstance Instance{ Transform };
 
@@ -168,69 +179,76 @@ void Renderer::Render(entt::registry& Registry)
 				InstanceData.resize(sizeof(EntityInstance));
 				std::memcpy(InstanceData.data(), &Instance, InstanceData.size());
 
-				Device->Write(InstanceBuffer.first, InstanceData, InstanceBuffer.second);
+				Device->WriteResource(InstanceBuffer.first, InstanceData, InstanceBuffer.second + (Index * sizeof(EntityInstance)));
+
+				++Index;
 			});
 	}
 
+	// Global to all render passes.
+	SetDescriptorHeaps(Device->GetDirectList());
+
+	// #TEMP: After barrier, but before anything related to pass.
 	BeginRenderPass(RenderPass::Main);
 
-	auto* DrawList = Device->DirectCommandList[FrameIndex].Get();
+	auto* DrawList = Device->GetDirectList().Native();
 
 	{
 		VGScopedCPUStat("Main Pass");
 
-		Registry.view<const TransformComponent, const MeshComponent>().each([&InstanceBuffer, DrawList](auto Entity, const auto&, const auto& Mesh)
+		Registry.view<const TransformComponent, const MeshComponent>().each([&InstanceBuffer, DrawList, this](auto Entity, const auto&, const auto& Mesh)
 			{
 				std::vector<D3D12_VERTEX_BUFFER_VIEW> VertexViews;
 
 				// Vertex Buffer.
 				VertexViews.push_back({});
-				VertexViews[0].BufferLocation = Mesh.VertexBuffer->Resource->GetResource()->GetGPUVirtualAddress();
-				VertexViews[0].SizeInBytes = Mesh.VertexBuffer->Description.Size;
-				VertexViews[0].StrideInBytes = Mesh.VertexBuffer->Description.Stride;
+				VertexViews[0].BufferLocation = Mesh.VertexBuffer->Native()->GetGPUVirtualAddress();
+				VertexViews[0].SizeInBytes = static_cast<UINT>(Mesh.VertexBuffer->Description.Size);
+				VertexViews[0].StrideInBytes = static_cast<UINT>(Mesh.VertexBuffer->Description.Stride);
 
 				// Instance Buffer.
 				VertexViews.push_back({});
-				VertexViews[1].BufferLocation = InstanceBuffer.first->Resource->GetResource()->GetGPUVirtualAddress() + InstanceBuffer.second;
-				VertexViews[1].SizeInBytes = InstanceBuffer.first->Description.Size;
-				VertexViews[1].StrideInBytes = InstanceBuffer.first->Description.Stride;
+				VertexViews[1].BufferLocation = InstanceBuffer.first->Native()->GetGPUVirtualAddress() + InstanceBuffer.second;
+				VertexViews[1].SizeInBytes = static_cast<UINT>(InstanceBuffer.first->Description.Size);
+				VertexViews[1].StrideInBytes = static_cast<UINT>(InstanceBuffer.first->Description.Stride);
 
-				DrawList->IASetVertexBuffers(0, VertexViews.size(), VertexViews.data());  // #TODO: Slot?
+				DrawList->IASetVertexBuffers(0, static_cast<UINT>(VertexViews.size()), VertexViews.data());  // #TODO: Slot?
 
 				D3D12_INDEX_BUFFER_VIEW IndexView{};
-				IndexView.BufferLocation = Mesh.IndexBuffer->Resource->GetResource()->GetGPUVirtualAddress();
+				IndexView.BufferLocation = Mesh.IndexBuffer->Native()->GetGPUVirtualAddress();
 				IndexView.SizeInBytes = Mesh.IndexBuffer->Description.Size;
 				IndexView.Format = DXGI_FORMAT_R32_UINT;
 
 				DrawList->IASetIndexBuffer(&IndexView);
 
-				//DrawList->OMSetStencilRef();  // #TODO: Stencil ref.
+				DrawList->OMSetStencilRef(0);  // #TODO: Stencil ref.
 
-				//DrawList->SetPipelineState();  // #TODO: Pipeline state.
-				DrawList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+				// #TEMP: Experimenting with pipeline binding.
+				Device->GetDirectList().BindPipelineState(*Materials[0].Pipeline);
 
 				DrawList->DrawIndexedInstanced(Mesh.IndexBuffer->Description.Size / sizeof(uint32_t), 1, 0, 0, 0);
 			});
 	}
 
+	// #TEMP: After execute?
 	EndRenderPass(RenderPass::Main);
 
-	// Sync the copy engine so we're sure that all the resources are ready on the GPU. In the future this can be split up into separate sync groups (pre, main, post, etc.) to reduce idle time.
-	Device->Sync(SyncType::Copy, Device->Frame);
-
 	DrawList->Close();
+
+	// Sync the copy engine so we're sure that all the resources are ready on the GPU. In the future this can be split up into separate sync groups (pre, main, post, etc.) to reduce idle time.
+	Device->Sync(SyncType::Copy);
 
 	ID3D12CommandList* DirectLists[] = { DrawList };
 
 	{
 		VGScopedCPUStat("Execute Direct");
 
-		Device->DirectCommandQueue->ExecuteCommandLists(1, DirectLists);
+		Device->GetDirectQueue()->ExecuteCommandLists(1, DirectLists);
 	}
 
 	{
 		VGScopedCPUStat("Present");
 
-		Device->SwapChain->Present(Device->VSync, 0);
+		Device->GetSwapChain()->Present(Device->VSync, 0);  // #TODO: This is probably presenting the wrong frame!
 	}
 }

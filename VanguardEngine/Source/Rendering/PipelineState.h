@@ -7,30 +7,41 @@
 
 #include <filesystem>
 
-#include <d3d12.h>
+#include <Core/Windows/DirectX12Minimal.h>
 
 class RenderDevice;
 
-struct PipelineState
+struct PipelineStateDescription
 {
+	std::filesystem::path ShaderPath;
+	D3D12_BLEND_DESC BlendDescription;
+	D3D12_RASTERIZER_DESC RasterizerDescription;
+	D3D12_DEPTH_STENCIL_DESC DepthStencilDescription;
+	D3D12_PRIMITIVE_TOPOLOGY Topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+};
+
+class PipelineState
+{
+	friend struct CommandList;
+
 private:
+	ResourcePtr<ID3D12PipelineState> Pipeline;
+	PipelineStateDescription Description;
+
 	void CreateShaders(RenderDevice& Device, const std::filesystem::path& ShaderPath);
 	void CreateRootSignature(RenderDevice& Device);
 	void CreateDescriptorTables(RenderDevice& Device);
-	void CreateInputLayout();
+	D3D12_INPUT_LAYOUT_DESC CreateInputLayout(std::vector<D3D12_INPUT_ELEMENT_DESC>& InputElements);
 
 public:
 	ResourcePtr<ID3D12RootSignature> RootSignature;
-	D3D12_INPUT_LAYOUT_DESC InputLayout;
 	std::unique_ptr<Shader> VertexShader;
 	std::unique_ptr<Shader> PixelShader;
 	std::unique_ptr<Shader> HullShader;
 	std::unique_ptr<Shader> DomainShader;
 	std::unique_ptr<Shader> GeometryShader;
-	//ResourcePtr<> BlendState;  // #TODO: Blend state.
-	//ResourcePtr<> RasterizerState;  // #TODO: Rasterizer state.
-	//ResourcePtr<> DepthStencilState;  // #TODO: Depth stencil state.
-	D3D12_PRIMITIVE_TOPOLOGY_TYPE Topology = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
 
-	void Build(RenderDevice& Device, const std::filesystem::path& ShaderPath);
+	auto* Native() const noexcept { return Pipeline.Get(); }
+
+	void Build(RenderDevice& Device, const PipelineStateDescription& InDescription);
 };

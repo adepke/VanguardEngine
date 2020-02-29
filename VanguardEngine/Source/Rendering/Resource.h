@@ -4,7 +4,7 @@
 
 #include <Rendering/Base.h>
 
-#include <D3D12MemAlloc.h>  // #NOTE: Can't forward declare D3D12MA::Allocation because then the SFINAE fails in ResourcePtr.
+#include <D3D12MemAlloc.h>
 
 enum class ResourceFrequency
 {
@@ -32,38 +32,30 @@ enum AccessFlag
 
 struct ResourceDescription
 {
-	size_t Size;
-	size_t Stride;
 	ResourceFrequency UpdateRate;
 	uint32_t BindFlags = 0;  // Determines the view type(s) created.
 	uint32_t AccessFlags = 0;
+	D3D12_RESOURCE_STATES InitialState = D3D12_RESOURCE_STATE_COMMON;  // Ignored if the update rate is Dynamic.
 };
 
-struct GPUBuffer
+class ResourceManager;
+
+struct Resource
 {
-	ResourcePtr<D3D12MA::Allocation> Resource;
-	ResourceDescription Description;
+	friend class ResourceManager;
 
-	CPUHandle CBV = 0;
-	CPUHandle SRV = 0;
-	CPUHandle UAV = 0;
+protected:
+	ResourcePtr<D3D12MA::Allocation> Allocation;
 
-	GPUBuffer(ResourcePtr<D3D12MA::Allocation>&& InResource, const ResourceDescription& InDesc) : Resource(std::move(InResource)), Description(InDesc) {}
-	GPUBuffer(const GPUBuffer&) = delete;
-	GPUBuffer(GPUBuffer&&) noexcept = default;
+public:
+	D3D12_RESOURCE_STATES State;
 
-	GPUBuffer& operator=(const GPUBuffer&) = delete;
-	GPUBuffer& operator=(GPUBuffer&&) noexcept = default;
-};
+	Resource() = default;  // #TODO: Prevent creation outside of the resource manager.
+	Resource(const Resource&) = delete;
+	Resource(Resource&&) noexcept = default;
 
-struct GPUTexture : GPUBuffer
-{
-	uint32_t Width;
-	uint32_t Height;
-	uint32_t Depth;
+	Resource& operator=(const Resource&) = delete;
+	Resource& operator=(Resource&&) noexcept = default;
 
-	CPUHandle RTV;
-	CPUHandle DSV;
-
-	using GPUBuffer::GPUBuffer;
+	auto* Native() const noexcept { return Allocation->GetResource(); }
 };

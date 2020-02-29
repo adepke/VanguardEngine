@@ -8,10 +8,17 @@
 #include <memory>
 #include <filesystem>
 
-#include <d3dcommon.h>
+#include <Core/Windows/DirectX12Minimal.h>
 
 struct ShaderReflection
 {
+	struct InputElement
+	{
+		std::string SemanticName;
+		size_t SemanticIndex;
+		DXGI_FORMAT Format;
+	};
+
 	struct ConstantBuffer
 	{
 		std::string Name;
@@ -24,6 +31,7 @@ struct ShaderReflection
 		size_t BindCount;
 	};
 
+	std::vector<InputElement> InputElements;
 	std::vector<ConstantBuffer> ConstantBuffers;
 	std::vector<Resource> ResourceBindings;
 	size_t InstructionCount = 0;
@@ -44,7 +52,10 @@ struct Shader
 	std::vector<uint8_t> Bytecode;
 	ShaderReflection Reflection;
 
-	ResourcePtr<ID3DBlob> Blob;  // Stored for proper cleanup only. Do not access.
+	void SetBlob(ResourcePtr<ID3DBlob>&& InBlob) { Blob = std::move(InBlob); }
+
+private:
+	ResourcePtr<ID3DBlob> Blob;  // Stored for proper cleanup only.
 };
 
 std::unique_ptr<Shader> CompileShader(const std::filesystem::path& Path, ShaderType Type);
