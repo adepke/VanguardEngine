@@ -8,6 +8,7 @@
 #include <Rendering/RenderComponents.h>
 #include <Rendering/RenderSystems.h>
 #include <Rendering/CommandList.h>
+#include <Rendering/RenderGraph.h>
 
 //#include <entt/entt.hpp>  // #TODO: Include from here instead of in the header.
 
@@ -21,104 +22,6 @@ struct EntityInstance
 
 	TransformComponent Transform;
 };
-
-auto Renderer::GetPassRenderTargets(RenderPass Pass)
-{
-	VGScopedCPUStat("Get Render Pass Targets");
-
-	// #TODO: Replace with render graph.
-
-	// Split into two vectors so that we can trivially pass to the command list.
-	std::vector<ID3D12Resource*> RenderTargets;
-	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> RenderTargetViews;
-
-	switch (Pass)
-	{
-	case RenderPass::Main:
-		RenderTargets.push_back({});
-		RenderTargetViews.push_back({});
-		RenderTargets[0] = Device->GetBackBuffer()->Native();
-		RenderTargetViews[0] = { *Device->GetBackBuffer()->RTV };
-		break;
-	}
-
-	VGAssert(RenderTargets.size() == RenderTargetViews.size(), "Size mismatch in render targets and render target views");
-
-	return std::move(std::pair{ std::move(RenderTargets), std::move(RenderTargetViews) });
-}
-
-void Renderer::BeginRenderPass(RenderPass Pass)
-{
-	VGScopedCPUStat("Begin Render Pass");
-
-	auto [RenderTargets, RenderTargetViews] = GetPassRenderTargets(Pass);
-
-	std::vector<D3D12_RESOURCE_BARRIER> Barriers;
-	Barriers.reserve(RenderTargets.size());
-
-	for (const auto& Target : RenderTargets)
-	{
-		D3D12_RESOURCE_BARRIER Barrier;
-		Barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-		Barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-		Barrier.Transition.pResource = Target;
-		Barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-		Barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_PRESENT;
-		Barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_RENDER_TARGET;
-
-		Barriers.push_back(std::move(Barrier));
-	}
-
-	// #TODO: Replace with render graph barriers.
-	Device->GetDirectList().Native()->ResourceBarrier(static_cast<UINT>(Barriers.size()), Barriers.data());
-
-	std::vector<D3D12_RENDER_PASS_RENDER_TARGET_DESC> RenderPassTargets;
-	RenderTargets.reserve(RenderTargetViews.size());
-
-	for (const auto& View : RenderTargetViews)
-	{
-		D3D12_RENDER_PASS_RENDER_TARGET_DESC PassDesc{};
-		PassDesc.cpuDescriptor = View;
-		PassDesc.BeginningAccess.Type = D3D12_RENDER_PASS_BEGINNING_ACCESS_TYPE_CLEAR;
-		PassDesc.BeginningAccess.Clear.ClearValue.Color[0] = 0.f;
-		PassDesc.BeginningAccess.Clear.ClearValue.Color[1] = 0.f;
-		PassDesc.BeginningAccess.Clear.ClearValue.Color[2] = 0.f;
-		PassDesc.BeginningAccess.Clear.ClearValue.Color[3] = 1.f;
-		PassDesc.EndingAccess.Type = D3D12_RENDER_PASS_ENDING_ACCESS_TYPE_PRESERVE;
-
-		RenderPassTargets.push_back(std::move(PassDesc));
-	}
-
-	Device->GetDirectList().Native()->BeginRenderPass(static_cast<UINT>(RenderTargets.size()), RenderPassTargets.data(), nullptr, D3D12_RENDER_PASS_FLAG_NONE);  // #TODO: Some passes need D3D12_RENDER_PASS_FLAG_ALLOW_UAV_WRITES.
-}
-
-void Renderer::EndRenderPass(RenderPass Pass)
-{
-	VGScopedCPUStat("End Render Pass");
-
-	Device->GetDirectList().Native()->EndRenderPass();
-
-	auto [RenderTargets, RenderTargetViews] = GetPassRenderTargets(Pass);
-
-	std::vector<D3D12_RESOURCE_BARRIER> Barriers;
-	Barriers.reserve(RenderTargets.size());
-
-	for (const auto& Target : RenderTargets)
-	{
-		D3D12_RESOURCE_BARRIER Barrier;
-		Barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-		Barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-		Barrier.Transition.pResource = Target;
-		Barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-		Barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_RENDER_TARGET;
-		Barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PRESENT;
-
-		Barriers.push_back(std::move(Barrier));
-	}
-
-	// #TODO: Replace with render graph barriers.
-	Device->GetDirectList().Native()->ResourceBarrier(static_cast<UINT>(Barriers.size()), Barriers.data());
-}
 
 void Renderer::SetDescriptorHeaps(CommandList& List)
 {
@@ -188,63 +91,21 @@ void Renderer::Render(entt::registry& Registry)
 	// Global to all render passes.
 	SetDescriptorHeaps(Device->GetDirectList());
 
-	// #TEMP: After barrier, but before anything related to pass.
-	BeginRenderPass(RenderPass::Main);
-
 	auto* DrawList = Device->GetDirectList().Native();
 
-	{
-		VGScopedCPUStat("Main Pass");
+	RenderGraph Graph;
 
-		Registry.view<const TransformComponent, const MeshComponent>().each([&InstanceBuffer, DrawList, this](auto Entity, const auto&, const auto& Mesh)
-			{
-				std::vector<D3D12_VERTEX_BUFFER_VIEW> VertexViews;
-
-				// Vertex Buffer.
-				VertexViews.push_back({});
-				VertexViews[0].BufferLocation = Mesh.VertexBuffer->Native()->GetGPUVirtualAddress();
-				VertexViews[0].SizeInBytes = static_cast<UINT>(Mesh.VertexBuffer->Description.Size);
-				VertexViews[0].StrideInBytes = static_cast<UINT>(Mesh.VertexBuffer->Description.Stride);
-
-				// Instance Buffer.
-				VertexViews.push_back({});
-				VertexViews[1].BufferLocation = InstanceBuffer.first->Native()->GetGPUVirtualAddress() + InstanceBuffer.second;
-				VertexViews[1].SizeInBytes = static_cast<UINT>(InstanceBuffer.first->Description.Size);
-				VertexViews[1].StrideInBytes = static_cast<UINT>(InstanceBuffer.first->Description.Stride);
-
-				DrawList->IASetVertexBuffers(0, static_cast<UINT>(VertexViews.size()), VertexViews.data());  // #TODO: Slot?
-
-				D3D12_INDEX_BUFFER_VIEW IndexView{};
-				IndexView.BufferLocation = Mesh.IndexBuffer->Native()->GetGPUVirtualAddress();
-				IndexView.SizeInBytes = Mesh.IndexBuffer->Description.Size;
-				IndexView.Format = DXGI_FORMAT_R32_UINT;
-
-				DrawList->IASetIndexBuffer(&IndexView);
-
-				DrawList->OMSetStencilRef(0);  // #TODO: Stencil ref.
-
-				// #TEMP: Experimenting with pipeline binding.
-				Device->GetDirectList().BindPipelineState(*Materials[0].Pipeline);
-
-				DrawList->DrawIndexedInstanced(Mesh.IndexBuffer->Description.Size / sizeof(uint32_t), 1, 0, 0, 0);
-			});
-	}
-
-	// #TEMP: After execute?
-	EndRenderPass(RenderPass::Main);
-
-	DrawList->Close();
+	auto& MainPass = Graph.AddPass("Main Pass");
+	//MainPass.ReadResource()  Read depthstencil.
+	//MainPass.WriteResource()  Write back buffer.
+	MainPass.BindExecution([](CommandList& List)
+		{
+			
+		}
+	);
 
 	// Sync the copy engine so we're sure that all the resources are ready on the GPU. In the future this can be split up into separate sync groups (pre, main, post, etc.) to reduce idle time.
 	Device->Sync(SyncType::Copy);
-
-	ID3D12CommandList* DirectLists[] = { DrawList };
-
-	{
-		VGScopedCPUStat("Execute Direct");
-
-		Device->GetDirectQueue()->ExecuteCommandLists(1, DirectLists);
-	}
 
 	{
 		VGScopedCPUStat("Present");

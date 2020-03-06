@@ -2,14 +2,23 @@
 
 #pragma once
 
-#include <Rendering/RenderGraphPass.h>
+#include <Rendering/RenderPass.h>
 
 class RenderGraph
 {
+private:
+	size_t TagCounter = 0;
+
+	// Passes should be stored in a sparse container so we don't shuffle, since we're returning raw addresses in AddPass().
+
 public:
-	void AddPass(RenderGraphPass&& Pass);
+	size_t GetNextResourceTag() noexcept
+	{
+		return TagCounter++;
+	}
+
+	RenderPass& AddPass(const std::wstring_view Name);
 
 	bool Build();
-	bool Compile();
 	void Execute();
 };
