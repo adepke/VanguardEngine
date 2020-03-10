@@ -91,19 +91,28 @@ void Renderer::Render(entt::registry& Registry)
 	// Global to all render passes.
 	SetDescriptorHeaps(Device->GetDirectList());
 
-	auto* DrawList = Device->GetDirectList().Native();
-
 	RenderGraph Graph{ *Device };
 
-	const size_t SwapChainTag = Graph.ImportResource(Device->GetBackBuffer());
+	const size_t BackBufferTag = Graph.ImportResource(Device->GetBackBuffer());
 	const size_t DepthStencilTag = Graph.ImportResource(...);
 
 	auto& MainPass = Graph.AddPass("Main Pass");
 	MainPass.ReadResource(DepthStencilTag, RGUsage::DepthStencil);
-	MainPass.WriteResource(SwapChainTag, RGUsage::SwapChain);
-	MainPass.BindExecution([](CommandList& List)
+	MainPass.WriteResource(BackBufferTag, RGUsage::SwapChain);
+
+	// Structured buffer of 64 ints. Dynamic implies upload heap. Bind flags as well as state (and transition barriers) will
+	// be derived automatically from passes' ReadResource usage.
+	RGBufferDescription BufferDesc{ ResourceFrequency::Dynamic, 64, sizeof(int) };
+	const size_t SomeOtherResourceTag = MainPass.CreateResource(BufferDesc, "Some Resource");
+
+	MainPass.Bind(
+		[BackBufferTag, DepthStencilTag, SomeOtherResourceTag](RGResolver& Resolver, CommandList& List)
 		{
-			
+			auto& BackBuffer = Resolver.Get<Texture>(BackBufferTag);
+			auto& DepthStencil = Resolver.Get<Texture>(DepthStencilTag);
+			auto& SomeOtherResource = Resolver.Get<Buffer>(SomeOtherResourceTag);
+
+			// ...
 		}
 	);
 

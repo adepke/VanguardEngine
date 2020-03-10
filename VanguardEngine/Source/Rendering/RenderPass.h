@@ -42,5 +42,5 @@ public:
 	void ReadResource(size_t ResourceTag, RGUsage Usage);  // #TODO: Most resources aren't mutable state-wise, so we should create different paths.
 	void WriteResource(size_t ResourceTag, RGUsage Usage);
 
-	void BindExecution(std::function<void(CommandList&)> Function);
+	void Bind(std::function<void(CommandList&)> Function);
 };
