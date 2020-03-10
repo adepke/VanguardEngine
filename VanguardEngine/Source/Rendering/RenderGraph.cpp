@@ -2,7 +2,7 @@
 
 #include <Rendering/RenderGraph.h>
 
-bool RenderGraph::Build()
+void RenderGraph::Build()
 {
 	// Trim passes that don't have their outputs fed into any other passes.
 	// Next, order the passes in order to optimize execution (avoid running

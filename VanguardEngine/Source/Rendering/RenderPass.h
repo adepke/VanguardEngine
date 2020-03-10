@@ -14,6 +14,8 @@ struct RGBufferDescription;
 struct RGTextureDescription;
 struct CommandList;
 
+// #TODO: Passes can either read or write to a single resource. Add the option to read and write to a resource?
+
 class RenderPass
 {
 	friend class RenderGraph;
@@ -35,8 +37,10 @@ public:
 
 	size_t CreateResource(const RGBufferDescription& Description, const std::wstring_view Name);
 	size_t CreateResource(const RGTextureDescription& Description, const std::wstring_view Name);
-	void ReadResource(size_t ResourceTag);
-	void WriteResource(size_t ResourceTag);
+	// When a pass declares a read/write on a resource, it will assume it performs that action on the entire resource,
+	// for the entire execution of the pass.
+	void ReadResource(size_t ResourceTag, RGUsage Usage);  // #TODO: Most resources aren't mutable state-wise, so we should create different paths.
+	void WriteResource(size_t ResourceTag, RGUsage Usage);
 
 	void BindExecution(std::function<void(CommandList&)> Function);
 };

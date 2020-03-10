@@ -6,6 +6,20 @@
 
 #include <optional>
 
+enum class RGUsage
+{
+	ConstantBuffer,
+	ByteAddressBuffer,
+	StructuredBuffer,
+	TypedBuffer,
+	ColorBuffer,
+	VertexBuffer,
+	IndexBuffer,
+	RenderTarget,
+	DepthStencil,
+	SwapChain,
+};
+
 // Reduced resource descriptions, the render graph will automatically determine the bind flags, access flags, etc.
 
 struct RGBufferDescription

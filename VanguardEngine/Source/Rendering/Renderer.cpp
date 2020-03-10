@@ -93,19 +93,26 @@ void Renderer::Render(entt::registry& Registry)
 
 	auto* DrawList = Device->GetDirectList().Native();
 
-	RenderGraph Graph;
+	RenderGraph Graph{ *Device };
+
+	const size_t SwapChainTag = Graph.ImportResource(Device->GetBackBuffer());
+	const size_t DepthStencilTag = Graph.ImportResource(...);
 
 	auto& MainPass = Graph.AddPass("Main Pass");
-	//MainPass.ReadResource()  Read depthstencil.
-	//MainPass.WriteResource()  Write back buffer.
+	MainPass.ReadResource(DepthStencilTag, RGUsage::DepthStencil);
+	MainPass.WriteResource(SwapChainTag, RGUsage::SwapChain);
 	MainPass.BindExecution([](CommandList& List)
 		{
 			
 		}
 	);
 
+	Graph.Build();
+
 	// Sync the copy engine so we're sure that all the resources are ready on the GPU. In the future this can be split up into separate sync groups (pre, main, post, etc.) to reduce idle time.
 	Device->Sync(SyncType::Copy);
+
+	Graph.Execute();
 
 	{
 		VGScopedCPUStat("Present");
