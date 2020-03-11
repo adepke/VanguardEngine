@@ -100,19 +100,13 @@ void Renderer::Render(entt::registry& Registry)
 	MainPass.ReadResource(DepthStencilTag, RGUsage::DepthStencil);
 	MainPass.WriteResource(BackBufferTag, RGUsage::SwapChain);
 
-	// Structured buffer of 64 ints. Dynamic implies upload heap. Bind flags as well as state (and transition barriers) will
-	// be derived automatically from passes' ReadResource usage.
-	RGBufferDescription BufferDesc{ ResourceFrequency::Dynamic, 64, sizeof(int) };
-	const size_t SomeOtherResourceTag = MainPass.CreateResource(BufferDesc, "Some Resource");
-
 	MainPass.Bind(
-		[BackBufferTag, DepthStencilTag, SomeOtherResourceTag](RGResolver& Resolver, CommandList& List)
+		[BackBufferTag, DepthStencilTag](RGResolver& Resolver, CommandList& List)
 		{
 			auto& BackBuffer = Resolver.Get<Texture>(BackBufferTag);
 			auto& DepthStencil = Resolver.Get<Texture>(DepthStencilTag);
-			auto& SomeOtherResource = Resolver.Get<Buffer>(SomeOtherResourceTag);
 
-			// ...
+			// #TODO: Add some draw commands to the list.
 		}
 	);
 

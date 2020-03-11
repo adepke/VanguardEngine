@@ -20,5 +20,21 @@ void RenderGraph::Execute()
 	// profile, the GPU might be fully loaded with work from
 	// previous frames/async compute.
 
+	// Serialize the execution pipeline, we need to do this to resolve resource state and barriers.
+
+	CommandList* CurrentList;  // The list we're looking at.
+	std::shared_ptr<Buffer> TargetResource;  // The resource we're looking at. Comes from pass inputs.
+	D3D12_RESOURCE_STATES NewResourceState;  // A new resource state derived from the usage.
+
+	// The state changed, which means there was a barrier injected in our current list.
+	if (TargetResource->State != NewResourceState)
+	{
+		CurrentList->TransitionBarrier(TargetResource, NewResourceState);
+	}
+
+	// For each list, list->FlushBarriers();
+
+	// For each list, list->Close();
+
 	//Device->GetDirectQueue()->ExecuteCommandLists(NumLists, DirectLists);
 }

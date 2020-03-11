@@ -4,6 +4,19 @@
 #include <Rendering/Device.h>
 #include <Rendering/PipelineState.h>
 
+void CommandList::TransitionBarrierInternal(ID3D12Resource* Resource, D3D12_RESOURCE_STATES OldState, D3D12_RESOURCE_STATES NewState)
+{
+	D3D12_RESOURCE_BARRIER Barrier;
+	Barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+	Barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+	Barrier.Transition.pResource = Resource;
+	Barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+	Barrier.Transition.StateBefore = OldState;
+	Barrier.Transition.StateAfter = NewState;
+
+	PendingBarriers.emplace_back(std::move(Barrier));
+}
+
 void CommandList::Create(RenderDevice& Device, D3D12_COMMAND_LIST_TYPE Type)
 {
 	auto Result = Device.Native()->CreateCommandAllocator(Type, IID_PPV_ARGS(Allocator.Indirect()));
@@ -23,6 +36,13 @@ void CommandList::SetName(std::wstring_view Name)
 {
 	Allocator->SetName(Name.data());
 	List->SetName(Name.data());
+}
+
+void CommandList::FlushBarriers()
+{
+	List->ResourceBarrier(PendingBarriers.size(), PendingBarriers.data());
+
+	PendingBarriers.clear();
 }
 
 void CommandList::BindPipelineState(PipelineState& State)
