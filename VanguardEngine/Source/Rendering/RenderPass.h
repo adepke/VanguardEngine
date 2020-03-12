@@ -13,6 +13,7 @@ class RenderGraph;
 struct RGBufferDescription;
 struct RGTextureDescription;
 struct CommandList;
+class RGResolver;
 
 // #TODO: Passes can either read or write to a single resource. Add the option to read and write to a resource?
 
@@ -42,5 +43,5 @@ public:
 	void ReadResource(size_t ResourceTag, RGUsage Usage);  // #TODO: Most resources aren't mutable state-wise, so we should create different paths.
 	void WriteResource(size_t ResourceTag, RGUsage Usage);
 
-	void Bind(std::function<void(CommandList&)> Function);
+	void Bind(std::function<void(RGResolver&, CommandList&)> Function);
 };
