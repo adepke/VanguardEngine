@@ -22,14 +22,15 @@ void RenderGraph::Execute()
 
 	// Serialize the execution pipeline, we need to do this to resolve resource state and barriers.
 
-	CommandList* CurrentList;  // The list we're looking at.
+	CommandList* PreviousList;  // The most recent list that used this resource.
 	std::shared_ptr<Buffer> TargetResource;  // The resource we're looking at. Comes from pass inputs.
 	D3D12_RESOURCE_STATES NewResourceState;  // A new resource state derived from the usage.
 
-	// The state changed, which means there was a barrier injected in our current list.
+	// The state changed, which means we need to inject a barrier at the end of the last list to use the resource. #TODO: Place a split barrier start
+	// at the end of that list, and a split barrier beginning at the current list which needs it in a different state.
 	if (TargetResource->State != NewResourceState)
 	{
-		CurrentList->TransitionBarrier(TargetResource, NewResourceState);
+		PreviousList->TransitionBarrier(TargetResource, NewResourceState);
 	}
 
 	// For each list, list->FlushBarriers();
