@@ -425,6 +425,7 @@ void ResourceManager::WriteBuffer(std::shared_ptr<Buffer>& Target, const std::ve
 		if (Target->State != D3D12_RESOURCE_STATE_COPY_DEST)
 		{
 			Device->GetCopyList().TransitionBarrier(Target, D3D12_RESOURCE_STATE_COPY_DEST);
+			Device->GetCopyList().FlushBarriers();
 		}
 
 		auto* TargetCommandList = Device->GetCopyList().Native();
@@ -498,6 +499,7 @@ void ResourceManager::WriteTexture(std::shared_ptr<Texture>& Target, const std::
 	if (Target->State != D3D12_RESOURCE_STATE_COPY_DEST)
 	{
 		Device->GetCopyList().TransitionBarrier(Target, D3D12_RESOURCE_STATE_COPY_DEST);
+		Device->GetCopyList().FlushBarriers();
 	}
 
 	auto* TargetCommandList = Device->GetCopyList().Native();
