@@ -91,12 +91,15 @@ void Renderer::Render(entt::registry& Registry)
 	// Global to all render passes.
 	SetDescriptorHeaps(Device->GetDirectList());
 
-	RenderGraph Graph{ *Device };
+	// #TEMP: Testing render graph API.
+	std::shared_ptr<Texture> DepthStencil;
+
+	RenderGraph Graph{ Device.get() };
 
 	const size_t BackBufferTag = Graph.ImportResource(Device->GetBackBuffer());
-	const size_t DepthStencilTag = Graph.ImportResource(...);
+	const size_t DepthStencilTag = Graph.ImportResource(DepthStencil);
 
-	auto& MainPass = Graph.AddPass("Main Pass");
+	auto& MainPass = Graph.AddPass(VGText("Main Pass"));
 	MainPass.ReadResource(DepthStencilTag, RGUsage::DepthStencil);
 	MainPass.WriteResource(BackBufferTag, RGUsage::SwapChain);
 

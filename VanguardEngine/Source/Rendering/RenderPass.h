@@ -3,6 +3,7 @@
 #pragma once
 
 #include <Rendering/Base.h>
+#include <Rendering/RenderGraphResource.h>
 
 #include <memory>
 #include <string_view>
@@ -22,14 +23,13 @@ class RenderPass
 	friend class RenderGraph;
 
 private:
-	std::weak_ptr<RenderGraph> Graph;
+	RenderGraph& Graph;
+	std::wstring Name;
 	std::vector<size_t> Reads;
 	std::vector<size_t> Writes;
 
-protected:
-	RenderPass() = default;  // Only allow pass creation from RenderGraph.
-
 public:
+	RenderPass(RenderGraph& InGraph, const std::wstring& InName) : Graph(InGraph), Name(InName) {}
 	RenderPass(const RenderPass&) = delete;
 	RenderPass(RenderPass&&) noexcept = default;
 

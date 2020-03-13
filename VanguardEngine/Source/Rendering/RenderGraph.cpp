@@ -1,26 +1,68 @@
 // Copyright (c) 2019-2020 Andrew Depke
 
 #include <Rendering/RenderGraph.h>
+#include <Rendering/CommandList.h>
+#include <Rendering/Buffer.h>
+#include <Rendering/Texture.h>
+
+bool RenderGraph::Validate()
+{
+	if (ResourceWrites.find(RGUsage::SwapChain) == ResourceWrites.end())
+		return false;  // We need to have at least one pass that writes to the swap chain.
+
+	auto CheckReadOnly = [](RGUsage Usage) { return
+		Usage == RGUsage::ConstantBuffer ||
+		Usage == RGUsage::VertexBuffer ||
+		Usage == RGUsage::IndexBuffer;
+	};
+	auto CheckWriteOnly = [](RGUsage Usage) { return
+		Usage == RGUsage::SwapChain;
+	};
+
+	for (const auto [Usage, PassIndex] : ResourceReads)
+	{
+		if (CheckWriteOnly(Usage))
+			return false;
+	}
+
+	for (const auto [Usage, PassIndex] : ResourceWrites)
+	{
+		if (CheckReadOnly(Usage))
+			return false;
+	}
+
+	return true;
+}
+
+std::stack<std::unique_ptr<RenderPass>> RenderGraph::Serialize()
+{
+
+}
+
+RenderPass& RenderGraph::AddPass(const std::wstring& Name)
+{
+	for (const auto& Pass : Passes)
+	{
+		VGAssert(Pass->Name != Name, "Attempted to add multiple passes with the same name!");
+	}
+
+	auto a = std::make_unique<RenderPass>(*this, Name);
+	return **Passes.begin();
+
+	//return *Passes.emplace_back(std::make_unique<RenderPass>(*this, Name));
+}
 
 void RenderGraph::Build()
 {
-	// Trim passes that don't have their outputs fed into any other passes.
-	// Next, order the passes in order to optimize execution (avoid running
-	// passes that depend on each other right after one another). We have
-	// to be extremely careful of maintaining dependency ordering, otherwise
-	// we might end up using a resource before it is lazy-created.
+	VGAssert(Validate(), "Failed to validate render graph!");
+
+	// Serialize the execution pipeline, we need to do this to resolve resource state and barriers.
+	auto PassPipeline = std::move(Serialize());
 }
 
 void RenderGraph::Execute()
 {
-	// First start by recording command lists in parallel.
-	// After they have all finished, we can batch execute them
-	// or execute in small groups as we go to keep the GPU busy
-	// more often. For now just batch execute all of them and
-	// profile, the GPU might be fully loaded with work from
-	// previous frames/async compute.
-
-	// Serialize the execution pipeline, we need to do this to resolve resource state and barriers.
+	// Record pass commands.
 
 	CommandList* PreviousList;  // The most recent list that used this resource.
 	std::shared_ptr<Buffer> TargetResource;  // The resource we're looking at. Comes from pass inputs.

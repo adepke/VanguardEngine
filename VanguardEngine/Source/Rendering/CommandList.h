@@ -3,6 +3,8 @@
 #pragma once
 
 #include <Rendering/Base.h>
+#include <Rendering/Buffer.h>
+#include <Rendering/Texture.h>
 
 #include <Core/Windows/DirectX12Minimal.h>
 

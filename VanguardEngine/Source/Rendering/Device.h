@@ -134,7 +134,7 @@ public:
 	auto* GetComputeQueue() const noexcept { return ComputeCommandQueue.Get(); }
 	auto& GetComputeList() noexcept { return ComputeCommandList[GetFrameIndex()]; }
 	auto* GetSwapChain() const noexcept { return SwapChain.Get(); }
-	auto* GetBackBuffer() const noexcept { return BackBufferTextures[GetFrameIndex()].get(); }
+	auto GetBackBuffer() const noexcept { return BackBufferTextures[GetFrameIndex()]; }
 	auto& GetResourceHeap() noexcept { return ResourceHeaps[GetFrameIndex()]; }
 	auto& GetSamplerHeap() noexcept { return SamplerHeaps[GetFrameIndex()]; }
 	auto& GetRenderTargetHeap() noexcept { return RenderTargetHeap; }

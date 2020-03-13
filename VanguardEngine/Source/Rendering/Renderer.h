@@ -11,12 +11,6 @@
 class RenderDevice;
 struct CommandList;
 
-// #TODO: Placeholder, replace with render graph.
-enum class RenderPass
-{
-	Main,
-};
-
 class Renderer
 {
 public:
@@ -25,9 +19,6 @@ public:
 	std::vector<Material> Materials;
 
 private:
-	auto GetPassRenderTargets(RenderPass Pass);
-	void BeginRenderPass(RenderPass Pass);
-	void EndRenderPass(RenderPass Pass);
 	void SetDescriptorHeaps(CommandList& List);
 
 public:
