@@ -217,7 +217,7 @@ void ResourceManager::Initialize(RenderDevice* InDevice, size_t BufferedFrames)
 		ID3D12Resource* RawResource = nullptr;
 		D3D12MA::Allocation* AllocationHandle = nullptr;
 
-		auto Result = Device->Allocator->CreateResource(&AllocationDesc, &ResourceDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, &AllocationHandle, IID_PPV_ARGS(&RawResource));
+		auto Result = Device->Allocator->CreateResource(&AllocationDesc, &ResourceDesc, D3D12_RESOURCE_STATE_COPY_SOURCE, nullptr, &AllocationHandle, IID_PPV_ARGS(&RawResource));
 		if (FAILED(Result))
 		{
 			VGLogError(Rendering) << "Failed to allocate write upload resource: " << Result;
@@ -422,12 +422,13 @@ void ResourceManager::WriteBuffer(std::shared_ptr<Buffer>& Target, const std::ve
 
 		std::memcpy(static_cast<uint8_t*>(UploadPtrs[FrameIndex]) + UploadOffsets[FrameIndex], Source.data(), Source.size());
 
-		// #TODO: Resource barrier?
+		if (Target->State != D3D12_RESOURCE_STATE_COPY_DEST)
+		{
+			Device->GetCopyList().TransitionBarrier(Target, D3D12_RESOURCE_STATE_COPY_DEST);
+		}
 
 		auto* TargetCommandList = Device->GetCopyList().Native();
 		TargetCommandList->CopyBufferRegion(Target->Native(), TargetOffset, UploadResources[FrameIndex]->GetResource(), UploadOffsets[FrameIndex], Source.size());  // #TODO: If we have offsets of 0, use CopyResource.
-
-		// #TODO: Resource barrier?
 
 		UploadOffsets[FrameIndex] += Source.size();
 	}
@@ -494,12 +495,13 @@ void ResourceManager::WriteTexture(std::shared_ptr<Texture>& Target, const std::
 	SourceBox.bottom = Target->Description.Height;
 	SourceBox.back = Target->Description.Depth;
 
-	// #TODO: Resource barrier?
+	if (Target->State != D3D12_RESOURCE_STATE_COPY_DEST)
+	{
+		Device->GetCopyList().TransitionBarrier(Target, D3D12_RESOURCE_STATE_COPY_DEST);
+	}
 
 	auto* TargetCommandList = Device->GetCopyList().Native();
 	TargetCommandList->CopyTextureRegion(&TargetCopyDesc, 0, 0, 0, &SourceCopyDesc, &SourceBox);  // #TODO: If we have offsets of 0, use CopyResource.
-
-	// #TODO: Resource barrier?
 
 	UploadOffsets[FrameIndex] += Source.size();
 }
