@@ -46,10 +46,7 @@ RenderPass& RenderGraph::AddPass(const std::wstring& Name)
 		VGAssert(Pass->Name != Name, "Attempted to add multiple passes with the same name!");
 	}
 
-	auto a = std::make_unique<RenderPass>(*this, Name);
-	return **Passes.begin();
-
-	//return *Passes.emplace_back(std::make_unique<RenderPass>(*this, Name));
+	return *Passes.emplace_back(std::make_unique<RenderPass>(*this, Name));
 }
 
 void RenderGraph::Build()
