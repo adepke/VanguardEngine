@@ -7,7 +7,6 @@
 
 #include <vector>
 #include <memory>
-#include <stack>
 
 class RenderDevice;
 struct Buffer;
@@ -20,11 +19,17 @@ private:
 	size_t TagCounter = 0;
 
 	std::vector<std::unique_ptr<RenderPass>> Passes;
-	std::unordered_map<RGUsage, size_t> ResourceReads;  // Maps usage to pass index.
-	std::unordered_map<RGUsage, size_t> ResourceWrites;  // Maps usage to pass index.
+	std::vector<size_t> PassPipeline;
+	std::unordered_map<size_t, RGUsage> ResourceReads;  // Maps resource tag to usage.
+	std::unordered_map<size_t, RGUsage> ResourceWrites;  // Maps resource tag to usage.
 
 	bool Validate();  // Ensures we have a valid graph.
+	void Traverse(size_t ResourceTag);  // Walk up the dependency chain, recursively adding passes to the stack. 
 	std::stack<std::unique_ptr<RenderPass>> Serialize();  // Serializes to an optimized linear pipeline.
+
+public:  // Utilities for render passes.
+	void AddResourceRead(size_t PassIndex, size_t ResourceTag, RGUsage Usage) { ResourceReads[ResourceTag] = Usage; }
+	void AddResourceWrite(size_t PassIndex, size_t ResourceTag, RGUsage Usage) { ResourceReads[ResourceTag] = Usage; }
 
 public:
 	RenderGraph(RenderDevice* InDevice) : Device(InDevice) {}

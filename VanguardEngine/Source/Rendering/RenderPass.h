@@ -25,11 +25,12 @@ class RenderPass
 private:
 	RenderGraph& Graph;
 	std::wstring Name;
+	size_t Index;
 	std::vector<size_t> Reads;
 	std::vector<size_t> Writes;
 
 public:
-	RenderPass(RenderGraph& InGraph, const std::wstring& InName) : Graph(InGraph), Name(InName) {}
+	RenderPass(RenderGraph& InGraph, const std::wstring& InName, size_t InIndex) : Graph(InGraph), Name(InName), Index(InIndex) {}
 	RenderPass(const RenderPass&) = delete;
 	RenderPass(RenderPass&&) noexcept = default;
 

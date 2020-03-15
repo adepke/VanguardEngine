@@ -7,7 +7,7 @@
 
 bool RenderGraph::Validate()
 {
-	if (ResourceWrites.find(RGUsage::SwapChain) == ResourceWrites.end())
+	if (std::find_if(ResourceWrites.begin(), ResourceWrites.end(), [](const auto& Pair) { return Pair.second == RGUsage::SwapChain }) == ResourceWrites.end())
 		return false;  // We need to have at least one pass that writes to the swap chain.
 
 	auto CheckReadOnly = [](RGUsage Usage) { return
@@ -19,13 +19,13 @@ bool RenderGraph::Validate()
 		Usage == RGUsage::SwapChain;
 	};
 
-	for (const auto [Usage, PassIndex] : ResourceReads)
+	for (const auto [ResourceTag, Usage] : ResourceReads)
 	{
 		if (CheckWriteOnly(Usage))
 			return false;
 	}
 
-	for (const auto [Usage, PassIndex] : ResourceWrites)
+	for (const auto [ResourceTag, Usage] : ResourceWrites)
 	{
 		if (CheckReadOnly(Usage))
 			return false;
@@ -34,9 +34,27 @@ bool RenderGraph::Validate()
 	return true;
 }
 
+void RenderGraph::Traverse(size_t ResourceTag)
+{
+	for (PassIndex : PassesThatWriteToResourceTag)
+	{
+		for (Tag : ResourceThatPassIndexWritesTo)
+		{
+			Traverse(Tag);
+		}
+
+		PassPipeline.push_back(PassIndex);
+	}
+}
+
 std::stack<std::unique_ptr<RenderPass>> RenderGraph::Serialize()
 {
+	PassPipeline.reserve(Passes.size());  // Unlikely that a significant number of passes are going to be trimmed.
 
+	const size_t SwapChainTag = std::find_if(ResourceWrites.begin(), ResourceWrites.end(), [](const auto& Pair) { return Pair.second == RGUsage::SwapChain })->first;
+	Traverse(SwapChainTag);
+
+	// #TODO: Optimize the pipeline.
 }
 
 RenderPass& RenderGraph::AddPass(const std::wstring& Name)
@@ -46,7 +64,7 @@ RenderPass& RenderGraph::AddPass(const std::wstring& Name)
 		VGAssert(Pass->Name != Name, "Attempted to add multiple passes with the same name!");
 	}
 
-	return *Passes.emplace_back(std::make_unique<RenderPass>(*this, Name));
+	return *Passes.emplace_back(std::make_unique<RenderPass>(*this, Name, Passes.size()));
 }
 
 void RenderGraph::Build()
@@ -54,12 +72,25 @@ void RenderGraph::Build()
 	VGAssert(Validate(), "Failed to validate render graph!");
 
 	// Serialize the execution pipeline, we need to do this to resolve resource state and barriers.
-	auto PassPipeline = std::move(Serialize());
+	Serialize();
 }
 
 void RenderGraph::Execute()
 {
-	// Record pass commands.
+	VGAssert(PassPipeline.size(), "Render graph is empty, ensure you built the graph before execution.");
+
+	RGResolver Resolver;
+
+	std::vector<CommandList> PassCommands;
+	PassCommands.reserve(PassPipeline.size());
+
+	// #TODO: Parallel recording.
+	size_t Index = 0;
+	for (auto PassIndex : PassPipeline)
+	{
+		Passes[PassIndex]->Execution(Resolver, PassCommands[Index]);
+		++Index;
+	}
 
 	CommandList* PreviousList;  // The most recent list that used this resource.
 	std::shared_ptr<Buffer> TargetResource;  // The resource we're looking at. Comes from pass inputs.
@@ -72,9 +103,11 @@ void RenderGraph::Execute()
 		PreviousList->TransitionBarrier(TargetResource, NewResourceState);
 	}
 
-	// For each list, list->FlushBarriers();
+	for (auto& List : PassCommands)
+	{
+		List->FlushBarriers();
+		List->Close();
+	}
 
-	// For each list, list->Close();
-
-	//Device->GetDirectQueue()->ExecuteCommandLists(NumLists, DirectLists);
+	Device->GetDirectQueue()->ExecuteCommandLists(static_cast<UINT>(PassCommands.size()), PassCommands.data());
 }

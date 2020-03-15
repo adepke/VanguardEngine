@@ -3,3 +3,13 @@
 #include <Rendering/RenderPass.h>
 #include <Rendering/RenderGraph.h>
 #include <Rendering/RenderGraphResource.h>
+
+void RenderPass::ReadResource(size_t ResourceTag, RGUsage Usage)
+{
+	Graph.AddResourceRead(ResourceTag, Usage);
+}
+
+void RenderPass::WriteResource(size_t ResourceTag, RGUsage Usage)
+{
+	Graph.AddResourceWrite(ResourceTag, Usage);
+}
