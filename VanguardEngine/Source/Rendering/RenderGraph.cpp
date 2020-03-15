@@ -1,14 +1,37 @@
 // Copyright (c) 2019-2020 Andrew Depke
 
 #include <Rendering/RenderGraph.h>
+#include <Rendering/Device.h>
 #include <Rendering/CommandList.h>
 #include <Rendering/Buffer.h>
 #include <Rendering/Texture.h>
 
+std::optional<size_t> RenderGraph::FindUsage(RGUsage Usage)
+{
+	 const auto Iter = std::find_if(ResourceUsages.begin(), ResourceUsages.end(), [Usage](const auto& Pair)
+		{
+			const auto& UsageMap = Pair.second.PassUsage;  // Mapping of pass indexes to usages.
+
+			return std::find_if(UsageMap.begin(), UsageMap.end(), [Usage](const auto& Pair)
+				{
+					return Pair.second == Usage;
+				}) != UsageMap.end();
+		});
+
+	 if (Iter != ResourceUsages.end())
+	 {
+		 return Iter->first;
+	 }
+
+	 return std::nullopt;
+}
+
 bool RenderGraph::Validate()
 {
-	if (std::find_if(ResourceWrites.begin(), ResourceWrites.end(), [](const auto& Pair) { return Pair.second == RGUsage::SwapChain }) == ResourceWrites.end())
+	if (!FindUsage(RGUsage::SwapChain))
+	{
 		return false;  // We need to have at least one pass that writes to the swap chain.
+	}
 
 	auto CheckReadOnly = [](RGUsage Usage) { return
 		Usage == RGUsage::ConstantBuffer ||
@@ -19,26 +42,41 @@ bool RenderGraph::Validate()
 		Usage == RGUsage::SwapChain;
 	};
 
-	for (const auto [ResourceTag, Usage] : ResourceReads)
+	for (const auto& [ResourceTag, UsageData] : ResourceUsages)
 	{
-		if (CheckWriteOnly(Usage))
-			return false;
-	}
+		for (const auto [PassIndex, Usage] : UsageData.PassUsage)
+		{
+			// Ensure we don't read from this resource while in a write-only usage.
+			if (CheckWriteOnly(Usage) && ResourceDependencies[ResourceTag].ReadingPasses.count(PassIndex))
+				return false;
 
-	for (const auto [ResourceTag, Usage] : ResourceWrites)
-	{
-		if (CheckReadOnly(Usage))
-			return false;
+			// Ensure we don't write to this resource while in a read-only usage.
+			if (CheckReadOnly(Usage) && ResourceDependencies[ResourceTag].WritingPasses.count(PassIndex))
+				return false;
+		}
 	}
 
 	return true;
 }
 
+std::unordered_set<size_t> RenderGraph::FindWrittenResources(size_t PassIndex)
+{
+	std::unordered_set<size_t> Result;
+
+	for (const auto& [ResourceTag, Dependency] : ResourceDependencies)
+	{
+		if (Dependency.WritingPasses.count(PassIndex))
+			Result.insert(ResourceTag);
+	}
+
+	return std::move(Result);
+}
+
 void RenderGraph::Traverse(size_t ResourceTag)
 {
-	for (PassIndex : PassesThatWriteToResourceTag)
+	for (const size_t PassIndex : ResourceDependencies[ResourceTag].WritingPasses)
 	{
-		for (Tag : ResourceThatPassIndexWritesTo)
+		for (const size_t Tag : FindWrittenResources(PassIndex))
 		{
 			Traverse(Tag);
 		}
@@ -47,11 +85,11 @@ void RenderGraph::Traverse(size_t ResourceTag)
 	}
 }
 
-std::stack<std::unique_ptr<RenderPass>> RenderGraph::Serialize()
+void RenderGraph::Serialize()
 {
 	PassPipeline.reserve(Passes.size());  // Unlikely that a significant number of passes are going to be trimmed.
 
-	const size_t SwapChainTag = std::find_if(ResourceWrites.begin(), ResourceWrites.end(), [](const auto& Pair) { return Pair.second == RGUsage::SwapChain })->first;
+	const size_t SwapChainTag = *FindUsage(RGUsage::SwapChain);
 	Traverse(SwapChainTag);
 
 	// #TODO: Optimize the pipeline.
@@ -82,12 +120,14 @@ void RenderGraph::Execute()
 	RGResolver Resolver;
 
 	std::vector<CommandList> PassCommands;
-	PassCommands.reserve(PassPipeline.size());
+	PassCommands.resize(PassPipeline.size());
 
 	// #TODO: Parallel recording.
 	size_t Index = 0;
 	for (auto PassIndex : PassPipeline)
 	{
+		PassCommands[Index].Create(*Device, D3D12_COMMAND_LIST_TYPE_DIRECT);
+
 		Passes[PassIndex]->Execution(Resolver, PassCommands[Index]);
 		++Index;
 	}
@@ -103,11 +143,15 @@ void RenderGraph::Execute()
 		PreviousList->TransitionBarrier(TargetResource, NewResourceState);
 	}
 
+	std::vector<ID3D12CommandList*> PassLists;
+	PassLists.reserve(PassCommands.size());
+
 	for (auto& List : PassCommands)
 	{
-		List->FlushBarriers();
-		List->Close();
+		List.FlushBarriers();
+		List.Close();
+		PassLists.emplace_back(List.Native());
 	}
 
-	Device->GetDirectQueue()->ExecuteCommandLists(static_cast<UINT>(PassCommands.size()), PassCommands.data());
+	Device->GetDirectQueue()->ExecuteCommandLists(static_cast<UINT>(PassLists.size()), PassLists.data());
 }

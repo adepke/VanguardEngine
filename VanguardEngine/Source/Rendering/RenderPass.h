@@ -29,6 +29,8 @@ private:
 	std::vector<size_t> Reads;
 	std::vector<size_t> Writes;
 
+	std::function<void(RGResolver&, CommandList&)> Execution;
+
 public:
 	RenderPass(RenderGraph& InGraph, const std::wstring& InName, size_t InIndex) : Graph(InGraph), Name(InName), Index(InIndex) {}
 	RenderPass(const RenderPass&) = delete;
@@ -44,5 +46,5 @@ public:
 	void ReadResource(size_t ResourceTag, RGUsage Usage);  // #TODO: Most resources aren't mutable state-wise, so we should create different paths.
 	void WriteResource(size_t ResourceTag, RGUsage Usage);
 
-	void Bind(std::function<void(RGResolver&, CommandList&)> Function);
+	void Bind(std::function<void(RGResolver&, CommandList&)> Function) { Execution = std::move(Function); }
 };

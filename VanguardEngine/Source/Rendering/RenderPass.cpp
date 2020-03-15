@@ -6,10 +6,10 @@
 
 void RenderPass::ReadResource(size_t ResourceTag, RGUsage Usage)
 {
-	Graph.AddResourceRead(ResourceTag, Usage);
+	Graph.AddResourceRead(Index, ResourceTag, Usage);
 }
 
 void RenderPass::WriteResource(size_t ResourceTag, RGUsage Usage)
 {
-	Graph.AddResourceWrite(ResourceTag, Usage);
+	Graph.AddResourceWrite(Index, ResourceTag, Usage);
 }
