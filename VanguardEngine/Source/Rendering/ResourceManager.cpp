@@ -217,7 +217,8 @@ void ResourceManager::Initialize(RenderDevice* InDevice, size_t BufferedFrames)
 		ID3D12Resource* RawResource = nullptr;
 		D3D12MA::Allocation* AllocationHandle = nullptr;
 
-		auto Result = Device->Allocator->CreateResource(&AllocationDesc, &ResourceDesc, D3D12_RESOURCE_STATE_COPY_SOURCE, nullptr, &AllocationHandle, IID_PPV_ARGS(&RawResource));
+		// Upload heap resources must always be in generic read state.
+		auto Result = Device->Allocator->CreateResource(&AllocationDesc, &ResourceDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, &AllocationHandle, IID_PPV_ARGS(&RawResource));
 		if (FAILED(Result))
 		{
 			VGLogError(Rendering) << "Failed to allocate write upload resource: " << Result;
