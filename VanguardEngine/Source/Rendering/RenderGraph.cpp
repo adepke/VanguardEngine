@@ -59,6 +59,19 @@ bool RenderGraph::Validate()
 	return true;
 }
 
+std::unordered_set<size_t> RenderGraph::FindReadResources(size_t PassIndex)
+{
+	std::unordered_set<size_t> Result;
+
+	for (const auto& [ResourceTag, Dependency] : ResourceDependencies)
+	{
+		if (Dependency.ReadingPasses.count(PassIndex))
+			Result.insert(ResourceTag);
+	}
+
+	return std::move(Result);
+}
+
 std::unordered_set<size_t> RenderGraph::FindWrittenResources(size_t PassIndex)
 {
 	std::unordered_set<size_t> Result;
@@ -78,7 +91,9 @@ void RenderGraph::Traverse(size_t ResourceTag)
 	{
 		for (const size_t Tag : FindWrittenResources(PassIndex))
 		{
-			Traverse(Tag);
+			// We don't want an infinite loop.
+			if (Tag != ResourceTag)
+				Traverse(Tag);
 		}
 
 		PassPipeline.push_back(PassIndex);
@@ -93,6 +108,37 @@ void RenderGraph::Serialize()
 	Traverse(SwapChainTag);
 
 	// #TODO: Optimize the pipeline.
+}
+
+void RenderGraph::InjectBarriers(std::vector<CommandList>& Lists)
+{
+	/*
+	CommandList* PreviousList;  // The most recent list that used this resource.
+	std::shared_ptr<Buffer> TargetResource;  // The resource we're looking at. Comes from pass inputs.
+	D3D12_RESOURCE_STATES NewResourceState;  // A new resource state derived from the usage.
+
+	// The state changed, which means we need to inject a barrier at the end of the last list to use the resource. #TODO: Place a split barrier start
+	// at the end of that list, and a split barrier beginning at the current list which needs it in a different state.
+	if (TargetResource->State != NewResourceState)
+	{
+		PreviousList->TransitionBarrier(TargetResource, NewResourceState);
+	}
+
+	std::unordered_map<size_t, > StateMap;  // Maps resource tag to the pass that last modified it.
+
+	for (const auto& [ResourceTag, Usage] : ResourceUsages)
+	{
+		StateMap.emplace(ResourceTag, )
+	}
+
+	for (size_t Iter = 0; Iter < PassPipeline.size(); ++Iter)
+	{
+		const auto Reads = FindReadResources(PassPipeline[Iter]);
+		const auto Writes = FindWrittenResources(PassPipeline[Iter]);
+
+		
+	}
+	*/
 }
 
 RenderPass& RenderGraph::AddPass(const std::wstring& Name)
@@ -132,16 +178,7 @@ void RenderGraph::Execute()
 		++Index;
 	}
 
-	CommandList* PreviousList;  // The most recent list that used this resource.
-	std::shared_ptr<Buffer> TargetResource;  // The resource we're looking at. Comes from pass inputs.
-	D3D12_RESOURCE_STATES NewResourceState;  // A new resource state derived from the usage.
-
-	// The state changed, which means we need to inject a barrier at the end of the last list to use the resource. #TODO: Place a split barrier start
-	// at the end of that list, and a split barrier beginning at the current list which needs it in a different state.
-	if (TargetResource->State != NewResourceState)
-	{
-		PreviousList->TransitionBarrier(TargetResource, NewResourceState);
-	}
+	InjectBarriers(PassCommands);
 
 	std::vector<ID3D12CommandList*> PassLists;
 	PassLists.reserve(PassCommands.size());

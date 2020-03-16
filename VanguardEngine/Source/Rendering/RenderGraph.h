@@ -39,9 +39,11 @@ private:
 
 	std::optional<size_t> FindUsage(RGUsage Usage);  // Searches for resources with the specified usage. If multiple exist, returns the first found.
 	bool Validate();  // Ensures we have a valid graph.
+	std::unordered_set<size_t> FindReadResources(size_t PassIndex);  // Searches for all resources that the specified pass reads from.
 	std::unordered_set<size_t> FindWrittenResources(size_t PassIndex);  // Searches for all resources that the specified pass writes to.
 	void Traverse(size_t ResourceTag);  // Walk up the dependency chain, recursively adding passes to the stack. 
 	void Serialize();  // Serializes to an optimized linear pipeline.
+	void InjectBarriers(std::vector<CommandList>& Lists);  // Places barriers in a serialized pipeline for usage changes on resources.
 
 public:  // Utilities for render passes.
 	inline void AddResourceRead(size_t PassIndex, size_t ResourceTag, RGUsage Usage);
@@ -56,8 +58,8 @@ public:
 	}
 
 	// Imports an externally-managed resource, such as the swap chain surface.
-	size_t ImportResource(std::shared_ptr<Buffer>& Resource);
-	size_t ImportResource(std::shared_ptr<Texture>& Resource);
+	size_t ImportResource(std::shared_ptr<Buffer>& Resource) { return GetNextResourceTag(); }  // #TEMP: Testing.
+	size_t ImportResource(std::shared_ptr<Texture>& Resource) { return GetNextResourceTag(); }
 
 	RenderPass& AddPass(const std::wstring& Name);
 
