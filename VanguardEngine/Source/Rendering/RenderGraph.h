@@ -30,7 +30,7 @@ class RenderGraph
 {
 private:
 	RenderDevice* Device;
-	size_t TagCounter = 0;
+	RGResolver Resolver;
 
 	std::vector<std::unique_ptr<RenderPass>> Passes;
 	std::vector<size_t> PassPipeline;
@@ -52,14 +52,9 @@ public:  // Utilities for render passes.
 public:
 	RenderGraph(RenderDevice* InDevice) : Device(InDevice) {}
 
-	size_t GetNextResourceTag() noexcept
-	{
-		return TagCounter++;
-	}
-
 	// Imports an externally-managed resource, such as the swap chain surface.
-	size_t ImportResource(std::shared_ptr<Buffer>& Resource) { return GetNextResourceTag(); }  // #TEMP: Testing.
-	size_t ImportResource(std::shared_ptr<Texture>& Resource) { return GetNextResourceTag(); }
+	size_t ImportResource(std::shared_ptr<Buffer>& Resource) { return Resolver.AddResource(Resource); }
+	size_t ImportResource(std::shared_ptr<Texture>& Resource) { return Resolver.AddResource(Resource); }
 
 	RenderPass& AddPass(const std::wstring& Name);
 

@@ -11,7 +11,7 @@
 
 D3D12_RESOURCE_STATES UsageToState(RGUsage Usage, bool Write)
 {
-
+	return {};  // #TEMP: Derive state from usage.
 }
 
 std::optional<size_t> RenderGraph::FindUsage(RGUsage Usage)
@@ -124,10 +124,10 @@ void RenderGraph::InjectBarriers(std::vector<CommandList>& Lists)
 
 	for (const auto& [ResourceTag, Usage] : ResourceUsages)
 	{
-		StateMap.emplace(ResourceTag, { ???, std::numeric_limits<size_t>::max() });
+		StateMap.emplace(ResourceTag, std::make_pair(Resolver.DetermineInitialState(ResourceTag), std::numeric_limits<size_t>::max()));
 	}
 
-	constexpr auto CheckState = [this, &StateMap, &Lists](size_t PassIndex, const auto& Resources, bool Write)
+	const auto CheckState = [this, &StateMap, &Lists](size_t PassIndex, const auto& Resources, bool Write)
 	{
 		for (size_t Resource : Resources)
 		{
@@ -138,7 +138,15 @@ void RenderGraph::InjectBarriers(std::vector<CommandList>& Lists)
 				// The state changed, which means we need to inject a barrier at the end of the last list to use the resource.
 				// #TODO: Potentially use split barriers.
 
-				Lists[PassIndex].TransitionBarrier(???, NewState);  // #TEMP: After reordering we can't access lists like this, need a map.
+				auto ResourceBuffer = Resolver.FetchAsBuffer(Resource);
+				auto ResourceTexture = Resolver.FetchAsTexture(Resource);
+
+				VGAssert(ResourceBuffer || ResourceTexture, "Failed to fetch the resource.");
+
+				if (ResourceBuffer)
+					Lists[PassIndex].TransitionBarrier(ResourceBuffer, NewState);  // #TEMP: After reordering we can't access lists like this, need a map.
+				else
+					Lists[PassIndex].TransitionBarrier(ResourceTexture, NewState);
 
 				StateMap[Resource] = { NewState, PassIndex };
 			}

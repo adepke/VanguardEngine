@@ -2,13 +2,77 @@
 
 #pragma once
 
+#include <Rendering/Buffer.h>
+#include <Rendering/Texture.h>
+
+#include <unordered_map>
+#include <memory>
+#include <type_traits>
+
 // Helper type to resolve resource tags into actual resource handles.
 class RGResolver
 {
+private:
+	size_t Counter = 0;
+	std::unordered_map<size_t, std::shared_ptr<Buffer>> BufferResources;
+	std::unordered_map<size_t, std::shared_ptr<Texture>> TextureResources;
+
+public:  // Utilities for the render graph.
+	size_t AddResource(const std::shared_ptr<Buffer>& Resource) { const auto Tag = Counter++; BufferResources[Tag] = Resource; return Tag; }
+	size_t AddResource(const std::shared_ptr<Texture>& Resource) { const auto Tag = Counter++; TextureResources[Tag] = Resource; return Tag; }
+
+	D3D12_RESOURCE_STATES DetermineInitialState(size_t ResourceTag)
+	{
+		if (BufferResources.count(ResourceTag))
+		{
+			return BufferResources[ResourceTag]->State;
+		}
+
+		else if (TextureResources.count(ResourceTag))
+		{
+			return TextureResources[ResourceTag]->State;
+		}
+
+		VGEnsure(false, "Failed to determine initial resource state.");
+		return {};
+	}
+
+	std::shared_ptr<Buffer> FetchAsBuffer(size_t ResourceTag)
+	{
+		if (BufferResources.count(ResourceTag))
+			return BufferResources[ResourceTag];
+		
+		return {};
+	}
+
+	std::shared_ptr<Texture> FetchAsTexture(size_t ResourceTag)
+	{
+		if (TextureResources.count(ResourceTag))
+			return TextureResources[ResourceTag];
+
+		return {};
+	}
+
 public:
 	template <typename T>
 	T& Get(size_t ResourceTag)
 	{
-		// #TODO: Resolve the resource via the render graph.
+		if constexpr (std::is_same_v<T, Buffer>)
+		{
+			VGAssert(BufferResources.count(ResourceTag), "Failed to resolve the resource as a buffer.");		
+			return *BufferResources[ResourceTag];
+		}
+
+		else if constexpr (std::is_same_v<T, Texture>)
+		{
+			VGAssert(TextureResources.count(ResourceTag), "Failed to resolve the resource as a texture.");
+			return *TextureResources[ResourceTag];
+		}
+
+		else
+		{
+			static_assert(false, "Graph resolver can only accept types 'Buffer' or 'Texture'");
+			return {};
+		}
 	}
 };
