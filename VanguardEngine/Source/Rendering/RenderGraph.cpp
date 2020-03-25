@@ -6,6 +6,14 @@
 #include <Rendering/Buffer.h>
 #include <Rendering/Texture.h>
 
+#include <utility>
+#include <limits>
+
+D3D12_RESOURCE_STATES UsageToState(RGUsage Usage, bool Write)
+{
+
+}
+
 std::optional<size_t> RenderGraph::FindUsage(RGUsage Usage)
 {
 	 const auto Iter = std::find_if(ResourceUsages.begin(), ResourceUsages.end(), [Usage](const auto& Pair)
@@ -104,7 +112,7 @@ void RenderGraph::Serialize()
 {
 	PassPipeline.reserve(Passes.size());  // Unlikely that a significant number of passes are going to be trimmed.
 
-	const size_t SwapChainTag = *FindUsage(RGUsage::SwapChain);
+	const size_t SwapChainTag = *FindUsage(RGUsage::SwapChain);  // #TODO: This will only work if we have 1 pass write to the swap chain.
 	Traverse(SwapChainTag);
 
 	// #TODO: Optimize the pipeline.
@@ -112,33 +120,39 @@ void RenderGraph::Serialize()
 
 void RenderGraph::InjectBarriers(std::vector<CommandList>& Lists)
 {
-	/*
-	CommandList* PreviousList;  // The most recent list that used this resource.
-	std::shared_ptr<Buffer> TargetResource;  // The resource we're looking at. Comes from pass inputs.
-	D3D12_RESOURCE_STATES NewResourceState;  // A new resource state derived from the usage.
-
-	// The state changed, which means we need to inject a barrier at the end of the last list to use the resource. #TODO: Place a split barrier start
-	// at the end of that list, and a split barrier beginning at the current list which needs it in a different state.
-	if (TargetResource->State != NewResourceState)
-	{
-		PreviousList->TransitionBarrier(TargetResource, NewResourceState);
-	}
-
-	std::unordered_map<size_t, > StateMap;  // Maps resource tag to the pass that last modified it.
+	std::unordered_map<size_t, std::pair<D3D12_RESOURCE_STATES, size_t>> StateMap;  // Maps resource tag to the state and which pass last modified it.
 
 	for (const auto& [ResourceTag, Usage] : ResourceUsages)
 	{
-		StateMap.emplace(ResourceTag, )
+		StateMap.emplace(ResourceTag, { ???, std::numeric_limits<size_t>::max() });
 	}
+
+	constexpr auto CheckState = [this, &StateMap, &Lists](size_t PassIndex, const auto& Resources, bool Write)
+	{
+		for (size_t Resource : Resources)
+		{
+			const auto NewState = UsageToState(ResourceUsages[Resource].PassUsage[PassIndex], Write);
+
+			if (NewState != StateMap[Resource].first)
+			{
+				// The state changed, which means we need to inject a barrier at the end of the last list to use the resource.
+				// #TODO: Potentially use split barriers.
+
+				Lists[PassIndex].TransitionBarrier(???, NewState);  // #TEMP: After reordering we can't access lists like this, need a map.
+
+				StateMap[Resource] = { NewState, PassIndex };
+			}
+		}
+	};
 
 	for (size_t Iter = 0; Iter < PassPipeline.size(); ++Iter)
 	{
 		const auto Reads = FindReadResources(PassPipeline[Iter]);
 		const auto Writes = FindWrittenResources(PassPipeline[Iter]);
 
-		
+		CheckState(Iter, Reads, false);
+		CheckState(Iter, Writes, true);
 	}
-	*/
 }
 
 RenderPass& RenderGraph::AddPass(const std::wstring& Name)
