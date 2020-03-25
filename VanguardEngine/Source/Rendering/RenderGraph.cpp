@@ -11,7 +11,40 @@
 
 D3D12_RESOURCE_STATES UsageToState(RGUsage Usage, bool Write)
 {
-	return {};  // #TEMP: Derive state from usage.
+	if (Write)
+	{
+		switch (Usage)
+		{
+		case RGUsage::ByteAddressBuffer: return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		case RGUsage::StructuredBuffer: return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		case RGUsage::TypedBuffer: return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		case RGUsage::ColorBuffer: return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		case RGUsage::VertexBuffer: return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		case RGUsage::IndexBuffer: return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		case RGUsage::RenderTarget: return D3D12_RESOURCE_STATE_RENDER_TARGET;
+		case RGUsage::DepthStencil: return D3D12_RESOURCE_STATE_DEPTH_WRITE;
+		//case RGUsage::SwapChain:  // #TEMP: Not sure how to handle this.
+		}
+	}
+
+	else
+	{
+		switch (Usage)
+		{
+		case RGUsage::ConstantBuffer: return D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+		case RGUsage::ByteAddressBuffer: return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;  // #TODO: We assume that all resources may be read out of order, consider refining this.
+		case RGUsage::StructuredBuffer: return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		case RGUsage::TypedBuffer: return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		case RGUsage::ColorBuffer: return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		case RGUsage::VertexBuffer: return D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+		case RGUsage::IndexBuffer: return D3D12_RESOURCE_STATE_INDEX_BUFFER;
+		case RGUsage::RenderTarget: return D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;  // #TODO: Refine state.
+		case RGUsage::DepthStencil: return D3D12_RESOURCE_STATE_DEPTH_READ;
+		}
+	}
+
+	VGEnsure(false, "Incompatible usage and read/write.");
+	return {};
 }
 
 std::optional<size_t> RenderGraph::FindUsage(RGUsage Usage)
