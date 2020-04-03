@@ -314,7 +314,7 @@ std::shared_ptr<Texture> ResourceManager::AllocateTexture(const TextureDescripti
 	ResourceDesc.Height = Description.Height;
 	ResourceDesc.DepthOrArraySize = Description.Depth;
 	ResourceDesc.Format = Description.Format;
-	ResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+	ResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;  // Prefer to let the adapter choose the most efficient layout. See: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ne-d3d12-d3d12_texture_layout
 	ResourceDesc.MipLevels = 1;
 	ResourceDesc.SampleDesc.Count = 1;
 	ResourceDesc.SampleDesc.Quality = 0;
@@ -327,7 +327,7 @@ std::shared_ptr<Texture> ResourceManager::AllocateTexture(const TextureDescripti
 
 	if (Description.BindFlags & BindFlag::DepthStencil)
 	{
-		if (Description.Depth > 0)
+		if (Description.Depth > 1)
 		{
 			VGLogWarning(Rendering) << "3D textures cannot have depth stencil binding.";
 		}

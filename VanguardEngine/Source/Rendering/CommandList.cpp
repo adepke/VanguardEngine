@@ -6,6 +6,9 @@
 
 void CommandList::TransitionBarrierInternal(ID3D12Resource* Resource, D3D12_RESOURCE_STATES OldState, D3D12_RESOURCE_STATES NewState)
 {
+	if (OldState == NewState)
+		return;
+
 	D3D12_RESOURCE_BARRIER Barrier;
 	Barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
 	Barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
