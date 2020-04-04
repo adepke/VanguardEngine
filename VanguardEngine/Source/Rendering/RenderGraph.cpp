@@ -206,6 +206,9 @@ void RenderGraph::Execute()
 
 	InjectBarriers(PassCommands);
 
+	// Ensure the back buffer is in presentation state at the very end of the graph.
+	PassCommands[PassCommands.size() - 1].TransitionBarrier(Resolver.FetchAsTexture(*FindUsage(RGUsage::BackBuffer)), D3D12_RESOURCE_STATE_PRESENT);
+
 	std::vector<ID3D12CommandList*> PassLists;
 	PassLists.reserve(PassCommands.size() + 1);
 

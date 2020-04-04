@@ -26,9 +26,9 @@ enum RGUsageFlag
 struct RGBufferDescription
 {
 	uint32_t UsageFlags;
-	ResourceFrequency UpdateRate;
+	ResourceFrequency UpdateRate = ResourceFrequency::Dynamic;
 	size_t Size;  // Element count. Size * Stride = Byte count.
-	size_t Stride;
+	size_t Stride = 0;
 	std::optional<DXGI_FORMAT> Format;
 };
 

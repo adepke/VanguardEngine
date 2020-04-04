@@ -91,25 +91,19 @@ void Renderer::Render(entt::registry& Registry)
 	// Global to all render passes.
 	SetDescriptorHeaps(Device->GetDirectList());
 
-	// #TEMP: Testing render graph API.
-	TextureDescription Desc;
-	Desc.UpdateRate = ResourceFrequency::Static;
-	Desc.BindFlags = BindFlag::DepthStencil;
-	Desc.AccessFlags = AccessFlag::GPUWrite;
-	Desc.InitialState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
-	Desc.Width = Device->RenderWidth;
-	Desc.Height = Device->RenderHeight;
-	Desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;  // DXGI_FORMAT_D32_FLOAT?
-	auto DepthStencil = Device->CreateResource(Desc, VGText("Depth Stencil"));
-
 	RenderGraph Graph{ Device.get() };
 
 	const size_t BackBufferTag = Graph.ImportResource(Device->GetBackBuffer());
-	const size_t DepthStencilTag = Graph.ImportResource(DepthStencil);
+
+	RGTextureDescription DepthStencilDesc{};
+	DepthStencilDesc.Width = Device->RenderWidth;
+	DepthStencilDesc.Height = Device->RenderHeight;
+	DepthStencilDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
 
 	auto& MainPass = Graph.AddPass(VGText("Main Pass"));
+	const size_t DepthStencilTag = MainPass.CreateResource(DepthStencilDesc, "Depth Stencil");
 	MainPass.ReadResource(DepthStencilTag, RGUsage::DepthStencil);
-	MainPass.WriteResource(BackBufferTag, RGUsage::SwapChain);
+	MainPass.WriteResource(BackBufferTag, RGUsage::BackBuffer);
 
 	MainPass.Bind(
 		[this, &Registry, &InstanceBuffer, BackBufferTag, DepthStencilTag](RGResolver& Resolver, CommandList& List)
@@ -122,8 +116,6 @@ void Renderer::Render(entt::registry& Registry)
 			auto DepthStencilFull = Resolver.FetchAsTexture(DepthStencilTag);
 
 			List.BindPipelineState(*Materials[0].Pipeline);
-			List.TransitionBarrier(BackBufferFull, D3D12_RESOURCE_STATE_RENDER_TARGET);
-			List.FlushBarriers();
 
 			List.Native()->OMSetRenderTargets(1, &*Device->GetBackBuffer()->RTV, false, &*DepthStencil.DSV);
 			List.Native()->OMSetStencilRef(0);
@@ -162,9 +154,6 @@ void Renderer::Render(entt::registry& Registry)
 
 					List.Native()->DrawIndexedInstanced(Mesh.IndexBuffer->Description.Size / sizeof(uint32_t), 1, 0, 0, 0);
 				});
-
-			List.TransitionBarrier(BackBufferFull, D3D12_RESOURCE_STATE_PRESENT);
-			List.FlushBarriers();
 		}
 	);
 
