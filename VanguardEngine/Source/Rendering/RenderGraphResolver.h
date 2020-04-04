@@ -17,41 +17,22 @@ private:
 	std::unordered_map<size_t, std::shared_ptr<Buffer>> BufferResources;
 	std::unordered_map<size_t, std::shared_ptr<Texture>> TextureResources;
 
+	std::unordered_map<size_t, RGBufferDescription> TransientBufferResources;
+	std::unordered_map<size_t, RGTextureDescription> TransientTextureResources;
+
 public:  // Utilities for the render graph.
 	size_t AddResource(const std::shared_ptr<Buffer>& Resource) { const auto Tag = Counter++; BufferResources[Tag] = Resource; return Tag; }
 	size_t AddResource(const std::shared_ptr<Texture>& Resource) { const auto Tag = Counter++; TextureResources[Tag] = Resource; return Tag; }
 
-	D3D12_RESOURCE_STATES DetermineInitialState(size_t ResourceTag)
-	{
-		if (BufferResources.count(ResourceTag))
-		{
-			return BufferResources[ResourceTag]->State;
-		}
+	size_t AddTransientResource(const RGBufferDescription& Description) { const auto Tag = Counter++; TransientBufferResources[Tag] = Description; return Tag; }
+	size_t AddTransientResource(const RGTextureDescription& Description) { const auto Tag = Counter++; TransientTextureResources[Tag] = Description; return Tag; }
 
-		else if (TextureResources.count(ResourceTag))
-		{
-			return TextureResources[ResourceTag]->State;
-		}
+	void BuildTransients(RenderDevice* Device, const std::unordered_map<size_t, ResourceDependencyData>& Dependencies, const std::unordered_map<size_t, ResourceUsageData>& Usages);
 
-		VGEnsure(false, "Failed to determine initial resource state.");
-		return {};
-	}
+	D3D12_RESOURCE_STATES DetermineInitialState(size_t ResourceTag);
 
-	std::shared_ptr<Buffer> FetchAsBuffer(size_t ResourceTag)
-	{
-		if (BufferResources.count(ResourceTag))
-			return BufferResources[ResourceTag];
-		
-		return {};
-	}
-
-	std::shared_ptr<Texture> FetchAsTexture(size_t ResourceTag)
-	{
-		if (TextureResources.count(ResourceTag))
-			return TextureResources[ResourceTag];
-
-		return {};
-	}
+	inline std::shared_ptr<Buffer> FetchAsBuffer(size_t ResourceTag);
+	inline std::shared_ptr<Texture> FetchAsTexture(size_t ResourceTag);
 
 public:
 	template <typename T>
@@ -76,3 +57,19 @@ public:
 		}
 	}
 };
+
+inline std::shared_ptr<Buffer> RGResolver::FetchAsBuffer(size_t ResourceTag)
+{
+	if (BufferResources.count(ResourceTag))
+		return BufferResources[ResourceTag];
+
+	return {};
+}
+
+inline std::shared_ptr<Texture> RGResolver::FetchAsTexture(size_t ResourceTag)
+{
+	if (TextureResources.count(ResourceTag))
+		return TextureResources[ResourceTag];
+
+	return {};
+}

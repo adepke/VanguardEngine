@@ -8,22 +8,24 @@
 
 enum class RGUsage
 {
-	ConstantBuffer,
-	ByteAddressBuffer,
-	StructuredBuffer,
-	TypedBuffer,
-	ColorBuffer,
-	VertexBuffer,
-	IndexBuffer,
+	Default,  // Standard usage, used if the resource doesn't qualify for any of the specific usages below.
 	RenderTarget,
 	DepthStencil,
-	SwapChain,
+	BackBuffer,  // Same as render target, used for extracting dependencies.
+};
+
+enum RGUsageFlag
+{
+	VertexBuffer = 1 << 0,
+	IndexBuffer = 1 << 1,
+	ConstantBuffer = 1 << 2,
 };
 
 // Reduced resource descriptions, the render graph will automatically determine the bind flags, access flags, etc.
 
 struct RGBufferDescription
 {
+	uint32_t UsageFlags;
 	ResourceFrequency UpdateRate;
 	size_t Size;  // Element count. Size * Stride = Byte count.
 	size_t Stride;
@@ -32,7 +34,6 @@ struct RGBufferDescription
 
 struct RGTextureDescription
 {
-	ResourceFrequency UpdateRate;
 	uint32_t Width = 1;
 	uint32_t Height = 1;
 	uint32_t Depth = 1;

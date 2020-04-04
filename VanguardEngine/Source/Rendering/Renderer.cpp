@@ -92,7 +92,15 @@ void Renderer::Render(entt::registry& Registry)
 	SetDescriptorHeaps(Device->GetDirectList());
 
 	// #TEMP: Testing render graph API.
-	std::shared_ptr<Texture> DepthStencil;
+	TextureDescription Desc;
+	Desc.UpdateRate = ResourceFrequency::Static;
+	Desc.BindFlags = BindFlag::DepthStencil;
+	Desc.AccessFlags = AccessFlag::GPUWrite;
+	Desc.InitialState = D3D12_RESOURCE_STATE_DEPTH_WRITE;
+	Desc.Width = Device->RenderWidth;
+	Desc.Height = Device->RenderHeight;
+	Desc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;  // DXGI_FORMAT_D32_FLOAT?
+	auto DepthStencil = Device->CreateResource(Desc, VGText("Depth Stencil"));
 
 	RenderGraph Graph{ Device.get() };
 
@@ -104,12 +112,59 @@ void Renderer::Render(entt::registry& Registry)
 	MainPass.WriteResource(BackBufferTag, RGUsage::SwapChain);
 
 	MainPass.Bind(
-		[BackBufferTag, DepthStencilTag](RGResolver& Resolver, CommandList& List)
+		[this, &Registry, &InstanceBuffer, BackBufferTag, DepthStencilTag](RGResolver& Resolver, CommandList& List)
 		{
 			auto& BackBuffer = Resolver.Get<Texture>(BackBufferTag);
 			auto& DepthStencil = Resolver.Get<Texture>(DepthStencilTag);
 
-			// #TODO: Add some draw commands to the list.
+			// #TEMP: Use this until we get fully automated transition barriers.
+			auto BackBufferFull = Resolver.FetchAsTexture(BackBufferTag);
+			auto DepthStencilFull = Resolver.FetchAsTexture(DepthStencilTag);
+
+			List.BindPipelineState(*Materials[0].Pipeline);
+			List.TransitionBarrier(BackBufferFull, D3D12_RESOURCE_STATE_RENDER_TARGET);
+			List.FlushBarriers();
+
+			List.Native()->OMSetRenderTargets(1, &*Device->GetBackBuffer()->RTV, false, &*DepthStencil.DSV);
+			List.Native()->OMSetStencilRef(0);
+			const float ClearColor[] = { 0.4f, 0.4f, 0.4f, 1.f };
+			List.Native()->ClearRenderTargetView(*BackBuffer.RTV, ClearColor, 0, nullptr);
+			List.Native()->ClearDepthStencilView(*DepthStencil.DSV, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0, 0, nullptr);
+			List.Native()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+			
+			Registry.view<const TransformComponent, MeshComponent>().each([&InstanceBuffer, &List](auto Entity, const auto&, auto& Mesh)
+				{
+					List.TransitionBarrier(Mesh.VertexBuffer, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+					List.FlushBarriers();
+
+					std::vector<D3D12_VERTEX_BUFFER_VIEW> VertexViews;
+
+					// Vertex Buffer.
+					VertexViews.push_back({});
+					VertexViews[0].BufferLocation = Mesh.VertexBuffer->Native()->GetGPUVirtualAddress();
+					VertexViews[0].SizeInBytes = static_cast<UINT>(Mesh.VertexBuffer->Description.Size);
+					VertexViews[0].StrideInBytes = static_cast<UINT>(Mesh.VertexBuffer->Description.Stride);
+
+					// Instance Buffer.
+					VertexViews.push_back({});
+					VertexViews[1].BufferLocation = InstanceBuffer.first->Native()->GetGPUVirtualAddress() + InstanceBuffer.second;
+					VertexViews[1].SizeInBytes = static_cast<UINT>(InstanceBuffer.first->Description.Size);
+					VertexViews[1].StrideInBytes = static_cast<UINT>(InstanceBuffer.first->Description.Stride);
+
+					List.Native()->IASetVertexBuffers(0, static_cast<UINT>(VertexViews.size()), VertexViews.data());  // #TODO: Slot?
+
+					D3D12_INDEX_BUFFER_VIEW IndexView{};
+					IndexView.BufferLocation = Mesh.IndexBuffer->Native()->GetGPUVirtualAddress();
+					IndexView.SizeInBytes = Mesh.IndexBuffer->Description.Size;
+					IndexView.Format = DXGI_FORMAT_R32_UINT;
+
+					List.Native()->IASetIndexBuffer(&IndexView);
+
+					List.Native()->DrawIndexedInstanced(Mesh.IndexBuffer->Description.Size / sizeof(uint32_t), 1, 0, 0, 0);
+				});
+
+			List.TransitionBarrier(BackBufferFull, D3D12_RESOURCE_STATE_PRESENT);
+			List.FlushBarriers();
 		}
 	);
 

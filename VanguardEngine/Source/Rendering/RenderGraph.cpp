@@ -9,41 +9,33 @@
 #include <utility>
 #include <limits>
 
-D3D12_RESOURCE_STATES UsageToState(RGUsage Usage, bool Write)
+D3D12_RESOURCE_STATES UsageToState(const std::shared_ptr<Buffer>& Resource, RGUsage Usage, bool Write)
 {
-	if (Write)
+	auto ReadState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+	if (Resource->Description.BindFlags & BindFlag::ConstantBuffer) ReadState |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+	if (Resource->Description.BindFlags & BindFlag::VertexBuffer) ReadState |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+	if (Resource->Description.BindFlags & BindFlag::IndexBuffer) ReadState |= D3D12_RESOURCE_STATE_INDEX_BUFFER;
+
+	switch (Usage)
 	{
-		switch (Usage)
-		{
-		case RGUsage::ByteAddressBuffer: return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-		case RGUsage::StructuredBuffer: return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-		case RGUsage::TypedBuffer: return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-		case RGUsage::ColorBuffer: return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-		case RGUsage::VertexBuffer: return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-		case RGUsage::IndexBuffer: return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-		case RGUsage::RenderTarget: return D3D12_RESOURCE_STATE_RENDER_TARGET;
-		case RGUsage::DepthStencil: return D3D12_RESOURCE_STATE_DEPTH_WRITE;
-		//case RGUsage::SwapChain:  // #TEMP: Not sure how to handle this.
-		}
+	case RGUsage::Default: return Write ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS : ReadState;
 	}
 
-	else
+	VGEnsure(false, "Buffer resource cannot have specified usage.");
+	return {};
+}
+
+D3D12_RESOURCE_STATES UsageToState(const std::shared_ptr<Texture>& Resource, RGUsage Usage, bool Write)
+{
+	switch (Usage)
 	{
-		switch (Usage)
-		{
-		case RGUsage::ConstantBuffer: return D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
-		case RGUsage::ByteAddressBuffer: return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;  // #TODO: We assume that all resources may be read out of order, consider refining this.
-		case RGUsage::StructuredBuffer: return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-		case RGUsage::TypedBuffer: return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-		case RGUsage::ColorBuffer: return D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
-		case RGUsage::VertexBuffer: return D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
-		case RGUsage::IndexBuffer: return D3D12_RESOURCE_STATE_INDEX_BUFFER;
-		case RGUsage::RenderTarget: return D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;  // #TODO: Refine state.
-		case RGUsage::DepthStencil: return D3D12_RESOURCE_STATE_DEPTH_READ;
-		}
+	case RGUsage::Default: return Write ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS : D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+	case RGUsage::RenderTarget: return Write ? D3D12_RESOURCE_STATE_RENDER_TARGET : D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+	case RGUsage::DepthStencil: return Write ? D3D12_RESOURCE_STATE_DEPTH_WRITE : D3D12_RESOURCE_STATE_DEPTH_READ;
+	case RGUsage::BackBuffer: return Write ? D3D12_RESOURCE_STATE_RENDER_TARGET : D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 	}
 
-	VGEnsure(false, "Incompatible usage and read/write.");
+	VGEnsure(false, "Texture resource cannot have specified usage.");
 	return {};
 }
 
@@ -69,32 +61,9 @@ std::optional<size_t> RenderGraph::FindUsage(RGUsage Usage)
 
 bool RenderGraph::Validate()
 {
-	if (!FindUsage(RGUsage::SwapChain))
+	if (!FindUsage(RGUsage::BackBuffer))
 	{
-		return false;  // We need to have at least one pass that writes to the swap chain.
-	}
-
-	auto CheckReadOnly = [](RGUsage Usage) { return
-		Usage == RGUsage::ConstantBuffer ||
-		Usage == RGUsage::VertexBuffer ||
-		Usage == RGUsage::IndexBuffer;
-	};
-	auto CheckWriteOnly = [](RGUsage Usage) { return
-		Usage == RGUsage::SwapChain;
-	};
-
-	for (const auto& [ResourceTag, UsageData] : ResourceUsages)
-	{
-		for (const auto [PassIndex, Usage] : UsageData.PassUsage)
-		{
-			// Ensure we don't read from this resource while in a write-only usage.
-			if (CheckWriteOnly(Usage) && ResourceDependencies[ResourceTag].ReadingPasses.count(PassIndex))
-				return false;
-
-			// Ensure we don't write to this resource while in a read-only usage.
-			if (CheckReadOnly(Usage) && ResourceDependencies[ResourceTag].WritingPasses.count(PassIndex))
-				return false;
-		}
+		return false;  // We need to have at least one pass that writes to the back buffer.
 	}
 
 	return true;
@@ -145,7 +114,7 @@ void RenderGraph::Serialize()
 {
 	PassPipeline.reserve(Passes.size());  // Unlikely that a significant number of passes are going to be trimmed.
 
-	const size_t SwapChainTag = *FindUsage(RGUsage::SwapChain);  // #TODO: This will only work if we have 1 pass write to the swap chain.
+	const size_t SwapChainTag = *FindUsage(RGUsage::BackBuffer);  // #TODO: This will only work if we have 1 pass write to the swap chain.
 	Traverse(SwapChainTag);
 
 	// #TODO: Optimize the pipeline.
@@ -154,16 +123,18 @@ void RenderGraph::Serialize()
 void RenderGraph::InjectBarriers(std::vector<CommandList>& Lists)
 {
 	std::unordered_map<size_t, std::pair<D3D12_RESOURCE_STATES, size_t>> StateMap;  // Maps resource tag to the state and which pass last modified it.
+	constexpr auto InvalidPassIndex = std::numeric_limits<size_t>::max();
 
 	for (const auto& [ResourceTag, Usage] : ResourceUsages)
 	{
-		StateMap.emplace(ResourceTag, std::make_pair(Resolver.DetermineInitialState(ResourceTag), std::numeric_limits<size_t>::max()));
+		StateMap.emplace(ResourceTag, std::make_pair(Resolver.DetermineInitialState(ResourceTag), InvalidPassIndex));
 	}
 
 	const auto CheckState = [this, &StateMap, &Lists](size_t PassIndex, const auto& Resources, bool Write)
 	{
 		for (size_t Resource : Resources)
 		{
+			// #TEMP: We can't use PassIndex directly, since it might be a size_t::max.
 			const auto NewState = UsageToState(ResourceUsages[Resource].PassUsage[PassIndex], Write);
 
 			if (NewState != StateMap[Resource].first)
@@ -212,13 +183,13 @@ void RenderGraph::Build()
 
 	// Serialize the execution pipeline, we need to do this to resolve resource state and barriers.
 	Serialize();
+
+	Resolver.BuildTransients(Device, ResourceDependencies, ResourceUsages);
 }
 
 void RenderGraph::Execute()
 {
 	VGAssert(PassPipeline.size(), "Render graph is empty, ensure you built the graph before execution.");
-
-	RGResolver Resolver;
 
 	std::vector<CommandList> PassCommands;
 	PassCommands.resize(PassPipeline.size());
@@ -236,7 +207,11 @@ void RenderGraph::Execute()
 	InjectBarriers(PassCommands);
 
 	std::vector<ID3D12CommandList*> PassLists;
-	PassLists.reserve(PassCommands.size());
+	PassLists.reserve(PassCommands.size() + 1);
+
+	Device->GetDirectList().FlushBarriers();
+	Device->GetDirectList().Close();
+	PassLists.emplace_back(Device->GetDirectList().Native());  // Add the device's main draw list. #TEMP: Get rid of this monolithic list.
 
 	for (auto& List : PassCommands)
 	{
