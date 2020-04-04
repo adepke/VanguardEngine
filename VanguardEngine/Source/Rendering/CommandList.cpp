@@ -43,6 +43,9 @@ void CommandList::SetName(std::wstring_view Name)
 
 void CommandList::FlushBarriers()
 {
+	if (!PendingBarriers.size())
+		return;
+
 	List->ResourceBarrier(static_cast<UINT>(PendingBarriers.size()), PendingBarriers.data());
 
 	PendingBarriers.clear();
