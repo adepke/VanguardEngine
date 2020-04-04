@@ -390,7 +390,7 @@ std::shared_ptr<Texture> ResourceManager::TextureFromSwapChain(void* Surface, co
 	Description.UpdateRate = ResourceFrequency::Static;
 	Description.BindFlags = BindFlag::RenderTarget;
 	Description.AccessFlags = AccessFlag::GPUWrite;
-	Description.InitialState = D3D12_RESOURCE_STATE_RENDER_TARGET;
+	Description.InitialState = D3D12_RESOURCE_STATE_PRESENT;
 	Description.Width = static_cast<uint32_t>(Device->RenderWidth);
 	Description.Height = static_cast<uint32_t>(Device->RenderHeight);
 	Description.Depth = 1;
