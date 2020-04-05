@@ -11,10 +11,14 @@
 
 D3D12_RESOURCE_STATES UsageToState(const std::shared_ptr<Buffer>& Resource, RGUsage Usage, bool Write)
 {
-	auto ReadState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-	if (Resource->Description.BindFlags & BindFlag::ConstantBuffer) ReadState |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
-	if (Resource->Description.BindFlags & BindFlag::VertexBuffer) ReadState |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
-	if (Resource->Description.BindFlags & BindFlag::IndexBuffer) ReadState |= D3D12_RESOURCE_STATE_INDEX_BUFFER;
+	D3D12_RESOURCE_STATES ReadState{};
+	if (!Write)
+	{
+		if (Resource->Description.BindFlags & BindFlag::ConstantBuffer) ReadState |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+		else if (Resource->Description.BindFlags & BindFlag::VertexBuffer) ReadState |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+		if (Resource->Description.BindFlags & BindFlag::IndexBuffer) ReadState |= D3D12_RESOURCE_STATE_INDEX_BUFFER;
+		if (Resource->Description.BindFlags & BindFlag::ShaderResource) ReadState |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+	}
 
 	switch (Usage)
 	{
@@ -27,12 +31,18 @@ D3D12_RESOURCE_STATES UsageToState(const std::shared_ptr<Buffer>& Resource, RGUs
 
 D3D12_RESOURCE_STATES UsageToState(const std::shared_ptr<Texture>& Resource, RGUsage Usage, bool Write)
 {
+	D3D12_RESOURCE_STATES ReadAdditiveState{};
+	if (!Write)
+	{
+		if (Resource->Description.BindFlags & BindFlag::ShaderResource) ReadAdditiveState |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+	}
+
 	switch (Usage)
 	{
-	case RGUsage::Default: return Write ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS : D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-	case RGUsage::RenderTarget: return Write ? D3D12_RESOURCE_STATE_RENDER_TARGET : D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-	case RGUsage::DepthStencil: return Write ? D3D12_RESOURCE_STATE_DEPTH_WRITE : D3D12_RESOURCE_STATE_DEPTH_READ;
-	case RGUsage::BackBuffer: return Write ? D3D12_RESOURCE_STATE_RENDER_TARGET : D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+	case RGUsage::Default: return Write ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS : ReadAdditiveState;
+	case RGUsage::RenderTarget: return Write ? D3D12_RESOURCE_STATE_RENDER_TARGET : ReadAdditiveState;
+	case RGUsage::DepthStencil: return Write ? D3D12_RESOURCE_STATE_DEPTH_WRITE : D3D12_RESOURCE_STATE_DEPTH_READ | ReadAdditiveState;
+	case RGUsage::BackBuffer: return Write ? D3D12_RESOURCE_STATE_RENDER_TARGET : ReadAdditiveState;
 	}
 
 	VGEnsure(false, "Texture resource cannot have specified usage.");
