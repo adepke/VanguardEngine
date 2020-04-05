@@ -271,11 +271,19 @@ std::shared_ptr<Buffer> ResourceManager::AllocateBuffer(const BufferDescription&
 	AllocationDesc.HeapType = Description.UpdateRate == ResourceFrequency::Static ? D3D12_HEAP_TYPE_DEFAULT : D3D12_HEAP_TYPE_UPLOAD;
 	AllocationDesc.Flags = D3D12MA::ALLOCATION_FLAG_NONE;
 
-	auto ResourceState = Description.InitialState;
+	// #TODO: Do we need these flags if we specify vertex/constant buffer or index buffer?
+	auto ResourceState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 
 	if (Description.UpdateRate == ResourceFrequency::Dynamic)
 	{
 		ResourceState = D3D12_RESOURCE_STATE_GENERIC_READ;
+	}
+
+	else
+	{
+		if (Description.BindFlags & BindFlag::ConstantBuffer) ResourceState |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+		else if (Description.BindFlags & BindFlag::VertexBuffer) ResourceState |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+		if (Description.BindFlags & BindFlag::IndexBuffer) ResourceState |= D3D12_RESOURCE_STATE_INDEX_BUFFER;
 	}
 
 	ID3D12Resource* RawResource = nullptr;
@@ -358,7 +366,7 @@ std::shared_ptr<Texture> ResourceManager::AllocateTexture(const TextureDescripti
 		AllocationDesc.Flags |= D3D12MA::ALLOCATION_FLAG_COMMITTED;
 	}
 
-	auto ResourceState = Description.InitialState;
+	const auto ResourceState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 
 	ID3D12Resource* RawResource = nullptr;
 	D3D12MA::Allocation* AllocationHandle = nullptr;
@@ -390,7 +398,6 @@ std::shared_ptr<Texture> ResourceManager::TextureFromSwapChain(void* Surface, co
 	Description.UpdateRate = ResourceFrequency::Static;
 	Description.BindFlags = BindFlag::RenderTarget;
 	Description.AccessFlags = AccessFlag::GPUWrite;
-	Description.InitialState = D3D12_RESOURCE_STATE_PRESENT;
 	Description.Width = static_cast<uint32_t>(Device->RenderWidth);
 	Description.Height = static_cast<uint32_t>(Device->RenderHeight);
 	Description.Depth = 1;
@@ -400,7 +407,7 @@ std::shared_ptr<Texture> ResourceManager::TextureFromSwapChain(void* Surface, co
 	Allocation->Description = Description;
 	Allocation->Allocation = std::move(ResourcePtr<D3D12MA::Allocation>{ new D3D12MA::Allocation });
 	Allocation->Allocation->CreateManual(static_cast<ID3D12Resource*>(Surface));
-	Allocation->State = Description.InitialState;
+	Allocation->State = D3D12_RESOURCE_STATE_PRESENT;
 
 	CreateResourceViews(Allocation);
 	NameResource(Allocation->Allocation, Name);

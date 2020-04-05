@@ -35,7 +35,6 @@ struct ResourceDescription
 	ResourceFrequency UpdateRate;
 	uint32_t BindFlags = 0;  // Determines the view type(s) created.
 	uint32_t AccessFlags = 0;
-	D3D12_RESOURCE_STATES InitialState = D3D12_RESOURCE_STATE_COMMON;  // Ignored if the update rate is Dynamic.
 };
 
 class ResourceManager;

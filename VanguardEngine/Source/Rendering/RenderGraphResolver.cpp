@@ -9,11 +9,10 @@ void RGResolver::BuildTransients(RenderDevice* Device, std::unordered_map<size_t
 	{
 		bool Written = Dependencies[Tag].WritingPasses.size();  // Is the resource ever written to.
 
-		BufferDescription FullDescription;
+		BufferDescription FullDescription{};
 		FullDescription.UpdateRate = Description.first.UpdateRate;
 		FullDescription.BindFlags = BindFlag::ShaderResource;
 		FullDescription.AccessFlags = Written ? AccessFlag::GPUWrite : 0;
-		//FullDescription.InitialState = ;  // #TEMP
 		FullDescription.Size = Description.first.Size;
 		FullDescription.Stride = Description.first.Stride;
 		FullDescription.Format = Description.first.Format;
@@ -43,7 +42,6 @@ void RGResolver::BuildTransients(RenderDevice* Device, std::unordered_map<size_t
 		FullDescription.UpdateRate = ResourceFrequency::Static;
 		FullDescription.BindFlags = BindFlag::ShaderResource;
 		FullDescription.AccessFlags = Written ? AccessFlag::GPUWrite : 0;
-		//FullDescription.InitialState = DepthStencil ? : ;  // #TEMP
 		FullDescription.Width = Description.first.Width;
 		FullDescription.Height = Description.first.Height;
 		FullDescription.Depth = Description.first.Depth;
