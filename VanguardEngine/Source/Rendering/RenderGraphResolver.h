@@ -4,10 +4,14 @@
 
 #include <Rendering/Buffer.h>
 #include <Rendering/Texture.h>
+#include <Rendering/RenderGraphResource.h>
 
 #include <unordered_map>
 #include <memory>
+#include <utility>
 #include <type_traits>
+
+class RenderDevice;
 
 // Helper type to resolve resource tags into actual resource handles.
 class RGResolver
@@ -17,17 +21,20 @@ private:
 	std::unordered_map<size_t, std::shared_ptr<Buffer>> BufferResources;
 	std::unordered_map<size_t, std::shared_ptr<Texture>> TextureResources;
 
-	std::unordered_map<size_t, RGBufferDescription> TransientBufferResources;
-	std::unordered_map<size_t, RGTextureDescription> TransientTextureResources;
+	std::unordered_map<size_t, std::pair<RGBufferDescription, std::wstring>> TransientBufferResources;
+	std::unordered_map<size_t, std::pair<RGTextureDescription, std::wstring>> TransientTextureResources;
 
 public:  // Utilities for the render graph.
 	size_t AddResource(const std::shared_ptr<Buffer>& Resource) { const auto Tag = Counter++; BufferResources[Tag] = Resource; return Tag; }
 	size_t AddResource(const std::shared_ptr<Texture>& Resource) { const auto Tag = Counter++; TextureResources[Tag] = Resource; return Tag; }
 
-	size_t AddTransientResource(const RGBufferDescription& Description) { const auto Tag = Counter++; TransientBufferResources[Tag] = Description; return Tag; }
-	size_t AddTransientResource(const RGTextureDescription& Description) { const auto Tag = Counter++; TransientTextureResources[Tag] = Description; return Tag; }
+	size_t AddTransientResource(const RGBufferDescription& Description) { const auto Tag = Counter++; TransientBufferResources[Tag].first = Description; return Tag; }
+	size_t AddTransientResource(const RGTextureDescription& Description) { const auto Tag = Counter++; TransientTextureResources[Tag].first = Description; return Tag; }
 
-	void BuildTransients(RenderDevice* Device, const std::unordered_map<size_t, ResourceDependencyData>& Dependencies, const std::unordered_map<size_t, ResourceUsageData>& Usages);
+	void NameTransientBuffer(size_t ResourceTag, const std::wstring& Name) { TransientBufferResources[ResourceTag].second = Name; }
+	void NameTransientTexture(size_t ResourceTag, const std::wstring& Name) { TransientTextureResources[ResourceTag].second = Name; }
+
+	void BuildTransients(RenderDevice* Device, std::unordered_map<size_t, ResourceDependencyData>& Dependencies, std::unordered_map<size_t, ResourceUsageData>& Usages);
 
 	D3D12_RESOURCE_STATES DetermineInitialState(size_t ResourceTag);
 

@@ -39,8 +39,8 @@ public:
 	RenderPass& operator=(const RenderPass&) = delete;
 	RenderPass& operator=(RenderPass&&) noexcept = default;
 
-	size_t CreateResource(const RGBufferDescription& Description, const std::wstring_view Name);
-	size_t CreateResource(const RGTextureDescription& Description, const std::wstring_view Name);
+	size_t CreateResource(const RGBufferDescription& Description, const std::wstring& Name);
+	size_t CreateResource(const RGTextureDescription& Description, const std::wstring& Name);
 	// When a pass declares a read/write on a resource, it will assume it performs that action on the entire resource,
 	// for the entire execution of the pass.
 	void ReadResource(size_t ResourceTag, RGUsage Usage);  // #TODO: Most resources aren't mutable state-wise, so we should create different paths.

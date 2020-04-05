@@ -3,28 +3,15 @@
 #pragma once
 
 #include <Rendering/RenderPass.h>
+#include <Rendering/RenderGraphResource.h>
 #include <Rendering/RenderGraphResolver.h>
 
 #include <vector>
 #include <memory>
-#include <unordered_map>
-#include <unordered_set>
-#include <optional>
 
 class RenderDevice;
 struct Buffer;
 struct Texture;
-
-struct ResourceDependencyData
-{
-	std::unordered_set<size_t> ReadingPasses;  // List of passes that read from this resource.
-	std::unordered_set<size_t> WritingPasses;  // List of passes that write to this resource.
-};
-
-struct ResourceUsageData
-{
-	std::unordered_map<size_t, RGUsage> PassUsage;  // Map of pass index to usage.
-};
 
 class RenderGraph
 {
@@ -46,6 +33,8 @@ private:
 	void InjectBarriers(std::vector<CommandList>& Lists);  // Places barriers in a serialized pipeline for usage changes on resources.
 
 public:  // Utilities for render passes.
+	inline size_t AddTransientResource(const RGBufferDescription& Description, const std::wstring& Name);
+	inline size_t AddTransientResource(const RGTextureDescription& Description, const std::wstring& Name);
 	inline void AddResourceRead(size_t PassIndex, size_t ResourceTag, RGUsage Usage);
 	inline void AddResourceWrite(size_t PassIndex, size_t ResourceTag, RGUsage Usage);
 
@@ -61,6 +50,22 @@ public:
 	void Build();
 	void Execute();
 };
+
+inline size_t RenderGraph::AddTransientResource(const RGBufferDescription& Description, const std::wstring& Name)
+{
+	const auto Result = Resolver.AddTransientResource(Description);
+	Resolver.NameTransientBuffer(Result, Name);
+
+	return Result;
+}
+
+inline size_t RenderGraph::AddTransientResource(const RGTextureDescription& Description, const std::wstring& Name)
+{
+	const auto Result = Resolver.AddTransientResource(Description);
+	Resolver.NameTransientTexture(Result, Name);
+
+	return Result;
+}
 
 inline void RenderGraph::AddResourceRead(size_t PassIndex, size_t ResourceTag, RGUsage Usage)
 {

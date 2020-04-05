@@ -134,18 +134,23 @@ void RenderGraph::InjectBarriers(std::vector<CommandList>& Lists)
 	{
 		for (size_t Resource : Resources)
 		{
+			auto ResourceBuffer = Resolver.FetchAsBuffer(Resource);
+			auto ResourceTexture = Resolver.FetchAsTexture(Resource);
+
+			VGAssert(ResourceBuffer || ResourceTexture, "Failed to fetch the resource.");
+
 			// #TEMP: We can't use PassIndex directly, since it might be a size_t::max.
-			const auto NewState = UsageToState(ResourceUsages[Resource].PassUsage[PassIndex], Write);
+			D3D12_RESOURCE_STATES NewState;
+
+			if (ResourceBuffer)
+				NewState = UsageToState(ResourceBuffer, ResourceUsages[Resource].PassUsage[PassIndex], Write);
+			else
+				NewState = UsageToState(ResourceTexture, ResourceUsages[Resource].PassUsage[PassIndex], Write);
 
 			if (NewState != StateMap[Resource].first)
 			{
 				// The state changed, which means we need to inject a barrier at the end of the last list to use the resource.
 				// #TODO: Potentially use split barriers.
-
-				auto ResourceBuffer = Resolver.FetchAsBuffer(Resource);
-				auto ResourceTexture = Resolver.FetchAsTexture(Resource);
-
-				VGAssert(ResourceBuffer || ResourceTexture, "Failed to fetch the resource.");
 
 				if (ResourceBuffer)
 					Lists[PassIndex].TransitionBarrier(ResourceBuffer, NewState);  // #TEMP: After reordering we can't access lists like this, need a map.

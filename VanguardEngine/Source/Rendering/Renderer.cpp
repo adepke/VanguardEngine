@@ -101,7 +101,7 @@ void Renderer::Render(entt::registry& Registry)
 	DepthStencilDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
 
 	auto& MainPass = Graph.AddPass(VGText("Main Pass"));
-	const size_t DepthStencilTag = MainPass.CreateResource(DepthStencilDesc, "Depth Stencil");
+	const size_t DepthStencilTag = MainPass.CreateResource(DepthStencilDesc, VGText("Depth Stencil"));
 	MainPass.ReadResource(DepthStencilTag, RGUsage::DepthStencil);
 	MainPass.WriteResource(BackBufferTag, RGUsage::BackBuffer);
 
