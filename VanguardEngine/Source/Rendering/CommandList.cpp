@@ -6,7 +6,8 @@
 
 void CommandList::TransitionBarrierInternal(ID3D12Resource* Resource, D3D12_RESOURCE_STATES OldState, D3D12_RESOURCE_STATES NewState)
 {
-	if (OldState == NewState)
+	// No need to transition if we're in a state that covers the new state.
+	if ((NewState & OldState) != 0)
 		return;
 
 	D3D12_RESOURCE_BARRIER Barrier;
