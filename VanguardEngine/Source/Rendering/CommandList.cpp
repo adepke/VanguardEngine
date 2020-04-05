@@ -6,6 +6,8 @@
 
 void CommandList::TransitionBarrierInternal(ID3D12Resource* Resource, D3D12_RESOURCE_STATES OldState, D3D12_RESOURCE_STATES NewState)
 {
+	VGScopedCPUStat("Transition Barrier");
+
 	// No need to transition if we're in a state that covers the new state.
 	if ((NewState & OldState) != 0)
 		return;
@@ -23,6 +25,8 @@ void CommandList::TransitionBarrierInternal(ID3D12Resource* Resource, D3D12_RESO
 
 void CommandList::Create(RenderDevice& Device, D3D12_COMMAND_LIST_TYPE Type)
 {
+	VGScopedCPUStat("Command List Create");
+
 	auto Result = Device.Native()->CreateCommandAllocator(Type, IID_PPV_ARGS(Allocator.Indirect()));
 	if (FAILED(Result))
 	{
@@ -44,6 +48,8 @@ void CommandList::SetName(std::wstring_view Name)
 
 void CommandList::FlushBarriers()
 {
+	VGScopedCPUStat("Command List Barrier Flush");
+
 	if (!PendingBarriers.size())
 		return;
 
@@ -54,6 +60,8 @@ void CommandList::FlushBarriers()
 
 void CommandList::BindPipelineState(PipelineState& State)
 {
+	VGScopedCPUStat("Command List Bind Pipeline");
+
 	List->IASetPrimitiveTopology(State.Description.Topology);
 	List->SetGraphicsRootSignature(State.RootSignature.Get());
 	//List->SetGraphicsRootDescriptorTable()  // #TODO: Set the descriptor table?

@@ -5,6 +5,8 @@
 
 void RGResolver::BuildTransients(RenderDevice* Device, std::unordered_map<size_t, ResourceDependencyData>& Dependencies, std::unordered_map<size_t, ResourceUsageData>& Usages)
 {
+	VGScopedCPUStat("Render Graph Build Transients");
+
 	for (const auto& [Tag, Description] : TransientBufferResources)
 	{
 		bool Written = Dependencies[Tag].WritingPasses.size();  // Is the resource ever written to.

@@ -51,6 +51,8 @@ D3D12_RESOURCE_STATES UsageToState(const std::shared_ptr<Texture>& Resource, RGU
 
 std::optional<size_t> RenderGraph::FindUsage(RGUsage Usage)
 {
+	VGScopedCPUStat("Render Graph Find Usage");
+
 	 const auto Iter = std::find_if(ResourceUsages.begin(), ResourceUsages.end(), [Usage](const auto& Pair)
 		{
 			const auto& UsageMap = Pair.second.PassUsage;  // Mapping of pass indexes to usages.
@@ -71,6 +73,8 @@ std::optional<size_t> RenderGraph::FindUsage(RGUsage Usage)
 
 bool RenderGraph::Validate()
 {
+	VGScopedCPUStat("Render Graph Validate");
+
 	if (!FindUsage(RGUsage::BackBuffer))
 	{
 		return false;  // We need to have at least one pass that writes to the back buffer.
@@ -122,6 +126,8 @@ void RenderGraph::Traverse(size_t ResourceTag)
 
 void RenderGraph::Serialize()
 {
+	VGScopedCPUStat("Render Graph Serialize");
+
 	PassPipeline.reserve(Passes.size());  // Unlikely that a significant number of passes are going to be trimmed.
 
 	const size_t SwapChainTag = *FindUsage(RGUsage::BackBuffer);  // #TODO: This will only work if we have 1 pass write to the swap chain.
@@ -132,6 +138,8 @@ void RenderGraph::Serialize()
 
 void RenderGraph::InjectBarriers(std::vector<CommandList>& Lists)
 {
+	VGScopedCPUStat("Render Graph Barriers");
+
 	std::unordered_map<size_t, std::pair<D3D12_RESOURCE_STATES, size_t>> StateMap;  // Maps resource tag to the state and which pass last modified it.
 	constexpr auto InvalidPassIndex = std::numeric_limits<size_t>::max();
 
@@ -184,6 +192,8 @@ void RenderGraph::InjectBarriers(std::vector<CommandList>& Lists)
 
 RenderPass& RenderGraph::AddPass(const std::wstring& Name)
 {
+	VGScopedCPUStat("Render Graph Add Pass");
+
 	for (const auto& Pass : Passes)
 	{
 		VGAssert(Pass->Name != Name, "Attempted to add multiple passes with the same name!");
@@ -194,6 +204,8 @@ RenderPass& RenderGraph::AddPass(const std::wstring& Name)
 
 void RenderGraph::Build()
 {
+	VGScopedCPUStat("Render Graph Build");
+
 	VGAssert(Validate(), "Failed to validate render graph!");
 
 	// Serialize the execution pipeline, we need to do this to resolve resource state and barriers.
@@ -204,6 +216,8 @@ void RenderGraph::Build()
 
 void RenderGraph::Execute()
 {
+	VGScopedCPUStat("Render Graph Execute");
+
 	VGAssert(PassPipeline.size(), "Render graph is empty, ensure you built the graph before execution.");
 
 	std::vector<CommandList> PassCommands;
@@ -214,6 +228,9 @@ void RenderGraph::Execute()
 	for (auto PassIndex : PassPipeline)
 	{
 		PassCommands[Index].Create(*Device, D3D12_COMMAND_LIST_TYPE_DIRECT);
+
+		// #TODO: Find a way to get the name of the pass in the stat so we can tell how long each pass takes to record.
+		VGScopedCPUStat("Render Graph Record");
 
 		Passes[PassIndex]->Execution(Resolver, PassCommands[Index]);
 		++Index;
