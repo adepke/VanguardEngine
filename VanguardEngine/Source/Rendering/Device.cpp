@@ -274,18 +274,6 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 
 	// Direct to Copy
 
-	D3D12_COMMAND_QUEUE_DESC DirectToCopyCommandQueueDesc{};
-	DirectToCopyCommandQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-	DirectToCopyCommandQueueDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
-	DirectToCopyCommandQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-	DirectToCopyCommandQueueDesc.NodeMask = 0;
-
-	Result = Device->CreateCommandQueue(&DirectToCopyCommandQueueDesc, IID_PPV_ARGS(DirectToCopyCommandQueue.Indirect()));
-	if (FAILED(Result))
-	{
-		VGLogFatal(Rendering) << "Failed to create direct/compute to copy command queue: " << Result;
-	}
-
 	for (int Index = 0; Index < FrameCount; ++Index)
 	{
 		DirectToCopyCommandList[Index].Create(*this, D3D12_COMMAND_LIST_TYPE_DIRECT);

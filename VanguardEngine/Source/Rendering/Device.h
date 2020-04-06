@@ -54,7 +54,6 @@ private:
 	Adapter RenderAdapter;
 
 	// For converting resources from the direct/compute engine to the copy engine.
-	ResourcePtr<ID3D12CommandQueue> DirectToCopyCommandQueue;
 	CommandList DirectToCopyCommandList[FrameCount];
 
 	ResourcePtr<ID3D12CommandQueue> CopyCommandQueue;
@@ -131,7 +130,6 @@ public:
 	void FrameStep();
 	size_t GetFrameIndex() const noexcept { return Frame % RenderDevice::FrameCount; }
 
-	auto* GetDirectToCopyQueue() const noexcept { return DirectToCopyCommandQueue.Get(); }
 	auto& GetDirectToCopyList() noexcept { return DirectToCopyCommandList[GetFrameIndex()]; }
 	auto* GetCopyQueue() const noexcept { return CopyCommandQueue.Get(); }
 	auto& GetCopyList() noexcept { return CopyCommandList[GetFrameIndex()]; }

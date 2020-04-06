@@ -56,7 +56,7 @@ void Renderer::Render(entt::registry& Registry)
 		VGScopedCPUStat("Execute Direct Transitions");
 
 		// We need to execute the engine transition barriers for going from direct to copy.
-		Device->GetDirectToCopyQueue()->ExecuteCommandLists(1, DirectToCopyLists);
+		Device->GetDirectQueue()->ExecuteCommandLists(1, DirectToCopyLists);
 	}
 
 	// #TEMP: Sync transitions.
