@@ -123,10 +123,6 @@ void Renderer::Render(entt::registry& Registry)
 			auto& BackBuffer = Resolver.Get<Texture>(BackBufferTag);
 			auto& DepthStencil = Resolver.Get<Texture>(DepthStencilTag);
 
-			// #TEMP: Use this until we get fully automated transition barriers.
-			auto BackBufferFull = Resolver.FetchAsTexture(BackBufferTag);
-			auto DepthStencilFull = Resolver.FetchAsTexture(DepthStencilTag);
-
 			List.BindPipelineState(*Materials[0].Pipeline);
 
 			List.Native()->OMSetRenderTargets(1, &*Device->GetBackBuffer()->RTV, false, &*DepthStencil.DSV);
