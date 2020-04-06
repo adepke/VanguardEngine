@@ -8,6 +8,9 @@ void CommandList::TransitionBarrierInternal(ID3D12Resource* Resource, D3D12_RESO
 {
 	VGScopedCPUStat("Transition Barrier");
 
+	// #TODO: Validation, either ensure we never transition from a read only state to another read only state,
+	// or combine these read states before a flush.
+
 	// Make sure we don't discard transitions to common. Special case since it's 0.
 	if (NewState == D3D12_RESOURCE_STATE_COMMON && OldState == D3D12_RESOURCE_STATE_COMMON)
 		return;
