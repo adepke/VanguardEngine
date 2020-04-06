@@ -413,7 +413,7 @@ std::shared_ptr<Texture> ResourceManager::TextureFromSwapChain(void* Surface, co
 	Allocation->Description = Description;
 	Allocation->Allocation = std::move(ResourcePtr<D3D12MA::Allocation>{ new D3D12MA::Allocation });
 	Allocation->Allocation->CreateManual(static_cast<ID3D12Resource*>(Surface));
-	Allocation->State = D3D12_RESOURCE_STATE_PRESENT;
+	Allocation->State = D3D12_RESOURCE_STATE_COMMON;  // Swap chain back buffers always start out in the common state.
 
 	CreateResourceViews(Allocation);
 	NameResource(Allocation->Allocation, Name);
