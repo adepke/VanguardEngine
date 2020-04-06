@@ -24,7 +24,7 @@ class RenderPass
 
 private:
 	RenderGraph& Graph;
-	std::wstring Name;
+	const char* StaticName;  // Stable name that is safe to send to external profiling services.
 	size_t Index;
 	std::vector<size_t> Reads;
 	std::vector<size_t> Writes;
@@ -32,7 +32,7 @@ private:
 	std::function<void(RGResolver&, CommandList&)> Execution;
 
 public:
-	RenderPass(RenderGraph& InGraph, const std::wstring& InName, size_t InIndex) : Graph(InGraph), Name(InName), Index(InIndex) {}
+	RenderPass(RenderGraph& InGraph, const std::string_view InStaticName, size_t InIndex) : Graph(InGraph), StaticName(InStaticName.data()), Index(InIndex) {}
 	RenderPass(const RenderPass&) = delete;
 	RenderPass(RenderPass&&) noexcept = default;
 

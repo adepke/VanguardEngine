@@ -8,6 +8,7 @@
 
 #include <utility>
 #include <limits>
+#include <cstring>
 
 D3D12_RESOURCE_STATES UsageToState(const std::shared_ptr<Buffer>& Resource, RGUsage Usage, bool Write)
 {
@@ -196,16 +197,16 @@ void RenderGraph::InjectBarriers(std::vector<CommandList>& Lists)
 	}
 }
 
-RenderPass& RenderGraph::AddPass(const std::wstring& Name)
+RenderPass& RenderGraph::AddPass(const std::string_view StaticName)
 {
 	VGScopedCPUStat("Render Graph Add Pass");
 
 	for (const auto& Pass : Passes)
 	{
-		VGAssert(Pass->Name != Name, "Attempted to add multiple passes with the same name!");
+		VGAssert(std::strcmp(Pass->StaticName, StaticName.data()) != 0, "Attempted to add multiple passes with the same name!");
 	}
 
-	return *Passes.emplace_back(std::make_unique<RenderPass>(*this, Name, Passes.size()));
+	return *Passes.emplace_back(std::make_unique<RenderPass>(*this, StaticName, Passes.size()));
 }
 
 void RenderGraph::Build()
@@ -243,8 +244,7 @@ void RenderGraph::Execute()
 	Index = 0;
 	for (auto PassIndex : PassPipeline)
 	{
-		// #TODO: Find a way to get the name of the pass in the stat so we can tell how long each pass takes to record.
-		VGScopedCPUStat("Render Graph Record");
+		VGScopedCPUStat(Passes[PassIndex]->StaticName);
 
 		Passes[PassIndex]->Execution(Resolver, PassCommands[Index]);
 		++Index;

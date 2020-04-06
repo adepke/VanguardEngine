@@ -112,7 +112,7 @@ void Renderer::Render(entt::registry& Registry)
 	DepthStencilDesc.Height = Device->RenderHeight;
 	DepthStencilDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
 
-	auto& MainPass = Graph.AddPass(VGText("Main Pass"));
+	auto& MainPass = Graph.AddPass("Main Pass");
 	const size_t DepthStencilTag = MainPass.CreateResource(DepthStencilDesc, VGText("Depth Stencil"));
 	MainPass.ReadResource(DepthStencilTag, RGUsage::DepthStencil);
 	MainPass.WriteResource(BackBufferTag, RGUsage::BackBuffer);
@@ -145,11 +145,13 @@ void Renderer::Render(entt::registry& Registry)
 					VertexViews[0].SizeInBytes = static_cast<UINT>(Mesh.VertexBuffer->Description.Size);
 					VertexViews[0].StrideInBytes = static_cast<UINT>(Mesh.VertexBuffer->Description.Stride);
 
+					/*
 					// Instance Buffer.
 					VertexViews.push_back({});
 					VertexViews[1].BufferLocation = InstanceBuffer.first->Native()->GetGPUVirtualAddress() + InstanceBuffer.second;
 					VertexViews[1].SizeInBytes = static_cast<UINT>(InstanceBuffer.first->Description.Size);
 					VertexViews[1].StrideInBytes = static_cast<UINT>(InstanceBuffer.first->Description.Stride);
+					*/
 
 					List.Native()->IASetVertexBuffers(0, static_cast<UINT>(VertexViews.size()), VertexViews.data());  // #TODO: Slot?
 

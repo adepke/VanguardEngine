@@ -45,7 +45,7 @@ public:
 	size_t ImportResource(std::shared_ptr<Buffer>& Resource) { return Resolver.AddResource(Resource); }
 	size_t ImportResource(std::shared_ptr<Texture>& Resource) { return Resolver.AddResource(Resource); }
 
-	RenderPass& AddPass(const std::wstring& Name);
+	RenderPass& AddPass(const std::string_view StaticName);
 
 	void Build();
 	void Execute();
