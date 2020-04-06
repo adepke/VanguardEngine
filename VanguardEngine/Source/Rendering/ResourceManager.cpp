@@ -370,7 +370,8 @@ std::shared_ptr<Texture> ResourceManager::AllocateTexture(const TextureDescripti
 
 	if (Description.BindFlags & BindFlag::DepthStencil)
 	{
-		ResourceState = D3D12_RESOURCE_STATE_DEPTH_READ;  // Depth stencil textures cannot be in standard shader resource format.
+		// Depth stencil textures cannot be in standard shader resource format if we don't have an SRV binding. Guess the initial state to try and avoid an immediate transition.
+		ResourceState = (Description.AccessFlags & AccessFlag::GPUWrite) ? D3D12_RESOURCE_STATE_DEPTH_WRITE : D3D12_RESOURCE_STATE_DEPTH_READ;
 	}
 
 	ID3D12Resource* RawResource = nullptr;
