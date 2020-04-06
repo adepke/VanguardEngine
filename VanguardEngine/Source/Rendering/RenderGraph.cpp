@@ -188,6 +188,12 @@ void RenderGraph::InjectBarriers(std::vector<CommandList>& Lists)
 		CheckState(Iter, Reads, false);
 		CheckState(Iter, Writes, true);
 	}
+
+	// Placed all the barriers, now flush them.
+	for (auto& List : Lists)
+	{
+		List.FlushBarriers();
+	}
 }
 
 RenderPass& RenderGraph::AddPass(const std::wstring& Name)
@@ -223,21 +229,26 @@ void RenderGraph::Execute()
 	std::vector<CommandList> PassCommands;
 	PassCommands.resize(PassPipeline.size());
 
-	// #TODO: Parallel recording.
+	// #TODO: Pool command lists in a ring buffer, extremely wasteful to recreate every frame.
 	size_t Index = 0;
 	for (auto PassIndex : PassPipeline)
 	{
-		// #TODO: Pool command lists in a ring buffer, extremely wasteful to recreate every frame.
 		PassCommands[Index].Create(*Device, D3D12_COMMAND_LIST_TYPE_DIRECT);
+		++Index;
+	}
 
+	InjectBarriers(PassCommands);
+
+	// #TODO: Parallel recording.
+	Index = 0;
+	for (auto PassIndex : PassPipeline)
+	{
 		// #TODO: Find a way to get the name of the pass in the stat so we can tell how long each pass takes to record.
 		VGScopedCPUStat("Render Graph Record");
 
 		Passes[PassIndex]->Execution(Resolver, PassCommands[Index]);
 		++Index;
 	}
-
-	InjectBarriers(PassCommands);
 
 	// Ensure the back buffer is in presentation state at the very end of the graph.
 	PassCommands[PassCommands.size() - 1].TransitionBarrier(Resolver.FetchAsTexture(*FindUsage(RGUsage::BackBuffer)), D3D12_RESOURCE_STATE_PRESENT);
@@ -251,7 +262,6 @@ void RenderGraph::Execute()
 
 	for (auto& List : PassCommands)
 	{
-		List.FlushBarriers();
 		List.Close();
 		PassLists.emplace_back(List.Native());
 	}
