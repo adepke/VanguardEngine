@@ -227,6 +227,7 @@ void RenderGraph::Execute()
 	size_t Index = 0;
 	for (auto PassIndex : PassPipeline)
 	{
+		// #TODO: Pool command lists in a ring buffer, extremely wasteful to recreate every frame.
 		PassCommands[Index].Create(*Device, D3D12_COMMAND_LIST_TYPE_DIRECT);
 
 		// #TODO: Find a way to get the name of the pass in the stat so we can tell how long each pass takes to record.
