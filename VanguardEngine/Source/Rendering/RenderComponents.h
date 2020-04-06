@@ -49,7 +49,7 @@ inline MeshComponent CreateMeshComponent(RenderDevice& Device, const std::vector
 	VertexDescription.Size = VertexPositions.size();
 	VertexDescription.Stride = sizeof(Vertex);
 	VertexDescription.UpdateRate = ResourceFrequency::Static;
-	VertexDescription.BindFlags = BindFlag::VertexBuffer | BindFlag::ShaderResource;
+	VertexDescription.BindFlags = BindFlag::VertexBuffer;
 	VertexDescription.AccessFlags = AccessFlag::CPUWrite;
 
 	Result.VertexBuffer = std::move(Device.CreateResource(VertexDescription, VGText("Vertex Buffer")));
@@ -63,7 +63,7 @@ inline MeshComponent CreateMeshComponent(RenderDevice& Device, const std::vector
 	IndexDescription.Size = Indices.size();
 	IndexDescription.Stride = sizeof(uint32_t);
 	IndexDescription.UpdateRate = ResourceFrequency::Static;
-	IndexDescription.BindFlags = BindFlag::IndexBuffer | BindFlag::ShaderResource;
+	IndexDescription.BindFlags = BindFlag::IndexBuffer;
 	IndexDescription.AccessFlags = AccessFlag::CPUWrite;
 
 	Result.IndexBuffer = std::move(Device.CreateResource(IndexDescription, VGText("Index Buffer")));
