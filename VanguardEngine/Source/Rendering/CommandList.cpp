@@ -8,8 +8,12 @@ void CommandList::TransitionBarrierInternal(ID3D12Resource* Resource, D3D12_RESO
 {
 	VGScopedCPUStat("Transition Barrier");
 
+	// Make sure we don't discard transitions to common. Special case since it's 0.
+	if (NewState == D3D12_RESOURCE_STATE_COMMON && OldState == D3D12_RESOURCE_STATE_COMMON)
+		return;
+
 	// No need to transition if we're in a state that covers the new state.
-	if ((NewState & OldState) != 0)
+	else if ((NewState & OldState) != 0)
 		return;
 
 	D3D12_RESOURCE_BARRIER Barrier;
