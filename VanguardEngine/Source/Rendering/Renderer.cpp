@@ -49,13 +49,25 @@ void Renderer::Render(entt::registry& Registry)
 {
 	VGScopedCPUStat("Render");
 
+	Device->GetDirectToCopyList().Close();
+	ID3D12CommandList* DirectToCopyLists[] = { Device->GetDirectToCopyList().Native() };
+
+	{
+		VGScopedCPUStat("Execute Direct Transitions");
+
+		// We need to execute the engine transition barriers for going from direct to copy.
+		Device->GetDirectToCopyQueue()->ExecuteCommandLists(1, DirectToCopyLists);
+	}
+
+	// #TEMP: Sync transitions.
+
 	Device->GetCopyList().Close();
-	
 	ID3D12CommandList* CopyLists[] = { Device->GetCopyList().Native() };
 
 	{
 		VGScopedCPUStat("Execute Copy");
 
+		// This will decay our resources back to common.
 		Device->GetCopyQueue()->ExecuteCommandLists(1, CopyLists);
 	}
 

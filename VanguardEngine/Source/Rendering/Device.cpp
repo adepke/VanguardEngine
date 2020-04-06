@@ -183,7 +183,13 @@ void RenderDevice::ResetFrame(size_t FrameID)
 
 	const auto FrameIndex = FrameID % FrameCount;
 
-	auto Result = CopyCommandList[FrameIndex].Reset();
+	auto Result = DirectToCopyCommandList[FrameIndex].Reset();
+	if (FAILED(Result))
+	{
+		VGLogError(Rendering) << "Failed to reset direct/compute to copy command list for frame " << FrameIndex << ": " << Result;
+	}
+
+	Result = CopyCommandList[FrameIndex].Reset();
 	if (FAILED(Result))
 	{
 		VGLogError(Rendering) << "Failed to reset copy command list for frame " << FrameIndex << ": " << Result;
@@ -263,6 +269,33 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 	}
 
 	AllocatorManager.Initialize(this, FrameCount);
+
+	// #TODO: Condense building queues and command lists into a function.
+
+	// Direct to Copy
+
+	D3D12_COMMAND_QUEUE_DESC DirectToCopyCommandQueueDesc{};
+	DirectToCopyCommandQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
+	DirectToCopyCommandQueueDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
+	DirectToCopyCommandQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
+	DirectToCopyCommandQueueDesc.NodeMask = 0;
+
+	Result = Device->CreateCommandQueue(&DirectToCopyCommandQueueDesc, IID_PPV_ARGS(DirectToCopyCommandQueue.Indirect()));
+	if (FAILED(Result))
+	{
+		VGLogFatal(Rendering) << "Failed to create direct/compute to copy command queue: " << Result;
+	}
+
+	for (int Index = 0; Index < FrameCount; ++Index)
+	{
+		DirectToCopyCommandList[Index].Create(*this, D3D12_COMMAND_LIST_TYPE_DIRECT);
+
+		// Close all lists except the current frame's list.
+		if (Index > 0)
+		{
+			DirectToCopyCommandList[Index].Close();
+		}
+	}
 
 	// Copy
 

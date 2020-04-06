@@ -204,7 +204,7 @@ void ResourceManager::Initialize(RenderDevice* InDevice, size_t BufferedFrames)
 		ResourceDesc.Height = 1;
 		ResourceDesc.DepthOrArraySize = 1;
 		ResourceDesc.Format = DXGI_FORMAT_UNKNOWN;
-		ResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+		ResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;  // Buffers are always row major.
 		ResourceDesc.MipLevels = 1;
 		ResourceDesc.SampleDesc.Count = 1;
 		ResourceDesc.SampleDesc.Quality = 0;
@@ -430,12 +430,14 @@ void ResourceManager::WriteBuffer(std::shared_ptr<Buffer>& Target, const std::ve
 
 		std::memcpy(static_cast<uint8_t*>(UploadPtrs[FrameIndex]) + UploadOffsets[FrameIndex], Source.data(), Source.size());
 
+		// If we haven't been promoted yet, we need to transition engines.
 		if (Target->State != D3D12_RESOURCE_STATE_COPY_DEST)
 		{
-			Device->GetCopyList().TransitionBarrier(Target, D3D12_RESOURCE_STATE_COPY_DEST);
-			Device->GetCopyList().FlushBarriers();
+			Device->GetDirectToCopyList().TransitionBarrier(Target, D3D12_RESOURCE_STATE_COMMON);
+			Device->GetDirectToCopyList().FlushBarriers();
 		}
 
+		// CopyBufferRegion() promotes the resource to D3D12_RESOURCE_STATE_COPY_DEST. #TODO: Track this state.
 		auto* TargetCommandList = Device->GetCopyList().Native();
 		TargetCommandList->CopyBufferRegion(Target->Native(), TargetOffset, UploadResources[FrameIndex]->GetResource(), UploadOffsets[FrameIndex], Source.size());  // #TODO: If we have offsets of 0, use CopyResource.
 
@@ -446,6 +448,7 @@ void ResourceManager::WriteBuffer(std::shared_ptr<Buffer>& Target, const std::ve
 	{
 		VGScopedCPUStat("Buffer Write Dynamic");
 
+		VGAssert(Target->State == D3D12_RESOURCE_STATE_GENERIC_READ, "Dynamic buffers must always be in the generic read state.");
 		VGAssert(Target->Description.AccessFlags & AccessFlag::CPUWrite, "Failed to write to dynamic buffer, no CPU write access.");
 		VGAssert((Target->Description.Size * Target->Description.Stride) - TargetOffset >= Source.size(), "Failed to write to dynamic buffer, source is larger than target.");
 
@@ -504,12 +507,14 @@ void ResourceManager::WriteTexture(std::shared_ptr<Texture>& Target, const std::
 	SourceBox.bottom = Target->Description.Height;
 	SourceBox.back = Target->Description.Depth;
 
+	// If we haven't been promoted yet, we need to transition engines.
 	if (Target->State != D3D12_RESOURCE_STATE_COPY_DEST)
 	{
-		Device->GetCopyList().TransitionBarrier(Target, D3D12_RESOURCE_STATE_COPY_DEST);
-		Device->GetCopyList().FlushBarriers();
+		Device->GetDirectToCopyList().TransitionBarrier(Target, D3D12_RESOURCE_STATE_COMMON);
+		Device->GetDirectToCopyList().FlushBarriers();
 	}
 
+	// CopyTextureRegion() promotes the resource to D3D12_RESOURCE_STATE_COPY_DEST. #TODO: Track this state.
 	auto* TargetCommandList = Device->GetCopyList().Native();
 	TargetCommandList->CopyTextureRegion(&TargetCopyDesc, 0, 0, 0, &SourceCopyDesc, &SourceBox);  // #TODO: If we have offsets of 0, use CopyResource.
 
