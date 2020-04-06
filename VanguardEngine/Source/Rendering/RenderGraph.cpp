@@ -190,6 +190,11 @@ void RenderGraph::InjectBarriers(std::vector<CommandList>& Lists)
 		CheckState(Iter, Writes, true);
 	}
 
+	// #TODO: Strongly consider looking ahead at sequential reading passes (up until a write pass) and merge their required
+	// read state into the current barrier in order to avoid transitions from a read-only state to another read-only state.
+
+	// #TODO: Absolutely no data hazard protection, we need to inject UAV barriers as well to prevent these race conditions.
+
 	// Placed all the barriers, now flush them.
 	for (auto& List : Lists)
 	{
