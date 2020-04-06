@@ -366,7 +366,12 @@ std::shared_ptr<Texture> ResourceManager::AllocateTexture(const TextureDescripti
 		AllocationDesc.Flags |= D3D12MA::ALLOCATION_FLAG_COMMITTED;
 	}
 
-	const auto ResourceState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+	auto ResourceState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+
+	if (Description.BindFlags & BindFlag::DepthStencil)
+	{
+		ResourceState = D3D12_RESOURCE_STATE_DEPTH_READ;  // Depth stencil textures cannot be in standard shader resource format.
+	}
 
 	ID3D12Resource* RawResource = nullptr;
 	D3D12MA::Allocation* AllocationHandle = nullptr;

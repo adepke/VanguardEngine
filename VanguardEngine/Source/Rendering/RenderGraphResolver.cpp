@@ -50,7 +50,7 @@ void RGResolver::BuildTransients(RenderDevice* Device, std::unordered_map<size_t
 		FullDescription.Format = Description.first.Format;
 
 		if (RenderTarget) FullDescription.BindFlags |= BindFlag::RenderTarget;
-		else if (DepthStencil) FullDescription.BindFlags |= BindFlag::DepthStencil;
+		else if (DepthStencil) FullDescription.BindFlags = BindFlag::DepthStencil;  // If we're used as a depth stencil, remove the ShaderResource binding.
 		if (Written) FullDescription.BindFlags |= BindFlag::UnorderedAccess;
 
 		TextureResources[Tag] = std::move(Device->CreateResource(FullDescription, Description.second));
