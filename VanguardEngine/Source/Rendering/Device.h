@@ -56,6 +56,7 @@ private:
 	// For converting resources from the direct/compute engine to the copy engine.
 	CommandList DirectToCopyCommandList[FrameCount];
 
+	// #TODO: Reserve for large async asset streaming, a direct/compute queue is faster for small copy operations.
 	ResourcePtr<ID3D12CommandQueue> CopyCommandQueue;
 	CommandList CopyCommandList[FrameCount];
 
