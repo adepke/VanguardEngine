@@ -30,7 +30,8 @@ private:
 	std::unordered_set<size_t> FindWrittenResources(size_t PassIndex);  // Searches for all resources that the specified pass writes to.
 	void Traverse(size_t ResourceTag);  // Walk up the dependency chain, recursively adding passes to the stack. 
 	void Serialize();  // Serializes to an optimized linear pipeline.
-	void InjectBarriers(std::vector<CommandList>& Lists);  // Places barriers in a serialized pipeline for usage changes on resources.
+	void InjectStateBarriers(std::vector<CommandList>& Lists);  // Places barriers in a serialized pipeline for usage changes on resources.
+	void InjectRaceBarriers(std::vector<CommandList>& Lists);  // Places barriers to prevent against data hazards through race conditions.
 
 public:  // Utilities for render passes.
 	inline size_t AddTransientResource(const RGBufferDescription& Description, const std::wstring& Name);

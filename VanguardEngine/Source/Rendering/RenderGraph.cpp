@@ -137,7 +137,7 @@ void RenderGraph::Serialize()
 	// #TODO: Optimize the pipeline.
 }
 
-void RenderGraph::InjectBarriers(std::vector<CommandList>& Lists)
+void RenderGraph::InjectStateBarriers(std::vector<CommandList>& Lists)
 {
 	VGScopedCPUStat("Render Graph Barriers");
 
@@ -193,7 +193,16 @@ void RenderGraph::InjectBarriers(std::vector<CommandList>& Lists)
 	// #TODO: Strongly consider looking ahead at sequential reading passes (up until a write pass) and merge their required
 	// read state into the current barrier in order to avoid transitions from a read-only state to another read-only state.
 
-	// #TODO: Absolutely no data hazard protection, we need to inject UAV barriers as well to prevent these race conditions.
+	// Placed all the barriers, now flush them.
+	for (auto& List : Lists)
+	{
+		List.FlushBarriers();
+	}
+}
+
+void RenderGraph::InjectRaceBarriers(std::vector<CommandList>& Lists)
+{
+	// #TODO: Place UAV barriers when needed.
 
 	// Placed all the barriers, now flush them.
 	for (auto& List : Lists)
@@ -243,7 +252,7 @@ void RenderGraph::Execute()
 		++Index;
 	}
 
-	InjectBarriers(PassCommands);
+	InjectStateBarriers(PassCommands);
 
 	// #TODO: Parallel recording.
 	Index = 0;
@@ -254,6 +263,8 @@ void RenderGraph::Execute()
 		Passes[PassIndex]->Execution(Resolver, PassCommands[Index]);
 		++Index;
 	}
+
+	InjectRaceBarriers(PassCommands);
 
 	// Ensure the back buffer is in presentation state at the very end of the graph.
 	PassCommands[PassCommands.size() - 1].TransitionBarrier(Resolver.FetchAsTexture(*FindUsage(RGUsage::BackBuffer)), D3D12_RESOURCE_STATE_PRESENT);
