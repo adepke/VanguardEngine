@@ -51,9 +51,13 @@ void RGResolver::BuildTransients(RenderDevice* Device, std::unordered_map<size_t
 		FullDescription.Depth = Description.first.Depth;
 		FullDescription.Format = Description.first.Format;
 
-		if (RenderTarget) FullDescription.BindFlags |= BindFlag::RenderTarget;
+		if (RenderTarget)
+		{
+			FullDescription.BindFlags |= BindFlag::RenderTarget;
+			if (Written && DefaultUsage) FullDescription.BindFlags |= BindFlag::UnorderedAccess;  // Normal render target writes use a special render target state, not UAV.
+		}
 		else if (DepthStencil) FullDescription.BindFlags |= BindFlag::DepthStencil;
-		if (Written) FullDescription.BindFlags |= BindFlag::UnorderedAccess;
+		else if (Written) FullDescription.BindFlags |= BindFlag::UnorderedAccess;
 
 		TextureResources[Tag] = std::move(Device->CreateResource(FullDescription, Description.second));
 	}

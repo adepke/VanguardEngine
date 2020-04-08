@@ -110,15 +110,21 @@ std::unordered_set<size_t> RenderGraph::FindWrittenResources(size_t PassIndex)
 	return std::move(Result);
 }
 
-void RenderGraph::Traverse(size_t ResourceTag)
+void RenderGraph::Traverse(std::unordered_set<size_t>& TrackedPasses, size_t ResourceTag)
 {
 	for (const size_t PassIndex : ResourceDependencies[ResourceTag].WritingPasses)
 	{
+		// If this pass has been added to the pipeline by a previous dependency, skip it.
+		if (TrackedPasses.count(PassIndex))
+			continue;
+
+		TrackedPasses.insert(PassIndex);
+
 		for (const size_t Tag : FindWrittenResources(PassIndex))
 		{
 			// We don't want an infinite loop.
 			if (Tag != ResourceTag)
-				Traverse(Tag);
+				Traverse(TrackedPasses, Tag);
 		}
 
 		PassPipeline.push_back(PassIndex);
@@ -132,7 +138,8 @@ void RenderGraph::Serialize()
 	PassPipeline.reserve(Passes.size());  // Unlikely that a significant number of passes are going to be trimmed.
 
 	const size_t SwapChainTag = *FindUsage(RGUsage::BackBuffer);  // #TODO: This will only work if we have 1 pass write to the swap chain.
-	Traverse(SwapChainTag);
+	std::unordered_set<size_t> TrackedPasses;
+	Traverse(TrackedPasses, SwapChainTag);
 
 	// #TODO: Optimize the pipeline.
 }
@@ -183,8 +190,17 @@ void RenderGraph::InjectStateBarriers(std::vector<CommandList>& Lists)
 
 	for (size_t Iter = 0; Iter < PassPipeline.size(); ++Iter)
 	{
-		const auto Reads = FindReadResources(PassPipeline[Iter]);
+		auto Reads = FindReadResources(PassPipeline[Iter]);
 		const auto Writes = FindWrittenResources(PassPipeline[Iter]);
+
+		// We need to remove resource that are both read and write during this pass from the read-only list.
+		for (auto Iter = Reads.begin(); Iter != Reads.end();)
+		{
+			if (Writes.count(*Iter))
+				Iter = Reads.erase(Iter);
+			else
+				++Iter;
+		}
 
 		CheckState(Iter, Reads, false);
 		CheckState(Iter, Writes, true);

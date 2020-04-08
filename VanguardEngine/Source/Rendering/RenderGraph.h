@@ -28,7 +28,7 @@ private:
 	bool Validate();  // Ensures we have a valid graph.
 	std::unordered_set<size_t> FindReadResources(size_t PassIndex);  // Searches for all resources that the specified pass reads from.
 	std::unordered_set<size_t> FindWrittenResources(size_t PassIndex);  // Searches for all resources that the specified pass writes to.
-	void Traverse(size_t ResourceTag);  // Walk up the dependency chain, recursively adding passes to the stack. 
+	void Traverse(std::unordered_set<size_t>& TrackedPasses, size_t ResourceTag);  // Walk up the dependency chain, recursively adding passes to the stack. 
 	void Serialize();  // Serializes to an optimized linear pipeline.
 	void InjectStateBarriers(std::vector<CommandList>& Lists);  // Places barriers in a serialized pipeline for usage changes on resources.
 	void InjectRaceBarriers(std::vector<CommandList>& Lists);  // Places barriers to prevent against data hazards through race conditions.
