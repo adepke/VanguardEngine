@@ -374,7 +374,23 @@ std::shared_ptr<Texture> ResourceManager::AllocateTexture(const TextureDescripti
 	ID3D12Resource* RawResource = nullptr;
 	D3D12MA::Allocation* AllocationHandle = nullptr;
 
-	auto Result = Device->Allocator->CreateResource(&AllocationDesc, &ResourceDesc, ResourceState, nullptr, &AllocationHandle, IID_PPV_ARGS(&RawResource));
+	D3D12_CLEAR_VALUE ClearValue{};
+	ClearValue.Format = Description.Format;
+	if (Description.BindFlags & BindFlag::DepthStencil)
+	{
+		ClearValue.DepthStencil.Depth = 0.f;
+		ClearValue.DepthStencil.Stencil = 0;
+	}
+
+	else
+	{
+		ClearValue.Color[0] = 0.f;
+		ClearValue.Color[1] = 0.f;
+		ClearValue.Color[2] = 0.f;
+		ClearValue.Color[3] = 1.f;
+	}
+
+	auto Result = Device->Allocator->CreateResource(&AllocationDesc, &ResourceDesc, ResourceState, &ClearValue, &AllocationHandle, IID_PPV_ARGS(&RawResource));
 	if (FAILED(Result))
 	{
 		VGLogError(Rendering) << "Failed to allocate texture: " << Result;
