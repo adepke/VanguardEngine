@@ -198,9 +198,9 @@ void ResourceManager::Initialize(RenderDevice* InDevice, size_t BufferedFrames)
 	for (uint32_t Index = 0; Index < FrameCount; ++Index)
 	{
 		D3D12_RESOURCE_DESC ResourceDesc{};
-		ResourceDesc.Alignment = 0;
+		ResourceDesc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
 		ResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-		ResourceDesc.Width = AlignedSize(UploadResourceSize, D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT);
+		ResourceDesc.Width = UploadResourceSize;
 		ResourceDesc.Height = 1;
 		ResourceDesc.DepthOrArraySize = 1;
 		ResourceDesc.Format = DXGI_FORMAT_UNKNOWN;
@@ -246,13 +246,10 @@ std::shared_ptr<Buffer> ResourceManager::AllocateBuffer(const BufferDescription&
 {
 	VGScopedCPUStat("Allocate Buffer");
 
-	const auto Alignment = Description.BindFlags & BindFlag::ConstantBuffer ? D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT : D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
-	const auto FinalSize = AlignedSize(Description.Size, static_cast<size_t>(Alignment));
-
 	D3D12_RESOURCE_DESC ResourceDesc{};
-	ResourceDesc.Alignment = 0;
+	ResourceDesc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
 	ResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-	ResourceDesc.Width = FinalSize;
+	ResourceDesc.Width = Description.Size * Description.Stride;
 	ResourceDesc.Height = 1;
 	ResourceDesc.DepthOrArraySize = 1;
 	ResourceDesc.Format = Description.Format ? *Description.Format : DXGI_FORMAT_UNKNOWN;
@@ -316,7 +313,7 @@ std::shared_ptr<Texture> ResourceManager::AllocateTexture(const TextureDescripti
 	VGAssert(Description.UpdateRate != ResourceFrequency::Dynamic, "Failed to create texture, cannot have dynamic update rate.");
 
 	D3D12_RESOURCE_DESC ResourceDesc{};
-	ResourceDesc.Alignment = 0;
+	ResourceDesc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
 	ResourceDesc.Dimension = Description.Height > 1 ? (Description.Depth > 1 ? D3D12_RESOURCE_DIMENSION_TEXTURE3D : D3D12_RESOURCE_DIMENSION_TEXTURE2D) : D3D12_RESOURCE_DIMENSION_TEXTURE1D;
 	ResourceDesc.Width = Description.Width;
 	ResourceDesc.Height = Description.Height;
