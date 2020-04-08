@@ -59,6 +59,8 @@ inline MeshComponent CreateMeshComponent(RenderDevice& Device, const std::vector
 	std::memcpy(VertexResource.data(), VertexPositions.data(), VertexResource.size());
 	Device.WriteResource(Result.VertexBuffer, VertexResource);
 
+	Device.GetDirectList().TransitionBarrier(Result.VertexBuffer, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+
 	BufferDescription IndexDescription{};
 	IndexDescription.Size = Indices.size();
 	IndexDescription.Stride = sizeof(uint32_t);
@@ -72,6 +74,9 @@ inline MeshComponent CreateMeshComponent(RenderDevice& Device, const std::vector
 	IndexResource.resize(sizeof(uint32_t) * Indices.size());
 	std::memcpy(IndexResource.data(), Indices.data(), IndexResource.size());
 	Device.WriteResource(Result.IndexBuffer, IndexResource);
+
+	Device.GetDirectList().TransitionBarrier(Result.IndexBuffer, D3D12_RESOURCE_STATE_INDEX_BUFFER);
+	Device.GetDirectList().FlushBarriers();
 
 	return std::move(Result);
 }
