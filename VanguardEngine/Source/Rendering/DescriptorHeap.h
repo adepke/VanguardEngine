@@ -27,4 +27,6 @@ public:
 	// How do we handle GPU descriptors?
 
 	void SetName(std::wstring_view Name);
+
+	void Reset();
 };

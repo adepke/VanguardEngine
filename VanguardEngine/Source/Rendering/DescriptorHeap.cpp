@@ -35,3 +35,8 @@ void DescriptorHeap::SetName(std::wstring_view Name)
 {
 	Heap->SetName(Name.data());
 }
+
+void DescriptorHeap::Reset()
+{
+	AllocatedDescriptors = 0;
+}
