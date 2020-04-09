@@ -9,7 +9,6 @@
 
 #include <string>
 // #TEMP
-#include <chrono>
 #include <thread>
 #include <Rendering/RenderComponents.h>
 #include <Core/CoreComponents.h>
@@ -89,9 +88,6 @@ void EngineLoop()
 		}
 
 		Renderer::Get().Render(TempReg);
-
-		// #TEMP
-		std::this_thread::sleep_for(4ms);
 
 		Renderer::Get().Device->FrameStep();
 	}
