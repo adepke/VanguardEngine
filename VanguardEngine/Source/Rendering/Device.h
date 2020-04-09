@@ -78,6 +78,10 @@ private:
 	ResourcePtr<ID3D12Fence> ComputeFence;
 	HANDLE ComputeFenceEvent;
 
+	size_t IntraSyncValue = 0;
+	ResourcePtr<ID3D12Fence> IntraSyncFence;
+	HANDLE IntraSyncEvent;
+
 	ResourcePtr<D3D12MA::Allocator> Allocator;
 	ResourceManager AllocatorManager;
 
@@ -124,8 +128,10 @@ public:
 	// Allocate a block of CPU write-only, GPU read-only memory from the per-frame dynamic heap.
 	std::pair<std::shared_ptr<Buffer>, size_t> FrameAllocate(size_t Size);
 
-	// Sync the specified GPU engine to FrameID. Blocking.
-	void Sync(SyncType Type, size_t FrameID = std::numeric_limits<size_t>::max());
+	// Sync the GPU until it is either fully caught up or within the max buffered frames limit, determined by FullSync. Blocking.
+	void SyncInterframe(bool FullSync);
+	// Sync the specified GPU engine within the active frame on the GPU. Blocking.
+	void SyncIntraframe(SyncType Type);
 
 	// Blocking, waits for the gpu to finish the next frame before returning. Marks the current frame as finished submitting and can move on to the next frame.
 	void FrameStep();

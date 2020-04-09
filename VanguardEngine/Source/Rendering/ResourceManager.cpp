@@ -378,7 +378,7 @@ std::shared_ptr<Texture> ResourceManager::AllocateTexture(const TextureDescripti
 	ClearValue.Format = Description.Format;
 	if (Description.BindFlags & BindFlag::DepthStencil)
 	{
-		ClearValue.DepthStencil.Depth = 0.f;
+		ClearValue.DepthStencil.Depth = 1.f;
 		ClearValue.DepthStencil.Stencil = 0;
 	}
 

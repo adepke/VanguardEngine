@@ -59,7 +59,8 @@ void Renderer::Render(entt::registry& Registry)
 		Device->GetDirectQueue()->ExecuteCommandLists(1, DirectToCopyLists);
 	}
 
-	// #TEMP: Sync transitions.
+	// Wait for the resources to transition before being ready to use on the copy engine.
+	Device->SyncIntraframe(SyncType::Direct);
 
 	Device->GetCopyList().Close();
 	ID3D12CommandList* CopyLists[] = { Device->GetCopyList().Native() };
@@ -114,7 +115,7 @@ void Renderer::Render(entt::registry& Registry)
 
 	auto& MainPass = Graph.AddPass("Main Pass");
 	const size_t DepthStencilTag = MainPass.CreateResource(DepthStencilDesc, VGText("Depth Stencil"));
-	MainPass.ReadResource(DepthStencilTag, RGUsage::DepthStencil);
+	MainPass.WriteResource(DepthStencilTag, RGUsage::DepthStencil);
 	MainPass.WriteResource(BackBufferTag, RGUsage::BackBuffer);
 
 	MainPass.Bind(
@@ -125,24 +126,36 @@ void Renderer::Render(entt::registry& Registry)
 
 			List.BindPipelineState(*Materials[0].Pipeline);
 
+			D3D12_VIEWPORT Viewport{};
+			Viewport.TopLeftX = 0.f;
+			Viewport.TopLeftY = 0.f;
+			Viewport.Width = Device->RenderWidth;
+			Viewport.Height = Device->RenderHeight;
+			Viewport.MinDepth = 0.f;
+			Viewport.MaxDepth = 1.f;
+
+			D3D12_RECT ScissorRect{};
+			ScissorRect.left = 0;
+			ScissorRect.top = 0;
+			ScissorRect.right = Device->RenderWidth;
+			ScissorRect.bottom = Device->RenderHeight;
+
+			List.Native()->RSSetViewports(1, &Viewport);
+			List.Native()->RSSetScissorRects(1, &ScissorRect);
 			List.Native()->OMSetRenderTargets(1, &*Device->GetBackBuffer()->RTV, false, &*DepthStencil.DSV);
 			List.Native()->OMSetStencilRef(0);
-			const float ClearColor[] = { 0.4f, 0.4f, 0.4f, 1.f };
+			const float ClearColor[] = { 0.2f, 0.2f, 0.2f, 1.f };
 			List.Native()->ClearRenderTargetView(*BackBuffer.RTV, ClearColor, 0, nullptr);
 			List.Native()->ClearDepthStencilView(*DepthStencil.DSV, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0, 0, nullptr);
-			List.Native()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
 			
 			Registry.view<const TransformComponent, MeshComponent>().each([&InstanceBuffer, &List](auto Entity, const auto&, auto& Mesh)
 				{
-					List.TransitionBarrier(Mesh.VertexBuffer, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
-					List.FlushBarriers();
-
 					std::vector<D3D12_VERTEX_BUFFER_VIEW> VertexViews;
 
 					// Vertex Buffer.
 					VertexViews.push_back({});
 					VertexViews[0].BufferLocation = Mesh.VertexBuffer->Native()->GetGPUVirtualAddress();
-					VertexViews[0].SizeInBytes = static_cast<UINT>(Mesh.VertexBuffer->Description.Size);
+					VertexViews[0].SizeInBytes = static_cast<UINT>(Mesh.VertexBuffer->Description.Size * Mesh.VertexBuffer->Description.Stride);
 					VertexViews[0].StrideInBytes = static_cast<UINT>(Mesh.VertexBuffer->Description.Stride);
 
 					/*
@@ -157,20 +170,20 @@ void Renderer::Render(entt::registry& Registry)
 
 					D3D12_INDEX_BUFFER_VIEW IndexView{};
 					IndexView.BufferLocation = Mesh.IndexBuffer->Native()->GetGPUVirtualAddress();
-					IndexView.SizeInBytes = Mesh.IndexBuffer->Description.Size;
+					IndexView.SizeInBytes = static_cast<UINT>(Mesh.IndexBuffer->Description.Size * Mesh.IndexBuffer->Description.Stride);
 					IndexView.Format = DXGI_FORMAT_R32_UINT;
 
 					List.Native()->IASetIndexBuffer(&IndexView);
 
-					List.Native()->DrawIndexedInstanced(Mesh.IndexBuffer->Description.Size / sizeof(uint32_t), 1, 0, 0, 0);
+					List.Native()->DrawIndexedInstanced(Mesh.IndexBuffer->Description.Size, 1, 0, 0, 0);
 				});
 		}
 	);
 
 	Graph.Build();
 
-	// Sync the copy engine so we're sure that all the resources are ready on the GPU. In the future this can be split up into separate sync groups (pre, main, post, etc.) to reduce idle time.
-	Device->Sync(SyncType::Copy);
+	// Ensure the copy operations have completed.
+	Device->SyncIntraframe(SyncType::Copy);
 
 	Graph.Execute();
 

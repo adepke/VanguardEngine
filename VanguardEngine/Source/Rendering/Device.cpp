@@ -120,7 +120,16 @@ std::vector<Material> RenderDevice::ReloadMaterials()
 		Desc.ShaderPath = Config::Get().EngineRoot / MaterialShaders;
 		Desc.BlendDescription.AlphaToCoverageEnable = false;
 		Desc.BlendDescription.IndependentBlendEnable = false;
-		Desc.BlendDescription.RenderTarget[0] = {};  // Default blending for now.
+		Desc.BlendDescription.RenderTarget[0].BlendEnable = false;
+		Desc.BlendDescription.RenderTarget[0].LogicOpEnable = false;
+		Desc.BlendDescription.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
+		Desc.BlendDescription.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;
+		Desc.BlendDescription.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+		Desc.BlendDescription.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+		Desc.BlendDescription.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+		Desc.BlendDescription.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+		Desc.BlendDescription.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;
+		Desc.BlendDescription.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 		Desc.RasterizerDescription.FillMode = D3D12_FILL_MODE_SOLID;  // #TODO: Support wire frame rendering.
 		Desc.RasterizerDescription.CullMode = NewMat.BackFaceCulling ? D3D12_CULL_MODE_BACK : D3D12_CULL_MODE_NONE;
 		Desc.RasterizerDescription.FrontCounterClockwise = false;
@@ -430,6 +439,17 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		VGLogFatal(Rendering) << "Failed to create compute fence event: " << GetPlatformError();
 	}
 
+	Result = Device->CreateFence(IntraSyncValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(IntraSyncFence.Indirect()));
+	if (FAILED(Result))
+	{
+		VGLogFatal(Rendering) << "Failed to create intra sync fence: " << Result;
+	}
+
+	if (IntraSyncEvent = ::CreateEvent(nullptr, false, false, VGText("Intra Sync Fence Event")); !IntraSyncEvent)
+	{
+		VGLogFatal(Rendering) << "Failed to create intra sync fence event: " << GetPlatformError();
+	}
+
 	SetupDescriptorHeaps();
 
 	constexpr auto FrameBufferSize = 1024 * 64;
@@ -441,7 +461,7 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		Description.Size = FrameBufferSize;
 		Description.Stride = 1;
 		Description.UpdateRate = ResourceFrequency::Dynamic;
-		Description.BindFlags = BindFlag::ConstantBuffer;  // #TODO: Correct?
+		Description.BindFlags = 0;
 		Description.AccessFlags = AccessFlag::CPUWrite;
 
 		FrameBuffers[Index] = std::move(AllocatorManager.AllocateBuffer(Description, VGText("Frame Buffer")));
@@ -456,11 +476,12 @@ RenderDevice::~RenderDevice()
 {
 	VGScopedCPUStat("Render Device Shutdown");
 
-	Sync(SyncType::Direct, Frame);
+	SyncInterframe(true);
 
 	::CloseHandle(CopyFenceEvent);
 	::CloseHandle(DirectFenceEvent);
 	::CloseHandle(ComputeFenceEvent);
+	::CloseHandle(IntraSyncEvent);
 }
 
 void RenderDevice::CheckFeatureSupport()
@@ -587,50 +608,48 @@ std::pair<std::shared_ptr<Buffer>, size_t> RenderDevice::FrameAllocate(size_t Si
 	return { FrameBuffers[FrameIndex], FrameBufferOffsets[FrameIndex] - Size };
 }
 
-void RenderDevice::Sync(SyncType Type, size_t FrameID)
+void RenderDevice::SyncInterframe(bool FullSync)
 {
-	VGScopedCPUStat("Render Device Sync");
+	VGScopedCPUStat("Render Sync Interframe");
+
+	// #TEMP
+	std::this_thread::sleep_for(200ms);
+}
+
+void RenderDevice::SyncIntraframe(SyncType Type)
+{
+	VGScopedCPUStat("Render Sync Intraframe");
 
 	ID3D12CommandQueue* SyncQueue = nullptr;
-	ID3D12Fence* SyncFence = nullptr;
-	HANDLE SyncEvent = nullptr;
 
 	switch (Type)
 	{
 	case SyncType::Copy:
 		SyncQueue = CopyCommandQueue.Get();
-		SyncFence = CopyFence.Get();
-		SyncEvent = CopyFenceEvent;
 		break;
 	case SyncType::Direct:
 		SyncQueue = DirectCommandQueue.Get();
-		SyncFence = DirectFence.Get();
-		SyncEvent = DirectFenceEvent;
 		break;
 	case SyncType::Compute:
 		SyncQueue = ComputeCommandQueue.Get();
-		SyncFence = ComputeFence.Get();
-		SyncEvent = ComputeFenceEvent;
 		break;
 	}
 
-	const auto FrameIndex = FrameID == std::numeric_limits<size_t>::max() ? GetFrameIndex() : FrameID % FrameCount;
-
-	auto Result = SyncQueue->Signal(SyncFence, FrameIndex);
+	auto Result = SyncQueue->Signal(IntraSyncFence.Get(), ++IntraSyncValue);
 	if (FAILED(Result))
 	{
 		VGLogFatal(Rendering) << "Failed to submit signal command to GPU during sync: " << Result;
 	}
 
-	if (SyncFence->GetCompletedValue() != FrameIndex)
+	if (IntraSyncFence->GetCompletedValue() != IntraSyncValue)
 	{
-		Result = SyncFence->SetEventOnCompletion(FrameIndex, SyncEvent);
+		Result = IntraSyncFence->SetEventOnCompletion(IntraSyncValue, IntraSyncEvent);
 		if (FAILED(Result))
 		{
 			VGLogFatal(Rendering) << "Failed to set fence completion event during sync: " << Result;
 		}
 
-		WaitForSingleObject(SyncEvent, INFINITE);
+		WaitForSingleObject(IntraSyncEvent, INFINITE);
 	}
 }
 
@@ -638,7 +657,8 @@ void RenderDevice::FrameStep()
 {
 	VGScopedCPUStat("Frame Step");
 
-	Sync(SyncType::Direct, Frame + 1);
+	// Make sure we don't get too many CPU frames ahead of the GPU.
+	SyncInterframe(false);
 
 	FrameBufferOffsets[(Frame + 1) % FrameCount] = 0;  // GPU has fully consumed the frame resources, we can now reuse the buffer.
 
@@ -657,7 +677,7 @@ void RenderDevice::SetResolution(size_t Width, size_t Height, bool InFullscreen)
 {
 	VGScopedCPUStat("Render Device Change Resolution");
 
-	Sync(SyncType::Direct, Frame);
+	SyncInterframe(true);
 
 	RenderWidth = Width;
 	RenderHeight = Height;
