@@ -42,30 +42,7 @@ void RenderDevice::SetNames()
 	CopyFence->SetName(VGText("Copy Fence"));
 	DirectFence->SetName(VGText("Direct Fence"));
 	ComputeFence->SetName(VGText("Compute Fence"));
-
-	for (uint32_t Index = 0; Index < FrameCount; ++Index)
-	{
-		ResourceHeaps[Index].SetName(VGText("Resource Heap"));
-		SamplerHeaps[Index].SetName(VGText("Sampler Heap"));
-	}
-
-	RenderTargetHeap.SetName(VGText("Render Target Heap"));
-	DepthStencilHeap.SetName(VGText("Depth Stencil Heap"));
 #endif
-}
-
-void RenderDevice::SetupDescriptorHeaps()
-{
-	VGScopedCPUStat("Setup Descriptor Heaps");
-
-	for (uint32_t Index = 0; Index < FrameCount; ++Index)
-	{
-		ResourceHeaps[Index].Initialize(*this, D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, ResourceDescriptors);
-		SamplerHeaps[Index].Initialize(*this, D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER, SamplerDescriptors);
-	}
-
-	RenderTargetHeap.Initialize(*this, D3D12_DESCRIPTOR_HEAP_TYPE_RTV, RenderTargetDescriptors);
-	DepthStencilHeap.Initialize(*this, D3D12_DESCRIPTOR_HEAP_TYPE_DSV, DepthStencilDescriptors);
 }
 
 void RenderDevice::SetupRenderTargets()
@@ -209,6 +186,8 @@ void RenderDevice::ResetFrame(size_t FrameID)
 	{
 		VGLogError(Rendering) << "Failed to reset direct command list for frame " << FrameIndex << ": " << Result;
 	}
+
+	DescriptorManager.FrameStep(FrameIndex);
 }
 
 RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
@@ -269,6 +248,8 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 	}
 
 	AllocatorManager.Initialize(this, FrameCount);
+
+	DescriptorManager.Initialize(this, 1024, 128);
 
 	// #TODO: Condense building queues and command lists into a function.
 
@@ -441,8 +422,6 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		VGLogFatal(Rendering) << "Failed to create intra sync fence event: " << GetPlatformError();
 	}
 
-	SetupDescriptorHeaps();
-
 	constexpr auto FrameBufferSize = 1024 * 64;
 
 	// Allocate frame buffers.
@@ -597,6 +576,11 @@ std::pair<std::shared_ptr<Buffer>, size_t> RenderDevice::FrameAllocate(size_t Si
 	FrameBufferOffsets[FrameIndex] += Size;
 
 	return { FrameBuffers[FrameIndex], FrameBufferOffsets[FrameIndex] - Size };
+}
+
+DescriptorHandle RenderDevice::AllocateDescriptor(DescriptorType Type)
+{
+	return DescriptorManager.Allocate(Type);
 }
 
 void RenderDevice::SyncInterframe(bool FullSync)

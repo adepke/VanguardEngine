@@ -90,7 +90,7 @@ void Renderer::Render(entt::registry& Registry)
 	}
 
 	// Global to all render passes.
-	Device->DescriptorHeap.Bind(Device->GetDirectList());
+	Device->GetDirectList().BindDescriptorAllocator(Device->GetDescriptorAllocator());
 
 	RenderGraph Graph{ Device.get() };
 
@@ -130,7 +130,7 @@ void Renderer::Render(entt::registry& Registry)
 
 			List.Native()->RSSetViewports(1, &Viewport);
 			List.Native()->RSSetScissorRects(1, &ScissorRect);
-			List.Native()->OMSetRenderTargets(1, &*Device->GetBackBuffer()->RTV, false, &*DepthStencil.DSV);
+			List.Native()->OMSetRenderTargets(1, &static_cast<D3D12_CPU_DESCRIPTOR_HANDLE>(*Device->GetBackBuffer()->RTV), false, &static_cast<D3D12_CPU_DESCRIPTOR_HANDLE>(*DepthStencil.DSV));
 			List.Native()->OMSetStencilRef(0);
 			const float ClearColor[] = { 0.2f, 0.2f, 0.2f, 1.f };
 			List.Native()->ClearRenderTargetView(*BackBuffer.RTV, ClearColor, 0, nullptr);

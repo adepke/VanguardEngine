@@ -88,18 +88,11 @@ private:
 	std::array<std::shared_ptr<Buffer>, FrameCount> FrameBuffers;  // Per-frame shared dynamic heap.
 	std::array<size_t, FrameCount> FrameBufferOffsets = {};
 
-	static constexpr size_t ResourceDescriptors = 1024;
-	static constexpr size_t SamplerDescriptors = 1024;
-	static constexpr size_t RenderTargetDescriptors = 1024;
-	static constexpr size_t DepthStencilDescriptors = 1024;
-
-	ResourcePtr<ID3D12DescriptorHeap> OfflineHeap;  // Building.
-	ResourcePtr<ID3D12DescriptorHeap> OnlineHeap;  // Staging.
+	DescriptorAllocator DescriptorManager;
 
 	// Name the D3D objects.
 	void SetNames();
 
-	void SetupDescriptorHeaps();
 	void SetupRenderTargets();
 
 	// Resets command lists and allocators.
@@ -125,6 +118,8 @@ public:
 	// Allocate a block of CPU write-only, GPU read-only memory from the per-frame dynamic heap.
 	std::pair<std::shared_ptr<Buffer>, size_t> FrameAllocate(size_t Size);
 
+	DescriptorHandle AllocateDescriptor(DescriptorType Type);
+
 	// Sync the GPU until it is either fully caught up or within the max buffered frames limit, determined by FullSync. Blocking.
 	void SyncInterframe(bool FullSync);
 	// Sync the specified GPU engine within the active frame on the GPU. Blocking.
@@ -143,10 +138,7 @@ public:
 	auto& GetComputeList() noexcept { return ComputeCommandList[GetFrameIndex()]; }
 	auto* GetSwapChain() const noexcept { return SwapChain.Get(); }
 	auto GetBackBuffer() const noexcept { return BackBufferTextures[GetFrameIndex()]; }
-	auto& GetResourceHeap() noexcept { return ResourceHeaps[GetFrameIndex()]; }
-	auto& GetSamplerHeap() noexcept { return SamplerHeaps[GetFrameIndex()]; }
-	auto& GetRenderTargetHeap() noexcept { return RenderTargetHeap; }
-	auto& GetDepthStencilHeap() noexcept { return DepthStencilHeap; }
+	auto& GetDescriptorAllocator() noexcept { return DescriptorManager; }
 
 	void SetResolution(size_t Width, size_t Height, bool InFullscreen);
 };

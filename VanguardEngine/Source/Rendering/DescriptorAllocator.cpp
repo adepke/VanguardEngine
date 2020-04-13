@@ -5,21 +5,24 @@
 
 void DescriptorAllocator::Initialize(RenderDevice* InDevice, size_t OfflineDescriptors, size_t OnlineDescriptors)
 {
-	OfflineHeaps[0].Create(DescriptorType::Default, OfflineDescriptors, false);
-	OfflineHeaps[1].Create(DescriptorType::Sampler, OfflineDescriptors, false);
+	OfflineHeaps[0].Create(InDevice, DescriptorType::Default, OfflineDescriptors, false);
+	OfflineHeaps[1].Create(InDevice, DescriptorType::Sampler, OfflineDescriptors, false);
 
 	OnlineHeaps[0].resize(InDevice->FrameCount);
 	OnlineHeaps[1].resize(InDevice->FrameCount);
 
-	for (auto& Heap : OnlineHeap[0])
+	for (auto& Heap : OnlineHeaps[0])
 	{
 		Heap.Create(InDevice, DescriptorType::Default, OnlineDescriptors, true);
 	}
 
-	for (auto& Heap : OnlineHeap[1])
+	for (auto& Heap : OnlineHeaps[1])
 	{
 		Heap.Create(InDevice, DescriptorType::Sampler, OnlineDescriptors, true);
 	}
+
+	RenderTargetHeap.Create(InDevice, DescriptorType::RenderTarget, OnlineDescriptors, false);
+	DepthStencilHeap.Create(InDevice, DescriptorType::DepthStencil, OnlineDescriptors, false);
 }
 
 DescriptorHandle DescriptorAllocator::Allocate(DescriptorType Type)
@@ -28,7 +31,7 @@ DescriptorHandle DescriptorAllocator::Allocate(DescriptorType Type)
 	{
 	case DescriptorType::Default:
 	case DescriptorType::Sampler:
-		return OfflineHeap[Type].Allocate();
+		return OfflineHeaps[static_cast<size_t>(Type)].Allocate();
 	case DescriptorType::RenderTarget:
 		return RenderTargetHeap.Allocate();
 	case DescriptorType::DepthStencil:
@@ -38,7 +41,10 @@ DescriptorHandle DescriptorAllocator::Allocate(DescriptorType Type)
 	return {};
 }
 
-void DescriptorAllocator::FrameStep()
+void DescriptorAllocator::FrameStep(size_t FrameIndex)
 {
-
+	for (auto& OnlineHeap : OnlineHeaps)
+	{
+		OnlineHeap[FrameIndex].Reset();
+	}
 }

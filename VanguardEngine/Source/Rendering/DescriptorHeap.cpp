@@ -24,12 +24,12 @@ void DescriptorHeapBase::Create(RenderDevice* Device, DescriptorType Type, size_
 	auto Result = Device->Native()->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(Heap.Indirect()));
 	if (FAILED(Result))
 	{
-		VGLogFatal(Rendering) << "Failed to create descriptor heap for type '" << Type << "' with " << Descriptors << " descriptors: " << Result;
+		VGLogFatal(Rendering) << "Failed to create descriptor heap for type '" << static_cast<int>(Type) << "' with " << Descriptors << " descriptors: " << Result;
 	}
 
 	CPUHeapStart = Heap->GetCPUDescriptorHandleForHeapStart().ptr;
 	GPUHeapStart = Heap->GetGPUDescriptorHandleForHeapStart().ptr;
-	DescriptorSize = Device->Native()->GetDescriptorHandleIncrementSize(Type);
+	DescriptorSize = Device->Native()->GetDescriptorHandleIncrementSize(HeapType);
 	TotalDescriptors = Descriptors;
 }
 
@@ -68,14 +68,14 @@ DescriptorHandle FreeQueueDescriptorHeap::Allocate()
 	{
 		VGEnsure(!FreeQueue.empty(), "Ran out of free queue descriptor heap memory.");
 
-		Handle = FreeQueue.front();
+		auto Handle = std::move(FreeQueue.front());
 		FreeQueue.pop();
 
 		return Handle;
 	}
 }
 
-void FreeQueueDescriptorHeap::Free(DescriptorHandle Handle)
+void FreeQueueDescriptorHeap::Free(DescriptorHandle&& Handle)
 {
-	FreeQueue.push(Handle);
+	FreeQueue.push(std::move(Handle));
 }

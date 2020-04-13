@@ -3,6 +3,7 @@
 #pragma once
 
 #include <Rendering/Resource.h>
+#include <Rendering/DescriptorHeap.h>
 
 #include <vector>
 #include <optional>
@@ -19,8 +20,8 @@ struct Texture : Resource
 {
 	TextureDescription Description;
 
-	std::optional<D3D12_CPU_DESCRIPTOR_HANDLE> RTV;
-	std::optional<D3D12_CPU_DESCRIPTOR_HANDLE> DSV;
-	std::optional<D3D12_CPU_DESCRIPTOR_HANDLE> SRV;
-	std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> UAV;
+	std::optional<DescriptorHandle> RTV;
+	std::optional<DescriptorHandle> DSV;
+	std::optional<DescriptorHandle> SRV;
+	std::vector<DescriptorHandle> UAV;
 };

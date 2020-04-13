@@ -30,5 +30,5 @@ public:
 
 	//void BuildTable(...);
 	
-	void FrameStep();
+	void FrameStep(size_t FrameIndex);
 };

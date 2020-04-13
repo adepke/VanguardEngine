@@ -17,7 +17,7 @@ void ResourceManager::CreateResourceViews(std::shared_ptr<Buffer>& Target)
 
 	if (Target->Description.BindFlags & BindFlag::ConstantBuffer)
 	{
-		Target->CBV = Device->GetResourceHeap().Allocate();
+		Target->CBV = Device->AllocateDescriptor(DescriptorType::Default);
 
 		D3D12_CONSTANT_BUFFER_VIEW_DESC ViewDesc{};
 		ViewDesc.BufferLocation = Target->Native()->GetGPUVirtualAddress();
@@ -28,7 +28,7 @@ void ResourceManager::CreateResourceViews(std::shared_ptr<Buffer>& Target)
 
 	if (Target->Description.BindFlags & BindFlag::ShaderResource)
 	{
-		Target->SRV = Device->GetResourceHeap().Allocate();
+		Target->SRV = Device->AllocateDescriptor(DescriptorType::Default);
 
 		D3D12_SHADER_RESOURCE_VIEW_DESC ViewDesc{};
 		ViewDesc.Format = Target->Description.Format ? *Target->Description.Format : DXGI_FORMAT_UNKNOWN;  // Structured buffers don't have a format.
@@ -44,7 +44,7 @@ void ResourceManager::CreateResourceViews(std::shared_ptr<Buffer>& Target)
 
 	if (Target->Description.BindFlags & BindFlag::UnorderedAccess)
 	{
-		Target->UAV = Device->GetResourceHeap().Allocate();
+		Target->UAV = Device->AllocateDescriptor(DescriptorType::Default);
 
 		D3D12_UNORDERED_ACCESS_VIEW_DESC ViewDesc{};
 		ViewDesc.Format = Target->Description.Format ? *Target->Description.Format : DXGI_FORMAT_UNKNOWN;  // Structured buffers don't have a format.
@@ -77,7 +77,7 @@ void ResourceManager::CreateResourceViews(std::shared_ptr<Texture>& Target)
 
 	if (Target->Description.BindFlags & BindFlag::RenderTarget)
 	{
-		Target->RTV = Device->GetRenderTargetHeap().Allocate();
+		Target->RTV = Device->AllocateDescriptor(DescriptorType::RenderTarget);
 
 		D3D12_RENDER_TARGET_VIEW_DESC ViewDesc{};
 		ViewDesc.Format = Target->Description.Format;
@@ -107,7 +107,7 @@ void ResourceManager::CreateResourceViews(std::shared_ptr<Texture>& Target)
 
 	if (Target->Description.BindFlags & BindFlag::DepthStencil)
 	{
-		Target->DSV = Device->GetDepthStencilHeap().Allocate();
+		Target->DSV = Device->AllocateDescriptor(DescriptorType::DepthStencil);
 
 		D3D12_DEPTH_STENCIL_VIEW_DESC ViewDesc{};
 		ViewDesc.Format = Target->Description.Format;
@@ -131,7 +131,7 @@ void ResourceManager::CreateResourceViews(std::shared_ptr<Texture>& Target)
 
 	if (Target->Description.BindFlags & BindFlag::ShaderResource)
 	{
-		Target->SRV = Device->GetResourceHeap().Allocate();
+		Target->SRV = Device->AllocateDescriptor(DescriptorType::Default);
 
 		D3D12_SHADER_RESOURCE_VIEW_DESC ViewDesc{};
 		ViewDesc.Format = Target->Description.Format;

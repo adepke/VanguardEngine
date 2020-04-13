@@ -3,6 +3,7 @@
 #pragma once
 
 #include <Rendering/Resource.h>
+#include <Rendering/DescriptorHeap.h>
 
 #include <D3D12MemAlloc.h>
 
@@ -25,7 +26,7 @@ private:
 public:
 	BufferDescription Description;
 
-	std::optional<D3D12_CPU_DESCRIPTOR_HANDLE> CBV;
-	std::optional<D3D12_CPU_DESCRIPTOR_HANDLE> SRV;
-	std::optional<D3D12_CPU_DESCRIPTOR_HANDLE> UAV;
+	std::optional<DescriptorHandle> CBV;
+	std::optional<DescriptorHandle> SRV;
+	std::optional<DescriptorHandle> UAV;
 };
