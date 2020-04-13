@@ -56,6 +56,8 @@ protected:
 
 public:
 	void Create(RenderDevice* Device, DescriptorType Type, size_t Descriptors, bool Visible);
+
+	auto* Native() noexcept { return Heap.Get(); }
 };
 
 class LinearDescriptorHeap : public DescriptorHeapBase

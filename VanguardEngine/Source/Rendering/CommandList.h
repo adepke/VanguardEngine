@@ -17,6 +17,7 @@ struct CommandList
 protected:
 	ResourcePtr<ID3D12CommandAllocator> Allocator;  // #TODO: Potentially share allocators? Something to look into in the future.
 	ResourcePtr<ID3D12GraphicsCommandList5> List;
+	RenderDevice* Device;
 
 	std::vector<D3D12_RESOURCE_BARRIER> PendingBarriers;
 
@@ -26,7 +27,7 @@ private:
 public:
 	auto* Native() const noexcept { return List.Get(); }
 
-	void Create(RenderDevice& Device, D3D12_COMMAND_LIST_TYPE Type);
+	void Create(RenderDevice* InDevice, D3D12_COMMAND_LIST_TYPE Type);
 	void SetName(std::wstring_view Name);
 
 	// #TODO: Support split barriers.

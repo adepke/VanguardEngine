@@ -264,7 +264,7 @@ void RenderGraph::Execute()
 	size_t Index = 0;
 	for (auto PassIndex : PassPipeline)
 	{
-		PassCommands[Index].Create(*Device, D3D12_COMMAND_LIST_TYPE_DIRECT);
+		PassCommands[Index].Create(Device, D3D12_COMMAND_LIST_TYPE_DIRECT);
 		++Index;
 	}
 

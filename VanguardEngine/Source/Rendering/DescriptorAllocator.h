@@ -14,6 +14,8 @@ class RenderDevice;
 
 class DescriptorAllocator
 {
+	friend class CommandList;
+
 private:
 	RenderDevice* Device;
 
