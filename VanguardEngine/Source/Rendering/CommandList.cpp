@@ -75,6 +75,11 @@ void CommandList::BindPipelineState(PipelineState& State)
 	List->SetPipelineState(State.Native());
 }
 
+void CommandList::BindDescriptorAllocator(DescriptorAllocator& Allocator)
+{
+	VGScopedCPUStat("Command List Bind Descriptor Allocator");
+}
+
 HRESULT CommandList::Close()
 {
 	return List->Close();

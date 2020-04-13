@@ -7,7 +7,7 @@
 #include <Rendering/Adapter.h>  // #TODO: Including this before D3D12MemAlloc.h causes an array of errors, this needs to be fixed.
 #include <Rendering/ResourceManager.h>
 #include <Rendering/PipelineState.h>
-#include <Rendering/DescriptorHeap.h>
+#include <Rendering/DescriptorAllocator.h>
 #include <Rendering/CommandList.h>
 #include <Rendering/Material.h>
 
@@ -93,11 +93,8 @@ private:
 	static constexpr size_t RenderTargetDescriptors = 1024;
 	static constexpr size_t DepthStencilDescriptors = 1024;
 
-	// #NOTE: Shader-visible descriptors require per-frame heaps.
-	std::array<DescriptorHeap, FrameCount> ResourceHeaps;  // CBV/SRV/UAV
-	std::array<DescriptorHeap, FrameCount> SamplerHeaps;
-	DescriptorHeap RenderTargetHeap;
-	DescriptorHeap DepthStencilHeap;
+	ResourcePtr<ID3D12DescriptorHeap> OfflineHeap;  // Building.
+	ResourcePtr<ID3D12DescriptorHeap> OnlineHeap;  // Staging.
 
 	// Name the D3D objects.
 	void SetNames();

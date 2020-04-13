@@ -10,6 +10,7 @@
 
 class RenderDevice;
 class PipelineState;
+class DescriptorAllocator;
 
 struct CommandList
 {
@@ -36,6 +37,7 @@ public:
 	void FlushBarriers();
 
 	void BindPipelineState(PipelineState& State);
+	void BindDescriptorAllocator(DescriptorAllocator& Allocator);
 
 	HRESULT Close();
 	HRESULT Reset();

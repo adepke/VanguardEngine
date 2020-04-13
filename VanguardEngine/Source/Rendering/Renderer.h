@@ -18,9 +18,6 @@ public:
 
 	std::vector<Material> Materials;
 
-private:
-	void SetDescriptorHeaps(CommandList& List);
-
 public:
 	static inline Renderer& Get() noexcept
 	{

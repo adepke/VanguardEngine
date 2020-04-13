@@ -23,18 +23,6 @@ struct EntityInstance
 	TransformComponent Transform;
 };
 
-void Renderer::SetDescriptorHeaps(CommandList& List)
-{
-	VGScopedCPUStat("Set Descriptor Heaps");
-
-	std::vector<ID3D12DescriptorHeap*> Heaps;
-
-	Heaps.push_back(Device->GetResourceHeap().Native());
-	Heaps.push_back(Device->GetSamplerHeap().Native());
-
-	List.Native()->SetDescriptorHeaps(static_cast<UINT>(Heaps.size()), Heaps.data());
-}
-
 void Renderer::Initialize(std::unique_ptr<RenderDevice>&& InDevice)
 {
 	VGScopedCPUStat("Renderer Initialize");
@@ -102,7 +90,7 @@ void Renderer::Render(entt::registry& Registry)
 	}
 
 	// Global to all render passes.
-	SetDescriptorHeaps(Device->GetDirectList());
+	Device->DescriptorHeap.Bind(Device->GetDirectList());
 
 	RenderGraph Graph{ Device.get() };
 

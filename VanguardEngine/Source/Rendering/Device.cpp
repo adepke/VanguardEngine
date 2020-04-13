@@ -209,9 +209,6 @@ void RenderDevice::ResetFrame(size_t FrameID)
 	{
 		VGLogError(Rendering) << "Failed to reset direct command list for frame " << FrameIndex << ": " << Result;
 	}
-
-	ResourceHeaps[FrameIndex].Reset();
-	SamplerHeaps[FrameIndex].Reset();
 }
 
 RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
