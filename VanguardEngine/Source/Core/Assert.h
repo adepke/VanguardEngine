@@ -6,6 +6,7 @@
 
 #include <iostream>
 #include <exception>
+#include <cstdlib>
 
 // MSVC doesn't yet support __VA_OPT__, see https://en.cppreference.com/w/cpp/compiler_support
 #ifdef _MSC_VER
@@ -16,6 +17,7 @@
 		{ \
 			std::cerr << "Assertion \"" << #Condition << "\" failed in " << __FILE__ << ", line " << __LINE__ << ": " << __VA_ARGS__; \
 			VGBreak(); \
+			std::abort(); \
 		} \
 	} \
 	while (0)
@@ -27,6 +29,7 @@
 		{ \
 			std::cerr << "Assertion \"" << #Condition << "\" failed in " << __FILE__ << ", line " << __LINE__ __VA_OPT__(<< ": " << __VA_ARGS__); \
 			VGBreak(); \
+			std::abort(); \
 		} \
 	} \
 	while (0)

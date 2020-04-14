@@ -7,7 +7,7 @@
 #include <Rendering/Adapter.h>  // #TODO: Including this before D3D12MemAlloc.h causes an array of errors, this needs to be fixed.
 #include <Rendering/ResourceManager.h>
 #include <Rendering/PipelineState.h>
-#include <Rendering/DescriptorHeap.h>
+#include <Rendering/DescriptorAllocator.h>
 #include <Rendering/CommandList.h>
 #include <Rendering/Material.h>
 
@@ -53,6 +53,10 @@ private:
 	ResourcePtr<ID3D12Device3> Device;
 	Adapter RenderAdapter;
 
+	// For converting resources from the direct/compute engine to the copy engine.
+	CommandList DirectToCopyCommandList[FrameCount];
+
+	// #TODO: Reserve for large async asset streaming, a direct/compute queue is faster for small copy operations.
 	ResourcePtr<ID3D12CommandQueue> CopyCommandQueue;
 	CommandList CopyCommandList[FrameCount];
 
@@ -74,27 +78,21 @@ private:
 	ResourcePtr<ID3D12Fence> ComputeFence;
 	HANDLE ComputeFenceEvent;
 
+	size_t IntraSyncValue = 0;
+	ResourcePtr<ID3D12Fence> IntraSyncFence;
+	HANDLE IntraSyncEvent;
+
 	ResourcePtr<D3D12MA::Allocator> Allocator;
 	ResourceManager AllocatorManager;
 
 	std::array<std::shared_ptr<Buffer>, FrameCount> FrameBuffers;  // Per-frame shared dynamic heap.
 	std::array<size_t, FrameCount> FrameBufferOffsets = {};
 
-	static constexpr size_t ResourceDescriptors = 1024;
-	static constexpr size_t SamplerDescriptors = 1024;
-	static constexpr size_t RenderTargetDescriptors = 1024;
-	static constexpr size_t DepthStencilDescriptors = 1024;
-
-	// #NOTE: Shader-visible descriptors require per-frame heaps.
-	std::array<DescriptorHeap, FrameCount> ResourceHeaps;  // CBV/SRV/UAV
-	std::array<DescriptorHeap, FrameCount> SamplerHeaps;
-	DescriptorHeap RenderTargetHeap;
-	DescriptorHeap DepthStencilHeap;
+	DescriptorAllocator DescriptorManager;
 
 	// Name the D3D objects.
 	void SetNames();
 
-	void SetupDescriptorHeaps();
 	void SetupRenderTargets();
 
 	// Resets command lists and allocators.
@@ -120,13 +118,18 @@ public:
 	// Allocate a block of CPU write-only, GPU read-only memory from the per-frame dynamic heap.
 	std::pair<std::shared_ptr<Buffer>, size_t> FrameAllocate(size_t Size);
 
-	// Sync the specified GPU engine to FrameID. Blocking.
-	void Sync(SyncType Type, size_t FrameID = std::numeric_limits<size_t>::max());
+	DescriptorHandle AllocateDescriptor(DescriptorType Type);
+
+	// Sync the GPU until it is either fully caught up or within the max buffered frames limit, determined by FullSync. Blocking.
+	void SyncInterframe(bool FullSync);
+	// Sync the specified GPU engine within the active frame on the GPU. Blocking.
+	void SyncIntraframe(SyncType Type);
 
 	// Blocking, waits for the gpu to finish the next frame before returning. Marks the current frame as finished submitting and can move on to the next frame.
 	void FrameStep();
 	size_t GetFrameIndex() const noexcept { return Frame % RenderDevice::FrameCount; }
 
+	auto& GetDirectToCopyList() noexcept { return DirectToCopyCommandList[GetFrameIndex()]; }
 	auto* GetCopyQueue() const noexcept { return CopyCommandQueue.Get(); }
 	auto& GetCopyList() noexcept { return CopyCommandList[GetFrameIndex()]; }
 	auto* GetDirectQueue() const noexcept { return DirectCommandQueue.Get(); }
@@ -134,11 +137,8 @@ public:
 	auto* GetComputeQueue() const noexcept { return ComputeCommandQueue.Get(); }
 	auto& GetComputeList() noexcept { return ComputeCommandList[GetFrameIndex()]; }
 	auto* GetSwapChain() const noexcept { return SwapChain.Get(); }
-	auto* GetBackBuffer() const noexcept { return BackBufferTextures[GetFrameIndex()].get(); }
-	auto& GetResourceHeap() noexcept { return ResourceHeaps[GetFrameIndex()]; }
-	auto& GetSamplerHeap() noexcept { return SamplerHeaps[GetFrameIndex()]; }
-	auto& GetRenderTargetHeap() noexcept { return RenderTargetHeap; }
-	auto& GetDepthStencilHeap() noexcept { return DepthStencilHeap; }
+	auto GetBackBuffer() const noexcept { return BackBufferTextures[GetFrameIndex()]; }
+	auto& GetDescriptorAllocator() noexcept { return DescriptorManager; }
 
 	void SetResolution(size_t Width, size_t Height, bool InFullscreen);
 };

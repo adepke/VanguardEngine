@@ -9,7 +9,6 @@
 
 #include <string>
 // #TEMP
-#include <chrono>
 #include <thread>
 #include <Rendering/RenderComponents.h>
 #include <Core/CoreComponents.h>
@@ -58,9 +57,12 @@ void EngineLoop()
 {
 	entt::registry TempReg;
 
-	for (int Index = 0; Index < 10; ++Index)
+	for (int Index = 0; Index < 1; ++Index)
 	{
-		auto Mesh{ CreateMeshComponent(*Renderer::Get().Device, std::vector<Vertex>{ Vertex{}, Vertex{}, Vertex{} }, std::vector<uint32_t>{ 0, 1, 2 }) };
+		Vertex v1{ { 0.f, 0.5f, 0.f }, { 1.f, 0.f, 0.f, 1.f } };
+		Vertex v2{ { 0.5f, -0.5f, 0.f }, { 0.f, 1.f, 0.f, 1.f } };
+		Vertex v3{ { -0.5f, -0.5f, 0.f }, { 0.f, 0.f, 1.f, 1.f } };
+		auto Mesh{ CreateMeshComponent(*Renderer::Get().Device, std::vector<Vertex>{ v1, v2, v3 }, std::vector<uint32_t>{ 0, 1, 2 }) };
 
 		const auto Entity = TempReg.create();
 		TempReg.assign<TransformComponent>(Entity);
@@ -86,9 +88,6 @@ void EngineLoop()
 		}
 
 		Renderer::Get().Render(TempReg);
-
-		// #TEMP
-		std::this_thread::sleep_for(4ms);
 
 		Renderer::Get().Device->FrameStep();
 	}
