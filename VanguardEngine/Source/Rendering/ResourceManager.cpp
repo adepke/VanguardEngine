@@ -21,7 +21,7 @@ void ResourceManager::CreateResourceViews(std::shared_ptr<Buffer>& Target)
 
 		D3D12_CONSTANT_BUFFER_VIEW_DESC ViewDesc{};
 		ViewDesc.BufferLocation = Target->Native()->GetGPUVirtualAddress();
-		ViewDesc.SizeInBytes = static_cast<UINT>(Target->Description.Size * Target->Description.Stride);
+		ViewDesc.SizeInBytes = static_cast<UINT>(AlignedSize(Target->Description.Size * Target->Description.Stride, 256));  // CBV's must be a multiple of 256 bytes.
 
 		Device->Native()->CreateConstantBufferView(&ViewDesc, *Target->CBV);
 	}
