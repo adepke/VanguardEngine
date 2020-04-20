@@ -16,3 +16,7 @@ struct Vertex
 	
 	// #TODO: Normal, UVs, etc?
 };
+
+// #TODO: Temporary globals.
+inline XMMATRIX GlobalViewMatrix;
+inline XMMATRIX GlobalProjectionMatrix;
