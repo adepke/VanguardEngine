@@ -35,6 +35,7 @@ struct CameraComponent
 	float FarPlane = 10000.f;
 	float FieldOfView = 1.57079633f;  // 90 Degrees.
 
+	// #TODO: Derive from a transform component.
 	XMFLOAT3 FocusPosition{ 0.f, 0.f, 0.f };
 	XMFLOAT3 UpDirection{ 0.f, 0.f, 1.f };
 };
