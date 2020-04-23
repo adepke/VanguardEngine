@@ -14,6 +14,7 @@
 
 #include <vector>
 #include <utility>
+#include <cstring>
 
 // Per-entity data, passed through input assembler.
 struct EntityInstance
@@ -23,6 +24,25 @@ struct EntityInstance
 	TransformComponent Transform;
 };
 
+struct CameraBuffer
+{
+	XMMATRIX ViewMatrix;
+	XMMATRIX ProjectionMatrix;
+};
+
+void Renderer::UpdateCameraBuffer()
+{
+	CameraBuffer BufferData;
+	BufferData.ViewMatrix = GlobalViewMatrix;
+	BufferData.ProjectionMatrix = GlobalProjectionMatrix;
+
+	std::vector<uint8_t> ByteData;
+	ByteData.resize(sizeof(CameraBuffer));
+	std::memcpy(ByteData.data(), &BufferData, sizeof(BufferData));
+
+	Device->WriteResource(cameraBuffer, ByteData);
+}
+
 void Renderer::Initialize(std::unique_ptr<RenderDevice>&& InDevice)
 {
 	VGScopedCPUStat("Renderer Initialize");
@@ -31,11 +51,23 @@ void Renderer::Initialize(std::unique_ptr<RenderDevice>&& InDevice)
 
 	Device->CheckFeatureSupport();
 	Materials = std::move(Device->ReloadMaterials());
+
+	BufferDescription CameraBufferDesc{};
+	CameraBufferDesc.UpdateRate = ResourceFrequency::Static;
+	CameraBufferDesc.BindFlags = BindFlag::ConstantBuffer;
+	CameraBufferDesc.AccessFlags = AccessFlag::CPUWrite;
+	CameraBufferDesc.Size = 1;  // #TODO: Support multiple cameras.
+	CameraBufferDesc.Stride = sizeof(CameraBuffer);
+
+	cameraBuffer = Device->CreateResource(CameraBufferDesc, VGText("Camera Buffer"));
 }
 
 void Renderer::Render(entt::registry& Registry)
 {
 	VGScopedCPUStat("Render");
+
+	// Update the camera buffer immediately.
+	UpdateCameraBuffer();
 
 	Device->GetDirectToCopyList().Close();
 	ID3D12CommandList* DirectToCopyLists[] = { Device->GetDirectToCopyList().Native() };
@@ -113,6 +145,8 @@ void Renderer::Render(entt::registry& Registry)
 			auto& DepthStencil = Resolver.Get<Texture>(DepthStencilTag);
 
 			List.BindPipelineState(*Materials[0].Pipeline);
+			
+			List.Native()->SetGraphicsRootConstantBufferView(0, cameraBuffer->Native()->GetGPUVirtualAddress());
 
 			D3D12_VIEWPORT Viewport{};
 			Viewport.TopLeftX = 0.f;

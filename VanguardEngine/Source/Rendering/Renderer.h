@@ -5,18 +5,26 @@
 #include <Core/Base.h>
 #include <Rendering/PipelineState.h>
 #include <Rendering/Material.h>
+#include <Rendering/Buffer.h>
+#include <Rendering/Texture.h>
 
 #include <entt/entt.hpp>  // #TODO: Don't include, forward and include in the source.
 
 class RenderDevice;
-struct CommandList;
+class CommandList;
 
 class Renderer
 {
+private:
+	std::shared_ptr<Buffer> cameraBuffer;
+
 public:
 	std::unique_ptr<RenderDevice> Device;
 
 	std::vector<Material> Materials;
+
+private:
+	void UpdateCameraBuffer();
 
 public:
 	static inline Renderer& Get() noexcept

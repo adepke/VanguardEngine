@@ -13,7 +13,7 @@
 class RenderGraph;
 struct RGBufferDescription;
 struct RGTextureDescription;
-struct CommandList;
+class CommandList;
 class RGResolver;
 
 // #TODO: Passes can either read or write to a single resource. Add the option to read and write to a resource?

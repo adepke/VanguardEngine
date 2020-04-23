@@ -12,7 +12,7 @@ class RenderDevice;
 class PipelineState;
 class DescriptorAllocator;
 
-struct CommandList
+class CommandList
 {
 protected:
 	ResourcePtr<ID3D12CommandAllocator> Allocator;  // #TODO: Potentially share allocators? Something to look into in the future.
