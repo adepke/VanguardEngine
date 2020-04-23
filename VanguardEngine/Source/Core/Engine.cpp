@@ -11,6 +11,7 @@
 // #TEMP
 #include <thread>
 #include <Rendering/RenderComponents.h>
+#include <Rendering/RenderSystems.h>
 #include <Core/CoreComponents.h>
 
 std::unique_ptr<WindowFrame> MainWindow;
@@ -57,6 +58,19 @@ void EngineLoop()
 {
 	entt::registry TempReg;
 
+	TransformComponent SpectatorTransform{};
+	SpectatorTransform.Translation.x = 0.f;
+	SpectatorTransform.Translation.y = 0.f;
+	SpectatorTransform.Translation.z = -3.f;
+
+	CameraComponent SpectatorCamera{};
+	SpectatorCamera.FocusPosition = { 0.f, 0.f, 0.f };
+	SpectatorCamera.UpDirection = { 0.f, 1.f, 0.f };
+
+	const auto Spectator = TempReg.create();
+	TempReg.assign<TransformComponent>(Spectator, std::move(SpectatorTransform));
+	TempReg.assign<CameraComponent>(Spectator, std::move(SpectatorCamera));
+
 	for (int Index = 0; Index < 1; ++Index)
 	{
 		Vertex v1{ { 0.f, 0.5f, 0.f }, { 1.f, 0.f, 0.f, 1.f } };
@@ -86,6 +100,8 @@ void EngineLoop()
 				return;
 			}
 		}
+
+		CameraSystem::Update(TempReg);
 
 		Renderer::Get().Render(TempReg);
 
