@@ -60,6 +60,8 @@ void Renderer::Initialize(std::unique_ptr<RenderDevice>&& InDevice)
 	CameraBufferDesc.Stride = sizeof(CameraBuffer);
 
 	cameraBuffer = Device->CreateResource(CameraBufferDesc, VGText("Camera Buffer"));
+
+	UserInterface = std::make_unique<UserInterfaceManager>(Device.get());
 }
 
 void Renderer::Render(entt::registry& Registry)
@@ -78,6 +80,9 @@ void Renderer::Render(entt::registry& Registry)
 		// We need to execute the engine transition barriers for going from direct to copy.
 		Device->GetDirectQueue()->ExecuteCommandLists(1, DirectToCopyLists);
 	}
+
+	// While we wait for transitions to execute, ensure the UI is ready for drawing.
+	UserInterface->NewFrame();
 
 	// Wait for the resources to transition before being ready to use on the copy engine.
 	Device->SyncIntraframe(SyncType::Direct);
@@ -201,6 +206,15 @@ void Renderer::Render(entt::registry& Registry)
 				});
 		}
 	);
+
+	auto& UIPass = Graph.AddPass("UI Pass");
+	UIPass.WriteResource(BackBufferTag, RGUsage::BackBuffer);
+
+	UIPass.Bind(
+		[this, BackBufferTag](RGResolver& Resolver, CommandList& List)
+		{
+			UserInterface->Render(List);
+		});
 
 	Graph.Build();
 

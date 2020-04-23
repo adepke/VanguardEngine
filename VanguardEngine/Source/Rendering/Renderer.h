@@ -7,6 +7,7 @@
 #include <Rendering/Material.h>
 #include <Rendering/Buffer.h>
 #include <Rendering/Texture.h>
+#include <Rendering/UserInterface.h>
 
 #include <entt/entt.hpp>  // #TODO: Don't include, forward and include in the source.
 
@@ -17,6 +18,8 @@ class Renderer
 {
 private:
 	std::shared_ptr<Buffer> cameraBuffer;
+
+	std::unique_ptr<UserInterfaceManager> UserInterface;
 
 public:
 	std::unique_ptr<RenderDevice> Device;
