@@ -2,6 +2,7 @@
 
 #pragma once
 
+class RenderDevice;
 struct ImDrawData;
 class CommandList;
 struct FrameResources;

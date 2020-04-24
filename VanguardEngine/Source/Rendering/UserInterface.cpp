@@ -6,6 +6,7 @@
 
 #include <imgui/imgui.h>
 #include <Core/Windows/DirectX12Minimal.h>
+#include <d3dcompiler.h>
 
 static ID3D10Blob* g_pVertexShaderBlob = NULL;
 static ID3D10Blob* g_pPixelShaderBlob = NULL;
@@ -13,6 +14,7 @@ static ID3D12RootSignature* g_pRootSignature = NULL;
 static ID3D12PipelineState* g_pPipelineState = NULL;
 static DXGI_FORMAT g_RTVFormat = DXGI_FORMAT_UNKNOWN;
 static ID3D12Resource* g_pFontTextureResource = NULL;
+static DescriptorHandle FontTextureDescriptor;
 
 struct FrameResources
 {
@@ -225,6 +227,8 @@ void UserInterfaceManager::CreateFontTexture()
 		fence->Release();
 		uploadBuffer->Release();
 
+		FontTextureDescriptor = Device->AllocateDescriptor(DescriptorType::Default);
+
 		// Create texture view
 		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
 		ZeroMemory(&srvDesc, sizeof(srvDesc));
@@ -233,14 +237,13 @@ void UserInterfaceManager::CreateFontTexture()
 		srvDesc.Texture2D.MipLevels = desc.MipLevels;
 		srvDesc.Texture2D.MostDetailedMip = 0;
 		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-		Device->Native()->CreateShaderResourceView(pTexture, &srvDesc, g_hFontSrvCpuDescHandle);
+		Device->Native()->CreateShaderResourceView(pTexture, &srvDesc, FontTextureDescriptor);
 		SafeRelease(g_pFontTextureResource);
 		g_pFontTextureResource = pTexture;
 	}
 
 	// Store our identifier
-	static_assert(sizeof(ImTextureID) >= sizeof(g_hFontSrvGpuDescHandle.ptr), "Can't pack descriptor handle into TexID, 32-bit not supported yet.");
-	io.Fonts->TexID = (ImTextureID)g_hFontSrvGpuDescHandle.ptr;
+	io.Fonts->TexID = (ImTextureID)static_cast<D3D12_GPU_DESCRIPTOR_HANDLE>(FontTextureDescriptor).ptr;
 }
 
 void UserInterfaceManager::CreateDeviceObjects()
