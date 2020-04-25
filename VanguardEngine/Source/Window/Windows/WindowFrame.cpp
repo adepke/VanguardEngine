@@ -178,12 +178,22 @@ void WindowFrame::RestrainCursor(bool Restrain)
 
 	if (Restrain)
 	{
-		RECT WindowRect;
-		::GetWindowRect(static_cast<HWND>(Handle), &WindowRect);
+		RECT ClientRect;
+		::GetClientRect(static_cast<HWND>(Handle), &ClientRect);
 
-		// #TODO: Minimize rect to actually keep the cursor entirely in the drawable interface of the window.
+		POINT TopLeft = { ClientRect.left, ClientRect.top };
+		POINT BottomRight = { ClientRect.right, ClientRect.bottom };
 
-		const auto Result = ::ClipCursor(&WindowRect);
+		// Convert the local space coordinates to screen space.
+		::ClientToScreen(static_cast<HWND>(Handle), &TopLeft);
+		::ClientToScreen(static_cast<HWND>(Handle), &BottomRight);
+
+		ClientRect.left = TopLeft.x;
+		ClientRect.top = TopLeft.y;
+		ClientRect.right = BottomRight.x;
+		ClientRect.bottom = BottomRight.y;
+
+		const auto Result = ::ClipCursor(&ClientRect);
 		if (!Result)
 		{
 			VGLogError(Window) << "Failed to restrain cursor: " << GetPlatformError();
