@@ -9,4 +9,4 @@ project "imgui"
 	
 	targetname "imgui"
 	
-	files { "imconfig.h", "imgui.h", "imgui.cpp", "imgui_draw.cpp", "imgui_widgets.cpp" }
+	files { "imconfig.h", "imgui.h", "imgui.cpp", "imgui_draw.cpp", "imgui_widgets.cpp", "imgui_demo.cpp" }
