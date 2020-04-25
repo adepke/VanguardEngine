@@ -32,6 +32,15 @@ void OnFocusChanged(bool Focus)
 	// #TODO: Limit render FPS, disable audio.
 }
 
+void OnSizeChanged(size_t Width, size_t Height, bool Fullscreen)
+{
+	VGScopedCPUStat("Size Changed");
+
+	VGLog(Window) << "Window size changed (" << Width << ", " << Height << ").";
+
+	Renderer::Get().Device->SetResolution(Width, Height, Fullscreen);
+}
+
 void EngineBoot()
 {
 	VGScopedCPUStat("Engine Boot");
@@ -40,7 +49,12 @@ void EngineBoot()
 
 	EnableDPIAwareness();
 
-	MainWindow = std::make_unique<WindowFrame>(VGText("Vanguard Engine"), 800, 600, &OnFocusChanged);
+	constexpr auto DefaultWindowSizeX = 800;
+	constexpr auto DefaultWindowSizeY = 600;
+
+	MainWindow = std::make_unique<WindowFrame>(VGText("Vanguard Engine"), DefaultWindowSizeX, DefaultWindowSizeY);
+	MainWindow->OnFocusChanged = &OnFocusChanged;
+	MainWindow->OnSizeChanged = &OnSizeChanged;
 	MainWindow->RestrainCursor(false);
 
 #if BUILD_DEBUG
@@ -50,7 +64,7 @@ void EngineBoot()
 #endif
 
 	auto Device = std::make_unique<RenderDevice>(static_cast<HWND>(MainWindow->GetHandle()), false, EnableDebugging);
-	Device->SetResolution(800, 600, false);
+	Device->SetResolution(DefaultWindowSizeX, DefaultWindowSizeY, false);
 	Renderer::Get().Initialize(std::move(Device));
 }
 

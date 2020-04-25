@@ -5,7 +5,7 @@
 
 WindowFrame* GlobalWindow;  // #NOTE: This is assuming we're only ever going to have one active WindowFrame at a time.
 
-constexpr auto WindowStyle = WS_OVERLAPPED | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_VISIBLE;
+constexpr auto WindowStyle = WS_OVERLAPPED | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_SIZEBOX | WS_VISIBLE;
 constexpr auto WindowStyleEx = 0;
 constexpr auto WindowClassStyle = CS_CLASSDC;
 constexpr auto WindowClassName = VGText("VanguardEngine");
@@ -42,8 +42,13 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		return 0;
 
 	case WM_SIZE:
-		// #TODO: Resizing.
-		return ::DefWindowProc(hWnd, msg, wParam, lParam);
+		if (wParam != SIZE_MINIMIZED && GlobalWindow->OnSizeChanged)
+		{
+			// #TODO: Handle fullscreen.
+			GlobalWindow->OnSizeChanged(static_cast<size_t>(LOWORD(lParam)), static_cast<size_t>(HIWORD(lParam)), false);
+		}
+
+		return 0;
 
 	case WM_DPICHANGED:
 		// #TODO: DPI awareness.
@@ -53,7 +58,11 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		const auto Active = LOWORD(wParam);
 		if (Active == WA_ACTIVE || Active == WA_CLICKACTIVE)
 		{
-			GlobalWindow->OnFocusChanged(true);
+			if (GlobalWindow->OnFocusChanged)
+			{
+				GlobalWindow->OnFocusChanged(true);
+			}
+
 			if (GlobalWindow->CursorRestrained)
 			{
 				GlobalWindow->RestrainCursor(true);
@@ -62,7 +71,10 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 		else
 		{
-			GlobalWindow->OnFocusChanged(false);
+			if (GlobalWindow->OnFocusChanged)
+			{
+				GlobalWindow->OnFocusChanged(false);
+			}
 		}
 
 		return 0;
@@ -71,7 +83,7 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 	return ::DefWindowProc(hWnd, msg, wParam, lParam);
 }
 
-WindowFrame::WindowFrame(const std::wstring& Title, size_t Width, size_t Height, std::function<void(bool)>&& FocusChanged) : OnFocusChanged(std::move(FocusChanged))
+WindowFrame::WindowFrame(const std::wstring& Title, size_t Width, size_t Height)
 {
 	VGScopedCPUStat("Create Window");
 
