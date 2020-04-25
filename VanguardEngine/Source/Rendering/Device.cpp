@@ -38,10 +38,6 @@ void RenderDevice::SetNames()
 	{
 		ComputeCommandList[Index].SetName(VGText("Compute Command List"));
 	}
-
-	CopyFence->SetName(VGText("Copy Fence"));
-	DirectFence->SetName(VGText("Direct Fence"));
-	ComputeFence->SetName(VGText("Compute Fence"));
 #endif
 }
 
@@ -379,39 +375,6 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		VGLogFatal(Rendering) << "Failed to bind device to window: " << Result;
 	}
 
-	Result = Device->CreateFence(Frame, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(CopyFence.Indirect()));
-	if (FAILED(Result))
-	{
-		VGLogFatal(Rendering) << "Failed to create copy fence: " << Result;
-	}
-
-	if (CopyFenceEvent = ::CreateEvent(nullptr, false, false, VGText("Copy Fence Event")); !CopyFenceEvent)
-	{
-		VGLogFatal(Rendering) << "Failed to create copy fence event: " << GetPlatformError();
-	}
-
-	Result = Device->CreateFence(Frame, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(DirectFence.Indirect()));
-	if (FAILED(Result))
-	{
-		VGLogFatal(Rendering) << "Failed to create direct fence: " << Result;
-	}
-
-	if (DirectFenceEvent = ::CreateEvent(nullptr, false, false, VGText("Direct Fence Event")); !DirectFenceEvent)
-	{
-		VGLogFatal(Rendering) << "Failed to create direct fence event: " << GetPlatformError();
-	}
-
-	Result = Device->CreateFence(Frame, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(ComputeFence.Indirect()));
-	if (FAILED(Result))
-	{
-		VGLogFatal(Rendering) << "Failed to create compute fence: " << Result;
-	}
-
-	if (ComputeFenceEvent = ::CreateEvent(nullptr, false, false, VGText("Compute Fence Event")); !ComputeFenceEvent)
-	{
-		VGLogFatal(Rendering) << "Failed to create compute fence event: " << GetPlatformError();
-	}
-
 	Result = Device->CreateFence(IntraSyncValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(IntraSyncFence.Indirect()));
 	if (FAILED(Result))
 	{
@@ -449,9 +412,6 @@ RenderDevice::~RenderDevice()
 
 	SyncInterframe(true);
 
-	::CloseHandle(CopyFenceEvent);
-	::CloseHandle(DirectFenceEvent);
-	::CloseHandle(ComputeFenceEvent);
 	::CloseHandle(IntraSyncEvent);
 }
 

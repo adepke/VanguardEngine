@@ -72,13 +72,6 @@ private:
 
 	std::array<std::shared_ptr<Texture>, FrameCount> BackBufferTextures;  // Render targets bound to the swap chain.
 
-	ResourcePtr<ID3D12Fence> CopyFence;
-	HANDLE CopyFenceEvent;
-	ResourcePtr<ID3D12Fence> DirectFence;
-	HANDLE DirectFenceEvent;
-	ResourcePtr<ID3D12Fence> ComputeFence;
-	HANDLE ComputeFenceEvent;
-
 	size_t IntraSyncValue = 0;
 	ResourcePtr<ID3D12Fence> IntraSyncFence;
 	HANDLE IntraSyncEvent;
