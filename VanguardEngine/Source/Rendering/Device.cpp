@@ -194,6 +194,7 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 {
 	VGScopedCPUStat("Render Device Initialize");
 
+	WindowHandle = InWindow;
 	Debugging = EnableDebugging;
 
 	if (EnableDebugging)

@@ -52,6 +52,7 @@ private:
 	// #NOTE: Ordering of these variables is significant for proper destruction!
 	ResourcePtr<ID3D12Device3> Device;
 	Adapter RenderAdapter;
+	HWND WindowHandle;
 
 	// For converting resources from the direct/compute engine to the copy engine.
 	CommandList DirectToCopyCommandList[FrameCount];
@@ -129,6 +130,7 @@ public:
 	void FrameStep();
 	size_t GetFrameIndex() const noexcept { return Frame % RenderDevice::FrameCount; }
 
+	auto GetWindowHandle() const noexcept { return WindowHandle; }
 	auto& GetDirectToCopyList() noexcept { return DirectToCopyCommandList[GetFrameIndex()]; }
 	auto* GetCopyQueue() const noexcept { return CopyCommandQueue.Get(); }
 	auto& GetCopyList() noexcept { return CopyCommandList[GetFrameIndex()]; }

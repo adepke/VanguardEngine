@@ -4,8 +4,8 @@
 #include <Rendering/Base.h>
 #include <Rendering/Device.h>
 
-#include <imgui/imgui.h>
 #include <Core/Windows/DirectX12Minimal.h>
+#include <imgui.h>
 #include <d3dcompiler.h>
 
 static ID3D10Blob* g_pVertexShaderBlob = NULL;
@@ -14,7 +14,7 @@ static ID3D12RootSignature* g_pRootSignature = NULL;
 static ID3D12PipelineState* g_pPipelineState = NULL;
 static DXGI_FORMAT g_RTVFormat = DXGI_FORMAT_UNKNOWN;
 static ID3D12Resource* g_pFontTextureResource = NULL;
-static DescriptorHandle FontTextureDescriptor;
+static ID3D12DescriptorHeap* FontHeap;
 
 struct FrameResources
 {
@@ -90,6 +90,7 @@ void UserInterfaceManager::SetupRenderState(ImDrawData* DrawData, CommandList& L
 	List.Native()->SetPipelineState(g_pPipelineState);
 	List.Native()->SetGraphicsRootSignature(g_pRootSignature);
 	List.Native()->SetGraphicsRoot32BitConstants(0, 16, &vertex_constant_buffer, 0);
+	List.Native()->SetDescriptorHeaps(1, &FontHeap);
 
 	// Setup blend factor
 	const float blend_factor[4] = { 0.f, 0.f, 0.f, 0.f };
@@ -227,8 +228,6 @@ void UserInterfaceManager::CreateFontTexture()
 		fence->Release();
 		uploadBuffer->Release();
 
-		FontTextureDescriptor = Device->AllocateDescriptor(DescriptorType::Default);
-
 		// Create texture view
 		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
 		ZeroMemory(&srvDesc, sizeof(srvDesc));
@@ -237,13 +236,13 @@ void UserInterfaceManager::CreateFontTexture()
 		srvDesc.Texture2D.MipLevels = desc.MipLevels;
 		srvDesc.Texture2D.MostDetailedMip = 0;
 		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-		Device->Native()->CreateShaderResourceView(pTexture, &srvDesc, FontTextureDescriptor);
+		Device->Native()->CreateShaderResourceView(pTexture, &srvDesc, FontHeap->GetCPUDescriptorHandleForHeapStart());
 		SafeRelease(g_pFontTextureResource);
 		g_pFontTextureResource = pTexture;
 	}
 
 	// Store our identifier
-	io.Fonts->TexID = (ImTextureID)static_cast<D3D12_GPU_DESCRIPTOR_HANDLE>(FontTextureDescriptor).ptr;
+	io.Fonts->TexID = (ImTextureID)FontHeap->GetGPUDescriptorHandleForHeapStart().ptr;
 }
 
 void UserInterfaceManager::CreateDeviceObjects()
@@ -437,6 +436,16 @@ void UserInterfaceManager::CreateDeviceObjects()
 	if (Device->Native()->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&g_pPipelineState)) != S_OK)
 		return;
 
+	// Create font heap.
+	D3D12_DESCRIPTOR_HEAP_DESC HeapDesc{};
+	HeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
+	HeapDesc.NumDescriptors = 1;
+	HeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+	HeapDesc.NodeMask = 0;
+
+	if (Device->Native()->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(&FontHeap)) != S_OK)
+		return;
+
 	CreateFontTexture();
 }
 
@@ -447,6 +456,7 @@ void UserInterfaceManager::InvalidateDeviceObjects()
 	SafeRelease(g_pRootSignature);
 	SafeRelease(g_pPipelineState);
 	SafeRelease(g_pFontTextureResource);
+	SafeRelease(FontHeap);
 
 	ImGuiIO& io = ImGui::GetIO();
 	io.Fonts->TexID = NULL; // We copied g_pFontTextureView to io.Fonts->TexID so let's clear that as well.
@@ -484,6 +494,8 @@ UserInterfaceManager::UserInterfaceManager(RenderDevice* InDevice) : Device(InDe
 		fr->IndexBufferSize = 10000;
 		fr->VertexBufferSize = 5000;
 	}
+
+	io.ImeWindowHandle = Device->GetWindowHandle();
 }
 
 UserInterfaceManager::~UserInterfaceManager()
@@ -502,6 +514,11 @@ void UserInterfaceManager::NewFrame()
 {
 	if (!g_pPipelineState)
 		CreateDeviceObjects();
+
+	auto& io = ImGui::GetIO();
+	io.DisplaySize = { static_cast<float>(Device->RenderWidth), static_cast<float>(Device->RenderHeight) };
+
+	ImGui::NewFrame();
 }
 
 void UserInterfaceManager::Render(CommandList& List)

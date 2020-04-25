@@ -11,6 +11,7 @@
 #include <Rendering/RenderGraph.h>
 
 //#include <entt/entt.hpp>  // #TODO: Include from here instead of in the header.
+#include <imgui.h>
 
 #include <vector>
 #include <utility>
@@ -81,9 +82,6 @@ void Renderer::Render(entt::registry& Registry)
 		Device->GetDirectQueue()->ExecuteCommandLists(1, DirectToCopyLists);
 	}
 
-	// While we wait for transitions to execute, ensure the UI is ready for drawing.
-	UserInterface->NewFrame();
-
 	// Wait for the resources to transition before being ready to use on the copy engine.
 	Device->SyncIntraframe(SyncType::Direct);
 
@@ -126,9 +124,6 @@ void Renderer::Render(entt::registry& Registry)
 			});
 	}
 
-	// Global to all render passes.
-	Device->GetDirectList().BindDescriptorAllocator(Device->GetDescriptorAllocator());
-
 	RenderGraph Graph{ Device.get() };
 
 	const size_t BackBufferTag = Graph.ImportResource(Device->GetBackBuffer());
@@ -150,6 +145,7 @@ void Renderer::Render(entt::registry& Registry)
 			auto& DepthStencil = Resolver.Get<Texture>(DepthStencilTag);
 
 			List.BindPipelineState(*Materials[0].Pipeline);
+			List.BindDescriptorAllocator(Device->GetDescriptorAllocator());
 			
 			List.Native()->SetGraphicsRootConstantBufferView(0, cameraBuffer->Native()->GetGPUVirtualAddress());
 
@@ -206,13 +202,17 @@ void Renderer::Render(entt::registry& Registry)
 				});
 		}
 	);
-
+	
 	auto& UIPass = Graph.AddPass("UI Pass");
 	UIPass.WriteResource(BackBufferTag, RGUsage::BackBuffer);
 
 	UIPass.Bind(
 		[this, BackBufferTag](RGResolver& Resolver, CommandList& List)
 		{
+			UserInterface->NewFrame();
+			
+			ImGui::ShowDemoWindow();
+
 			UserInterface->Render(List);
 		});
 
