@@ -27,7 +27,6 @@ struct TextureDescription;
 
 enum class SyncType
 {
-	Copy,
 	Direct,
 	Compute,
 };
@@ -54,13 +53,6 @@ private:
 	Adapter RenderAdapter;
 	HWND WindowHandle;
 
-	// For converting resources from the direct/compute engine to the copy engine.
-	CommandList DirectToCopyCommandList[FrameCount];
-
-	// #TODO: Reserve for large async asset streaming, a direct/compute queue is faster for small copy operations.
-	ResourcePtr<ID3D12CommandQueue> CopyCommandQueue;
-	CommandList CopyCommandList[FrameCount];
-
 	ResourcePtr<ID3D12CommandQueue> DirectCommandQueue;
 	CommandList DirectCommandList[FrameCount];  // #TODO: One per worker thread.
 
@@ -85,6 +77,9 @@ private:
 	std::array<size_t, FrameCount> FrameBufferOffsets = {};
 
 	DescriptorAllocator DescriptorManager;
+
+	// #TODO: Don't use shared_ptr's here.
+	std::array<std::vector<std::shared_ptr<CommandList>>, FrameCount> FrameCommandLists;  // Per-frame dynamic command lists.
 
 	// Name the D3D objects.
 	void SetNames();
@@ -114,6 +109,9 @@ public:
 	// Allocate a block of CPU write-only, GPU read-only memory from the per-frame dynamic heap.
 	std::pair<std::shared_ptr<Buffer>, size_t> FrameAllocate(size_t Size);
 
+	// Allocate a per-frame command list, disposed of automatically.
+	std::shared_ptr<CommandList> AllocateFrameCommandList(D3D12_COMMAND_LIST_TYPE Type);
+
 	DescriptorHandle AllocateDescriptor(DescriptorType Type);
 
 	// Sync the GPU until it is either fully caught up or within the max buffered frames limit, determined by FullSync. Blocking.
@@ -126,9 +124,6 @@ public:
 	size_t GetFrameIndex() const noexcept { return Frame % RenderDevice::FrameCount; }
 
 	auto GetWindowHandle() const noexcept { return WindowHandle; }
-	auto& GetDirectToCopyList() noexcept { return DirectToCopyCommandList[GetFrameIndex()]; }
-	auto* GetCopyQueue() const noexcept { return CopyCommandQueue.Get(); }
-	auto& GetCopyList() noexcept { return CopyCommandList[GetFrameIndex()]; }
 	auto* GetDirectQueue() const noexcept { return DirectCommandQueue.Get(); }
 	auto& GetDirectList() noexcept { return DirectCommandList[GetFrameIndex()]; }
 	auto* GetComputeQueue() const noexcept { return ComputeCommandQueue.Get(); }

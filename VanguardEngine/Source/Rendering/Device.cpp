@@ -21,12 +21,6 @@ void RenderDevice::SetNames()
 
 	Device->SetName(VGText("Primary Render Device"));
 
-	CopyCommandQueue->SetName(VGText("Copy Command Queue"));
-	for (uint32_t Index = 0; Index < FrameCount; ++Index)
-	{
-		CopyCommandList[Index].SetName(VGText("Copy Command List"));
-	}
-
 	DirectCommandQueue->SetName(VGText("Direct Command Queue"));
 	for (uint32_t Index = 0; Index < FrameCount; ++Index)
 	{
@@ -165,25 +159,21 @@ void RenderDevice::ResetFrame(size_t FrameID)
 
 	const auto FrameIndex = FrameID % FrameCount;
 
-	auto Result = DirectToCopyCommandList[FrameIndex].Reset();
-	if (FAILED(Result))
-	{
-		VGLogError(Rendering) << "Failed to reset direct/compute to copy command list for frame " << FrameIndex << ": " << Result;
-	}
-
-	Result = CopyCommandList[FrameIndex].Reset();
-	if (FAILED(Result))
-	{
-		VGLogError(Rendering) << "Failed to reset copy command list for frame " << FrameIndex << ": " << Result;
-	}
-
-	Result = DirectCommandList[FrameIndex].Reset();
+	const auto Result = DirectCommandList[FrameIndex].Reset();
 	if (FAILED(Result))
 	{
 		VGLogError(Rendering) << "Failed to reset direct command list for frame " << FrameIndex << ": " << Result;
 	}
 
 	DescriptorManager.FrameStep(FrameIndex);
+
+	for (auto& List : FrameCommandLists[FrameIndex])
+	{
+		List->Reset();
+	}
+
+	// #TODO: Don't discard the lists, they can be reused.
+	FrameCommandLists[FrameIndex].clear();
 }
 
 RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
@@ -249,44 +239,6 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 	DescriptorManager.Initialize(this, 1024, 128);
 
 	// #TODO: Condense building queues and command lists into a function.
-
-	// Direct to Copy
-
-	for (int Index = 0; Index < FrameCount; ++Index)
-	{
-		DirectToCopyCommandList[Index].Create(this, D3D12_COMMAND_LIST_TYPE_DIRECT);
-
-		// Close all lists except the current frame's list.
-		if (Index > 0)
-		{
-			DirectToCopyCommandList[Index].Close();
-		}
-	}
-
-	// Copy
-
-	D3D12_COMMAND_QUEUE_DESC CopyCommandQueueDesc{};
-	CopyCommandQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_COPY;
-	CopyCommandQueueDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
-	CopyCommandQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-	CopyCommandQueueDesc.NodeMask = 0;
-
-	Result = Device->CreateCommandQueue(&CopyCommandQueueDesc, IID_PPV_ARGS(CopyCommandQueue.Indirect()));
-	if (FAILED(Result))
-	{
-		VGLogFatal(Rendering) << "Failed to create copy command queue: " << Result;
-	}
-
-	for (int Index = 0; Index < FrameCount; ++Index)
-	{
-		CopyCommandList[Index].Create(this, D3D12_COMMAND_LIST_TYPE_COPY);
-
-		// Close all lists except the current frame's list.
-		if (Index > 0)
-		{
-			CopyCommandList[Index].Close();
-		}
-	}
 
 	// Direct
 
@@ -545,6 +497,18 @@ std::pair<std::shared_ptr<Buffer>, size_t> RenderDevice::FrameAllocate(size_t Si
 	return { FrameBuffers[FrameIndex], FrameBufferOffsets[FrameIndex] - Size };
 }
 
+std::shared_ptr<CommandList> RenderDevice::AllocateFrameCommandList(D3D12_COMMAND_LIST_TYPE Type)
+{
+	const auto FrameIndex = GetFrameIndex();
+	const auto Size = FrameCommandLists[FrameIndex].size();
+
+	FrameCommandLists[FrameIndex].emplace_back(std::make_shared<CommandList>());
+	FrameCommandLists[FrameIndex][Size]->Create(this, Type);
+	FrameCommandLists[FrameIndex][Size]->SetName(VGText("Frame Command List"));
+
+	return FrameCommandLists[FrameIndex][Size];
+}
+
 DescriptorHandle RenderDevice::AllocateDescriptor(DescriptorType Type)
 {
 	return DescriptorManager.Allocate(Type);
@@ -583,9 +547,6 @@ void RenderDevice::SyncIntraframe(SyncType Type)
 
 	switch (Type)
 	{
-	case SyncType::Copy:
-		SyncQueue = CopyCommandQueue.Get();
-		break;
 	case SyncType::Direct:
 		SyncQueue = DirectCommandQueue.Get();
 		break;

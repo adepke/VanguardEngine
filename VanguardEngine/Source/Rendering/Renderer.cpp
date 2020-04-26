@@ -72,16 +72,6 @@ void Renderer::Render(entt::registry& Registry)
 	// Update the camera buffer immediately.
 	UpdateCameraBuffer();
 
-	Device->GetCopyList().Close();
-	ID3D12CommandList* CopyLists[] = { Device->GetCopyList().Native() };
-
-	{
-		VGScopedCPUStat("Execute Copy");
-
-		// This will decay our resources back to common.
-		Device->GetCopyQueue()->ExecuteCommandLists(1, CopyLists);
-	}
-
 	// #TODO: Culling.
 
 	// #TODO: Sort by material.
@@ -114,6 +104,7 @@ void Renderer::Render(entt::registry& Registry)
 	RenderGraph Graph{ Device.get() };
 
 	const size_t BackBufferTag = Graph.ImportResource(Device->GetBackBuffer());
+	const size_t CameraBufferTag = Graph.ImportResource(cameraBuffer);
 
 	RGTextureDescription DepthStencilDesc{};
 	DepthStencilDesc.Width = Device->RenderWidth;
@@ -124,17 +115,19 @@ void Renderer::Render(entt::registry& Registry)
 	const size_t DepthStencilTag = MainPass.CreateResource(DepthStencilDesc, VGText("Depth Stencil"));
 	MainPass.WriteResource(DepthStencilTag, RGUsage::DepthStencil);
 	MainPass.WriteResource(BackBufferTag, RGUsage::BackBuffer);
+	MainPass.ReadResource(CameraBufferTag, RGUsage::Default);
 
 	MainPass.Bind(
-		[this, &Registry, &InstanceBuffer, BackBufferTag, DepthStencilTag](RGResolver& Resolver, CommandList& List)
+		[this, &Registry, &InstanceBuffer, BackBufferTag, DepthStencilTag, CameraBufferTag](RGResolver& Resolver, CommandList& List)
 		{
 			auto& BackBuffer = Resolver.Get<Texture>(BackBufferTag);
 			auto& DepthStencil = Resolver.Get<Texture>(DepthStencilTag);
+			auto& ActualCameraBuffer = Resolver.Get<Buffer>(CameraBufferTag);  // #TODO: Fix naming.
 
 			List.BindPipelineState(*Materials[0].Pipeline);
 			List.BindDescriptorAllocator(Device->GetDescriptorAllocator());
 			
-			List.Native()->SetGraphicsRootConstantBufferView(0, cameraBuffer->Native()->GetGPUVirtualAddress());
+			List.Native()->SetGraphicsRootConstantBufferView(0, ActualCameraBuffer.Native()->GetGPUVirtualAddress());
 
 			D3D12_VIEWPORT Viewport{};
 			Viewport.TopLeftX = 0.f;
@@ -206,7 +199,7 @@ void Renderer::Render(entt::registry& Registry)
 			for (int i = 0; i < 50; ++i)
 				UserInterface->Render(List);
 		});
-
+		
 	Graph.Build();
 
 	Graph.Execute();

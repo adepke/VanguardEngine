@@ -449,15 +449,14 @@ void ResourceManager::WriteBuffer(std::shared_ptr<Buffer>& Target, const std::ve
 
 		std::memcpy(static_cast<uint8_t*>(UploadPtrs[FrameIndex]) + UploadOffsets[FrameIndex], Source.data(), Source.size());
 
-		// If we haven't been promoted yet, we need to transition engines.
+		// Ensure we're in the proper state.
 		if (Target->State != D3D12_RESOURCE_STATE_COPY_DEST)
 		{
-			Device->GetDirectToCopyList().TransitionBarrier(Target, D3D12_RESOURCE_STATE_COMMON);
-			Device->GetDirectToCopyList().FlushBarriers();
+			Device->GetDirectList().TransitionBarrier(Target, D3D12_RESOURCE_STATE_COPY_DEST);
+			Device->GetDirectList().FlushBarriers();
 		}
-
-		// CopyBufferRegion() promotes the resource to D3D12_RESOURCE_STATE_COPY_DEST. #TODO: Track this state.
-		auto* TargetCommandList = Device->GetCopyList().Native();
+		
+		auto* TargetCommandList = Device->GetDirectList().Native();  // Small writes are more efficiently performed on the direct/compute queue.
 		TargetCommandList->CopyBufferRegion(Target->Native(), TargetOffset, UploadResources[FrameIndex]->GetResource(), UploadOffsets[FrameIndex], Source.size());  // #TODO: If we have offsets of 0, use CopyResource.
 
 		UploadOffsets[FrameIndex] += Source.size();
@@ -526,15 +525,14 @@ void ResourceManager::WriteTexture(std::shared_ptr<Texture>& Target, const std::
 	SourceBox.bottom = Target->Description.Height;
 	SourceBox.back = Target->Description.Depth;
 
-	// If we haven't been promoted yet, we need to transition engines.
+	// Ensure we're in the proper state.
 	if (Target->State != D3D12_RESOURCE_STATE_COPY_DEST)
 	{
-		Device->GetDirectToCopyList().TransitionBarrier(Target, D3D12_RESOURCE_STATE_COMMON);
-		Device->GetDirectToCopyList().FlushBarriers();
+		Device->GetDirectList().TransitionBarrier(Target, D3D12_RESOURCE_STATE_COPY_DEST);
+		Device->GetDirectList().FlushBarriers();
 	}
 
-	// CopyTextureRegion() promotes the resource to D3D12_RESOURCE_STATE_COPY_DEST. #TODO: Track this state.
-	auto* TargetCommandList = Device->GetCopyList().Native();
+	auto* TargetCommandList = Device->GetDirectList().Native();  // Small writes are more efficiently performed on the direct/compute queue.
 	TargetCommandList->CopyTextureRegion(&TargetCopyDesc, 0, 0, 0, &SourceCopyDesc, &SourceBox);  // #TODO: If we have offsets of 0, use CopyResource.
 
 	UploadOffsets[FrameIndex] += Source.size();

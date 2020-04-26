@@ -144,7 +144,7 @@ void RenderGraph::Serialize()
 	// #TODO: Optimize the pipeline.
 }
 
-void RenderGraph::InjectStateBarriers(std::vector<CommandList>& Lists)
+void RenderGraph::InjectStateBarriers(std::vector<std::shared_ptr<CommandList>>& Lists)
 {
 	VGScopedCPUStat("Render Graph Barriers");
 
@@ -179,9 +179,9 @@ void RenderGraph::InjectStateBarriers(std::vector<CommandList>& Lists)
 				// #TODO: Potentially use split barriers.
 
 				if (ResourceBuffer)
-					Lists[PassIndex].TransitionBarrier(ResourceBuffer, NewState);  // #TEMP: After reordering we can't access lists like this, need a map.
+					Lists[PassIndex]->TransitionBarrier(ResourceBuffer, NewState);  // #TEMP: After reordering we can't access lists like this, need a map.
 				else
-					Lists[PassIndex].TransitionBarrier(ResourceTexture, NewState);
+					Lists[PassIndex]->TransitionBarrier(ResourceTexture, NewState);
 
 				StateMap[Resource] = { NewState, PassIndex };
 			}
@@ -212,18 +212,18 @@ void RenderGraph::InjectStateBarriers(std::vector<CommandList>& Lists)
 	// Placed all the barriers, now flush them.
 	for (auto& List : Lists)
 	{
-		List.FlushBarriers();
+		List->FlushBarriers();
 	}
 }
 
-void RenderGraph::InjectRaceBarriers(std::vector<CommandList>& Lists)
+void RenderGraph::InjectRaceBarriers(std::vector<std::shared_ptr<CommandList>>& Lists)
 {
 	// #TODO: Place UAV barriers when needed.
 
 	// Placed all the barriers, now flush them.
 	for (auto& List : Lists)
 	{
-		List.FlushBarriers();
+		List->FlushBarriers();
 	}
 }
 
@@ -257,14 +257,13 @@ void RenderGraph::Execute()
 
 	VGAssert(PassPipeline.size(), "Render graph is empty, ensure you built the graph before execution.");
 
-	std::vector<CommandList> PassCommands;
+	std::vector<std::shared_ptr<CommandList>> PassCommands;
 	PassCommands.resize(PassPipeline.size());
 
-	// #TODO: Pool command lists in a ring buffer, extremely wasteful to recreate every frame.
 	size_t Index = 0;
 	for (auto PassIndex : PassPipeline)
 	{
-		PassCommands[Index].Create(Device, D3D12_COMMAND_LIST_TYPE_DIRECT);
+		PassCommands[Index] = Device->AllocateFrameCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
 		++Index;
 	}
 
@@ -276,14 +275,14 @@ void RenderGraph::Execute()
 	{
 		VGScopedCPUStat(Passes[PassIndex]->StaticName);
 
-		Passes[PassIndex]->Execution(Resolver, PassCommands[Index]);
+		Passes[PassIndex]->Execution(Resolver, *PassCommands[Index]);
 		++Index;
 	}
 
 	InjectRaceBarriers(PassCommands);
 
 	// Ensure the back buffer is in presentation state at the very end of the graph.
-	PassCommands[PassCommands.size() - 1].TransitionBarrier(Resolver.FetchAsTexture(*FindUsage(RGUsage::BackBuffer)), D3D12_RESOURCE_STATE_PRESENT);
+	PassCommands[PassCommands.size() - 1]->TransitionBarrier(Resolver.FetchAsTexture(*FindUsage(RGUsage::BackBuffer)), D3D12_RESOURCE_STATE_PRESENT);
 
 	std::vector<ID3D12CommandList*> PassLists;
 	PassLists.reserve(PassCommands.size() + 1);
@@ -294,8 +293,8 @@ void RenderGraph::Execute()
 
 	for (auto& List : PassCommands)
 	{
-		List.Close();
-		PassLists.emplace_back(List.Native());
+		List->Close();
+		PassLists.emplace_back(List->Native());
 	}
 
 	Device->GetDirectQueue()->ExecuteCommandLists(static_cast<UINT>(PassLists.size()), PassLists.data());
