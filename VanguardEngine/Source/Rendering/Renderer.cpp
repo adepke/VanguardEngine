@@ -72,16 +72,6 @@ void Renderer::Render(entt::registry& Registry)
 	// Update the camera buffer immediately.
 	UpdateCameraBuffer();
 
-	Device->GetDirectToCopyList().Close();
-	ID3D12CommandList* DirectToCopyLists[] = { Device->GetDirectToCopyList().Native() };
-
-	{
-		VGScopedCPUStat("Execute Direct Transitions");
-
-		// We need to execute the engine transition barriers for going from direct to copy.
-		Device->GetDirectQueue()->ExecuteCommandLists(1, DirectToCopyLists);
-	}
-
 	Device->GetCopyList().Close();
 	ID3D12CommandList* CopyLists[] = { Device->GetCopyList().Native() };
 
@@ -218,9 +208,6 @@ void Renderer::Render(entt::registry& Registry)
 		});
 
 	Graph.Build();
-
-	// Ensure the copy operations have completed.
-	Device->SyncIntraframe(SyncType::Copy);
 
 	Graph.Execute();
 
