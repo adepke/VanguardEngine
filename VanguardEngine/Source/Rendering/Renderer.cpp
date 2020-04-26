@@ -82,9 +82,6 @@ void Renderer::Render(entt::registry& Registry)
 		Device->GetDirectQueue()->ExecuteCommandLists(1, DirectToCopyLists);
 	}
 
-	// Wait for the resources to transition before being ready to use on the copy engine.
-	Device->SyncIntraframe(SyncType::Direct);
-
 	Device->GetCopyList().Close();
 	ID3D12CommandList* CopyLists[] = { Device->GetCopyList().Native() };
 
@@ -216,7 +213,8 @@ void Renderer::Render(entt::registry& Registry)
 			ImGui::ShowDemoWindow();
 
 			List.Native()->OMSetRenderTargets(1, &static_cast<D3D12_CPU_DESCRIPTOR_HANDLE>(*BackBuffer.RTV), false, nullptr);
-			UserInterface->Render(List);
+			for (int i = 0; i < 50; ++i)
+				UserInterface->Render(List);
 		});
 
 	Graph.Build();
@@ -231,4 +229,6 @@ void Renderer::Render(entt::registry& Registry)
 
 		Device->GetSwapChain()->Present(Device->VSync, 0);  // #TODO: This is probably presenting the wrong frame!
 	}
+
+	Device->AdvanceGPU();
 }

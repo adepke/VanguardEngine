@@ -119,7 +119,7 @@ void EngineLoop()
 
 		Renderer::Get().Render(TempReg);
 
-		Renderer::Get().Device->FrameStep();
+		Renderer::Get().Device->AdvanceCPU();
 	}
 }
 

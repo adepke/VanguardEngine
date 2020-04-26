@@ -375,15 +375,21 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		VGLogFatal(Rendering) << "Failed to bind device to window: " << Result;
 	}
 
+	Result = Device->CreateFence(GPUFrame, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(InterSyncFence.Indirect()));
+	if (FAILED(Result))
+	{
+		VGLogFatal(Rendering) << "Failed to create inter sync fence: " << Result;
+	}
+
 	Result = Device->CreateFence(IntraSyncValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(IntraSyncFence.Indirect()));
 	if (FAILED(Result))
 	{
 		VGLogFatal(Rendering) << "Failed to create intra sync fence: " << Result;
 	}
 
-	if (IntraSyncEvent = ::CreateEvent(nullptr, false, false, VGText("Intra Sync Fence Event")); !IntraSyncEvent)
+	if (SyncEvent = ::CreateEvent(nullptr, false, false, VGText("Intra Sync Fence Event")); !SyncEvent)
 	{
-		VGLogFatal(Rendering) << "Failed to create intra sync fence event: " << GetPlatformError();
+		VGLogFatal(Rendering) << "Failed to create sync event: " << GetPlatformError();
 	}
 
 	constexpr auto FrameBufferSize = 1024 * 64;
@@ -412,7 +418,7 @@ RenderDevice::~RenderDevice()
 
 	SyncInterframe(true);
 
-	::CloseHandle(IntraSyncEvent);
+	::CloseHandle(SyncEvent);
 }
 
 void RenderDevice::CheckFeatureSupport()
@@ -548,8 +554,25 @@ void RenderDevice::SyncInterframe(bool FullSync)
 {
 	VGScopedCPUStat("Render Sync Interframe");
 
-	// #TEMP
-	std::this_thread::sleep_for(200ms);
+	VGLog(Rendering) << (FullSync ? "Interframe Full Sync" : "Interframe Partial Sync") << ", CPU: " << Frame << ", GPU: " << InterSyncFence->GetCompletedValue();
+
+	// If we're doing a full sync, wait until the renderer is fully caught up, otherwise make sure it's within the latency limit.
+	const auto TargetValue = FullSync ? static_cast<uint32_t>(Frame) : std::max(static_cast<uint32_t>(Frame), FrameCount) - FrameCount;
+
+	if (InterSyncFence->GetCompletedValue() < TargetValue)
+	{
+		VGLog(Rendering) << "Waiting for GPU catch-up to " << TargetValue << ".";
+
+		const auto Result = InterSyncFence->SetEventOnCompletion(TargetValue, SyncEvent);
+		if (FAILED(Result))
+		{
+			VGLogFatal(Rendering) << "Failed to set fence completion event during sync: " << Result;
+		}
+
+		WaitForSingleObject(SyncEvent, INFINITE);
+
+		VGLog(Rendering) << "GPU caught-up: " << InterSyncFence->GetCompletedValue() << ".";
+	}
 }
 
 void RenderDevice::SyncIntraframe(SyncType Type)
@@ -579,19 +602,19 @@ void RenderDevice::SyncIntraframe(SyncType Type)
 
 	if (IntraSyncFence->GetCompletedValue() != IntraSyncValue)
 	{
-		Result = IntraSyncFence->SetEventOnCompletion(IntraSyncValue, IntraSyncEvent);
+		Result = IntraSyncFence->SetEventOnCompletion(IntraSyncValue, SyncEvent);
 		if (FAILED(Result))
 		{
 			VGLogFatal(Rendering) << "Failed to set fence completion event during sync: " << Result;
 		}
 
-		WaitForSingleObject(IntraSyncEvent, INFINITE);
+		WaitForSingleObject(SyncEvent, INFINITE);
 	}
 }
 
-void RenderDevice::FrameStep()
+void RenderDevice::AdvanceCPU()
 {
-	VGScopedCPUStat("Frame Step");
+	VGScopedCPUStat("CPU Frame Advance");
 
 	// Make sure we don't get too many CPU frames ahead of the GPU.
 	SyncInterframe(false);
@@ -607,6 +630,19 @@ void RenderDevice::FrameStep()
 
 	VGStatFrame;  // Mark the new frame.
 	++Frame;
+}
+
+void RenderDevice::AdvanceGPU()
+{
+	VGScopedCPUStat("GPU Frame Advance");
+
+	++GPUFrame;
+
+	const auto Result = DirectCommandQueue->Signal(InterSyncFence.Get(), GPUFrame);
+	if (FAILED(Result))
+	{
+		VGLogFatal(Rendering) << "Failed to submit signal command to GPU during frame advancement: " << Result;
+	}
 }
 
 void RenderDevice::SetResolution(size_t Width, size_t Height, bool InFullscreen)

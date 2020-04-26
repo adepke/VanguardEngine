@@ -72,9 +72,11 @@ private:
 
 	std::array<std::shared_ptr<Texture>, FrameCount> BackBufferTextures;  // Render targets bound to the swap chain.
 
-	size_t IntraSyncValue = 0;
+	size_t GPUFrame = 0;
+	size_t IntraSyncValue = 0;  // Value to ensure that we signal a unique value every time we intra sync.
+	ResourcePtr<ID3D12Fence> InterSyncFence;
 	ResourcePtr<ID3D12Fence> IntraSyncFence;
-	HANDLE IntraSyncEvent;
+	HANDLE SyncEvent;  // Shared event for inter and intra syncing.
 
 	ResourcePtr<D3D12MA::Allocator> Allocator;
 	ResourceManager AllocatorManager;
@@ -119,8 +121,8 @@ public:
 	// Sync the specified GPU engine within the active frame on the GPU. Blocking.
 	void SyncIntraframe(SyncType Type);
 
-	// Blocking, waits for the gpu to finish the next frame before returning. Marks the current frame as finished submitting and can move on to the next frame.
-	void FrameStep();
+	void AdvanceCPU();  // Steps the CPU frame counter, blocking sync with GPU.
+	void AdvanceGPU();  // Steps the GPU frame counter.
 	size_t GetFrameIndex() const noexcept { return Frame % RenderDevice::FrameCount; }
 
 	auto GetWindowHandle() const noexcept { return WindowHandle; }
