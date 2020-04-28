@@ -196,8 +196,7 @@ void Renderer::Render(entt::registry& Registry)
 			ImGui::ShowDemoWindow();
 
 			List.Native()->OMSetRenderTargets(1, &static_cast<D3D12_CPU_DESCRIPTOR_HANDLE>(*BackBuffer.RTV), false, nullptr);
-			for (int i = 0; i < 50; ++i)
-				UserInterface->Render(List);
+			UserInterface->Render(List);
 		});
 		
 	Graph.Build();
