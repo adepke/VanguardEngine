@@ -206,7 +206,7 @@ void Renderer::Render(entt::registry& Registry)
 	{
 		VGScopedCPUStat("Present");
 
-		Device->GetSwapChain()->Present(Device->VSync, 0);  // #TODO: This is probably presenting the wrong frame!
+		Device->GetSwapChain()->Present(Device->VSync, 0);
 	}
 
 	Device->AdvanceGPU();

@@ -293,6 +293,7 @@ void RenderGraph::Execute()
 
 	for (auto& List : PassCommands)
 	{
+		List->FlushBarriers();
 		List->Close();
 		PassLists.emplace_back(List->Native());
 	}
