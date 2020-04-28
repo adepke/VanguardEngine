@@ -327,7 +327,7 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 		VGLogFatal(Rendering) << "Failed to bind device to window: " << Result;
 	}
 
-	Result = Device->CreateFence(GPUFrame, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(InterSyncFence.Indirect()));
+	Result = Device->CreateFence(Frame, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(InterSyncFence.Indirect()));
 	if (FAILED(Result))
 	{
 		VGLogFatal(Rendering) << "Failed to create inter sync fence: " << Result;
@@ -518,15 +518,11 @@ void RenderDevice::SyncInterframe(bool FullSync)
 {
 	VGScopedCPUStat("Render Sync Interframe");
 
-	VGLog(Rendering) << (FullSync ? "Interframe Full Sync" : "Interframe Partial Sync") << ", CPU: " << Frame << ", GPU: " << InterSyncFence->GetCompletedValue();
-
 	// If we're doing a full sync, wait until the renderer is fully caught up, otherwise make sure it's within the latency limit.
-	const auto TargetValue = FullSync ? static_cast<uint32_t>(Frame) : std::max(static_cast<uint32_t>(Frame), FrameCount) - FrameCount;
+	const auto TargetValue = FullSync ? static_cast<uint32_t>(Frame) : std::max(static_cast<uint32_t>(Frame), FrameCount - 1) - (FrameCount - 1);
 
 	if (InterSyncFence->GetCompletedValue() < TargetValue)
 	{
-		VGLog(Rendering) << "Waiting for GPU catch-up to " << TargetValue << ".";
-
 		const auto Result = InterSyncFence->SetEventOnCompletion(TargetValue, SyncEvent);
 		if (FAILED(Result))
 		{
@@ -534,8 +530,6 @@ void RenderDevice::SyncInterframe(bool FullSync)
 		}
 
 		WaitForSingleObject(SyncEvent, INFINITE);
-
-		VGLog(Rendering) << "GPU caught-up: " << InterSyncFence->GetCompletedValue() << ".";
 	}
 }
 
@@ -597,9 +591,7 @@ void RenderDevice::AdvanceGPU()
 {
 	VGScopedCPUStat("GPU Frame Advance");
 
-	++GPUFrame;
-
-	const auto Result = DirectCommandQueue->Signal(InterSyncFence.Get(), GPUFrame);
+	const auto Result = DirectCommandQueue->Signal(InterSyncFence.Get(), Frame);
 	if (FAILED(Result))
 	{
 		VGLogFatal(Rendering) << "Failed to submit signal command to GPU during frame advancement: " << Result;

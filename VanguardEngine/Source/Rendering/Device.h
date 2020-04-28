@@ -64,7 +64,6 @@ private:
 
 	std::array<std::shared_ptr<Texture>, FrameCount> BackBufferTextures;  // Render targets bound to the swap chain.
 
-	size_t GPUFrame = 0;
 	size_t IntraSyncValue = 0;  // Value to ensure that we signal a unique value every time we intra sync.
 	ResourcePtr<ID3D12Fence> InterSyncFence;
 	ResourcePtr<ID3D12Fence> IntraSyncFence;
