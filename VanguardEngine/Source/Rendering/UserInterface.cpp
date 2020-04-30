@@ -3,6 +3,8 @@
 #include <Rendering/UserInterface.h>
 #include <Rendering/Base.h>
 #include <Rendering/Device.h>
+#include <Rendering/PipelineState.h>
+#include <Core/Config.h>
 
 #include <imgui.h>
 #include <d3dcompiler.h>
@@ -77,9 +79,7 @@ void UserInterfaceManager::SetupRenderState(ImDrawData* DrawData, CommandList& L
 	ibv.SizeInBytes = Resources->IndexBufferSize * sizeof(ImDrawIdx);
 	ibv.Format = sizeof(ImDrawIdx) == 2 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
 	List.Native()->IASetIndexBuffer(&ibv);
-	List.Native()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	List.Native()->SetPipelineState(g_pPipelineState.Get());
-	List.Native()->SetGraphicsRootSignature(g_pRootSignature.Get());
+	List.BindPipelineState(*Pipeline);
 	List.Native()->SetGraphicsRoot32BitConstants(0, 16, &vertex_constant_buffer, 0);
 	List.Native()->SetDescriptorHeaps(1, FontHeap.Indirect());
 
@@ -237,194 +237,45 @@ void UserInterfaceManager::CreateFontTexture()
 
 void UserInterfaceManager::CreateDeviceObjects()
 {
-	if (g_pPipelineState)
+	if (Pipeline)
 		InvalidateDeviceObjects();
 
-	// Create the root signature
-	{
-		D3D12_DESCRIPTOR_RANGE descRange = {};
-		descRange.RangeType = D3D12_DESCRIPTOR_RANGE_TYPE_SRV;
-		descRange.NumDescriptors = 1;
-		descRange.BaseShaderRegister = 0;
-		descRange.RegisterSpace = 0;
-		descRange.OffsetInDescriptorsFromTableStart = 0;
+	Pipeline = std::make_unique<PipelineState>();
 
-		D3D12_ROOT_PARAMETER param[2] = {};
+	PipelineStateDescription Description{};
+	Description.ShaderPath = Config::Get().EngineRoot / "Assets/Shaders/UserInterface";
+	Description.BlendDescription.AlphaToCoverageEnable = false;
+	Description.BlendDescription.RenderTarget[0].BlendEnable = true;
+	Description.BlendDescription.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+	Description.BlendDescription.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+	Description.BlendDescription.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+	Description.BlendDescription.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+	Description.BlendDescription.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+	Description.BlendDescription.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	Description.BlendDescription.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+	Description.RasterizerDescription.FillMode = D3D12_FILL_MODE_SOLID;
+	Description.RasterizerDescription.CullMode = D3D12_CULL_MODE_NONE;
+	Description.RasterizerDescription.FrontCounterClockwise = false;
+	Description.RasterizerDescription.DepthBias = D3D12_DEFAULT_DEPTH_BIAS;
+	Description.RasterizerDescription.DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
+	Description.RasterizerDescription.SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
+	Description.RasterizerDescription.DepthClipEnable = true;
+	Description.RasterizerDescription.MultisampleEnable = false;
+	Description.RasterizerDescription.AntialiasedLineEnable = false;
+	Description.RasterizerDescription.ForcedSampleCount = 0;
+	Description.RasterizerDescription.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+	Description.DepthStencilDescription.DepthEnable = false;
+	Description.DepthStencilDescription.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+	Description.DepthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+	Description.DepthStencilDescription.StencilEnable = false;
+	Description.DepthStencilDescription.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
+	Description.DepthStencilDescription.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
+	Description.DepthStencilDescription.FrontFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
+	Description.DepthStencilDescription.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
+	Description.DepthStencilDescription.BackFace = Description.DepthStencilDescription.FrontFace;
+	Description.Topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 
-		param[0].ParameterType = D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS;
-		param[0].Constants.ShaderRegister = 0;
-		param[0].Constants.RegisterSpace = 0;
-		param[0].Constants.Num32BitValues = 16;
-		param[0].ShaderVisibility = D3D12_SHADER_VISIBILITY_VERTEX;
-
-		param[1].ParameterType = D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE;
-		param[1].DescriptorTable.NumDescriptorRanges = 1;
-		param[1].DescriptorTable.pDescriptorRanges = &descRange;
-		param[1].ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-		D3D12_STATIC_SAMPLER_DESC staticSampler = {};
-		staticSampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
-		staticSampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		staticSampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		staticSampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_WRAP;
-		staticSampler.MipLODBias = 0.f;
-		staticSampler.MaxAnisotropy = 0;
-		staticSampler.ComparisonFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-		staticSampler.BorderColor = D3D12_STATIC_BORDER_COLOR_TRANSPARENT_BLACK;
-		staticSampler.MinLOD = 0.f;
-		staticSampler.MaxLOD = 0.f;
-		staticSampler.ShaderRegister = 0;
-		staticSampler.RegisterSpace = 0;
-		staticSampler.ShaderVisibility = D3D12_SHADER_VISIBILITY_PIXEL;
-
-		D3D12_ROOT_SIGNATURE_DESC desc = {};
-		desc.NumParameters = _countof(param);
-		desc.pParameters = param;
-		desc.NumStaticSamplers = 1;
-		desc.pStaticSamplers = &staticSampler;
-		desc.Flags =
-			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-			D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-
-		ID3DBlob* blob = NULL;
-		if (D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, NULL) != S_OK)
-			return;
-
-		Device->Native()->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(g_pRootSignature.Indirect()));
-		blob->Release();
-	}
-
-	// By using D3DCompile() from <d3dcompiler.h> / d3dcompiler.lib, we introduce a dependency to a given version of d3dcompiler_XX.dll (see D3DCOMPILER_DLL_A)
-	// If you would like to use this DX12 sample code but remove this dependency you can:
-	//  1) compile once, save the compiled shader blobs into a file or source code and pass them to CreateVertexShader()/CreatePixelShader() [preferred solution]
-	//  2) use code to detect any version of the DLL and grab a pointer to D3DCompile from the DLL.
-	// See https://github.com/ocornut/imgui/pull/638 for sources and details.
-
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC psoDesc;
-	memset(&psoDesc, 0, sizeof(D3D12_GRAPHICS_PIPELINE_STATE_DESC));
-	psoDesc.NodeMask = 1;
-	psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-	psoDesc.pRootSignature = g_pRootSignature.Get();
-	psoDesc.SampleMask = UINT_MAX;
-	psoDesc.NumRenderTargets = 1;
-	psoDesc.RTVFormats[0] = g_RTVFormat;
-	psoDesc.SampleDesc.Count = 1;
-	psoDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;
-
-	// Create the vertex shader
-	{
-		static const char* vertexShader =
-			"cbuffer vertexBuffer : register(b0) \
-            {\
-              float4x4 ProjectionMatrix; \
-            };\
-            struct VS_INPUT\
-            {\
-              float2 pos : POSITION;\
-              float4 col : COLOR0;\
-              float2 uv  : TEXCOORD0;\
-            };\
-            \
-            struct PS_INPUT\
-            {\
-              float4 pos : SV_POSITION;\
-              float4 col : COLOR0;\
-              float2 uv  : TEXCOORD0;\
-            };\
-            \
-            PS_INPUT main(VS_INPUT input)\
-            {\
-              PS_INPUT output;\
-              output.pos = mul( ProjectionMatrix, float4(input.pos.xy, 0.f, 1.f));\
-              output.col = input.col;\
-              output.uv  = input.uv;\
-              return output;\
-            }";
-
-		D3DCompile(vertexShader, strlen(vertexShader), NULL, NULL, NULL, "main", "vs_5_0", 0, 0, g_pVertexShaderBlob.Indirect(), NULL);
-		if (!g_pVertexShaderBlob) // NB: Pass ID3D10Blob* pErrorBlob to D3DCompile() to get error showing in (const char*)pErrorBlob->GetBufferPointer(). Make sure to Release() the blob!
-			return;
-		psoDesc.VS = { g_pVertexShaderBlob->GetBufferPointer(), g_pVertexShaderBlob->GetBufferSize() };
-
-		// Create the input layout
-		static D3D12_INPUT_ELEMENT_DESC local_layout[] = {
-			{ "POSITION", 0, DXGI_FORMAT_R32G32_FLOAT,   0, (UINT)IM_OFFSETOF(ImDrawVert, pos), D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "TEXCOORD", 0, DXGI_FORMAT_R32G32_FLOAT,   0, (UINT)IM_OFFSETOF(ImDrawVert, uv),  D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-			{ "COLOR",    0, DXGI_FORMAT_R8G8B8A8_UNORM, 0, (UINT)IM_OFFSETOF(ImDrawVert, col), D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-		};
-		psoDesc.InputLayout = { local_layout, 3 };
-	}
-
-	// Create the pixel shader
-	{
-		static const char* pixelShader =
-			"struct PS_INPUT\
-            {\
-              float4 pos : SV_POSITION;\
-              float4 col : COLOR0;\
-              float2 uv  : TEXCOORD0;\
-            };\
-            SamplerState sampler0 : register(s0);\
-            Texture2D texture0 : register(t0);\
-            \
-            float4 main(PS_INPUT input) : SV_Target\
-            {\
-              float4 out_col = input.col * texture0.Sample(sampler0, input.uv); \
-              return out_col; \
-            }";
-
-		D3DCompile(pixelShader, strlen(pixelShader), NULL, NULL, NULL, "main", "ps_5_0", 0, 0, g_pPixelShaderBlob.Indirect(), NULL);
-		if (!g_pPixelShaderBlob)  // NB: Pass ID3D10Blob* pErrorBlob to D3DCompile() to get error showing in (const char*)pErrorBlob->GetBufferPointer(). Make sure to Release() the blob!
-			return;
-		psoDesc.PS = { g_pPixelShaderBlob->GetBufferPointer(), g_pPixelShaderBlob->GetBufferSize() };
-	}
-
-	// Create the blending setup
-	{
-		D3D12_BLEND_DESC& desc = psoDesc.BlendState;
-		desc.AlphaToCoverageEnable = false;
-		desc.RenderTarget[0].BlendEnable = true;
-		desc.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
-		desc.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
-		desc.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-		desc.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
-		desc.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
-		desc.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
-		desc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-	}
-
-	// Create the rasterizer state
-	{
-		D3D12_RASTERIZER_DESC& desc = psoDesc.RasterizerState;
-		desc.FillMode = D3D12_FILL_MODE_SOLID;
-		desc.CullMode = D3D12_CULL_MODE_NONE;
-		desc.FrontCounterClockwise = FALSE;
-		desc.DepthBias = D3D12_DEFAULT_DEPTH_BIAS;
-		desc.DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
-		desc.SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
-		desc.DepthClipEnable = true;
-		desc.MultisampleEnable = FALSE;
-		desc.AntialiasedLineEnable = FALSE;
-		desc.ForcedSampleCount = 0;
-		desc.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
-	}
-
-	// Create depth-stencil State
-	{
-		D3D12_DEPTH_STENCIL_DESC& desc = psoDesc.DepthStencilState;
-		desc.DepthEnable = false;
-		desc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
-		desc.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-		desc.StencilEnable = false;
-		desc.FrontFace.StencilFailOp = desc.FrontFace.StencilDepthFailOp = desc.FrontFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
-		desc.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-		desc.BackFace = desc.FrontFace;
-	}
-
-	if (Device->Native()->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(g_pPipelineState.Indirect())) != S_OK)
-		return;
+	Pipeline->Build(*Device, Description);
 
 	// Create font heap.
 	D3D12_DESCRIPTOR_HEAP_DESC HeapDesc{};
@@ -443,8 +294,7 @@ void UserInterfaceManager::InvalidateDeviceObjects()
 {
 	g_pVertexShaderBlob = {};
 	g_pPixelShaderBlob = {};
-	g_pRootSignature = {};
-	g_pPipelineState = {};
+	Pipeline.reset();
 	g_pFontTextureResource = {};
 	FontHeap = {};
 
@@ -501,7 +351,7 @@ UserInterfaceManager::~UserInterfaceManager()
 
 void UserInterfaceManager::NewFrame()
 {
-	if (!g_pPipelineState)
+	if (!Pipeline)
 		CreateDeviceObjects();
 
 	auto& io = ImGui::GetIO();

@@ -6,10 +6,13 @@
 
 #include <Core/Windows/DirectX12Minimal.h>
 
+#include <memory>
+
 class RenderDevice;
 struct ImDrawData;
 class CommandList;
 struct FrameResources;
+class PipelineState;
 
 class UserInterfaceManager
 {
@@ -18,8 +21,8 @@ private:
 
 	ResourcePtr<ID3D10Blob> g_pVertexShaderBlob;
 	ResourcePtr<ID3D10Blob> g_pPixelShaderBlob;
-	ResourcePtr<ID3D12RootSignature> g_pRootSignature;
-	ResourcePtr<ID3D12PipelineState> g_pPipelineState;
+	std::unique_ptr<PipelineState> Pipeline;
+
 	ResourcePtr<ID3D12Resource> g_pFontTextureResource;
 	ResourcePtr<ID3D12DescriptorHeap> FontHeap;
 
