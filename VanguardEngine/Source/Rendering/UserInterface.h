@@ -23,6 +23,8 @@ private:
 	ResourcePtr<ID3D12Resource> g_pFontTextureResource;
 	ResourcePtr<ID3D12DescriptorHeap> FontHeap;
 
+	const DXGI_FORMAT g_RTVFormat = DXGI_FORMAT_B8G8R8A8_UNORM;  // #TODO: Centralize RTV format.
+
 private:
 	void SetupRenderState(ImDrawData* DrawData, CommandList& List, FrameResources* Resources);
 	void CreateFontTexture();

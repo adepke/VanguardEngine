@@ -7,8 +7,6 @@
 #include <imgui.h>
 #include <d3dcompiler.h>
 
-static DXGI_FORMAT g_RTVFormat = DXGI_FORMAT_UNKNOWN;
-
 struct FrameResources
 {
 	ID3D12Resource* IndexBuffer;
@@ -472,7 +470,6 @@ UserInterfaceManager::UserInterfaceManager(RenderDevice* InDevice) : Device(InDe
 	io.BackendRendererName = "imgui_impl_dx12";
 	io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;  // We can honor the ImDrawCmd::VtxOffset field, allowing for large meshes.
 
-	g_RTVFormat = DXGI_FORMAT_B8G8R8A8_UNORM;  // #TODO: Centralize RTV format.
 	g_pFrameResources = new FrameResources[Device->FrameCount];
 	g_numFramesInFlight = Device->FrameCount;
 	g_frameIndex = UINT_MAX;
