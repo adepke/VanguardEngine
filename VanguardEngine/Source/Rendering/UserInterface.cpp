@@ -4,17 +4,10 @@
 #include <Rendering/Base.h>
 #include <Rendering/Device.h>
 
-#include <Core/Windows/DirectX12Minimal.h>
 #include <imgui.h>
 #include <d3dcompiler.h>
 
-static ID3D10Blob* g_pVertexShaderBlob = NULL;
-static ID3D10Blob* g_pPixelShaderBlob = NULL;
-static ID3D12RootSignature* g_pRootSignature = NULL;
-static ID3D12PipelineState* g_pPipelineState = NULL;
 static DXGI_FORMAT g_RTVFormat = DXGI_FORMAT_UNKNOWN;
-static ID3D12Resource* g_pFontTextureResource = NULL;
-static ID3D12DescriptorHeap* FontHeap;
 
 struct FrameResources
 {
@@ -87,10 +80,10 @@ void UserInterfaceManager::SetupRenderState(ImDrawData* DrawData, CommandList& L
 	ibv.Format = sizeof(ImDrawIdx) == 2 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
 	List.Native()->IASetIndexBuffer(&ibv);
 	List.Native()->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	List.Native()->SetPipelineState(g_pPipelineState);
-	List.Native()->SetGraphicsRootSignature(g_pRootSignature);
+	List.Native()->SetPipelineState(g_pPipelineState.Get());
+	List.Native()->SetGraphicsRootSignature(g_pRootSignature.Get());
 	List.Native()->SetGraphicsRoot32BitConstants(0, 16, &vertex_constant_buffer, 0);
-	List.Native()->SetDescriptorHeaps(1, &FontHeap);
+	List.Native()->SetDescriptorHeaps(1, FontHeap.Indirect());
 
 	// Setup blend factor
 	const float blend_factor[4] = { 0.f, 0.f, 0.f, 0.f };
@@ -127,9 +120,10 @@ void UserInterfaceManager::CreateFontTexture()
 		desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
 		desc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-		ID3D12Resource* pTexture = NULL;
+		g_pFontTextureResource = {};
+
 		Device->Native()->CreateCommittedResource(&props, D3D12_HEAP_FLAG_NONE, &desc,
-			D3D12_RESOURCE_STATE_COPY_DEST, NULL, IID_PPV_ARGS(&pTexture));
+			D3D12_RESOURCE_STATE_COPY_DEST, NULL, IID_PPV_ARGS(g_pFontTextureResource.Indirect()));
 
 		UINT uploadPitch = (width * 4 + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u) & ~(D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u);
 		UINT uploadSize = height * uploadPitch;
@@ -172,14 +166,14 @@ void UserInterfaceManager::CreateFontTexture()
 		srcLocation.PlacedFootprint.Footprint.RowPitch = uploadPitch;
 
 		D3D12_TEXTURE_COPY_LOCATION dstLocation = {};
-		dstLocation.pResource = pTexture;
+		dstLocation.pResource = g_pFontTextureResource.Get();
 		dstLocation.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
 		dstLocation.SubresourceIndex = 0;
 
 		D3D12_RESOURCE_BARRIER barrier = {};
 		barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
 		barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-		barrier.Transition.pResource = pTexture;
+		barrier.Transition.pResource = g_pFontTextureResource.Get();
 		barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
 		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
 		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
@@ -236,9 +230,7 @@ void UserInterfaceManager::CreateFontTexture()
 		srvDesc.Texture2D.MipLevels = desc.MipLevels;
 		srvDesc.Texture2D.MostDetailedMip = 0;
 		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-		Device->Native()->CreateShaderResourceView(pTexture, &srvDesc, FontHeap->GetCPUDescriptorHandleForHeapStart());
-		SafeRelease(g_pFontTextureResource);
-		g_pFontTextureResource = pTexture;
+		Device->Native()->CreateShaderResourceView(g_pFontTextureResource.Get(), &srvDesc, FontHeap->GetCPUDescriptorHandleForHeapStart());
 	}
 
 	// Store our identifier
@@ -302,7 +294,7 @@ void UserInterfaceManager::CreateDeviceObjects()
 		if (D3D12SerializeRootSignature(&desc, D3D_ROOT_SIGNATURE_VERSION_1, &blob, NULL) != S_OK)
 			return;
 
-		Device->Native()->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(&g_pRootSignature));
+		Device->Native()->CreateRootSignature(0, blob->GetBufferPointer(), blob->GetBufferSize(), IID_PPV_ARGS(g_pRootSignature.Indirect()));
 		blob->Release();
 	}
 
@@ -316,7 +308,7 @@ void UserInterfaceManager::CreateDeviceObjects()
 	memset(&psoDesc, 0, sizeof(D3D12_GRAPHICS_PIPELINE_STATE_DESC));
 	psoDesc.NodeMask = 1;
 	psoDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-	psoDesc.pRootSignature = g_pRootSignature;
+	psoDesc.pRootSignature = g_pRootSignature.Get();
 	psoDesc.SampleMask = UINT_MAX;
 	psoDesc.NumRenderTargets = 1;
 	psoDesc.RTVFormats[0] = g_RTVFormat;
@@ -353,8 +345,8 @@ void UserInterfaceManager::CreateDeviceObjects()
               return output;\
             }";
 
-		D3DCompile(vertexShader, strlen(vertexShader), NULL, NULL, NULL, "main", "vs_5_0", 0, 0, &g_pVertexShaderBlob, NULL);
-		if (g_pVertexShaderBlob == NULL) // NB: Pass ID3D10Blob* pErrorBlob to D3DCompile() to get error showing in (const char*)pErrorBlob->GetBufferPointer(). Make sure to Release() the blob!
+		D3DCompile(vertexShader, strlen(vertexShader), NULL, NULL, NULL, "main", "vs_5_0", 0, 0, g_pVertexShaderBlob.Indirect(), NULL);
+		if (!g_pVertexShaderBlob) // NB: Pass ID3D10Blob* pErrorBlob to D3DCompile() to get error showing in (const char*)pErrorBlob->GetBufferPointer(). Make sure to Release() the blob!
 			return;
 		psoDesc.VS = { g_pVertexShaderBlob->GetBufferPointer(), g_pVertexShaderBlob->GetBufferSize() };
 
@@ -385,8 +377,8 @@ void UserInterfaceManager::CreateDeviceObjects()
               return out_col; \
             }";
 
-		D3DCompile(pixelShader, strlen(pixelShader), NULL, NULL, NULL, "main", "ps_5_0", 0, 0, &g_pPixelShaderBlob, NULL);
-		if (g_pPixelShaderBlob == NULL)  // NB: Pass ID3D10Blob* pErrorBlob to D3DCompile() to get error showing in (const char*)pErrorBlob->GetBufferPointer(). Make sure to Release() the blob!
+		D3DCompile(pixelShader, strlen(pixelShader), NULL, NULL, NULL, "main", "ps_5_0", 0, 0, g_pPixelShaderBlob.Indirect(), NULL);
+		if (!g_pPixelShaderBlob)  // NB: Pass ID3D10Blob* pErrorBlob to D3DCompile() to get error showing in (const char*)pErrorBlob->GetBufferPointer(). Make sure to Release() the blob!
 			return;
 		psoDesc.PS = { g_pPixelShaderBlob->GetBufferPointer(), g_pPixelShaderBlob->GetBufferSize() };
 	}
@@ -433,7 +425,7 @@ void UserInterfaceManager::CreateDeviceObjects()
 		desc.BackFace = desc.FrontFace;
 	}
 
-	if (Device->Native()->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(&g_pPipelineState)) != S_OK)
+	if (Device->Native()->CreateGraphicsPipelineState(&psoDesc, IID_PPV_ARGS(g_pPipelineState.Indirect())) != S_OK)
 		return;
 
 	// Create font heap.
@@ -443,7 +435,7 @@ void UserInterfaceManager::CreateDeviceObjects()
 	HeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
 	HeapDesc.NodeMask = 0;
 
-	if (Device->Native()->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(&FontHeap)) != S_OK)
+	if (Device->Native()->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(FontHeap.Indirect())) != S_OK)
 		return;
 
 	CreateFontTexture();
@@ -451,12 +443,12 @@ void UserInterfaceManager::CreateDeviceObjects()
 
 void UserInterfaceManager::InvalidateDeviceObjects()
 {
-	SafeRelease(g_pVertexShaderBlob);
-	SafeRelease(g_pPixelShaderBlob);
-	SafeRelease(g_pRootSignature);
-	SafeRelease(g_pPipelineState);
-	SafeRelease(g_pFontTextureResource);
-	SafeRelease(FontHeap);
+	g_pVertexShaderBlob = {};
+	g_pPixelShaderBlob = {};
+	g_pRootSignature = {};
+	g_pPipelineState = {};
+	g_pFontTextureResource = {};
+	FontHeap = {};
 
 	ImGuiIO& io = ImGui::GetIO();
 	io.Fonts->TexID = NULL; // We copied g_pFontTextureView to io.Fonts->TexID so let's clear that as well.

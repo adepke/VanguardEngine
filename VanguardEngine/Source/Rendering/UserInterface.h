@@ -2,6 +2,10 @@
 
 #pragma once
 
+#include <Rendering/Base.h>
+
+#include <Core/Windows/DirectX12Minimal.h>
+
 class RenderDevice;
 struct ImDrawData;
 class CommandList;
@@ -11,6 +15,13 @@ class UserInterfaceManager
 {
 private:
 	RenderDevice* Device;
+
+	ResourcePtr<ID3D10Blob> g_pVertexShaderBlob;
+	ResourcePtr<ID3D10Blob> g_pPixelShaderBlob;
+	ResourcePtr<ID3D12RootSignature> g_pRootSignature;
+	ResourcePtr<ID3D12PipelineState> g_pPipelineState;
+	ResourcePtr<ID3D12Resource> g_pFontTextureResource;
+	ResourcePtr<ID3D12DescriptorHeap> FontHeap;
 
 private:
 	void SetupRenderState(ImDrawData* DrawData, CommandList& List, FrameResources* Resources);
