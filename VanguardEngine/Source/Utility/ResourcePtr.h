@@ -63,7 +63,7 @@ namespace Detail
 
 			return *this;
 		}
-		ResourcePtrBase& operator=(nullptr_t) noexcept { Internal = nullptr; }
+		ResourcePtrBase& operator=(nullptr_t) noexcept { Internal = nullptr; return *this; }
 
 		pointer Release() noexcept
 		{
