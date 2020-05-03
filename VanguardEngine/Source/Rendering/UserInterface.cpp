@@ -5,6 +5,7 @@
 #include <Rendering/Device.h>
 #include <Rendering/PipelineState.h>
 #include <Core/Config.h>
+#include <Core/InputManager.h>
 
 #include <imgui.h>
 #include <d3dcompiler.h>
@@ -314,7 +315,7 @@ UserInterfaceManager::UserInterfaceManager(RenderDevice* InDevice) : Device(InDe
 
 	// Setup back-end capabilities flags
 	ImGuiIO& io = ImGui::GetIO();
-	io.BackendRendererName = "imgui_impl_dx12";
+	io.BackendRendererName = "ImGui DirectX 12";
 	io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;  // We can honor the ImDrawCmd::VtxOffset field, allowing for large meshes.
 
 	g_pFrameResources = new FrameResources[Device->FrameCount];
@@ -353,6 +354,9 @@ void UserInterfaceManager::NewFrame()
 
 	auto& io = ImGui::GetIO();
 	io.DisplaySize = { static_cast<float>(Device->RenderWidth), static_cast<float>(Device->RenderHeight) };
+
+	// Update inputs.
+	InputManager::Get().UpdateInputDevices();
 
 	ImGui::NewFrame();
 }

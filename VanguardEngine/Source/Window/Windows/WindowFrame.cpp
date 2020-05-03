@@ -2,6 +2,7 @@
 
 #include <Window/WindowFrame.h>
 #include <Core/Windows/WindowsMinimal.h>
+#include <Core/InputManager.h>
 
 WindowFrame* GlobalWindow;  // #NOTE: This is assuming we're only ever going to have one active WindowFrame at a time.
 
@@ -77,6 +78,11 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 			}
 		}
 
+		return 0;
+	}
+
+	if (InputManager::Get().ProcessWindowMessage(msg, wParam, lParam))
+	{
 		return 0;
 	}
 
