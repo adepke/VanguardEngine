@@ -7,10 +7,17 @@ cbuffer CameraBuffer : register(b0)
 	matrix ProjectionMatrix;
 };
 
-struct Input
+struct Vertex
 {
 	float3 Position : POSITION;
 	float4 Color : COLOR;
+};
+
+StructuredBuffer<Vertex> VertexBuffer : register(t0);
+
+struct Input
+{
+	uint VertexID : SV_VertexID;
 };
 
 struct Output
@@ -22,11 +29,13 @@ struct Output
 [RootSignature(RS)]
 Output main(Input In)
 {
+	Vertex vertex = VertexBuffer[In.VertexID];
+
 	Output Out;
-	Out.Position = float4(In.Position.x, In.Position.y, In.Position.z, 1.f);
+	Out.Position = float4(vertex.Position.x, vertex.Position.y, vertex.Position.z, 1.f);
 	Out.Position = mul(Out.Position, ViewMatrix);
 	Out.Position = mul(Out.Position, ProjectionMatrix);
-	Out.Color = In.Color;
+	Out.Color = vertex.Color;
 
 	return Out;
 }

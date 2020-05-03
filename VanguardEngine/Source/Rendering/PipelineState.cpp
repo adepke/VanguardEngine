@@ -104,27 +104,6 @@ void PipelineState::CreateDescriptorTables(RenderDevice& Device)
 	VGScopedCPUStat("Create Descriptor Tables");
 }
 
-D3D12_INPUT_LAYOUT_DESC PipelineState::CreateInputLayout(std::vector<D3D12_INPUT_ELEMENT_DESC>& InputElements)
-{
-	VGScopedCPUStat("Create Input Layout");
-
-	for (auto& Element : VertexShader->Reflection.InputElements)
-	{
-		D3D12_INPUT_ELEMENT_DESC InputDesc{};
-		InputDesc.SemanticName = Element.SemanticName.c_str();
-		InputDesc.SemanticIndex = static_cast<UINT>(Element.SemanticIndex);
-		InputDesc.Format = Element.Format;
-		InputDesc.InputSlot = 0;
-		InputDesc.AlignedByteOffset = D3D12_APPEND_ALIGNED_ELEMENT;
-		InputDesc.InputSlotClass = Element.SemanticName.find("INSTANCE") != std::string::npos ? D3D12_INPUT_CLASSIFICATION_PER_INSTANCE_DATA : D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA;
-		InputDesc.InstanceDataStepRate = InputDesc.InputSlotClass == D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA ? 0 : 1;
-
-		InputElements.push_back(std::move(InputDesc));
-	}
-
-	return { InputElements.size() ? InputElements.data() : nullptr, static_cast<UINT>(InputElements.size()) };
-}
-
 void PipelineState::Build(RenderDevice& Device, const PipelineStateDescription& InDescription)
 {
 	VGScopedCPUStat("Build Pipeline");
@@ -140,9 +119,6 @@ void PipelineState::Build(RenderDevice& Device, const PipelineStateDescription& 
 		VGLogWarning(Rendering) << "Improper shader path '" << Description.ShaderPath.filename().generic_wstring() << "', do not include extension.";
 	}
 
-	// Data that must be kept alive until the pipeline is created.
-	std::vector<D3D12_INPUT_ELEMENT_DESC> InputElements;
-
 	CreateShaders(Device, Description.ShaderPath);
 
 	if (!VertexShader)
@@ -154,7 +130,6 @@ void PipelineState::Build(RenderDevice& Device, const PipelineStateDescription& 
 
 	CreateRootSignature(Device);
 	CreateDescriptorTables(Device);
-	auto InputLayout = std::move(CreateInputLayout(InputElements));
 
 	D3D12_GRAPHICS_PIPELINE_STATE_DESC Desc{};
 	Desc.pRootSignature = RootSignature.Get();
@@ -168,7 +143,7 @@ void PipelineState::Build(RenderDevice& Device, const PipelineStateDescription& 
 	Desc.SampleMask = std::numeric_limits<UINT>::max();
 	Desc.RasterizerState = Description.RasterizerDescription;
 	Desc.DepthStencilState = Description.DepthStencilDescription;
-	Desc.InputLayout = InputLayout;
+	Desc.InputLayout = { nullptr, 0 };  // We aren't using the input assembler, use programmable vertex pulling.
 	Desc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;  // Don't support strip topology cuts.
 	switch (Description.Topology)  // #TODO: Support patch topology, which is needed for hull and domain shaders.
 	{

@@ -31,7 +31,6 @@ private:
 	void CreateShaders(RenderDevice& Device, const std::filesystem::path& ShaderPath);
 	void CreateRootSignature(RenderDevice& Device);
 	void CreateDescriptorTables(RenderDevice& Device);
-	D3D12_INPUT_LAYOUT_DESC CreateInputLayout(std::vector<D3D12_INPUT_ELEMENT_DESC>& InputElements);
 
 public:
 	ResourcePtr<ID3D12RootSignature> RootSignature;

@@ -16,7 +16,6 @@ struct ShaderReflection
 	{
 		std::string SemanticName;
 		size_t SemanticIndex;
-		DXGI_FORMAT Format;
 	};
 
 	struct ConstantBuffer

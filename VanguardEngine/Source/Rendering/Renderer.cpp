@@ -76,6 +76,8 @@ void Renderer::Render(entt::registry& Registry)
 
 	// #TODO: Sort by material.
 	
+	// #TEMP: Disabled until the new vertex processing is in place.
+#if 0
 	// Number of entities with MeshComponent and TransformComponent
 	const auto RenderCount = 10;
 
@@ -100,6 +102,7 @@ void Renderer::Render(entt::registry& Registry)
 				++Index;
 			});
 	}
+#endif
 
 	RenderGraph Graph{ Device.get() };
 
@@ -118,7 +121,8 @@ void Renderer::Render(entt::registry& Registry)
 	MainPass.ReadResource(CameraBufferTag, RGUsage::Default);
 
 	MainPass.Bind(
-		[this, &Registry, &InstanceBuffer, BackBufferTag, DepthStencilTag, CameraBufferTag](RGResolver& Resolver, CommandList& List)
+		[this, &Registry, BackBufferTag, DepthStencilTag, CameraBufferTag]
+		(RGResolver& Resolver, CommandList& List)
 		{
 			auto& BackBuffer = Resolver.Get<Texture>(BackBufferTag);
 			auto& DepthStencil = Resolver.Get<Texture>(DepthStencilTag);
@@ -151,25 +155,10 @@ void Renderer::Render(entt::registry& Registry)
 			List.Native()->ClearRenderTargetView(*BackBuffer.RTV, ClearColor, 0, nullptr);
 			List.Native()->ClearDepthStencilView(*DepthStencil.DSV, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0, 0, nullptr);
 			
-			Registry.view<const TransformComponent, MeshComponent>().each([&InstanceBuffer, &List](auto Entity, const auto&, auto& Mesh)
+			Registry.view<const TransformComponent, MeshComponent>().each([&List](auto Entity, const auto&, auto& Mesh)
 				{
-					std::vector<D3D12_VERTEX_BUFFER_VIEW> VertexViews;
-
-					// Vertex Buffer.
-					VertexViews.push_back({});
-					VertexViews[0].BufferLocation = Mesh.VertexBuffer->Native()->GetGPUVirtualAddress();
-					VertexViews[0].SizeInBytes = static_cast<UINT>(Mesh.VertexBuffer->Description.Size * Mesh.VertexBuffer->Description.Stride);
-					VertexViews[0].StrideInBytes = static_cast<UINT>(Mesh.VertexBuffer->Description.Stride);
-
-					/*
-					// Instance Buffer.
-					VertexViews.push_back({});
-					VertexViews[1].BufferLocation = InstanceBuffer.first->Native()->GetGPUVirtualAddress() + InstanceBuffer.second;
-					VertexViews[1].SizeInBytes = static_cast<UINT>(InstanceBuffer.first->Description.Size);
-					VertexViews[1].StrideInBytes = static_cast<UINT>(InstanceBuffer.first->Description.Stride);
-					*/
-
-					List.Native()->IASetVertexBuffers(0, static_cast<UINT>(VertexViews.size()), VertexViews.data());  // #TODO: Slot?
+					// Set the vertex buffer.
+					List.Native()->SetGraphicsRootShaderResourceView(1, Mesh.VertexBuffer->Native()->GetGPUVirtualAddress());
 
 					D3D12_INDEX_BUFFER_VIEW IndexView{};
 					IndexView.BufferLocation = Mesh.IndexBuffer->Native()->GetGPUVirtualAddress();
@@ -182,7 +171,7 @@ void Renderer::Render(entt::registry& Registry)
 				});
 		}
 	);
-	
+
 	auto& UIPass = Graph.AddPass("UI Pass");
 	UIPass.WriteResource(BackBufferTag, RGUsage::BackBuffer);
 
@@ -194,6 +183,11 @@ void Renderer::Render(entt::registry& Registry)
 			UserInterface->NewFrame();
 			
 			ImGui::ShowDemoWindow();
+			ImGui::Begin("My Window");
+			ImGui::Text("Text");
+			bool b = true;
+			ImGui::Checkbox("Box", &b);
+			ImGui::End();
 
 			List.Native()->OMSetRenderTargets(1, &static_cast<D3D12_CPU_DESCRIPTOR_HANDLE>(*BackBuffer.RTV), false, nullptr);
 			UserInterface->Render(List);

@@ -5,7 +5,10 @@
 		"DENY_DOMAIN_SHADER_ROOT_ACCESS |" \
 		"DENY_GEOMETRY_SHADER_ROOT_ACCESS)," \
 	"RootConstants(num32BitConstants = 16, b0, visibility = SHADER_VISIBILITY_VERTEX)," \
-	"DescriptorTable(SRV(t0, numDescriptors = 1), visibility = SHADER_VISIBILITY_PIXEL)," \
+	"SRV(t0, visibility = SHADER_VISIBILITY_VERTEX)," \
+	"DescriptorTable(" \
+		"SRV(t1, numDescriptors = 1)," \
+		"visibility = SHADER_VISIBILITY_PIXEL)," \
 	"StaticSampler(" \
 		"s0," \
 		"filter = FILTER_MIN_MAG_MIP_LINEAR," \

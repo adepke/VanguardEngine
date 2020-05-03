@@ -64,22 +64,19 @@ void UserInterfaceManager::SetupRenderState(ImDrawData* DrawData, CommandList& L
 	vp.TopLeftX = vp.TopLeftY = 0.0f;
 	List.Native()->RSSetViewports(1, &vp);
 
+	List.BindPipelineState(*Pipeline);
+
 	// Bind shader and vertex buffers
-	unsigned int stride = sizeof(ImDrawVert);
-	unsigned int offset = 0;
-	D3D12_VERTEX_BUFFER_VIEW vbv;
-	memset(&vbv, 0, sizeof(D3D12_VERTEX_BUFFER_VIEW));
-	vbv.BufferLocation = Resources->VertexBuffer->GetGPUVirtualAddress() + offset;
-	vbv.SizeInBytes = Resources->VertexBufferSize * stride;
-	vbv.StrideInBytes = stride;
-	List.Native()->IASetVertexBuffers(0, 1, &vbv);
+
+	List.Native()->SetGraphicsRootShaderResourceView(1, Resources->VertexBuffer->GetGPUVirtualAddress());
+
 	D3D12_INDEX_BUFFER_VIEW ibv;
 	memset(&ibv, 0, sizeof(D3D12_INDEX_BUFFER_VIEW));
 	ibv.BufferLocation = Resources->IndexBuffer->GetGPUVirtualAddress();
 	ibv.SizeInBytes = Resources->IndexBufferSize * sizeof(ImDrawIdx);
 	ibv.Format = sizeof(ImDrawIdx) == 2 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
 	List.Native()->IASetIndexBuffer(&ibv);
-	List.BindPipelineState(*Pipeline);
+
 	List.Native()->SetGraphicsRoot32BitConstants(0, 16, &vertex_constant_buffer, 0);
 	List.Native()->SetDescriptorHeaps(1, FontHeap.Indirect());
 
@@ -470,7 +467,7 @@ void UserInterfaceManager::Render(CommandList& List)
 			{
 				// Apply Scissor, Bind texture, Draw
 				const D3D12_RECT r = { (LONG)(pcmd->ClipRect.x - clip_off.x), (LONG)(pcmd->ClipRect.y - clip_off.y), (LONG)(pcmd->ClipRect.z - clip_off.x), (LONG)(pcmd->ClipRect.w - clip_off.y) };
-				List.Native()->SetGraphicsRootDescriptorTable(1, *(D3D12_GPU_DESCRIPTOR_HANDLE*)&pcmd->TextureId);
+				List.Native()->SetGraphicsRootDescriptorTable(2, *(D3D12_GPU_DESCRIPTOR_HANDLE*)&pcmd->TextureId);
 				List.Native()->RSSetScissorRects(1, &r);
 				List.Native()->DrawIndexedInstanced(pcmd->ElemCount, 1, pcmd->IdxOffset + global_idx_offset, pcmd->VtxOffset + global_vtx_offset, 0);
 			}

@@ -51,7 +51,7 @@ inline MeshComponent CreateMeshComponent(RenderDevice& Device, const std::vector
 	VertexDescription.Size = VertexPositions.size();
 	VertexDescription.Stride = sizeof(Vertex);
 	VertexDescription.UpdateRate = ResourceFrequency::Static;
-	VertexDescription.BindFlags = BindFlag::VertexBuffer;
+	VertexDescription.BindFlags = BindFlag::ShaderResource;  // Don't bind as vertex buffer, we aren't using the fixed pipeline vertex processing.
 	VertexDescription.AccessFlags = AccessFlag::CPUWrite;
 
 	Result.VertexBuffer = std::move(Device.CreateResource(VertexDescription, VGText("Vertex Buffer")));
@@ -61,7 +61,7 @@ inline MeshComponent CreateMeshComponent(RenderDevice& Device, const std::vector
 	std::memcpy(VertexResource.data(), VertexPositions.data(), VertexResource.size());
 	Device.WriteResource(Result.VertexBuffer, VertexResource);
 
-	Device.GetDirectList().TransitionBarrier(Result.VertexBuffer, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+	Device.GetDirectList().TransitionBarrier(Result.VertexBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 	BufferDescription IndexDescription{};
 	IndexDescription.Size = Indices.size();
