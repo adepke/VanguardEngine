@@ -12,11 +12,6 @@ struct Vertex
 	uint col : COLOR0;
 };
 
-struct Input
-{
-	uint VertexID : SV_VertexID;
-};
-
 StructuredBuffer<Vertex> VertexBuffer : register(t0);
 
 struct PS_INPUT
@@ -27,9 +22,9 @@ struct PS_INPUT
 };
 
 [RootSignature(RS)]
-PS_INPUT main(Input In)
+PS_INPUT main(uint VertexID : SV_VertexID)
 {
-	Vertex vertex = VertexBuffer[In.VertexID];
+	Vertex vertex = VertexBuffer[VertexID];
 
 	PS_INPUT output;
 	output.pos = mul(ProjectionMatrix, float4(vertex.pos.xy, 0.f, 1.f));

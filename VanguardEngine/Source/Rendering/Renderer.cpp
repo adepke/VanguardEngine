@@ -17,12 +17,12 @@
 #include <utility>
 #include <cstring>
 
-// Per-entity data, passed through input assembler.
+// Per-entity data.
 struct EntityInstance
 {
 	// #TODO: Create from some form of shader interop.
 
-	TransformComponent Transform;
+	XMMATRIX WorldMatrix;
 };
 
 struct CameraBuffer
@@ -76,10 +76,8 @@ void Renderer::Render(entt::registry& Registry)
 
 	// #TODO: Sort by material.
 	
-	// #TEMP: Disabled until the new vertex processing is in place.
-#if 0
-	// Number of entities with MeshComponent and TransformComponent
-	const auto RenderCount = 10;
+	// #TEMP: Number of entities with MeshComponent and TransformComponent. Determine this procedurally.
+	const auto RenderCount = 1;
 
 	std::pair<std::shared_ptr<Buffer>, size_t> InstanceBuffer;
 
@@ -91,7 +89,12 @@ void Renderer::Render(entt::registry& Registry)
 		size_t Index = 0;
 		Registry.view<const TransformComponent, const MeshComponent>().each([this, &InstanceBuffer, &Index](auto Entity, const auto& Transform, const auto&)
 			{
-				EntityInstance Instance{ Transform };
+				const auto Scaling = XMVectorSet(Transform.Scale.x, Transform.Scale.y, Transform.Scale.z, 0.f);
+				const auto Rotation = XMVectorSet(Transform.Rotation.x, Transform.Rotation.y, Transform.Rotation.z, 0.f);
+				const auto Translation = XMVectorSet(Transform.Translation.x, Transform.Translation.y, Transform.Translation.z, 0.f);
+
+				EntityInstance Instance;
+				Instance.WorldMatrix = XMMatrixAffineTransformation(Scaling, XMVectorZero(), Rotation, Translation);
 
 				std::vector<uint8_t> InstanceData{};
 				InstanceData.resize(sizeof(EntityInstance));
@@ -102,12 +105,12 @@ void Renderer::Render(entt::registry& Registry)
 				++Index;
 			});
 	}
-#endif
 
 	RenderGraph Graph{ Device.get() };
 
 	const size_t BackBufferTag = Graph.ImportResource(Device->GetBackBuffer());
 	const size_t CameraBufferTag = Graph.ImportResource(cameraBuffer);
+	const size_t InstanceBufferTag = Graph.ImportResource(InstanceBuffer.first);
 
 	RGTextureDescription DepthStencilDesc{};
 	DepthStencilDesc.Width = Device->RenderWidth;
@@ -119,19 +122,21 @@ void Renderer::Render(entt::registry& Registry)
 	MainPass.WriteResource(DepthStencilTag, RGUsage::DepthStencil);
 	MainPass.WriteResource(BackBufferTag, RGUsage::BackBuffer);
 	MainPass.ReadResource(CameraBufferTag, RGUsage::Default);
+	MainPass.ReadResource(InstanceBufferTag, RGUsage::Default);
 
 	MainPass.Bind(
-		[this, &Registry, BackBufferTag, DepthStencilTag, CameraBufferTag]
+		[this, &Registry, BackBufferTag, DepthStencilTag, CameraBufferTag, InstanceBufferTag, InstanceBufferOffset = InstanceBuffer.second]
 		(RGResolver& Resolver, CommandList& List)
 		{
 			auto& BackBuffer = Resolver.Get<Texture>(BackBufferTag);
 			auto& DepthStencil = Resolver.Get<Texture>(DepthStencilTag);
 			auto& ActualCameraBuffer = Resolver.Get<Buffer>(CameraBufferTag);  // #TODO: Fix naming.
+			auto& InstanceBuffer = Resolver.Get<Buffer>(InstanceBufferTag);
 
 			List.BindPipelineState(*Materials[0].Pipeline);
 			List.BindDescriptorAllocator(Device->GetDescriptorAllocator());
 			
-			List.Native()->SetGraphicsRootConstantBufferView(0, ActualCameraBuffer.Native()->GetGPUVirtualAddress());
+			List.Native()->SetGraphicsRootConstantBufferView(2, ActualCameraBuffer.Native()->GetGPUVirtualAddress());
 
 			D3D12_VIEWPORT Viewport{};
 			Viewport.TopLeftX = 0.f;
@@ -155,8 +160,14 @@ void Renderer::Render(entt::registry& Registry)
 			List.Native()->ClearRenderTargetView(*BackBuffer.RTV, ClearColor, 0, nullptr);
 			List.Native()->ClearDepthStencilView(*DepthStencil.DSV, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0, 0, nullptr);
 			
-			Registry.view<const TransformComponent, MeshComponent>().each([&List](auto Entity, const auto&, auto& Mesh)
+			size_t EntityIndex = 0;
+			Registry.view<const TransformComponent, MeshComponent>().each(
+				[&EntityIndex, &List, &InstanceBuffer, InstanceBufferOffset](auto Entity, const auto&, auto& Mesh)
 				{
+					// Set the per object buffer.
+					const auto FinalInstanceBufferOffset = InstanceBufferOffset + (EntityIndex * sizeof(EntityInstance));
+					List.Native()->SetGraphicsRootConstantBufferView(0, InstanceBuffer.Native()->GetGPUVirtualAddress() + FinalInstanceBufferOffset);
+
 					// Set the vertex buffer.
 					List.Native()->SetGraphicsRootShaderResourceView(1, Mesh.VertexBuffer->Native()->GetGPUVirtualAddress());
 
@@ -168,6 +179,8 @@ void Renderer::Render(entt::registry& Registry)
 					List.Native()->IASetIndexBuffer(&IndexView);
 
 					List.Native()->DrawIndexedInstanced(Mesh.IndexBuffer->Description.Size, 1, 0, 0, 0);
+
+					++EntityIndex;
 				});
 		}
 	);
@@ -183,11 +196,6 @@ void Renderer::Render(entt::registry& Registry)
 			UserInterface->NewFrame();
 			
 			ImGui::ShowDemoWindow();
-			ImGui::Begin("My Window");
-			ImGui::Text("Text");
-			bool b = true;
-			ImGui::Checkbox("Box", &b);
-			ImGui::End();
 
 			List.Native()->OMSetRenderTargets(1, &static_cast<D3D12_CPU_DESCRIPTOR_HANDLE>(*BackBuffer.RTV), false, nullptr);
 			UserInterface->Render(List);
