@@ -23,9 +23,16 @@ Config::Config()
 		EngineRoot = CurrentPath;
 	}
 
+	// Running from visual studio sandbox.
 	else if (IsEngineRoot(CurrentPath.parent_path().parent_path() / "VanguardEngine"))
 	{
 		EngineRoot = CurrentPath.parent_path().parent_path() / "VanguardEngine";
+	}
+
+	// Running the binary outside of visual studio.
+	else if (IsEngineRoot(CurrentPath.parent_path().parent_path().parent_path() / "VanguardEngine"))
+	{
+		EngineRoot = CurrentPath.parent_path().parent_path().parent_path() / "VanguardEngine";
 	}
 
 	else
