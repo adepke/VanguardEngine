@@ -165,6 +165,10 @@ void RenderGraph::InjectStateBarriers(std::vector<std::shared_ptr<CommandList>>&
 
 			VGAssert(ResourceBuffer || ResourceTexture, "Failed to fetch the resource.");
 
+			// Dynamic resources don't ever transition states, so we can skip them.
+			if (ResourceBuffer && ResourceBuffer->Description.UpdateRate == ResourceFrequency::Dynamic) continue;
+			if (ResourceTexture && ResourceTexture->Description.UpdateRate == ResourceFrequency::Dynamic) continue;
+
 			// #TEMP: We can't use PassIndex directly, since it might be a size_t::max.
 			D3D12_RESOURCE_STATES NewState;
 
