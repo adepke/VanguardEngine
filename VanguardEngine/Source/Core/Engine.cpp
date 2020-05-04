@@ -107,10 +107,10 @@ void EngineLoop()
 			VGScopedCPUStat("Window Message Processing");
 
 			MSG Message{};
-			if (PeekMessage(&Message, static_cast<HWND>(MainWindow->GetHandle()), 0, 0, PM_REMOVE))
+			if (::PeekMessage(&Message, static_cast<HWND>(MainWindow->GetHandle()), 0, 0, PM_REMOVE))
 			{
-				TranslateMessage(&Message);
-				DispatchMessage(&Message);
+				::TranslateMessage(&Message);
+				::DispatchMessage(&Message);
 			}
 
 			if (Message.message == WM_QUIT)
