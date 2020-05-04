@@ -9,7 +9,7 @@
 class InputManager
 {
 private:
-	void* WindowHandle;
+	void* WindowHandle = nullptr;
 
 	void UpdateKeyboard();
 	void UpdateMouse();

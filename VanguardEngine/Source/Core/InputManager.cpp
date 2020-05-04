@@ -10,6 +10,8 @@
 #include <Core/Windows/WindowsMinimal.h>
 #include <XInput.h>  // Required for gamepad support.
 
+// #TODO: Implement viewports features.
+
 void InputManager::UpdateKeyboard()
 {
 	auto& IO = ImGui::GetIO();
@@ -35,19 +37,40 @@ void InputManager::UpdateMouse()
 
 	IO.MousePos.x = std::numeric_limits<float>::min();
 	IO.MousePos.y = std::numeric_limits<float>::min();
+	IO.MouseHoveredViewport = 0;
+
+	POINT MousePosition;
+	if (!::GetCursorPos(&MousePosition))
+	{
+		VGLogWarning(Core) << "Failed to get mouse cursor position: " << GetPlatformError();
+
+		return;
+	}
 
 	if (auto* ForegroundWindow = ::GetForegroundWindow(); ForegroundWindow)
 	{
-		if (ForegroundWindow == WindowHandle || ::IsChild(ForegroundWindow, static_cast<HWND>(WindowHandle)))
+		if (::IsChild(ForegroundWindow, static_cast<HWND>(WindowHandle)))
 		{
-			POINT MousePosition;
+			ForegroundWindow = static_cast<HWND>(WindowHandle);
+		}
 
-			if (!::GetCursorPos(&MousePosition))
-				VGLogWarning(Core) << "Failed to get mouse cursor position: " << GetPlatformError();
-			else if (!::ScreenToClient(static_cast<HWND>(WindowHandle), &MousePosition))
-				VGLogWarning(Core) << "Failed to convert mouse position from screen space to window space: " << GetPlatformError();
-			else
+		if (IO.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+		{	
+			if (ImGui::FindViewportByPlatformHandle(ForegroundWindow))
+			{
 				IO.MousePos = { static_cast<float>(MousePosition.x), static_cast<float>(MousePosition.y) };
+			}
+		}
+
+		else
+		{
+			if (ForegroundWindow == WindowHandle)
+			{
+				if (!::ScreenToClient(static_cast<HWND>(WindowHandle), &MousePosition))
+					VGLogWarning(Core) << "Failed to convert mouse position from screen space to window space: " << GetPlatformError();
+				else
+					IO.MousePos = { static_cast<float>(MousePosition.x), static_cast<float>(MousePosition.y) };
+			}
 		}
 	}
 
@@ -120,12 +143,12 @@ bool InputManager::ProcessWindowMessage(uint32_t Message, int64_t wParam, uint64
 		if (Message == WM_RBUTTONDOWN || Message == WM_RBUTTONDBLCLK) MouseButton = 1;
 		if (Message == WM_MBUTTONDOWN || Message == WM_MBUTTONDBLCLK) MouseButton = 2;
 		if (Message == WM_XBUTTONDOWN || Message == WM_XBUTTONDBLCLK) MouseButton = (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) ? 3 : 4;
-
+		
 		if (!ImGui::IsAnyMouseDown() && !::GetCapture())
 		{
 			::SetCapture(static_cast<HWND>(WindowHandle));
 		}
-
+		
 		IO.MouseDown[MouseButton] = true;
 
 		return true;
@@ -141,13 +164,13 @@ bool InputManager::ProcessWindowMessage(uint32_t Message, int64_t wParam, uint64
 		if (Message == WM_RBUTTONDOWN || Message == WM_RBUTTONDBLCLK) MouseButton = 1;
 		if (Message == WM_MBUTTONDOWN || Message == WM_MBUTTONDBLCLK) MouseButton = 2;
 		if (Message == WM_XBUTTONDOWN || Message == WM_XBUTTONDBLCLK) MouseButton = (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) ? 3 : 4;
+		
+		IO.MouseDown[MouseButton] = false;
 
 		if (!ImGui::IsAnyMouseDown() && ::GetCapture() == WindowHandle)
 		{
 			::ReleaseCapture();
 		}
-
-		IO.MouseDown[MouseButton] = false;
 
 		return true;
 	}
