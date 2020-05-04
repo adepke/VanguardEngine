@@ -6,8 +6,10 @@
 #include <Rendering/Device.h>
 #include <Rendering/Renderer.h>
 #include <Window/WindowFrame.h>
+#include <Core/InputManager.h>
 
 #include <string>
+#include <memory>
 // #TEMP
 #include <thread>
 #include <Rendering/RenderComponents.h>
@@ -56,6 +58,8 @@ void EngineBoot()
 	MainWindow->OnFocusChanged = &OnFocusChanged;
 	MainWindow->OnSizeChanged = &OnSizeChanged;
 	MainWindow->RestrainCursor(false);
+
+	InputManager::Get().SetWindowHandle(MainWindow->GetHandle());
 
 #if BUILD_DEBUG
 	constexpr auto EnableDebugging = true;

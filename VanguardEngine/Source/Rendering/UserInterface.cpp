@@ -331,8 +331,6 @@ UserInterfaceManager::UserInterfaceManager(RenderDevice* InDevice) : Device(InDe
 		fr->IndexBufferSize = 10000;
 		fr->VertexBufferSize = 5000;
 	}
-
-	io.ImeWindowHandle = Device->GetWindowHandle();
 }
 
 UserInterfaceManager::~UserInterfaceManager()

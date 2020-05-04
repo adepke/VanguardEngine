@@ -4,12 +4,12 @@
 
 #include <Core/Base.h>
 
-class WindowFrame;
+#include <memory>
 
 class InputManager
 {
 private:
-	std::shared_ptr<WindowFrame> Window;
+	void* WindowHandle;
 
 	void UpdateKeyboard();
 	void UpdateMouse();
@@ -28,6 +28,8 @@ public:
 
 	InputManager& operator=(const InputManager&) = delete;
 	InputManager& operator=(InputManager&&) noexcept = delete;
+
+	void SetWindowHandle(void* Handle) noexcept { WindowHandle = Handle; }
 
 	bool ProcessWindowMessage(uint32_t Message, int64_t wParam, uint64_t lParam);
 	void UpdateInputDevices();

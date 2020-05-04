@@ -29,7 +29,7 @@ void InputManager::UpdateMouse()
 	{
 		POINT TargetPoint = { static_cast<int>(IO.MousePos.x), static_cast<int>(IO.MousePos.y) };
 
-		::ClientToScreen(static_cast<HWND>(Window->GetHandle()), &TargetPoint);  // Convert the point to screen space.
+		::ClientToScreen(static_cast<HWND>(WindowHandle), &TargetPoint);  // Convert the point to screen space.
 		::SetCursorPos(TargetPoint.x, TargetPoint.y);
 	}
 
@@ -38,13 +38,13 @@ void InputManager::UpdateMouse()
 
 	if (auto* ForegroundWindow = ::GetForegroundWindow(); ForegroundWindow)
 	{
-		if (ForegroundWindow == Window->GetHandle() || ::IsChild(ForegroundWindow, static_cast<HWND>(Window->GetHandle())))
+		if (ForegroundWindow == WindowHandle || ::IsChild(ForegroundWindow, static_cast<HWND>(WindowHandle)))
 		{
 			POINT MousePosition;
 
 			if (!::GetCursorPos(&MousePosition))
 				VGLogWarning(Core) << "Failed to get mouse cursor position: " << GetPlatformError();
-			else if (!::ScreenToClient(static_cast<HWND>(Window->GetHandle()), &MousePosition))
+			else if (!::ScreenToClient(static_cast<HWND>(WindowHandle), &MousePosition))
 				VGLogWarning(Core) << "Failed to convert mouse position from screen space to window space: " << GetPlatformError();
 			else
 				IO.MousePos = { static_cast<float>(MousePosition.x), static_cast<float>(MousePosition.y) };
@@ -61,6 +61,10 @@ void InputManager::UpdateGamepad()
 
 InputManager::InputManager()
 {
+	// Ensure we have an ImGui context.
+	if (!ImGui::GetCurrentContext())
+		return;
+
 	auto& IO = ImGui::GetIO();
 
 	IO.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
@@ -119,7 +123,7 @@ bool InputManager::ProcessWindowMessage(uint32_t Message, int64_t wParam, uint64
 
 		if (!ImGui::IsAnyMouseDown() && !::GetCapture())
 		{
-			::SetCapture(static_cast<HWND>(Window->GetHandle()));
+			::SetCapture(static_cast<HWND>(WindowHandle));
 		}
 
 		IO.MouseDown[MouseButton] = true;
@@ -138,7 +142,7 @@ bool InputManager::ProcessWindowMessage(uint32_t Message, int64_t wParam, uint64
 		if (Message == WM_MBUTTONDOWN || Message == WM_MBUTTONDBLCLK) MouseButton = 2;
 		if (Message == WM_XBUTTONDOWN || Message == WM_XBUTTONDBLCLK) MouseButton = (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) ? 3 : 4;
 
-		if (!ImGui::IsAnyMouseDown() && ::GetCapture() == Window->GetHandle())
+		if (!ImGui::IsAnyMouseDown() && ::GetCapture() == WindowHandle)
 		{
 			::ReleaseCapture();
 		}
