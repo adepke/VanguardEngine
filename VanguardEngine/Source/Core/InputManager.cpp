@@ -206,6 +206,8 @@ bool InputManager::ProcessWindowMessage(uint32_t Message, int64_t wParam, uint64
 		return false;
 	}
 	}
+
+	return false;
 }
 
 void InputManager::UpdateInputDevices()
