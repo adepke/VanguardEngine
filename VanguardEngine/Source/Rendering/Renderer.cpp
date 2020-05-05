@@ -9,6 +9,7 @@
 #include <Rendering/RenderSystems.h>
 #include <Rendering/CommandList.h>
 #include <Rendering/RenderGraph.h>
+#include <Editor/UIManager.h>
 
 //#include <entt/entt.hpp>  // #TODO: Include from here instead of in the header.
 #include <imgui.h>
@@ -224,25 +225,8 @@ void Renderer::Render(entt::registry& Registry)
 					Camera.FieldOfView = FOV * 3.14159f / 180.f;
 				});
 
-			// #TEMP: Entity viewer, move this into the editor module.
-
-			const auto EntityView = Registry.view<TransformComponent>();
-			const auto EntityCount = EntityView.size();
-			
-			ImGui::Begin("Entity Viewer");
-			ImGui::Text("%i Entities", EntityCount);
-			EntityView.each([](auto Entity, auto& Transform)
-				{
-					if (ImGui::TreeNode((void*)Entity, "ID: %i", Entity))
-					{
-						ImGui::InputFloat("X", &Transform.Translation.x);
-						ImGui::InputFloat("Y", &Transform.Translation.y);
-						ImGui::InputFloat("Z", &Transform.Translation.z);
-
-						ImGui::TreePop();
-					}
-				});
-			ImGui::End();
+			// #TODO: Conditionally compile this out.
+			UIManager::Get().Render(Registry);
 			
 			List.Native()->OMSetRenderTargets(1, &static_cast<D3D12_CPU_DESCRIPTOR_HANDLE>(*BackBuffer.RTV), false, nullptr);
 			UserInterface->Render(List);
