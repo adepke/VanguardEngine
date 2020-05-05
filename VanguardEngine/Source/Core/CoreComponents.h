@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <DirectXMath.h>
+
 struct TransformComponent
 {
 	XMFLOAT3 Scale{ 1.f, 1.f, 1.f };
