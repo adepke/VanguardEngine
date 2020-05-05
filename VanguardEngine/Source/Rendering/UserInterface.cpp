@@ -67,10 +67,6 @@ void UserInterfaceManager::SetupRenderState(ImDrawData* DrawData, CommandList& L
 
 	List.BindPipelineState(*Pipeline);
 
-	// Bind shader and vertex buffers
-
-	List.Native()->SetGraphicsRootShaderResourceView(1, Resources->VertexBuffer->GetGPUVirtualAddress());
-
 	D3D12_INDEX_BUFFER_VIEW ibv;
 	memset(&ibv, 0, sizeof(D3D12_INDEX_BUFFER_VIEW));
 	ibv.BufferLocation = Resources->IndexBuffer->GetGPUVirtualAddress();
@@ -471,7 +467,8 @@ void UserInterfaceManager::Render(CommandList& List)
 				const D3D12_RECT r = { (LONG)(pcmd->ClipRect.x - clip_off.x), (LONG)(pcmd->ClipRect.y - clip_off.y), (LONG)(pcmd->ClipRect.z - clip_off.x), (LONG)(pcmd->ClipRect.w - clip_off.y) };
 				List.Native()->SetGraphicsRootDescriptorTable(2, *(D3D12_GPU_DESCRIPTOR_HANDLE*)&pcmd->TextureId);
 				List.Native()->RSSetScissorRects(1, &r);
-				List.Native()->DrawIndexedInstanced(pcmd->ElemCount, 1, pcmd->IdxOffset + global_idx_offset, pcmd->VtxOffset + global_vtx_offset, 0);
+				List.Native()->SetGraphicsRootShaderResourceView(1, Resources->VertexBuffer->GetGPUVirtualAddress() + (pcmd->VtxOffset + global_vtx_offset) * sizeof(ImDrawVert));
+				List.Native()->DrawIndexedInstanced(pcmd->ElemCount, 1, pcmd->IdxOffset + global_idx_offset, 0, 0);
 			}
 		}
 		global_idx_offset += cmd_list->IdxBuffer.Size;
