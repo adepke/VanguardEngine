@@ -189,14 +189,61 @@ void Renderer::Render(entt::registry& Registry)
 	UIPass.WriteResource(BackBufferTag, RGUsage::BackBuffer);
 
 	UIPass.Bind(
-		[this, BackBufferTag](RGResolver& Resolver, CommandList& List)
+		[this, BackBufferTag, &Registry](RGResolver& Resolver, CommandList& List)
 		{
 			auto& BackBuffer = Resolver.Get<Texture>(BackBufferTag);
 
 			UserInterface->NewFrame();
-			
-			ImGui::ShowDemoWindow();
 
+			// #TEMP: Temporary camera settings utility for debugging.
+
+			float CameraPosX, CameraPosY, CameraPosZ, FOV;
+
+			Registry.view<TransformComponent, CameraComponent>().each(
+				[&CameraPosX, &CameraPosY, &CameraPosZ, &FOV](auto Entity, auto& Transform, auto& Camera)
+				{
+					CameraPosX = Transform.Translation.x;
+					CameraPosY = Transform.Translation.y;
+					CameraPosZ = Transform.Translation.z;
+					FOV = Camera.FieldOfView * 180.f / 3.14159f;
+				});
+			
+			ImGui::Begin("Camera Settings");
+			ImGui::SliderFloat("X", &CameraPosX, -20.f, 20.f);
+			ImGui::SliderFloat("Y", &CameraPosY, -20.f, 20.f);
+			ImGui::SliderFloat("Z", &CameraPosZ, -20.f, 20.f);
+			ImGui::SliderFloat("FOV", &FOV, 45.f, 120.f);
+			ImGui::End();
+
+			Registry.view<TransformComponent, CameraComponent>().each(
+				[CameraPosX, CameraPosY, CameraPosZ, FOV](auto Entity, auto& Transform, auto& Camera)
+				{
+					Transform.Translation.x = CameraPosX;
+					Transform.Translation.y = CameraPosY;
+					Transform.Translation.z = CameraPosZ;
+					Camera.FieldOfView = FOV * 3.14159f / 180.f;
+				});
+
+			// #TEMP: Entity viewer, move this into the editor module.
+
+			const auto EntityView = Registry.view<TransformComponent>();
+			const auto EntityCount = EntityView.size();
+			
+			ImGui::Begin("Entity Viewer");
+			ImGui::Text("%i Entities", EntityCount);
+			EntityView.each([](auto Entity, auto& Transform)
+				{
+					if (ImGui::TreeNode((void*)Entity, "ID: %i", Entity))
+					{
+						ImGui::InputFloat("X", &Transform.Translation.x);
+						ImGui::InputFloat("Y", &Transform.Translation.y);
+						ImGui::InputFloat("Z", &Transform.Translation.z);
+
+						ImGui::TreePop();
+					}
+				});
+			ImGui::End();
+			
 			List.Native()->OMSetRenderTargets(1, &static_cast<D3D12_CPU_DESCRIPTOR_HANDLE>(*BackBuffer.RTV), false, nullptr);
 			UserInterface->Render(List);
 		});
