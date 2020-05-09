@@ -1,5 +1,7 @@
 #include "Default_RS.hlsli"
 
+#pragma pack_matrix(row_major)
+
 // #TODO: Replace with ConstantBuffer in DXC branch.
 cbuffer PerObject : register(b0)
 {
@@ -33,7 +35,7 @@ Output main(uint VertexID : SV_VertexID)
 	Vertex vertex = VertexBuffer[VertexID];
 
 	Output Out;
-	Out.Position = float4(vertex.Position.x, vertex.Position.y, vertex.Position.z, 1.f);
+	Out.Position = float4(vertex.Position, 1.f);
 	Out.Position = mul(Out.Position, WorldMatrix);
 	Out.Position = mul(Out.Position, ViewMatrix);
 	Out.Position = mul(Out.Position, ProjectionMatrix);
