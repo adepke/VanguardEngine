@@ -37,7 +37,6 @@ struct CameraComponent
 
 	// #TODO: Derive from a transform component.
 	XMFLOAT3 FocusPosition{ 0.f, 0.f, 0.f };
-	XMFLOAT3 UpDirection{ 0.f, 0.f, 1.f };
 };
 
 // #TODO: Normals, UVs, etc.
