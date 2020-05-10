@@ -196,7 +196,7 @@ bool InputManager::ProcessWindowMessage(uint32_t Message, int64_t wParam, uint64
 	{
 		if (wParam < 256)
 		{
-			IO.KeysDown[wParam] = 1;
+			IO.KeysDown[wParam] = true;
 
 			return true;
 		}
@@ -209,7 +209,7 @@ bool InputManager::ProcessWindowMessage(uint32_t Message, int64_t wParam, uint64
 	{
 		if (wParam < 256)
 		{
-			IO.KeysDown[wParam] = 0;
+			IO.KeysDown[wParam] = false;
 
 			return true;
 		}
