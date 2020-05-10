@@ -207,9 +207,9 @@ void Renderer::Render(entt::registry& Registry)
 					CameraPosY = Transform.Translation.y;
 					CameraPosZ = Transform.Translation.z;
 					FOV = Camera.FieldOfView * 180.f / 3.14159f;
-					CameraPitch = Transform.Rotation.x * 180.f / 3.14159f;
-					CameraYaw = Transform.Rotation.y * 180.f / 3.14159f;
-					CameraRoll = Transform.Rotation.z * 180.f / 3.14159f;
+					CameraPitch = Transform.Rotation.y * 180.f / 3.14159f;
+					CameraYaw = Transform.Rotation.z * 180.f / 3.14159f;
+					CameraRoll = Transform.Rotation.x * 180.f / 3.14159f;
 				});
 			
 			ImGui::Begin("Camera Settings");
