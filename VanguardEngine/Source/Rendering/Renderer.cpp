@@ -198,32 +198,29 @@ void Renderer::Render(entt::registry& Registry)
 
 			// #TEMP: Temporary camera settings utility for debugging.
 
-			float CameraPosX, CameraPosY, CameraPosZ, FOV;
+			float CameraPosX, CameraPosY, CameraPosZ, FOV, CameraPitch, CameraYaw, CameraRoll;
 
 			Registry.view<TransformComponent, CameraComponent>().each(
-				[&CameraPosX, &CameraPosY, &CameraPosZ, &FOV](auto Entity, auto& Transform, auto& Camera)
+				[&](auto Entity, auto& Transform, auto& Camera)
 				{
 					CameraPosX = Transform.Translation.x;
 					CameraPosY = Transform.Translation.y;
 					CameraPosZ = Transform.Translation.z;
 					FOV = Camera.FieldOfView * 180.f / 3.14159f;
+					CameraPitch = Transform.Rotation.x * 180.f / 3.14159f;
+					CameraYaw = Transform.Rotation.y * 180.f / 3.14159f;
+					CameraRoll = Transform.Rotation.z * 180.f / 3.14159f;
 				});
 			
 			ImGui::Begin("Camera Settings");
-			ImGui::SliderFloat("X", &CameraPosX, -20.f, 20.f);
-			ImGui::SliderFloat("Y", &CameraPosY, -20.f, 20.f);
-			ImGui::SliderFloat("Z", &CameraPosZ, -20.f, 20.f);
-			ImGui::SliderFloat("FOV", &FOV, 45.f, 120.f);
+			ImGui::Text("X: %f", CameraPosX);
+			ImGui::Text("Y: %f", CameraPosY);
+			ImGui::Text("Z: %f", CameraPosZ);
+			ImGui::Text("Pitch: %f", CameraPitch);
+			ImGui::Text("Yaw: %f", CameraYaw);
+			ImGui::Text("Roll: %f", CameraRoll);
+			ImGui::Text("FOV: %f", FOV);
 			ImGui::End();
-
-			Registry.view<TransformComponent, CameraComponent>().each(
-				[CameraPosX, CameraPosY, CameraPosZ, FOV](auto Entity, auto& Transform, auto& Camera)
-				{
-					Transform.Translation.x = CameraPosX;
-					Transform.Translation.y = CameraPosY;
-					Transform.Translation.z = CameraPosZ;
-					Camera.FieldOfView = FOV * 3.14159f / 180.f;
-				});
 
 			// #TODO: Conditionally compile this out.
 			UIManager::Get().Render(Registry);
