@@ -4,7 +4,7 @@
 #include <Core/Windows/WindowsMinimal.h>
 #include <Core/InputManager.h>
 
-WindowFrame* GlobalWindow;  // #NOTE: This is assuming we're only ever going to have one active WindowFrame at a time.
+#include <imgui.h>
 
 constexpr auto WindowStyle = WS_OVERLAPPED | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_SIZEBOX | WS_VISIBLE;
 constexpr auto WindowStyleEx = 0;
@@ -35,18 +35,15 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 	case WM_MOVE:
 		// #TODO: Not working.
-		if (GlobalWindow->CursorRestrained)
-		{
-			GlobalWindow->RestrainCursor(true);
-		}
+		WindowFrame::Get().RestrainCursor(WindowFrame::Get().ActiveCursorRestraint);
 
-		return 0;
+		return ::DefWindowProc(hWnd, msg, wParam, lParam);
 
 	case WM_SIZE:
-		if (wParam != SIZE_MINIMIZED && GlobalWindow->OnSizeChanged)
+		if (wParam != SIZE_MINIMIZED && WindowFrame::Get().OnSizeChanged)
 		{
 			// #TODO: Handle fullscreen.
-			GlobalWindow->OnSizeChanged(static_cast<size_t>(LOWORD(lParam)), static_cast<size_t>(HIWORD(lParam)), false);
+			WindowFrame::Get().OnSizeChanged(static_cast<size_t>(LOWORD(lParam)), static_cast<size_t>(HIWORD(lParam)), false);
 		}
 
 		return 0;
@@ -59,41 +56,38 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		const auto Active = LOWORD(wParam);
 		if (Active == WA_ACTIVE || Active == WA_CLICKACTIVE)
 		{
-			if (GlobalWindow->OnFocusChanged)
+			if (WindowFrame::Get().OnFocusChanged)
 			{
-				GlobalWindow->OnFocusChanged(true);
+				WindowFrame::Get().OnFocusChanged(true);
 			}
 
-			if (GlobalWindow->CursorRestrained)
-			{
-				GlobalWindow->RestrainCursor(true);
-			}
+			WindowFrame::Get().RestrainCursor(WindowFrame::Get().ActiveCursorRestraint);
 		}
 
 		else
 		{
-			if (GlobalWindow->OnFocusChanged)
+			if (WindowFrame::Get().OnFocusChanged)
 			{
-				GlobalWindow->OnFocusChanged(false);
+				WindowFrame::Get().OnFocusChanged(false);
 			}
 		}
 
 		return 0;
 	}
 
-	if (InputManager::Get().ProcessWindowMessage(msg, wParam, lParam))
-	{
-		return 0;
-	}
-
-	return ::DefWindowProc(hWnd, msg, wParam, lParam);
+	return InputManager::Get().ProcessWindowMessage(msg, wParam, lParam) ? 0 : ::DefWindowProc(hWnd, msg, wParam, lParam);
 }
 
-WindowFrame::WindowFrame(const std::wstring& Title, size_t Width, size_t Height)
+WindowFrame::~WindowFrame()
+{
+	VGScopedCPUStat("Destroy Window");
+
+	::UnregisterClass(WindowClassName, ::GetModuleHandle(nullptr));
+}
+
+void WindowFrame::Create(const std::wstring& Title, size_t Width, size_t Height)
 {
 	VGScopedCPUStat("Create Window");
-
-	GlobalWindow = this;
 
 	const auto ModuleHandle = ::GetModuleHandle(nullptr);
 
@@ -136,13 +130,6 @@ WindowFrame::WindowFrame(const std::wstring& Title, size_t Width, size_t Height)
 	}
 }
 
-WindowFrame::~WindowFrame()
-{
-	VGScopedCPUStat("Destroy Window");
-
-	::UnregisterClass(WindowClassName, ::GetModuleHandle(nullptr));
-}
-
 void WindowFrame::SetTitle(std::wstring Title)
 {
 	VGScopedCPUStat("Set Window Title");
@@ -175,10 +162,7 @@ void WindowFrame::SetSize(size_t Width, size_t Height)
 	}
 
 	// Window size updated, we need to update the clipping bounds.
-	if (CursorRestrained)
-	{
-		RestrainCursor(true);
-	}
+	RestrainCursor(ActiveCursorRestraint);
 }
 
 void WindowFrame::ShowCursor(bool Visible)
@@ -188,13 +172,50 @@ void WindowFrame::ShowCursor(bool Visible)
 	::ShowCursor(Visible);
 }
 
-void WindowFrame::RestrainCursor(bool Restrain)
+void WindowFrame::RestrainCursor(CursorRestraint Restraint)
 {
 	VGScopedCPUStat("Restrain Window Cursor");
 
-	CursorRestrained = Restrain;
+	ActiveCursorRestraint = Restraint;
 
-	if (Restrain)
+	switch (Restraint)
+	{
+	case CursorRestraint::None:
+	{
+		const auto Result = ::ClipCursor(nullptr);
+		if (!Result)
+		{
+			VGLogError(Window) << "Failed to unrestrain cursor: " << GetPlatformError();
+		}
+
+		break;
+	}
+
+	case CursorRestraint::ToCenter:
+	{
+		// Disable any clipping first.
+		const auto Result = ::ClipCursor(nullptr);
+		if (!Result)
+		{
+			VGLogError(Window) << "Failed to unrestrain cursor: " << GetPlatformError();
+		}
+
+		RECT ClientRect;
+		::GetClientRect(static_cast<HWND>(Handle), &ClientRect);
+
+		POINT TopLeft = { ClientRect.left, ClientRect.top };
+		POINT BottomRight = { ClientRect.right, ClientRect.bottom };
+
+		// Convert the local space coordinates to screen space.
+		::ClientToScreen(static_cast<HWND>(Handle), &TopLeft);
+		::ClientToScreen(static_cast<HWND>(Handle), &BottomRight);
+
+		CursorLockPosition = std::make_pair(TopLeft.x + (BottomRight.x - TopLeft.x) * 0.5f, TopLeft.y + (BottomRight.y - TopLeft.y) * 0.5f);
+
+		break;
+	}
+
+	case CursorRestraint::ToWindow:
 	{
 		RECT ClientRect;
 		::GetClientRect(static_cast<HWND>(Handle), &ClientRect);
@@ -216,14 +237,37 @@ void WindowFrame::RestrainCursor(bool Restrain)
 		{
 			VGLogError(Window) << "Failed to restrain cursor: " << GetPlatformError();
 		}
-	}
 
-	else
+		break;
+	}
+	}
+}
+
+void WindowFrame::UpdateCursor()
+{
+	// Apply centering restraint if that's active.
+	if (ActiveCursorRestraint == CursorRestraint::ToCenter && ::GetFocus() == static_cast<HWND>(GetHandle()))
 	{
-		const auto Result = ::ClipCursor(nullptr);
-		if (!Result)
+		if (!::SetCursorPos(CursorLockPosition.first, CursorLockPosition.second))
 		{
-			VGLogError(Window) << "Failed to restrain cursor: " << GetPlatformError();
+			VGLogWarning(Window) << "Failed to set cursor position to window center: " << GetPlatformError();
+		}
+
+		else
+		{
+			POINT ClientMousePos{ CursorLockPosition.first, CursorLockPosition.second };
+
+			// ImGui stores cursor positions in client space.
+			if (!::ScreenToClient(static_cast<HWND>(GetHandle()), &ClientMousePos))
+			{
+				VGLogWarning(Window) << "Failed to convert mouse position from screen space to window space: " << GetPlatformError();
+			}
+
+			else
+			{
+				// Set the previous position to the center so that next frame's delta doesn't treat this cursor update as a normal mouse move.
+				ImGui::GetIO().MousePosPrev = { static_cast<float>(ClientMousePos.x), static_cast<float>(ClientMousePos.y) };
+			}
 		}
 	}
 }
