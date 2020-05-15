@@ -6,6 +6,7 @@
 #include <Rendering/PipelineState.h>
 #include <Core/Config.h>
 #include <Core/InputManager.h>
+#include <Window/WindowFrame.h>
 
 #include <imgui.h>
 #include <d3dcompiler.h>
@@ -353,6 +354,9 @@ void UserInterfaceManager::NewFrame()
 	InputManager::Get().UpdateInputDevices();
 
 	ImGui::NewFrame();
+
+	// Update the mouse after computing the movement delta.
+	WindowFrame::Get().UpdateCursor();
 }
 
 void UserInterfaceManager::Render(CommandList& List)

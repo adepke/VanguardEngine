@@ -31,7 +31,7 @@ void InputManager::UpdateMouse()
 	{
 		POINT TargetPoint = { static_cast<int>(IO.MousePos.x), static_cast<int>(IO.MousePos.y) };
 
-		::ClientToScreen(static_cast<HWND>(WindowHandle), &TargetPoint);  // Convert the point to screen space.
+		::ClientToScreen(static_cast<HWND>(WindowFrame::Get().GetHandle()), &TargetPoint);  // Convert the point to screen space.
 		::SetCursorPos(TargetPoint.x, TargetPoint.y);
 	}
 
@@ -49,9 +49,9 @@ void InputManager::UpdateMouse()
 
 	if (auto* ForegroundWindow = ::GetForegroundWindow(); ForegroundWindow)
 	{
-		if (::IsChild(ForegroundWindow, static_cast<HWND>(WindowHandle)))
+		if (::IsChild(ForegroundWindow, static_cast<HWND>(WindowFrame::Get().GetHandle())))
 		{
-			ForegroundWindow = static_cast<HWND>(WindowHandle);
+			ForegroundWindow = static_cast<HWND>(WindowFrame::Get().GetHandle());
 		}
 
 		if (IO.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
@@ -64,9 +64,9 @@ void InputManager::UpdateMouse()
 
 		else
 		{
-			if (ForegroundWindow == WindowHandle)
+			if (ForegroundWindow == WindowFrame::Get().GetHandle())
 			{
-				if (!::ScreenToClient(static_cast<HWND>(WindowHandle), &MousePosition))
+				if (!::ScreenToClient(static_cast<HWND>(WindowFrame::Get().GetHandle()), &MousePosition))
 					VGLogWarning(Core) << "Failed to convert mouse position from screen space to window space: " << GetPlatformError();
 				else
 					IO.MousePos = { static_cast<float>(MousePosition.x), static_cast<float>(MousePosition.y) };
@@ -146,7 +146,7 @@ bool InputManager::ProcessWindowMessage(uint32_t Message, int64_t wParam, uint64
 		
 		if (!ImGui::IsAnyMouseDown() && !::GetCapture())
 		{
-			::SetCapture(static_cast<HWND>(WindowHandle));
+			::SetCapture(static_cast<HWND>(WindowFrame::Get().GetHandle()));
 		}
 		
 		IO.MouseDown[MouseButton] = true;
@@ -167,7 +167,7 @@ bool InputManager::ProcessWindowMessage(uint32_t Message, int64_t wParam, uint64
 		
 		IO.MouseDown[MouseButton] = false;
 
-		if (!ImGui::IsAnyMouseDown() && ::GetCapture() == WindowHandle)
+		if (!ImGui::IsAnyMouseDown() && ::GetCapture() == WindowFrame::Get().GetHandle())
 		{
 			::ReleaseCapture();
 		}

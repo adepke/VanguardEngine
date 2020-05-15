@@ -9,8 +9,6 @@
 class InputManager
 {
 private:
-	void* WindowHandle = nullptr;
-
 	void UpdateKeyboard();
 	void UpdateMouse();
 	void UpdateGamepad();
@@ -28,8 +26,6 @@ public:
 
 	InputManager& operator=(const InputManager&) = delete;
 	InputManager& operator=(InputManager&&) noexcept = delete;
-
-	void SetWindowHandle(void* Handle) noexcept { WindowHandle = Handle; }
 
 	bool ProcessWindowMessage(uint32_t Message, int64_t wParam, uint64_t lParam);
 	void UpdateInputDevices();

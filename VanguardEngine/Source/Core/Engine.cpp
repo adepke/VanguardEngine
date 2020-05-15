@@ -16,8 +16,6 @@
 #include <Rendering/RenderSystems.h>
 #include <Core/CoreComponents.h>
 
-std::unique_ptr<WindowFrame> MainWindow;
-
 void EnableDPIAwareness()
 {
 	VGScopedCPUStat("Enable DPI Awareness");
@@ -54,12 +52,10 @@ void EngineBoot()
 	constexpr auto DefaultWindowSizeX = 800;
 	constexpr auto DefaultWindowSizeY = 600;
 
-	MainWindow = std::make_unique<WindowFrame>(VGText("Vanguard Engine"), DefaultWindowSizeX, DefaultWindowSizeY);
-	MainWindow->OnFocusChanged = &OnFocusChanged;
-	MainWindow->OnSizeChanged = &OnSizeChanged;
-	MainWindow->RestrainCursor(false);
-
-	InputManager::Get().SetWindowHandle(MainWindow->GetHandle());
+	WindowFrame::Get().Create(VGText("Vanguard Engine"), DefaultWindowSizeX, DefaultWindowSizeY);
+	WindowFrame::Get().OnFocusChanged = &OnFocusChanged;
+	WindowFrame::Get().OnSizeChanged = &OnSizeChanged;
+	WindowFrame::Get().RestrainCursor(CursorRestraint::ToCenter);
 
 #if BUILD_DEBUG
 	constexpr auto EnableDebugging = true;
@@ -67,7 +63,7 @@ void EngineBoot()
 	constexpr auto EnableDebugging = false;
 #endif
 
-	auto Device = std::make_unique<RenderDevice>(static_cast<HWND>(MainWindow->GetHandle()), false, EnableDebugging);
+	auto Device = std::make_unique<RenderDevice>(static_cast<HWND>(WindowFrame::Get().GetHandle()), false, EnableDebugging);
 	Device->SetResolution(DefaultWindowSizeX, DefaultWindowSizeY, false);
 	Renderer::Get().Initialize(std::move(Device));
 }
@@ -77,9 +73,9 @@ void EngineLoop()
 	entt::registry TempReg;
 
 	TransformComponent SpectatorTransform{};
-	SpectatorTransform.Translation.x = -5.f;
+	SpectatorTransform.Translation.x = -10.f;
 	SpectatorTransform.Translation.y = 0.f;
-	SpectatorTransform.Translation.z = 4.f;
+	SpectatorTransform.Translation.z = 1.f;
 
 	CameraComponent SpectatorCamera{};
 
@@ -132,7 +128,7 @@ void EngineLoop()
 			VGScopedCPUStat("Window Message Processing");
 
 			MSG Message{};
-			if (::PeekMessage(&Message, static_cast<HWND>(MainWindow->GetHandle()), 0, 0, PM_REMOVE))
+			if (::PeekMessage(&Message, static_cast<HWND>(WindowFrame::Get().GetHandle()), 0, 0, PM_REMOVE))
 			{
 				::TranslateMessage(&Message);
 				::DispatchMessage(&Message);
@@ -155,8 +151,6 @@ void EngineLoop()
 void EngineShutdown()
 {
 	VGScopedCPUStat("Engine Shutdown");
-
-	MainWindow.reset();
 }
 
 int32_t EngineMain()
