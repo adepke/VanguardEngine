@@ -16,37 +16,34 @@
 XMMATRIX SpectatorCameraView(TransformComponent& Transform, const CameraComponent& Camera, float DeltaPitch, float DeltaYaw,
 	bool MoveForward, bool MoveBackward, bool MoveLeft, bool MoveRight, bool MoveUp, bool MoveDown)
 {
-	constexpr auto MovementSpeed = 0.5f;  // #TODO: Multiply by delta time.
-	constexpr auto RotationSpeed = 0.5f;
+	constexpr auto MovementSpeed = 0.4f;  // #TODO: Multiply by delta time.
+	constexpr auto RotationSpeed = 0.4f;
 
 	// #TODO: Pitch locking.
 	Transform.Rotation.y += DeltaPitch * RotationSpeed * -1.f;
 	Transform.Rotation.z += DeltaYaw * RotationSpeed;
 
-	//const auto RotationMatrix = XMMatrixRotationRollPitchYaw(-Transform.Rotation.y, -Transform.Rotation.z, -Transform.Rotation.x);
-	const auto RotationMatrix = XMMatrixRotationRollPitchYaw(Transform.Rotation.x, -Transform.Rotation.y, Transform.Rotation.z);
-	const auto FocusDirection = XMVector3Normalize(XMVector3TransformCoord(XMVectorSet(1.f, 0.f, 0.f, 0.f), RotationMatrix));
-
-	auto EyePosition = XMVectorSet(Transform.Translation.x, Transform.Translation.y, Transform.Translation.z, 0.f);
-	const auto UpDirection = XMVectorSet(0.f, 0.f, 1.f, 0.f);
+	const auto RotationMatrix = XMMatrixRotationX(-Transform.Rotation.x) * XMMatrixRotationY(-Transform.Rotation.y) * XMMatrixRotationZ(-Transform.Rotation.z);
 
 	const auto Forward = XMVector3TransformCoord(XMVectorSet(1.f, 0.f, 0.f, 0.f), RotationMatrix);
-	const auto Across = XMVector3Normalize(XMVectorNegate(XMVector3Cross(Forward, UpDirection)));
-	const auto Upward = XMVector3Normalize(XMVectorNegate(XMVector3Cross(Across, Forward)));
+	const auto Upward = XMVector3TransformCoord(XMVectorSet(0.f, 0.f, 1.f, 0.f), RotationMatrix);
+	const auto Across = XMVector3Cross(Upward, Forward);
 
 	const auto ForwardMovement = (MoveForward ? 1.f : 0.f) - (MoveBackward ? 1.f : 0.f);
-	const auto LeftMovement = (MoveLeft ? 1.f : 0.f) - (MoveRight ? 1.f : 0.f);
 	const auto UpMovement = (MoveUp ? 1.f : 0.f) - (MoveDown ? 1.f : 0.f);
+	const auto LeftMovement = (MoveLeft ? 1.f : 0.f) - (MoveRight ? 1.f : 0.f);
 
+	auto EyePosition = XMVectorSet(Transform.Translation.x, Transform.Translation.y, Transform.Translation.z, 0.f);
 	EyePosition += Forward * ForwardMovement * MovementSpeed;
-	EyePosition += Across * LeftMovement * MovementSpeed;
 	EyePosition += Upward * UpMovement * MovementSpeed;
-
-	const auto FocusPosition = EyePosition + FocusDirection;
+	EyePosition += Across * LeftMovement * MovementSpeed;
 
 	XMStoreFloat3(&Transform.Translation, EyePosition);
 
-	return XMMatrixLookAtRH(EyePosition, FocusPosition, UpDirection);
+	const auto FocusDirection = XMVector3Normalize(XMVector3TransformCoord(XMVectorSet(1.f, 0.f, 0.f, 0.f), RotationMatrix));
+	const auto FocusPosition = EyePosition + FocusDirection;
+
+	return XMMatrixLookAtRH(EyePosition, FocusPosition, Upward);
 }
 
 void CameraSystem::Update(entt::registry& Registry)
