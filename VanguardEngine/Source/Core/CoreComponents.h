@@ -4,6 +4,8 @@
 
 #include <DirectXMath.h>
 
+using namespace DirectX;
+
 struct TransformComponent
 {
 	XMFLOAT3 Scale{ 1.f, 1.f, 1.f };
