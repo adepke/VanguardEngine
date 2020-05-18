@@ -66,14 +66,14 @@ typedef HRESULT(__stdcall *DxcCreateInstance2Proc)(
 /// While this function is similar to CoCreateInstance, there is no COM involvement.
 /// </remarks>
 
-//extern "C"
+extern "C"
 DXC_API_IMPORT HRESULT __stdcall DxcCreateInstance(
   _In_ REFCLSID   rclsid,
   _In_ REFIID     riid,
   _Out_ LPVOID*   ppv
   );
 
-//extern "C"
+extern "C"
 DXC_API_IMPORT HRESULT __stdcall DxcCreateInstance2(
   _In_ IMalloc    *pMalloc,
   _In_ REFCLSID   rclsid,
