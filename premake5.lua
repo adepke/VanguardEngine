@@ -156,7 +156,7 @@ project "Engine"
 	
 	libdirs {}
 	
-	links { "d3d12", "dxgi", "d3dcompiler", "xinput" }
+	links { "d3d12", "dxgi", "xinput" }
 	
 	-- Specific Links
 	
@@ -167,6 +167,10 @@ project "Engine"
 		links { "pthread" }
 		
 	filter {}
+	
+	postbuildcommands {
+		"{COPY} ../../VanguardEngine/ThirdParty/DirectXShaderCompiler/*.dll ../Bin/%{cfg.platform}_%{cfg.buildcfg}/"
+	}
 	
 	-- Third Party Links
 	
