@@ -1,7 +1,7 @@
 // Copyright (c) 2019-2020 Andrew Depke
 
 #include <Editor/UIManager.h>
-//#include <Core/CoreComponents.h>  // #TEMP: Causing build errors.
+#include <Core/CoreComponents.h>
 #include <Rendering/RenderComponents.h>
 
 #include <imgui.h>
@@ -9,7 +9,7 @@
 void UIManager::DrawEntityViewer(entt::registry& Registry)
 {
 	// #TODO: Use reflection to get all entity properties.
-	/*
+
 	const auto EntityView = Registry.view<TransformComponent>();
 	const auto EntityCount = EntityView.size();
 
@@ -29,7 +29,6 @@ void UIManager::DrawEntityViewer(entt::registry& Registry)
 		});
 
 	ImGui::End();
-	*/
 }
 
 void UIManager::Render(entt::registry& Registry)
