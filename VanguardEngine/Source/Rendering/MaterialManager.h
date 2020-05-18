@@ -11,9 +11,6 @@ class RenderDevice;
 
 class MaterialManager
 {
-private:
-	void* CompilerModule = nullptr;
-
 public:
 	static inline MaterialManager& Get() noexcept
 	{
@@ -21,14 +18,12 @@ public:
 		return Singleton;
 	}
 
-	MaterialManager();
+	MaterialManager() = default;
 	MaterialManager(const MaterialManager&) = delete;
 	MaterialManager(MaterialManager&&) noexcept = delete;
 
 	MaterialManager& operator=(const MaterialManager&) = delete;
 	MaterialManager& operator=(MaterialManager&&) noexcept = delete;
-
-	~MaterialManager();
 
 	// Compiles shaders, builds pipelines.
 	std::vector<Material> ReloadMaterials(RenderDevice& Device);

@@ -9,27 +9,6 @@
 #include <filesystem>
 #include <fstream>
 
-#include <Core/Windows/WindowsMinimal.h>
-
-MaterialManager::MaterialManager()
-{
-	if (CompilerModule = ::LoadLibrary(VGText("dxcompiler.dll")); !CompilerModule)
-	{
-		VGLogFatal(Rendering) << "Failed to load DirectX shader compiler DLL: " << GetPlatformError();
-	}
-}
-
-MaterialManager::~MaterialManager()
-{
-	if (CompilerModule)
-	{
-		if (!::FreeLibrary(static_cast<HMODULE>(CompilerModule)))
-		{
-			VGLogError(Rendering) << "Failed to free DirectX shader compiler DLL: " << GetPlatformError();
-		}
-	}
-}
-
 std::vector<Material> MaterialManager::ReloadMaterials(RenderDevice& Device)
 {
 	VGScopedCPUStat("Reload Materials");
