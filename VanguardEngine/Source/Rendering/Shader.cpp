@@ -147,8 +147,13 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& Path, ShaderT
 	CompileArguments.emplace_back(VGText("-I"));
 	CompileArguments.emplace_back(StableShaderIncludePath.data());
 #if BUILD_DEBUG || BUILD_DEVELOPMENT
-	CompileArguments.emplace_back(DXC_ARG_SKIP_OPTIMIZATIONS);  // Disable optimization.
 	CompileArguments.emplace_back(DXC_ARG_DEBUG);  // Enable debug information.
+#endif
+#if BUILD_DEBUG
+	CompileArguments.emplace_back(DXC_ARG_SKIP_OPTIMIZATIONS);  // Disable optimization.
+#endif
+#if BUILD_DEVELOPMENT
+	CompileArguments.emplace_back(DXC_ARG_OPTIMIZATION_LEVEL1);  // Basic optimization.
 #endif
 #if BUILD_RELEASE
 	CompileArguments.emplace_back(DXC_ARG_OPTIMIZATION_LEVEL3);  // Maximum optimization.
