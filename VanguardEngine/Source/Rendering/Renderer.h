@@ -22,9 +22,9 @@ private:
 	std::unique_ptr<UserInterfaceManager> UserInterface;
 
 public:
-	std::unique_ptr<RenderDevice> Device;
-
 	std::vector<Material> Materials;
+
+	std::unique_ptr<RenderDevice> Device;
 
 private:
 	void UpdateCameraBuffer();
