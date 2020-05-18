@@ -2,18 +2,20 @@
 
 #pragma pack_matrix(row_major)
 
-// #TODO: Replace with ConstantBuffer in DXC branch.
-cbuffer PerObject : register(b0)
+struct PerObject
 {
 	matrix WorldMatrix;
 };
 
-// #TODO: Replace with ConstantBuffer in DXC branch.
-cbuffer CameraBuffer : register(b1)
+ConstantBuffer<PerObject> perObject : register(b0);
+
+struct CameraBuffer
 {
 	matrix ViewMatrix;
 	matrix ProjectionMatrix;
 };
+
+ConstantBuffer<CameraBuffer> cameraBuffer : register(b1);
 
 struct Vertex
 {
@@ -21,7 +23,7 @@ struct Vertex
 	float4 Color : COLOR;
 };
 
-StructuredBuffer<Vertex> VertexBuffer : register(t0);
+StructuredBuffer<Vertex> vertexBuffer : register(t0);
 
 struct Output
 {
@@ -32,13 +34,13 @@ struct Output
 [RootSignature(RS)]
 Output main(uint VertexID : SV_VertexID)
 {
-	Vertex vertex = VertexBuffer[VertexID];
+	Vertex vertex = vertexBuffer[VertexID];
 
 	Output Out;
 	Out.Position = float4(vertex.Position, 1.f);
-	Out.Position = mul(Out.Position, WorldMatrix);
-	Out.Position = mul(Out.Position, ViewMatrix);
-	Out.Position = mul(Out.Position, ProjectionMatrix);
+	Out.Position = mul(Out.Position, perObject.WorldMatrix);
+	Out.Position = mul(Out.Position, cameraBuffer.ViewMatrix);
+	Out.Position = mul(Out.Position, cameraBuffer.ProjectionMatrix);
 	Out.Color = vertex.Color;
 
 	return Out;
