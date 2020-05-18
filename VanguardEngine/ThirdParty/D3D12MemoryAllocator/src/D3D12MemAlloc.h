@@ -329,6 +329,8 @@ Features deliberately excluded from the scope of this library:
 #endif
 
 #define NOMINMAX
+#define WINDOWSMINIMAL  // #TEMP: We need to do this since this header is included in Resource.h, and leaks all over the render code, breaking WindowsMinimal.h.
+#define WIN32_LEAN_AND_MEAN
 #include <Windows.h>
 
 #define _INC_WINDOWS
