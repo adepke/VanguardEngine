@@ -151,7 +151,6 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& Path, ShaderT
 	CompileArguments.emplace_back(DXC_ARG_DEBUG);  // Enable debug information.
 #endif
 #if BUILD_RELEASE
-	CompileArguments.emplace_back(DXC_ARG_SKIP_VALIDATION);  // Disable validation.
 	CompileArguments.emplace_back(DXC_ARG_OPTIMIZATION_LEVEL3);  // Maximum optimization.
 #endif
 
