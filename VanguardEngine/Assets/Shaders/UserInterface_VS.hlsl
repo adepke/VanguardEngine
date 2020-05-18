@@ -1,9 +1,11 @@
 #include "UserInterface_RS.hlsli"
 
-cbuffer Projections : register(b0)
+struct Projections
 {
 	float4x4 ProjectionMatrix;
 };
+
+ConstantBuffer<Projections> projections : register(b0);
 
 struct Vertex
 {
@@ -27,7 +29,7 @@ PS_INPUT main(uint VertexID : SV_VertexID)
 	Vertex vertex = VertexBuffer[VertexID];
 
 	PS_INPUT output;
-	output.pos = mul(ProjectionMatrix, float4(vertex.pos.xy, 0.f, 1.f));
+	output.pos = mul(projections.ProjectionMatrix, float4(vertex.pos.xy, 0.f, 1.f));
 	output.col.r = float((vertex.col >> 0) & 0xFF) / 255.f;
 	output.col.g = float((vertex.col >> 8) & 0xFF) / 255.f;
 	output.col.b = float((vertex.col >> 16) & 0xFF) / 255.f;

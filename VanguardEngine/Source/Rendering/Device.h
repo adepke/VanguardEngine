@@ -97,9 +97,6 @@ public:
 	// Logs various data about the device's feature support. Not needed in optimized builds.
 	void CheckFeatureSupport();
 
-	// Compiles shaders, builds pipelines.
-	std::vector<Material> ReloadMaterials();
-
 	std::shared_ptr<Buffer> CreateResource(const BufferDescription& Description, const std::wstring_view Name);
 	std::shared_ptr<Texture> CreateResource(const TextureDescription& Description, const std::wstring_view Name);
 	void WriteResource(std::shared_ptr<Buffer>& Target, const std::vector<uint8_t>& Source, size_t TargetOffset = 0);

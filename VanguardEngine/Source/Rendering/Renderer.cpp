@@ -9,6 +9,7 @@
 #include <Rendering/RenderSystems.h>
 #include <Rendering/CommandList.h>
 #include <Rendering/RenderGraph.h>
+#include <Rendering/MaterialManager.h>
 #include <Editor/UIManager.h>
 
 //#include <entt/entt.hpp>  // #TODO: Include from here instead of in the header.
@@ -52,7 +53,7 @@ void Renderer::Initialize(std::unique_ptr<RenderDevice>&& InDevice)
 	Device = std::move(InDevice);
 
 	Device->CheckFeatureSupport();
-	Materials = std::move(Device->ReloadMaterials());
+	Materials = std::move(MaterialManager::Get().ReloadMaterials(*Device));
 
 	BufferDescription CameraBufferDesc{};
 	CameraBufferDesc.UpdateRate = ResourceFrequency::Static;
