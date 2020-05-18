@@ -29,7 +29,7 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 	switch (msg)
 	{
-	case WM_QUIT:
+	case WM_DESTROY:
 		::PostQuitMessage(0);
 		return 0;
 

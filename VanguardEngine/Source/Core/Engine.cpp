@@ -128,7 +128,7 @@ void EngineLoop()
 			VGScopedCPUStat("Window Message Processing");
 
 			MSG Message{};
-			if (::PeekMessage(&Message, static_cast<HWND>(WindowFrame::Get().GetHandle()), 0, 0, PM_REMOVE))
+			if (::PeekMessage(&Message, nullptr, 0, 0, PM_REMOVE))
 			{
 				::TranslateMessage(&Message);
 				::DispatchMessage(&Message);
@@ -151,6 +151,8 @@ void EngineLoop()
 void EngineShutdown()
 {
 	VGScopedCPUStat("Engine Shutdown");
+
+	VGLog(Core) << "Engine shutting down.";
 }
 
 int32_t EngineMain()
