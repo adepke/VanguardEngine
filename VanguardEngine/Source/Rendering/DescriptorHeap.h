@@ -75,6 +75,8 @@ private:
 public:
 	DescriptorHandle Allocate();
 	void Free(DescriptorHandle&& Handle);
+
+	~FreeQueueDescriptorHeap();
 };
 
 inline DescriptorHandle::~DescriptorHandle()

@@ -62,8 +62,6 @@ private:
 	ResourcePtr<IDXGISwapChain3> SwapChain;
 	size_t Frame = 0;  // Stores the actual frame number. Refers to the current CPU frame being run, stepped after finishing CPU pass.
 
-	std::array<std::shared_ptr<Texture>, FrameCount> BackBufferTextures;  // Render targets bound to the swap chain.
-
 	size_t IntraSyncValue = 0;  // Value to ensure that we signal a unique value every time we intra sync.
 	ResourcePtr<ID3D12Fence> InterSyncFence;
 	ResourcePtr<ID3D12Fence> IntraSyncFence;
@@ -72,10 +70,12 @@ private:
 	ResourcePtr<D3D12MA::Allocator> Allocator;
 	ResourceManager AllocatorManager;
 
+	DescriptorAllocator DescriptorManager;
+
+	std::array<std::shared_ptr<Texture>, FrameCount> BackBufferTextures;  // Render targets bound to the swap chain.
+
 	std::array<std::shared_ptr<Buffer>, FrameCount> FrameBuffers;  // Per-frame shared dynamic heap.
 	std::array<size_t, FrameCount> FrameBufferOffsets = {};
-
-	DescriptorAllocator DescriptorManager;
 
 	// #TODO: Don't use shared_ptr's here.
 	std::array<std::vector<std::shared_ptr<CommandList>>, FrameCount> FrameCommandLists;  // Per-frame dynamic command lists.

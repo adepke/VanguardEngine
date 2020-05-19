@@ -79,3 +79,13 @@ void FreeQueueDescriptorHeap::Free(DescriptorHandle&& Handle)
 {
 	FreeQueue.push(std::move(Handle));
 }
+
+FreeQueueDescriptorHeap::~FreeQueueDescriptorHeap()
+{
+	// Discard any remaining descriptors in the free queue.
+	while (FreeQueue.size())
+	{
+		FreeQueue.front().ParentHeap = nullptr;
+		FreeQueue.pop();
+	}
+}

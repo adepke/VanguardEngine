@@ -46,6 +46,12 @@ void Renderer::UpdateCameraBuffer()
 	Device->WriteResource(cameraBuffer, ByteData);
 }
 
+Renderer::~Renderer()
+{
+	// Sync the device so that resource members in Renderer.h don't get destroyed while in-flight.
+	Device->SyncInterframe(true);
+}
+
 void Renderer::Initialize(std::unique_ptr<RenderDevice>&& InDevice)
 {
 	VGScopedCPUStat("Renderer Initialize");
