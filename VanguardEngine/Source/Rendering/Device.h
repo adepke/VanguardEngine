@@ -125,7 +125,7 @@ public:
 	auto* GetComputeQueue() const noexcept { return ComputeCommandQueue.Get(); }
 	auto& GetComputeList() noexcept { return ComputeCommandList[GetFrameIndex()]; }
 	auto* GetSwapChain() const noexcept { return SwapChain.Get(); }
-	auto GetBackBuffer() const noexcept { return BackBufferTextures[GetFrameIndex()]; }
+	auto GetBackBuffer() const noexcept { return BackBufferTextures[SwapChain->GetCurrentBackBufferIndex()]; }  // Resizing affects the buffer index, so use the swap chain's index.
 	auto& GetDescriptorAllocator() noexcept { return DescriptorManager; }
 
 	void SetResolution(size_t Width, size_t Height, bool InFullscreen);
