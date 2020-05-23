@@ -212,6 +212,7 @@ VGWarningPop
 #define VGDeclareLogSubsystem(Name) struct ___##Name {}; static ___##Name Name; namespace Detail { constexpr const char* SubsysToString(___##Name) { return #Name; } }
 
 VGDeclareLogSubsystem(Core);
+VGDeclareLogSubsystem(Editor);
 VGDeclareLogSubsystem(Rendering);
 VGDeclareLogSubsystem(Threading);
 VGDeclareLogSubsystem(Utility);
