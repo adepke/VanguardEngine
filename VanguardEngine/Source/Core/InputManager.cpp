@@ -55,7 +55,7 @@ void InputManager::UpdateMouse()
 		}
 
 		if (IO.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
-		{	
+		{
 			if (ImGui::FindViewportByPlatformHandle(ForegroundWindow))
 			{
 				IO.MousePos = { static_cast<float>(MousePosition.x), static_cast<float>(MousePosition.y) };
@@ -74,7 +74,36 @@ void InputManager::UpdateMouse()
 		}
 	}
 
-	// #TODO: Handle mouse icons.
+	auto Cursor = ImGui::GetMouseCursor();
+
+	if (Cursor == ImGuiMouseCursor_None || IO.MouseDrawCursor)
+	{
+		::SetCursor(nullptr);  // Hide the cursor.
+	}
+
+	else
+	{
+		// Default to arrow.
+		LPTSTR PlatformCursor = IDC_ARROW;
+
+		switch (Cursor)
+		{
+		case ImGuiMouseCursor_Arrow: PlatformCursor = IDC_ARROW; break;
+		case ImGuiMouseCursor_TextInput: PlatformCursor = IDC_IBEAM; break;
+		case ImGuiMouseCursor_ResizeAll: PlatformCursor = IDC_SIZEALL; break;
+		case ImGuiMouseCursor_ResizeEW: PlatformCursor = IDC_SIZEWE; break;
+		case ImGuiMouseCursor_ResizeNS: PlatformCursor = IDC_SIZENS; break;
+		case ImGuiMouseCursor_ResizeNESW: PlatformCursor = IDC_SIZENESW; break;
+		case ImGuiMouseCursor_ResizeNWSE: PlatformCursor = IDC_SIZENWSE; break;
+		case ImGuiMouseCursor_Hand: PlatformCursor = IDC_HAND; break;
+		case ImGuiMouseCursor_NotAllowed: PlatformCursor = IDC_NO; break;
+		}
+
+		if (!::SetCursor(::LoadCursor(nullptr, PlatformCursor)))
+		{
+			VGLogWarning(Core) << "Failed to set cursor: " << GetPlatformError();
+		}
+	}
 }
 
 void InputManager::UpdateGamepad()
