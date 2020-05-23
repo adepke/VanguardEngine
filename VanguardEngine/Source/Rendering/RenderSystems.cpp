@@ -48,8 +48,6 @@ XMMATRIX SpectatorCameraView(TransformComponent& Transform, const CameraComponen
 
 void CameraSystem::Update(entt::registry& Registry)
 {
-	float PitchDelta = 0.f;
-	float YawDelta = 0.f;
 	bool MoveForward = false;
 	bool MoveBackward = false;
 	bool MoveLeft = false;
@@ -58,18 +56,15 @@ void CameraSystem::Update(entt::registry& Registry)
 	bool MoveDown = false;
 
 	auto& IO = ImGui::GetIO();
-	if (IO.MouseDown[1])  // Require right click to be pressed in order to move the camera.
-	{
-		PitchDelta = IO.MouseDelta.y * 0.005f;
-		YawDelta = IO.MouseDelta.x * 0.005f;
+	const auto PitchDelta = IO.MouseDelta.y * 0.005f;
+	const auto YawDelta = IO.MouseDelta.x * 0.005f;
 
-		if (IO.KeysDown[0x57]) MoveForward = true;  // W
-		if (IO.KeysDown[0x53]) MoveBackward = true;  // S
-		if (IO.KeysDown[0x41]) MoveLeft = true;  // A
-		if (IO.KeysDown[0x44]) MoveRight = true;  // D
-		if (IO.KeysDown[VK_SPACE]) MoveUp = true;  // Spacebar
-		if (IO.KeysDown[VK_CONTROL]) MoveDown = true;  // Ctrl
-	}
+	if (IO.KeysDown[0x57]) MoveForward = true;  // W
+	if (IO.KeysDown[0x53]) MoveBackward = true;  // S
+	if (IO.KeysDown[0x41]) MoveLeft = true;  // A
+	if (IO.KeysDown[0x44]) MoveRight = true;  // D
+	if (IO.KeysDown[VK_SPACE]) MoveUp = true;  // Spacebar
+	if (IO.KeysDown[VK_CONTROL]) MoveDown = true;  // Ctrl
 	
 	// Iterate all camera entities that have control.
 	Registry.view<TransformComponent, const CameraComponent, const ControlComponent>().each([&](auto Entity, auto& Transform, const auto& Camera)
