@@ -8,8 +8,6 @@
 
 void UIManager::DrawScene()
 {
-	//ImGui::GetStyle().WindowBorderSize = 0.f;
-
 	ImGui::SetNextWindowSize({ 400, 300 }, ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowBgAlpha(0.f);
 
