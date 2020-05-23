@@ -19,13 +19,6 @@
 #include <Rendering/RenderSystems.h>
 //
 
-void EnableDPIAwareness()
-{
-	VGScopedCPUStat("Enable DPI Awareness");
-
-	// #TODO
-}
-
 void OnFocusChanged(bool Focus)
 {
 	VGScopedCPUStat("Focus Changed");
@@ -50,7 +43,7 @@ void EngineBoot()
 
 	LogManager::Get().AddOutput<DefaultLogOutput>();
 
-	EnableDPIAwareness();
+	InputManager::Get().EnableDPIAwareness();
 
 	constexpr auto DefaultWindowSizeX = 800;
 	constexpr auto DefaultWindowSizeY = 600;
@@ -84,6 +77,7 @@ void EngineLoop()
 	const auto Spectator = TempReg.create();
 	TempReg.assign<TransformComponent>(Spectator, std::move(SpectatorTransform));
 	TempReg.assign<CameraComponent>(Spectator, std::move(SpectatorCamera));
+	TempReg.emplace<ControlComponent>(Spectator);  // #TEMP
 
 	for (int Index = 0; Index < 1; ++Index)
 	{

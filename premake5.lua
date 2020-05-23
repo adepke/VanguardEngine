@@ -156,7 +156,7 @@ project "Engine"
 	
 	libdirs {}
 	
-	links { "d3d12", "dxgi", "xinput" }
+	links { "d3d12", "dxgi", "xinput", "Shcore" }
 	
 	-- Specific Links
 	

@@ -9,6 +9,61 @@
 
 #include <Core/Windows/WindowsMinimal.h>
 #include <XInput.h>  // Required for gamepad support.
+#include <ShellScalingApi.h>
+
+float GetDPIScale(void* Monitor)
+{
+	uint32_t DPIX = 96;
+	uint32_t DPIY = 96;
+
+	if (FAILED(::GetDpiForMonitor(static_cast<HMONITOR>(Monitor), MDT_EFFECTIVE_DPI, &DPIX, &DPIY)))
+	{
+		VGLogError(Core) << "Failed to get monitor DPI.";
+
+		return 1.f;
+	}
+
+	return DPIX / 96.f;
+}
+
+void InputManager::UpdateMonitors()
+{
+	PendingMonitorUpdate = false;
+
+	ImGui::GetPlatformIO().Monitors.resize(0);
+
+	::EnumDisplayMonitors(nullptr, nullptr, MONITORENUMPROC(+[](HMONITOR Monitor, HDC, LPRECT, LPARAM)
+		{
+			MONITORINFO MonitorInfo{};
+			MonitorInfo.cbSize = sizeof(MonitorInfo);
+			
+			if (!::GetMonitorInfo(Monitor, &MonitorInfo))
+			{
+				return true;
+			}
+
+			ImGuiPlatformMonitor PlatformMonitor;
+			PlatformMonitor.MainPos = { static_cast<float>(MonitorInfo.rcMonitor.left), static_cast<float>(MonitorInfo.rcMonitor.top) };
+			PlatformMonitor.MainSize = { static_cast<float>(MonitorInfo.rcMonitor.right - MonitorInfo.rcMonitor.left), static_cast<float>(MonitorInfo.rcMonitor.bottom - MonitorInfo.rcMonitor.top) };
+			PlatformMonitor.WorkPos = { static_cast<float>(MonitorInfo.rcWork.left), static_cast<float>(MonitorInfo.rcWork.top) };
+			PlatformMonitor.WorkSize = { static_cast<float>(MonitorInfo.rcWork.right - MonitorInfo.rcWork.left), static_cast<float>(MonitorInfo.rcWork.bottom - MonitorInfo.rcWork.top) };
+			PlatformMonitor.DpiScale = GetDPIScale(Monitor);
+
+			auto& PlatformIO = ImGui::GetPlatformIO();
+
+			if (MonitorInfo.dwFlags & MONITORINFOF_PRIMARY)
+			{
+				PlatformIO.Monitors.push_front(PlatformMonitor);
+			}
+
+			else
+			{
+				PlatformIO.Monitors.push_back(PlatformMonitor);
+			}
+
+			return true;
+		}), 0);
+}
 
 // #TODO: Implement viewports features.
 
@@ -31,7 +86,6 @@ void InputManager::UpdateMouse()
 	{
 		POINT TargetPoint = { static_cast<int>(IO.MousePos.x), static_cast<int>(IO.MousePos.y) };
 
-		::ClientToScreen(static_cast<HWND>(WindowFrame::Get().GetHandle()), &TargetPoint);  // Convert the point to screen space.
 		::SetCursorPos(TargetPoint.x, TargetPoint.y);
 	}
 
@@ -70,6 +124,17 @@ void InputManager::UpdateMouse()
 					VGLogWarning(Core) << "Failed to convert mouse position from screen space to window space: " << GetPlatformError();
 				else
 					IO.MousePos = { static_cast<float>(MousePosition.x), static_cast<float>(MousePosition.y) };
+			}
+		}
+	}
+
+	if (auto HoveredWindow = ::WindowFromPoint(MousePosition); HoveredWindow)
+	{
+		if (auto* ImViewport = ImGui::FindViewportByPlatformHandle(HoveredWindow); ImViewport)
+		{
+			if (!(ImViewport->Flags & ImGuiViewportFlags_NoInputs))
+			{
+				IO.MouseHoveredViewport = ImViewport->ID;
 			}
 		}
 	}
@@ -151,6 +216,11 @@ InputManager::InputManager()
 	IO.KeyMap[ImGuiKey_Z] = 'Z';
 }
 
+void InputManager::EnableDPIAwareness()
+{
+	SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+}
+
 bool InputManager::ProcessWindowMessage(uint32_t Message, int64_t wParam, uint64_t lParam)
 {
 	// Ensure we have an ImGui context.
@@ -176,12 +246,12 @@ bool InputManager::ProcessWindowMessage(uint32_t Message, int64_t wParam, uint64
 		if (Message == WM_RBUTTONDOWN || Message == WM_RBUTTONDBLCLK) MouseButton = 1;
 		if (Message == WM_MBUTTONDOWN || Message == WM_MBUTTONDBLCLK) MouseButton = 2;
 		if (Message == WM_XBUTTONDOWN || Message == WM_XBUTTONDBLCLK) MouseButton = (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) ? 3 : 4;
-		
+
 		if (!ImGui::IsAnyMouseDown() && !::GetCapture())
 		{
 			::SetCapture(static_cast<HWND>(WindowFrame::Get().GetHandle()));
 		}
-		
+
 		IO.MouseDown[MouseButton] = true;
 
 		return true;
@@ -197,7 +267,7 @@ bool InputManager::ProcessWindowMessage(uint32_t Message, int64_t wParam, uint64
 		if (Message == WM_RBUTTONDOWN || Message == WM_RBUTTONDBLCLK) MouseButton = 1;
 		if (Message == WM_MBUTTONDOWN || Message == WM_MBUTTONDBLCLK) MouseButton = 2;
 		if (Message == WM_XBUTTONDOWN || Message == WM_XBUTTONDBLCLK) MouseButton = (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) ? 3 : 4;
-		
+
 		IO.MouseDown[MouseButton] = false;
 
 		if (!ImGui::IsAnyMouseDown() && ::GetCapture() == WindowFrame::Get().GetHandle())
@@ -261,6 +331,14 @@ bool InputManager::ProcessWindowMessage(uint32_t Message, int64_t wParam, uint64
 
 		return false;
 	}
+
+	// Display events.
+	case WM_DISPLAYCHANGE:
+	{
+		PendingMonitorUpdate = true;
+
+		return true;
+	}
 	}
 
 	return false;
@@ -269,6 +347,12 @@ bool InputManager::ProcessWindowMessage(uint32_t Message, int64_t wParam, uint64
 void InputManager::UpdateInputDevices()
 {
 	VGScopedCPUStat("Update Input Devices");
+
+	// If we have a monitor update, run it before any mouse-related tasks.
+	if (PendingMonitorUpdate)
+	{
+		UpdateMonitors();
+	}
 
 	UpdateKeyboard();
 	UpdateMouse();

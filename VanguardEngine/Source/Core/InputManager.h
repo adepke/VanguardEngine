@@ -9,6 +9,10 @@
 class InputManager
 {
 private:
+	bool PendingMonitorUpdate = true;
+
+private:
+	void UpdateMonitors();
 	void UpdateKeyboard();
 	void UpdateMouse();
 	void UpdateGamepad();
@@ -26,6 +30,8 @@ public:
 
 	InputManager& operator=(const InputManager&) = delete;
 	InputManager& operator=(InputManager&&) noexcept = delete;
+
+	void EnableDPIAwareness();
 
 	bool ProcessWindowMessage(uint32_t Message, int64_t wParam, uint64_t lParam);
 	void UpdateInputDevices();
