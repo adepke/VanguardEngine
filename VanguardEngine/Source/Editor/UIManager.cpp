@@ -6,6 +6,31 @@
 
 #include <imgui.h>
 
+void UIManager::DrawScene()
+{
+	ImGui::SetNextWindowSize({ 400, 300 }, ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowBgAlpha(0.f);
+
+	ImGui::Begin("Scene");
+
+	const auto WindowPos = ImGui::GetWindowPos();
+
+	auto ContentMin = ImGui::GetWindowContentRegionMin();
+	auto ContentMax = ImGui::GetWindowContentRegionMax();
+
+	ContentMin.x += WindowPos.x;
+	ContentMin.y += WindowPos.y;
+	ContentMax.x += WindowPos.x;
+	ContentMax.y += WindowPos.y;
+
+	SceneViewport.PositionX = ContentMin.x;
+	SceneViewport.PositionY = ContentMin.y;
+	SceneViewport.Width = ContentMax.x - ContentMin.x;
+	SceneViewport.Height = ContentMax.y - ContentMin.y;
+
+	ImGui::End();
+}
+
 void UIManager::DrawEntityViewer(entt::registry& Registry)
 {
 	// #TODO: Use reflection to get all entity properties.
@@ -29,9 +54,4 @@ void UIManager::DrawEntityViewer(entt::registry& Registry)
 		});
 
 	ImGui::End();
-}
-
-void UIManager::Render(entt::registry& Registry)
-{
-	DrawEntityViewer(Registry);
 }

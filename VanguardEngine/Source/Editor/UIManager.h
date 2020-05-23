@@ -3,12 +3,16 @@
 #pragma once
 
 #include <Core/Base.h>
+#include <Rendering/Viewport.h>
 
 #include <entt/entt.hpp>  // #TODO: Don't include this here.
 
 class UIManager
 {
-private:
+public:
+	Viewport SceneViewport;
+
+	void DrawScene();
 	void DrawEntityViewer(entt::registry& Registry);
 
 public:
@@ -24,7 +28,4 @@ public:
 
 	UIManager& operator=(const UIManager&) = delete;
 	UIManager& operator=(UIManager&&) noexcept = delete;
-
-	// Single interface to draw the editor from the renderer.
-	void Render(entt::registry& Registry);
 };
