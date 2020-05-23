@@ -10,7 +10,7 @@
 #include <Rendering/CommandList.h>
 #include <Rendering/RenderGraph.h>
 #include <Rendering/MaterialManager.h>
-#include <Editor/UIManager.h>
+#include <Editor/EditorRenderer.h>
 
 //#include <entt/entt.hpp>  // #TODO: Include from here instead of in the header.
 #include <imgui.h>
@@ -146,6 +146,11 @@ void Renderer::Render(entt::registry& Registry)
 			
 			List.Native()->SetGraphicsRootConstantBufferView(2, ActualCameraBuffer.Native()->GetGPUVirtualAddress());
 
+			// #TODO: Conditionally compile this out.
+			auto Viewport = static_cast<D3D12_VIEWPORT>(EditorRenderer::GetSceneViewport());
+
+			// #TODO: If we don't have an editor, use this viewport.
+			/*
 			D3D12_VIEWPORT Viewport{};
 			Viewport.TopLeftX = 0.f;
 			Viewport.TopLeftY = 0.f;
@@ -153,6 +158,7 @@ void Renderer::Render(entt::registry& Registry)
 			Viewport.Height = Device->RenderHeight;
 			Viewport.MinDepth = 0.f;
 			Viewport.MaxDepth = 1.f;
+			*/
 
 			D3D12_RECT ScissorRect{};
 			ScissorRect.left = 0;
@@ -230,7 +236,7 @@ void Renderer::Render(entt::registry& Registry)
 			ImGui::End();
 
 			// #TODO: Conditionally compile this out.
-			UIManager::Get().Render(Registry);
+			EditorRenderer::Render(Registry);
 			
 			List.Native()->OMSetRenderTargets(1, &static_cast<D3D12_CPU_DESCRIPTOR_HANDLE>(*BackBuffer.RTV), false, nullptr);
 			UserInterface->Render(List);
