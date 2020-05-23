@@ -70,10 +70,9 @@ void CameraSystem::Update(entt::registry& Registry)
 		if (IO.KeysDown[VK_SPACE]) MoveUp = true;  // Spacebar
 		if (IO.KeysDown[VK_CONTROL]) MoveDown = true;  // Ctrl
 	}
-
-	// #TODO: Movement affects all cameras in the registry, only affect the controlled camera.
-
-	Registry.view<TransformComponent, const CameraComponent>().each([&](auto Entity, auto& Transform, const auto& Camera)
+	
+	// Iterate all camera entities that have control.
+	Registry.view<TransformComponent, const CameraComponent, const ControlComponent>().each([&](auto Entity, auto& Transform, const auto& Camera)
 		{
 			auto ViewMatrix = SpectatorCameraView(Transform, Camera, PitchDelta, YawDelta, MoveForward, MoveBackward, MoveLeft, MoveRight, MoveUp, MoveDown);
 
