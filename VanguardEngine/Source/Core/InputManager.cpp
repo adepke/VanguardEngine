@@ -92,7 +92,11 @@ InputManager::InputManager()
 
 	IO.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
 	IO.BackendFlags |= ImGuiBackendFlags_HasSetMousePos;
+	IO.BackendFlags |= ImGuiBackendFlags_PlatformHasViewports;
+	IO.BackendFlags |= ImGuiBackendFlags_HasMouseHoveredViewport;
 	IO.BackendPlatformName = "ImGui Win32";
+
+	ImGui::GetMainViewport()->PlatformHandleRaw = WindowFrame::Get().GetHandle();
 
 	IO.KeyMap[ImGuiKey_Tab] = VK_TAB;
 	IO.KeyMap[ImGuiKey_LeftArrow] = VK_LEFT;

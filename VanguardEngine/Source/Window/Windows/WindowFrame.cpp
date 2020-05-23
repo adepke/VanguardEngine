@@ -6,7 +6,7 @@
 
 #include <imgui.h>
 
-constexpr auto WindowStyle = WS_OVERLAPPED | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_SIZEBOX | WS_VISIBLE;
+constexpr auto WindowStyle = WS_OVERLAPPED | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_SIZEBOX | WS_VISIBLE | CS_HREDRAW | CS_VREDRAW;
 constexpr auto WindowStyleEx = 0;
 constexpr auto WindowClassStyle = CS_CLASSDC;
 constexpr auto WindowClassName = VGText("VanguardEngine");
