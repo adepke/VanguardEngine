@@ -18,6 +18,7 @@ class WindowFrame
 {
 private:
 	void* Handle = nullptr;
+	bool CursorShown = true;
 
 // #NOTE: We need to make a bunch of these variables public in order to be accessible from WndProc. We also can't friend WndProc due to win32 API requirements.
 public:

@@ -169,7 +169,12 @@ void WindowFrame::ShowCursor(bool Visible)
 {
 	VGScopedCPUStat("Show Window Cursor");
 
-	::ShowCursor(Visible);
+	// ShowCursor acts like a stack, but we don't want this kind of behavior.
+	if ((Visible && !CursorShown) || (!Visible && CursorShown))
+	{
+		CursorShown = Visible;
+		::ShowCursor(Visible);
+	}
 }
 
 void WindowFrame::RestrainCursor(CursorRestraint Restraint)
