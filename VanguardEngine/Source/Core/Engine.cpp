@@ -7,14 +7,17 @@
 #include <Rendering/Renderer.h>
 #include <Window/WindowFrame.h>
 #include <Core/InputManager.h>
+#include <Core/CoreComponents.h>
+#include <Core/CoreSystems.h>
 
 #include <string>
 #include <memory>
+
 // #TEMP
 #include <thread>
 #include <Rendering/RenderComponents.h>
 #include <Rendering/RenderSystems.h>
-#include <Core/CoreComponents.h>
+//
 
 void EnableDPIAwareness()
 {
@@ -55,7 +58,6 @@ void EngineBoot()
 	WindowFrame::Get().Create(VGText("Vanguard Engine"), DefaultWindowSizeX, DefaultWindowSizeY);
 	WindowFrame::Get().OnFocusChanged = &OnFocusChanged;
 	WindowFrame::Get().OnSizeChanged = &OnSizeChanged;
-	WindowFrame::Get().RestrainCursor(CursorRestraint::ToCenter);
 
 #if BUILD_DEBUG
 	constexpr auto EnableDebugging = true;
@@ -139,6 +141,8 @@ void EngineLoop()
 				return;
 			}
 		}
+
+		ControlSystem::Update(TempReg);
 
 		CameraSystem::Update(TempReg);
 
