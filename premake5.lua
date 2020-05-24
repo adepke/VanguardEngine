@@ -6,6 +6,7 @@ function IncludeThirdParty()
 	includedirs "VanguardEngine/ThirdParty/Tracy"
 	includedirs "VanguardEngine/ThirdParty/D3D12MemoryAllocator/src"
 	includedirs "VanguardEngine/ThirdParty/DirectXShaderCompiler"
+	includedirs "VanguardEngine/ThirdParty/assimp/Include"
 end
 
 function LinkThirdParty()
@@ -14,12 +15,14 @@ function LinkThirdParty()
 	libdirs "Build/ThirdParty/Tracy/Bin/*"
 	libdirs "Build/ThirdParty/D3D12MemoryAllocator/Bin/*"
 	libdirs "VanguardEngine/ThirdParty/DirectXShaderCompiler"
+	libdirs "VanguardEngine/ThirdParty/assimp/Bin/*"
 	
 	links "imgui"
 	links "Jobs"
 	links "Tracy"
 	links "D3D12MemoryAllocator"
 	links "dxcompiler"
+	links "assimp"
 end
 
 function RunThirdParty()
@@ -29,6 +32,7 @@ function RunThirdParty()
 	include "VanguardEngine/ThirdParty/Tracy"
 	include "VanguardEngine/ThirdParty/Tracy/server"
 	include "VanguardEngine/ThirdParty/D3D12MemoryAllocator"
+	include "VanguardEngine/ThirdParty/assimp"
 end
 
 workspace "Vanguard"
@@ -127,6 +131,7 @@ project "Engine"
 	-- General Files
 		
 	filter {}
+		files { "VanguardEngine/Source/Asset/*.h", "VanguardEngine/Source/Asset/*.cpp" }
 		files { "VanguardEngine/Source/Core/*.h", "VanguardEngine/Source/Core/*.cpp" }
 		files { "VanguardEngine/Source/Debug/*.h", "VanguardEngine/Source/Debug/*.cpp" }
 		files { "VanguardEngine/Source/Editor/*.h", "VanguardEngine/Source/Editor/*.cpp" }
@@ -138,6 +143,7 @@ project "Engine"
 	-- Specific Files
 		
 	filter { "platforms:Win64" }
+		files { "VanguardEngine/Source/Asset/Windows/*.h", "VanguardEngine/Source/Asset/Windows/*.cpp" }
 		files { "VanguardEngine/Source/Core/Windows/*.h", "VanguardEngine/Source/Core/Windows/*.cpp" }
 		files { "VanguardEngine/Source/Debug/Windows/*.h", "VanguardEngine/Source/Debug/Windows/*.cpp" }
 		files { "VanguardEngine/Source/Editor/Windows/*.h", "VanguardEngine/Source/Editor/Windows/*.cpp" }
