@@ -35,8 +35,8 @@ void ControlSystem::Update(entt::registry& Registry)
 			// GetHoveredViewport()
 			{
 				// #TEMP
-				entt::registry::entity_type SomeEntity;
-				Registry.emplace<ControlComponent>(SomeEntity);
+				//entt::registry::entity_type SomeEntity;
+				//Registry.emplace<ControlComponent>(SomeEntity);
 			}
 		}
 	}
