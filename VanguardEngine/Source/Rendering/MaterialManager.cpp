@@ -76,7 +76,7 @@ std::vector<Material> MaterialManager::ReloadMaterials(RenderDevice& Device)
 		Desc.DepthStencilDescription.BackFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
 		Desc.DepthStencilDescription.BackFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
 		Desc.DepthStencilDescription.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-		Desc.Topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+		Desc.Topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 
 		NewMat.Pipeline = std::make_unique<PipelineState>();
 		NewMat.Pipeline->Build(Device, Desc);  // #TODO: Pipeline libraries.
