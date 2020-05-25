@@ -2,8 +2,13 @@
 
 struct Input
 {
-	float4 Position : SV_POSITION;
-	float4 Color : COLOR;
+	float4 PositionSS : SV_POSITION;  // Screen space.
+	float3 Position : POSITION;  // World space.
+	float3 Normal : NORMAL;  // World space.
+	float2 UV : UV;
+	float3 Tangent : TANGENT;  // World space.
+	float3 Bitangent : BITANGENT;  // World space.
+	float Depth : DEPTH;  // View space.
 };
 
 struct Output
@@ -15,7 +20,7 @@ struct Output
 Output main(Input In) : SV_TARGET
 {
 	Output Out;
-	Out.Color = In.Color;
+	Out.Color = float4(1.f, 1.f, 1.f, 1.f);
 
 	return Out;
 }

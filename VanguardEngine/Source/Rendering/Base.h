@@ -12,9 +12,10 @@ using namespace DirectX;
 struct Vertex
 {
 	XMFLOAT3 Position;
-	XMFLOAT4 Color;
-	
-	// #TODO: Normal, UVs, etc?
+	XMFLOAT3 Normal;
+	XMFLOAT2 UV;
+	XMFLOAT3 Tangent;
+	XMFLOAT3 Bitangent;
 };
 
 // #TODO: Temporary globals.
