@@ -49,6 +49,7 @@ workspace "Vanguard"
 	
 	filter { "platforms:Win64" }
 		defines { "WIN32", "_WIN32" }
+		systemversion "latest"
 	
 	-- Global Configurations
 	
@@ -90,6 +91,7 @@ project "Engine"
 		clr "Off"
 		rtti "Off"
 		characterset "Unicode"
+		staticruntime "Off"
 		--warnings "Extra"  Disabled Extra warnings indefinitely during early development
 		warnings "Default"
 		disablewarnings { "4324", "4127" }
