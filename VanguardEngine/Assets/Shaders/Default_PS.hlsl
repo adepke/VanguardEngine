@@ -20,7 +20,7 @@ struct Output
 Output main(Input In) : SV_TARGET
 {
 	Output Out;
-	Out.Color = float4(1.f, 1.f, 1.f, 1.f);
+	Out.Color = float4(In.Normal, 1.f);
 
 	return Out;
 }
