@@ -36,15 +36,14 @@ struct CameraComponent
 	float FieldOfView = 1.57079633f;  // 90 Degrees.
 };
 
-// #TODO: Normals, UVs, etc.
-inline MeshComponent CreateMeshComponent(RenderDevice& Device, const std::vector<Vertex>& VertexPositions, const std::vector<uint32_t>& Indices)
+inline MeshComponent CreateMeshComponent(RenderDevice& Device, const std::vector<Vertex>& Vertices, const std::vector<uint32_t>& Indices)
 {
 	VGScopedCPUStat("Create Mesh Component");
 
 	MeshComponent Result;
 
 	BufferDescription VertexDescription{};
-	VertexDescription.Size = VertexPositions.size();
+	VertexDescription.Size = Vertices.size();
 	VertexDescription.Stride = sizeof(Vertex);
 	VertexDescription.UpdateRate = ResourceFrequency::Static;
 	VertexDescription.BindFlags = BindFlag::ShaderResource;  // Don't bind as vertex buffer, we aren't using the fixed pipeline vertex processing.
@@ -53,8 +52,8 @@ inline MeshComponent CreateMeshComponent(RenderDevice& Device, const std::vector
 	Result.VertexBuffer = std::move(Device.CreateResource(VertexDescription, VGText("Vertex Buffer")));
 
 	std::vector<uint8_t> VertexResource{};
-	VertexResource.resize(sizeof(Vertex) * VertexPositions.size());
-	std::memcpy(VertexResource.data(), VertexPositions.data(), VertexResource.size());
+	VertexResource.resize(sizeof(Vertex) * Vertices.size());
+	std::memcpy(VertexResource.data(), Vertices.data(), VertexResource.size());
 	Device.WriteResource(Result.VertexBuffer, VertexResource);
 
 	Device.GetDirectList().TransitionBarrier(Result.VertexBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
