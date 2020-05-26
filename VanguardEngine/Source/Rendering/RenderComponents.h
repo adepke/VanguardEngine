@@ -18,7 +18,8 @@ struct MeshComponent
 	struct Subset
 	{
 		size_t VertexOffset = 0;  // Offset into the vertex buffer.
-		size_t Vertices = 0;
+		size_t IndexOffset = 0;  // Offset into the index buffer.
+		size_t Indices = 0;
 
 		std::shared_ptr<Material> Mat;
 	};

@@ -83,19 +83,18 @@ void Renderer::Render(entt::registry& Registry)
 	// #TODO: Culling.
 
 	// #TODO: Sort by material.
-	
-	// #TEMP: Number of entities with MeshComponent and TransformComponent. Determine this procedurally.
-	const auto RenderCount = 1;
 
 	std::pair<std::shared_ptr<Buffer>, size_t> InstanceBuffer;
 
 	{
 		VGScopedCPUStat("Generate Instance Buffer");
 
-		InstanceBuffer = std::move(Device->FrameAllocate(sizeof(EntityInstance) * RenderCount));
+		const auto InstanceView = Registry.view<const TransformComponent, const MeshComponent>();
+
+		InstanceBuffer = std::move(Device->FrameAllocate(sizeof(EntityInstance) * InstanceView.size()));
 
 		size_t Index = 0;
-		Registry.view<const TransformComponent, const MeshComponent>().each([this, &InstanceBuffer, &Index](auto Entity, const auto& Transform, const auto&)
+		InstanceView.each([this, &InstanceBuffer, &Index](auto Entity, const auto& Transform, const auto&)
 			{
 				const auto Scaling = XMVectorSet(Transform.Scale.x, Transform.Scale.y, Transform.Scale.z, 0.f);
 				const auto Rotation = XMVectorSet(Transform.Rotation.x, Transform.Rotation.y, Transform.Rotation.z, 0.f);
@@ -182,9 +181,7 @@ void Renderer::Render(entt::registry& Registry)
 					const auto FinalInstanceBufferOffset = InstanceBufferOffset + (EntityIndex * sizeof(EntityInstance));
 					List.Native()->SetGraphicsRootConstantBufferView(0, InstanceBuffer.Native()->GetGPUVirtualAddress() + FinalInstanceBufferOffset);
 
-					// Set the vertex buffer.
-					List.Native()->SetGraphicsRootShaderResourceView(1, Mesh.VertexBuffer->Native()->GetGPUVirtualAddress());
-
+					// Set the index buffer.
 					D3D12_INDEX_BUFFER_VIEW IndexView{};
 					IndexView.BufferLocation = Mesh.IndexBuffer->Native()->GetGPUVirtualAddress();
 					IndexView.SizeInBytes = static_cast<UINT>(Mesh.IndexBuffer->Description.Size * Mesh.IndexBuffer->Description.Stride);
@@ -192,7 +189,17 @@ void Renderer::Render(entt::registry& Registry)
 
 					List.Native()->IASetIndexBuffer(&IndexView);
 
-					List.Native()->DrawIndexedInstanced(Mesh.IndexBuffer->Description.Size, 1, 0, 0, 0);
+					for (const auto& Subset : Mesh.Subsets)
+					{
+						// #TODO: Instead of rebinding the vertex buffer with an offset for every submesh, it's likely more performant to bind an offset table once per mesh.
+
+						// Set the vertex buffer.
+						List.Native()->SetGraphicsRootShaderResourceView(1, Mesh.VertexBuffer->Native()->GetGPUVirtualAddress() + (Subset.VertexOffset * sizeof(Vertex)));
+
+						// #TODO: Load material data into shader?
+
+						List.Native()->DrawIndexedInstanced(Subset.Indices, 1, Subset.IndexOffset, 0, 0);
+					}
 
 					++EntityIndex;
 				});
