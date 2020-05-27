@@ -191,7 +191,7 @@ void Renderer::Render(entt::registry& Registry)
 
 					for (const auto& Subset : Mesh.Subsets)
 					{
-						// #TODO: Instead of rebinding the vertex buffer with an offset for every submesh, it's likely more performant to bind an offset table once per mesh.
+						// #TODO: Only bind once per mesh, and pass Subset.VertexOffset into the draw call. This isn't yet supported with DXC, see: https://github.com/microsoft/DirectXShaderCompiler/issues/2907
 
 						// Set the vertex buffer.
 						List.Native()->SetGraphicsRootShaderResourceView(1, Mesh.VertexBuffer->Native()->GetGPUVirtualAddress() + (Subset.VertexOffset * sizeof(Vertex)));
