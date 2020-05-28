@@ -220,7 +220,7 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 	SwapChainDescription.SampleDesc.Quality = 0;
 	SwapChainDescription.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
 	SwapChainDescription.Stereo = false;
-	SwapChainDescription.Flags = 0;
+	SwapChainDescription.Flags = 0;  // #TODO: Check for tearing support, and enable if available.
 
 	DXGI_SWAP_CHAIN_FULLSCREEN_DESC SwapChainFSDescription{};
 	SwapChainFSDescription.RefreshRate.Numerator = 60;  // #TODO: Determine this based on the current monitor refresh rate?
