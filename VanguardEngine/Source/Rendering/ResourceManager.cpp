@@ -375,22 +375,29 @@ std::shared_ptr<Texture> ResourceManager::AllocateTexture(const TextureDescripti
 	D3D12MA::Allocation* AllocationHandle = nullptr;
 
 	D3D12_CLEAR_VALUE ClearValue{};
-	ClearValue.Format = Description.Format;
-	if (Description.BindFlags & BindFlag::DepthStencil)
-	{
-		ClearValue.DepthStencil.Depth = 1.f;
-		ClearValue.DepthStencil.Stencil = 0;
-	}
+	bool UseClearValue = false;
 
-	else
+	if (Description.BindFlags & BindFlag::RenderTarget)
 	{
+		UseClearValue = true;
+
+		ClearValue.Format = Description.Format;
 		ClearValue.Color[0] = 0.f;
 		ClearValue.Color[1] = 0.f;
 		ClearValue.Color[2] = 0.f;
 		ClearValue.Color[3] = 1.f;
 	}
 
-	auto Result = Device->Allocator->CreateResource(&AllocationDesc, &ResourceDesc, ResourceState, &ClearValue, &AllocationHandle, IID_PPV_ARGS(&RawResource));
+	else if (Description.BindFlags & BindFlag::DepthStencil)
+	{
+		UseClearValue = true;
+
+		ClearValue.Format = Description.Format;
+		ClearValue.DepthStencil.Depth = 1.f;
+		ClearValue.DepthStencil.Stencil = 0;
+	}
+
+	auto Result = Device->Allocator->CreateResource(&AllocationDesc, &ResourceDesc, ResourceState, UseClearValue ? &ClearValue : nullptr, &AllocationHandle, IID_PPV_ARGS(&RawResource));
 	if (FAILED(Result))
 	{
 		VGLogError(Rendering) << "Failed to allocate texture: " << Result;
