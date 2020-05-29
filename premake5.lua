@@ -7,6 +7,7 @@ function IncludeThirdParty()
 	includedirs "VanguardEngine/ThirdParty/D3D12MemoryAllocator/src"
 	includedirs "VanguardEngine/ThirdParty/DirectXShaderCompiler"
 	includedirs "VanguardEngine/ThirdParty/assimp/Include"
+	includedirs "VanguardEngine/ThirdParty/stb"
 end
 
 function LinkThirdParty()
