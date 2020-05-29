@@ -1,6 +1,7 @@
 // Copyright (c) 2019-2020 Andrew Depke
 
 #include <Asset/AssetLoader.h>
+#include <Asset/TextureLoader.h>
 #include <Rendering/Renderer.h>
 
 #include <assimp/scene.h>
@@ -40,7 +41,25 @@ MeshComponent AssetLoader::Load(std::filesystem::path Path)
 
 	Scene = Importer.ApplyPostProcessing(PostProcessFlags);
 
-	// #TODO: Material loading.
+	auto TrimmedPath = Path;
+	TrimmedPath.remove_filename();
+
+	std::vector<std::shared_ptr<Material>> Materials{};
+	Materials.reserve(Scene->mNumMaterials);
+
+	for (int Iter = 0; Iter < Scene->mNumMaterials; ++Iter)
+	{
+		const auto& Mat = *Scene->mMaterials[Iter];
+
+		Materials.emplace_back(std::make_shared<Material>());
+
+		aiString DiffusePath;
+
+		if (Mat.GetTexture(aiTextureType_DIFFUSE, 0, &DiffusePath) == aiReturn_SUCCESS)
+		{
+			Materials[Iter]->Albedo = TextureLoader::Load(TrimmedPath / DiffusePath.C_Str());
+		}
+	}
 
 	// Sum vertices/indices from all the submeshes.
 	size_t VertexCount = 0;
@@ -129,6 +148,9 @@ MeshComponent AssetLoader::Load(std::filesystem::path Path)
 			Indices.emplace_back(Face.mIndices[1]);
 			Indices.emplace_back(Face.mIndices[2]);
 		}
+
+		// Copy the submesh material, don't move since multiple submeshes can share a material.
+		Subset.Mat = Materials[Mesh->mMaterialIndex];
 
 		// #TODO: Get the mesh AABB.
 

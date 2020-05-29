@@ -193,7 +193,7 @@ void ResourceManager::Initialize(RenderDevice* InDevice, size_t BufferedFrames)
 	UploadOffsets.resize(FrameCount);
 	UploadPtrs.resize(FrameCount);
 
-	constexpr auto UploadResourceSize = 1024 * 1024 * 64;
+	constexpr auto UploadResourceSize = 1024 * 1024 * 512;
 
 	for (uint32_t Index = 0; Index < FrameCount; ++Index)
 	{
@@ -464,7 +464,7 @@ void ResourceManager::WriteBuffer(std::shared_ptr<Buffer>& Target, const std::ve
 		}
 		
 		auto* TargetCommandList = Device->GetDirectList().Native();  // Small writes are more efficiently performed on the direct/compute queue.
-		TargetCommandList->CopyBufferRegion(Target->Native(), TargetOffset, UploadResources[FrameIndex]->GetResource(), UploadOffsets[FrameIndex], Source.size());  // #TODO: If we have offsets of 0, use CopyResource.
+		TargetCommandList->CopyBufferRegion(Target->Native(), TargetOffset, UploadResources[FrameIndex]->GetResource(), UploadOffsets[FrameIndex], Source.size());
 
 		UploadOffsets[FrameIndex] += Source.size();
 	}
@@ -511,12 +511,11 @@ void ResourceManager::WriteTexture(std::shared_ptr<Texture>& Target, const std::
 	D3D12_TEXTURE_COPY_LOCATION SourceCopyDesc{};
 	SourceCopyDesc.pResource = UploadResources[FrameIndex]->GetResource();
 	SourceCopyDesc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-	SourceCopyDesc.PlacedFootprint.Offset = UploadOffsets[FrameIndex];
-	SourceCopyDesc.PlacedFootprint.Footprint.Format = Target->Description.Format;
-	SourceCopyDesc.PlacedFootprint.Footprint.Width = Target->Description.Width;  // #TODO: Support custom copy sizes.
-	SourceCopyDesc.PlacedFootprint.Footprint.Height = Target->Description.Height;
-	SourceCopyDesc.PlacedFootprint.Footprint.Depth = Target->Description.Depth;
-	SourceCopyDesc.PlacedFootprint.Footprint.RowPitch = D3D12_TEXTURE_DATA_PITCH_ALIGNMENT * 256;  // #TODO: Properly determine this number from the source data?
+
+	D3D12_RESOURCE_DESC TargetDescriptionCopy = Target->Allocation->GetResource()->GetDesc();
+
+	uint64_t RequiredCopySize;
+	Device->Native()->GetCopyableFootprints(&TargetDescriptionCopy, 0, 1, UploadOffsets[FrameIndex], &SourceCopyDesc.PlacedFootprint, nullptr, nullptr, &RequiredCopySize);
 
 	D3D12_TEXTURE_COPY_LOCATION TargetCopyDesc{};
 	TargetCopyDesc.pResource = Target->Native();
@@ -540,9 +539,9 @@ void ResourceManager::WriteTexture(std::shared_ptr<Texture>& Target, const std::
 	}
 
 	auto* TargetCommandList = Device->GetDirectList().Native();  // Small writes are more efficiently performed on the direct/compute queue.
-	TargetCommandList->CopyTextureRegion(&TargetCopyDesc, 0, 0, 0, &SourceCopyDesc, &SourceBox);  // #TODO: If we have offsets of 0, use CopyResource.
+	TargetCommandList->CopyTextureRegion(&TargetCopyDesc, 0, 0, 0, &SourceCopyDesc, &SourceBox);
 
-	UploadOffsets[FrameIndex] += Source.size();
+	UploadOffsets[FrameIndex] += RequiredCopySize;
 }
 
 void ResourceManager::CleanupFrameResources(size_t Frame)
