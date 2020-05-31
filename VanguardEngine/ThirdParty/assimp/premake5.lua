@@ -2,6 +2,12 @@ project "assimp"
 	language "C++"
 	kind "StaticLib"
 	
+	-- Always apply optimizations, we don't want to wait 5x longer for mesh loading when we likely never need to debug assimp.
+	optimize "Speed"
+	omitframepointer "On"
+	exceptionhandling "Off"
+	flags "NoRuntimeChecks"
+	
 	location "../../../Build/ThirdParty/assimp/Generated"
 	buildlog "../../../Build/Logs/AssimpBuildLog.log"
 	objdir "../../../Build/ThirdParty/assimp/Intermediate/%{cfg.platform}_%{cfg.buildcfg}"
