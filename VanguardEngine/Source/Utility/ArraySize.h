@@ -12,6 +12,9 @@ namespace Detail
 
 	template <typename T, size_t Size>
 	struct ArraySizeInternal<T[Size]> : std::integral_constant<size_t, Size> {};
+
+	template <typename T, size_t Size>
+	struct ArraySizeInternal<std::array<T, Size>> : std::integral_constant<size_t, Size> {};
 }
 
 template <typename T>
