@@ -36,7 +36,6 @@ struct Output
 	float2 UV : UV;
 	float3 Tangent : TANGENT;  // World space.
 	float3 Bitangent : BITANGENT;  // World space.
-	float Depth : DEPTH;  // View space.
 };
 
 [RootSignature(RS)]
