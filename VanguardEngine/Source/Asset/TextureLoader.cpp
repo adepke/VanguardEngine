@@ -11,6 +11,8 @@ namespace AssetLoader
 {
 	std::shared_ptr<Texture> LoadTexture(RenderDevice& Device, std::filesystem::path Path)
 	{
+		VGScopedCPUStat("Load Texture");
+
 		int PixelsX;
 		int PixelsY;
 		int ComponentsPerPixel;

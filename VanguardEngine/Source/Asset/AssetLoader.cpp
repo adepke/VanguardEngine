@@ -2,6 +2,7 @@
 
 #include <Asset/AssetLoader.h>
 #include <Asset/TextureLoader.h>
+#include <Utility/ArraySize.h>
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -17,6 +18,8 @@ namespace AssetLoader
 {
 	MeshComponent LoadMesh(RenderDevice& Device, std::filesystem::path Path)
 	{
+		VGScopedCPUStat("Load Mesh");
+
 		Assimp::Importer Importer{};
 
 		auto* Scene = Importer.ReadFile(Path.generic_string(), 0);
@@ -56,12 +59,49 @@ namespace AssetLoader
 
 			Materials.emplace_back(std::make_shared<Material>());
 
-			// #TODO: Assimp sometimes returns an absolute path, sometimes a relative path. We should convert all paths to relative before sending them to LoadTexture.
-			aiString DiffusePath;
+			aiString TexturePath;
 
-			if (Mat.GetTexture(aiTextureType_DIFFUSE, 0, &DiffusePath) == aiReturn_SUCCESS)
+			const auto SearchTextureType = [&Mat, TexturePathPtr = &TexturePath](auto& TextureTypeList)
 			{
-				Materials[Iter]->Albedo = LoadTexture(Device, TrimmedPath / DiffusePath.C_Str());
+				for (size_t Iter = 0; Iter < ArraySize(TextureTypeList); ++Iter)
+				{
+					if (Mat.GetTexture(TextureTypeList[Iter], 0, TexturePathPtr) == aiReturn_SUCCESS)
+						return true;
+				}
+
+				return false;
+			};
+
+			// #TODO: Assimp sometimes returns an absolute path, sometimes a relative path. We should convert all paths to relative before sending them to LoadTexture.
+
+			if (SearchTextureType(std::array{ aiTextureType_BASE_COLOR, aiTextureType_DIFFUSE }))
+			{
+				Materials[Iter]->Albedo = LoadTexture(Device, TrimmedPath / TexturePath.C_Str());
+			}
+			
+			if (SearchTextureType(std::array{ aiTextureType_NORMAL_CAMERA, aiTextureType_NORMALS }))
+			{
+				Materials[Iter]->Normal = LoadTexture(Device, TrimmedPath / TexturePath.C_Str());
+			}
+
+			if (SearchTextureType(std::array{ aiTextureType_EMISSION_COLOR, aiTextureType_EMISSIVE }))
+			{
+				//Materials[Iter]->Emissive = LoadTexture(Device, TrimmedPath / TexturePath.C_Str());
+			}
+
+			if (SearchTextureType(std::array{ aiTextureType_DIFFUSE_ROUGHNESS }))
+			{
+				Materials[Iter]->Roughness = LoadTexture(Device, TrimmedPath / TexturePath.C_Str());
+			}
+
+			if (SearchTextureType(std::array{ aiTextureType_METALNESS }))
+			{
+				Materials[Iter]->Metallic = LoadTexture(Device, TrimmedPath / TexturePath.C_Str());
+			}
+
+			if (SearchTextureType(std::array{ aiTextureType_AMBIENT_OCCLUSION }))
+			{
+				//Materials[Iter]->AmbientOcclusion = LoadTexture(Device, TrimmedPath / TexturePath.C_Str());
 			}
 		}
 
