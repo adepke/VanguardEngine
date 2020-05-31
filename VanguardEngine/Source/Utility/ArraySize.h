@@ -4,6 +4,7 @@
 
 #include <cstdlib>
 #include <type_traits>
+#include <array>
 
 namespace Detail
 {
