@@ -1,12 +1,12 @@
 // Copyright (c) 2019-2020 Andrew Depke
 
-#include <Editor/UIManager.h>
+#include <Editor/EditorUI.h>
 #include <Core/CoreComponents.h>
 #include <Rendering/RenderComponents.h>
 
 #include <imgui.h>
 
-void UIManager::DrawScene()
+void EditorUI::DrawScene()
 {
 	ImGui::SetNextWindowSize({ 400, 300 }, ImGuiCond_FirstUseEver);
 	ImGui::SetNextWindowBgAlpha(0.f);
@@ -31,7 +31,7 @@ void UIManager::DrawScene()
 	ImGui::End();
 }
 
-void UIManager::DrawEntityViewer(entt::registry& Registry)
+void EditorUI::DrawEntityViewer(entt::registry& Registry)
 {
 	// #TODO: Use reflection to get all entity properties.
 

@@ -2,13 +2,13 @@
 
 #pragma once
 
-#include <Rendering/Material.h>
-
 #include <filesystem>
 #include <memory>
 
-class TextureLoader
+struct Texture;
+class RenderDevice;
+
+namespace AssetLoader
 {
-public:
-	static std::shared_ptr<Texture> Load(std::filesystem::path Path);
-};
+	std::shared_ptr<Texture> LoadTexture(RenderDevice& Device, std::filesystem::path Path);
+}

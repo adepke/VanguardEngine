@@ -4,11 +4,13 @@
 
 #include <Rendering/Viewport.h>
 
-#include <entt/entt.hpp>  // #TODO: Don't include this here.
+#include <entt/entt.hpp>
 
-struct EditorRenderer
+// Rendering interface for the entire editor, this is the single point of rendering access outside of the Editor module.
+
+namespace EditorRenderer
 {
-	static Viewport GetSceneViewport();
+	Viewport GetSceneViewport();
 
-	static void Render(entt::registry& Registry);
+	void Render(entt::registry& Registry);
 };

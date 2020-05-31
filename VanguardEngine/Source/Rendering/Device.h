@@ -38,8 +38,8 @@ class RenderDevice
 public:
 	bool Debugging = false;
 	bool VSync = false;
-	size_t RenderWidth = 10;
-	size_t RenderHeight = 10;
+	uint32_t RenderWidth = 10;
+	uint32_t RenderHeight = 10;
 	bool Fullscreen = false;
 
 	static constexpr uint32_t FrameCount = 3;  // #TODO: Determine at runtime.
@@ -51,7 +51,6 @@ private:
 	// #NOTE: Ordering of these variables is significant for proper destruction!
 	ResourcePtr<ID3D12Device3> Device;
 	Adapter RenderAdapter;
-	HWND WindowHandle;
 
 	ResourcePtr<ID3D12CommandQueue> DirectCommandQueue;
 	CommandList DirectCommandList[FrameCount];  // #TODO: One per worker thread.
@@ -89,7 +88,7 @@ private:
 	void ResetFrame(size_t FrameID);
 
 public:
-	RenderDevice(HWND InWindow, bool Software, bool EnableDebugging);
+	RenderDevice(void* InWindow, bool Software, bool EnableDebugging);
 	~RenderDevice();
 
 	auto* Native() const noexcept { return Device.Get(); }
@@ -119,7 +118,6 @@ public:
 	void AdvanceGPU();  // Steps the GPU frame counter.
 	size_t GetFrameIndex() const noexcept { return Frame % RenderDevice::FrameCount; }
 
-	auto GetWindowHandle() const noexcept { return WindowHandle; }
 	auto* GetDirectQueue() const noexcept { return DirectCommandQueue.Get(); }
 	auto& GetDirectList() noexcept { return DirectCommandList[GetFrameIndex()]; }
 	auto* GetComputeQueue() const noexcept { return ComputeCommandQueue.Get(); }
@@ -128,5 +126,5 @@ public:
 	auto GetBackBuffer() const noexcept { return BackBufferTextures[SwapChain->GetCurrentBackBufferIndex()]; }  // Resizing affects the buffer index, so use the swap chain's index.
 	auto& GetDescriptorAllocator() noexcept { return DescriptorManager; }
 
-	void SetResolution(size_t Width, size_t Height, bool InFullscreen);
+	void SetResolution(uint32_t Width, uint32_t Height, bool InFullscreen);
 };

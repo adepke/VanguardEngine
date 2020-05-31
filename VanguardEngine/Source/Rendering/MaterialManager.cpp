@@ -17,7 +17,7 @@ std::vector<Material> MaterialManager::ReloadMaterials(RenderDevice& Device)
 
 	std::vector<Material> Materials;
 
-	for (const auto& Entry : std::filesystem::directory_iterator{ Config::Get().MaterialsPath })
+	for (const auto& Entry : std::filesystem::directory_iterator{ Config::MaterialsPath })
 	{
 		// #TODO: Move to standardized asset loading pipeline.
 
@@ -38,7 +38,7 @@ std::vector<Material> MaterialManager::ReloadMaterials(RenderDevice& Device)
 		NewMat.BackFaceCulling = MaterialData["BackFaceCulling"].get<bool>();
 
 		PipelineStateDescription Desc{};
-		Desc.ShaderPath = Config::Get().EngineRoot / MaterialShaders;
+		Desc.ShaderPath = Config::ShadersPath / MaterialShaders;
 		Desc.BlendDescription.AlphaToCoverageEnable = false;
 		Desc.BlendDescription.IndependentBlendEnable = false;
 		Desc.BlendDescription.RenderTarget[0].BlendEnable = false;

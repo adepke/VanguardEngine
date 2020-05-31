@@ -81,6 +81,11 @@ project "Engine"
 	
 	targetname "Vanguard"
 	
+	-- General Settings
+	
+	EnableLogging = true
+	EnableProfiling = true
+	
 	includedirs { "VanguardEngine/Source" }
 	
 	-- General Build
@@ -97,6 +102,18 @@ project "Engine"
 		warnings "Default"
 		disablewarnings { "4324", "4127" }
 		
+		if EnableLogging then
+			defines { "ENABLE_LOGGING=1" }
+		else
+			defines { "ENABLE_LOGGING=0", "JOBS_DISABLE_LOGGING" }
+		end
+		
+		if EnableProfiling then
+			defines { "ENABLE_PROFILING=1", "TRACY_ENABLE" }
+		else
+			defines { "ENABLE_PROFILING=0" }
+		end
+		
 	-- Specific Build
 		
 	filter { "platforms:Win64" }
@@ -106,7 +123,7 @@ project "Engine"
 	-- Configurations
 		
 	filter { "configurations:Debug" }
-		defines { "BUILD_DEBUG=1", "D3DCOMPILE_DEBUG=1", "TRACY_ENABLE" }
+		defines { "BUILD_DEBUG=1" }
 		flags { }
 		symbols "On"
 		optimize "Off"
@@ -114,7 +131,7 @@ project "Engine"
 		exceptionhandling "On"
 		
 	filter { "configurations:Development" }
-		defines { "BUILD_DEVELOPMENT=1", "TRACY_ENABLE", "JOBS_DISABLE_LOGGING" }
+		defines { "BUILD_DEVELOPMENT=1" }
 		flags { "LinkTimeOptimization" }
 		symbols "On"
 		optimize "Debug"
@@ -122,14 +139,12 @@ project "Engine"
 		exceptionhandling "On"
 		
 	filter { "configurations:Release" }
-		defines { "BUILD_RELEASE=1", "ENTT_DISABLE_ASSERT", "JOBS_DISABLE_LOGGING" }
+		defines { "BUILD_RELEASE=1", "ENTT_DISABLE_ASSERT" }
 		flags { "LinkTimeOptimization", "NoRuntimeChecks" }
 		symbols "Off"
 		optimize "Speed"  -- /O2 instead of /Ox on MSVS with "Full".
 		omitframepointer "On"
 		exceptionhandling "Off"
-		
-	filter {}
 		
 	-- General Files
 		
@@ -154,7 +169,7 @@ project "Engine"
 		files { "VanguardEngine/Source/Threading/Windows/*.h", "VanguardEngine/Source/Threading/Windows/*.cpp" }
 		files { "VanguardEngine/Source/Utility/Windows/*.h", "VanguardEngine/Source/Utility/Windows/*.cpp" }
 		files { "VanguardEngine/Source/Window/Windows/*.h", "VanguardEngine/Source/Window/Windows/*.cpp" }
-		
+
 	filter {}
 	
 	-- Third Party Files

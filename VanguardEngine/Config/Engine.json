@@ -1,5 +1,4 @@
 {
-  "Assets": {
-    "Materials": "Assets/Materials"
-  }
+  "ShadersPath": "Shaders",
+  "MaterialsPath": "Materials"
 }

@@ -424,8 +424,8 @@ std::shared_ptr<Texture> ResourceManager::TextureFromSwapChain(void* Surface, co
 	Description.UpdateRate = ResourceFrequency::Static;
 	Description.BindFlags = BindFlag::RenderTarget;
 	Description.AccessFlags = AccessFlag::GPUWrite;
-	Description.Width = static_cast<uint32_t>(Device->RenderWidth);
-	Description.Height = static_cast<uint32_t>(Device->RenderHeight);
+	Description.Width = Device->RenderWidth;
+	Description.Height = Device->RenderHeight;
 	Description.Depth = 1;
 	Description.Format = /*DXGI_FORMAT_R10G10B10A2_UNORM*/ DXGI_FORMAT_B8G8R8A8_UNORM;
 

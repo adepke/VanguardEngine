@@ -49,7 +49,7 @@ public:
 	void AddTableEntry(DescriptorHandle& Handle, DescriptorTableEntryType Type);
 
 	// Constructs the pending descriptor table and copies descriptors to an online heap.
-	void BuildTable(CommandList& List, uint32_t RootParameter);
+	void BuildTable(RenderDevice& Device, CommandList& List, uint32_t RootParameter);
 	
 	void FrameStep(size_t FrameIndex);
 };

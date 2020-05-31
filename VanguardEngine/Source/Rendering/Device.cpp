@@ -95,11 +95,10 @@ void RenderDevice::ResetFrame(size_t FrameID)
 	FrameCommandLists[FrameIndex].clear();
 }
 
-RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
+RenderDevice::RenderDevice(void* InWindow, bool Software, bool EnableDebugging)
 {
 	VGScopedCPUStat("Render Device Initialize");
 
-	WindowHandle = InWindow;
 	Debugging = EnableDebugging;
 
 	if (EnableDebugging)
@@ -210,8 +209,8 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 	}
 
 	DXGI_SWAP_CHAIN_DESC1 SwapChainDescription{};
-	SwapChainDescription.Width = static_cast<UINT>(RenderWidth);
-	SwapChainDescription.Height = static_cast<UINT>(RenderHeight);
+	SwapChainDescription.Width = RenderWidth;
+	SwapChainDescription.Height = RenderHeight;
 	SwapChainDescription.Format = DXGI_FORMAT_B8G8R8A8_UNORM;  // Non-HDR. #TODO: Support HDR.
 	SwapChainDescription.BufferCount = FrameCount;
 	SwapChainDescription.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -230,7 +229,7 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 	SwapChainFSDescription.Windowed = !Fullscreen;
 
 	Microsoft::WRL::ComPtr<IDXGISwapChain1> SwapChainWrapper;
-	Result = Factory->CreateSwapChainForHwnd(DirectCommandQueue.Get(), InWindow, &SwapChainDescription, &SwapChainFSDescription, nullptr, &SwapChainWrapper);
+	Result = Factory->CreateSwapChainForHwnd(DirectCommandQueue.Get(), static_cast<HWND>(InWindow), &SwapChainDescription, &SwapChainFSDescription, nullptr, &SwapChainWrapper);
 	if (FAILED(Result))
 	{
 		VGLogFatal(Rendering) << "Failed to create swap chain: " << Result;
@@ -240,7 +239,7 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 	SwapChainWrapper.As(&SwapChainWrapperConverted);
 	SwapChain.Reset(SwapChainWrapperConverted.Detach());
 
-	Result = Factory->MakeWindowAssociation(InWindow, DXGI_MWA_NO_ALT_ENTER);
+	Result = Factory->MakeWindowAssociation(static_cast<HWND>(InWindow), DXGI_MWA_NO_ALT_ENTER);
 	if (FAILED(Result))
 	{
 		VGLogFatal(Rendering) << "Failed to bind device to window: " << Result;
@@ -517,7 +516,7 @@ void RenderDevice::AdvanceGPU()
 	}
 }
 
-void RenderDevice::SetResolution(size_t Width, size_t Height, bool InFullscreen)
+void RenderDevice::SetResolution(uint32_t Width, uint32_t Height, bool InFullscreen)
 {
 	VGScopedCPUStat("Render Device Change Resolution");
 

@@ -2,7 +2,7 @@
 
 #pragma once
 
-#if !BUILD_RELEASE
+#if ENABLE_LOGGING
 
 #include <Threading/CriticalSection.h>
 
@@ -28,7 +28,7 @@ struct LogFileOutput : LogOutputBase
 		std::wstringstream Stream{};
 		Stream << "[" << Out.Subsystem << "." << Detail::SeverityToString(Out.Severity) << "] " << Out.MessageStream.str() << std::endl;
 
-		std::lock_guard Guard(Lock);
+		std::lock_guard Guard{ Lock };
 
 		FileStream << Stream.str();
 	}
@@ -47,7 +47,7 @@ struct LogWindowsOutput : LogOutputBase
 		std::wstringstream Stream{};
 		Stream << "[" << Out.Subsystem << "." << Detail::SeverityToString(Out.Severity) << "] " << Out.MessageStream.str() << std::endl;
 
-		std::lock_guard Guard(Lock);
+		std::lock_guard Guard{ Lock };
 
 		OutputDebugString(Stream.str().c_str());
 	}

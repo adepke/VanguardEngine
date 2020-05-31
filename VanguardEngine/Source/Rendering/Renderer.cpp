@@ -1,7 +1,6 @@
 // Copyright (c) 2019-2020 Andrew Depke
 
 #include <Rendering/Renderer.h>
-#include <Rendering/Device.h>
 #include <Rendering/Buffer.h>
 #include <Rendering/Texture.h>
 #include <Core/CoreComponents.h>
@@ -12,7 +11,6 @@
 #include <Rendering/MaterialManager.h>
 #include <Editor/EditorRenderer.h>
 
-//#include <entt/entt.hpp>  // #TODO: Include from here instead of in the header.
 #include <imgui.h>
 
 #include <vector>
@@ -52,10 +50,11 @@ Renderer::~Renderer()
 	Device->SyncInterframe(true);
 }
 
-void Renderer::Initialize(std::unique_ptr<RenderDevice>&& InDevice)
+void Renderer::Initialize(std::unique_ptr<WindowFrame>&& InWindow, std::unique_ptr<RenderDevice>&& InDevice)
 {
 	VGScopedCPUStat("Renderer Initialize");
 
+	Window = std::move(InWindow);
 	Device = std::move(InDevice);
 
 	Device->CheckFeatureSupport();
@@ -175,7 +174,7 @@ void Renderer::Render(entt::registry& Registry)
 			
 			size_t EntityIndex = 0;
 			Registry.view<const TransformComponent, MeshComponent>().each(
-				[&EntityIndex, &List, &InstanceBuffer, InstanceBufferOffset](auto Entity, const auto&, auto& Mesh)
+				[this, &EntityIndex, &List, &InstanceBuffer, InstanceBufferOffset](auto Entity, const auto&, auto& Mesh)
 				{
 					// Set the per object buffer.
 					const auto FinalInstanceBufferOffset = InstanceBufferOffset + (EntityIndex * sizeof(EntityInstance));
@@ -196,9 +195,16 @@ void Renderer::Render(entt::registry& Registry)
 						// Set the vertex buffer.
 						List.Native()->SetGraphicsRootShaderResourceView(1, Mesh.VertexBuffer->Native()->GetGPUVirtualAddress() + (Subset.VertexOffset * sizeof(Vertex)));
 
-						// #TODO: Load material data into shader?
+						// #TEMP: Testing sending textures to shaders.
+						/*
+						if (Subset.Mat && Subset.Mat->Albedo)
+						{
+							Device->GetDescriptorAllocator().AddTableEntry(*Subset.Mat->Albedo->SRV, DescriptorTableEntryType::ShaderResource);
+							Device->GetDescriptorAllocator().BuildTable(*Device, List, 3);
+						}
+						*/
 
-						List.Native()->DrawIndexedInstanced(Subset.Indices, 1, Subset.IndexOffset, 0, 0);
+						List.Native()->DrawIndexedInstanced(static_cast<uint32_t>(Subset.Indices), 1, static_cast<uint32_t>(Subset.IndexOffset), 0, 0);
 					}
 
 					++EntityIndex;

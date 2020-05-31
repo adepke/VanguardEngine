@@ -3,22 +3,24 @@
 #pragma once
 
 #include <Core/Base.h>
+#include <Utility/Singleton.h>
+#include <Window/WindowFrame.h>
+#include <Rendering/Device.h>
 #include <Rendering/PipelineState.h>
 #include <Rendering/Material.h>
 #include <Rendering/Buffer.h>
 #include <Rendering/Texture.h>
 #include <Rendering/UserInterface.h>
 
-#include <entt/entt.hpp>  // #TODO: Don't include, forward and include in the source.
+#include <entt/entt.hpp>
 
-class RenderDevice;
 class CommandList;
 
-class Renderer
+class Renderer : public Singleton<Renderer>
 {
 public:
-	// Destruct the device after all other resources.
-	std::unique_ptr<RenderDevice> Device;
+	std::unique_ptr<WindowFrame> Window;
+	std::unique_ptr<RenderDevice> Device;  // Destruct the device after all other resources.
 
 private:
 	std::shared_ptr<Buffer> cameraBuffer;
@@ -29,22 +31,9 @@ private:
 	void UpdateCameraBuffer();
 
 public:
-	static inline Renderer& Get() noexcept
-	{
-		static Renderer Singleton;
-		return Singleton;
-	}
-
-	Renderer() = default;
-	Renderer(const Renderer&) = delete;
-	Renderer(Renderer&&) noexcept = delete;
-
-	Renderer& operator=(const Renderer&) = delete;
-	Renderer& operator=(Renderer&&) noexcept = delete;
-
 	~Renderer();
 
-	void Initialize(std::unique_ptr<RenderDevice>&& InDevice);
+	void Initialize(std::unique_ptr<WindowFrame>&& InWindow, std::unique_ptr<RenderDevice>&& InDevice);
 
 	// Entity data is safe to write to immediately after this function returns. Do not attempt to write before Render() returns.
 	void Render(entt::registry& Registry);

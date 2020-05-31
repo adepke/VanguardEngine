@@ -4,8 +4,9 @@
 
 #include <Core/Pragma.h>
 #include <Core/Misc.h>
+#include <Utility/Singleton.h>
 
-#if !BUILD_RELEASE
+#if ENABLE_PROFILING
 #include <Tracy.hpp>
 #endif
 
@@ -32,7 +33,7 @@ PlatformErrorType GetPlatformError();
 
 namespace Detail
 {
-#if !BUILD_RELEASE
+#if ENABLE_PROFILING
 	inline tracy::Color::ColorType ResolveScopeColor(const char* Filename)
 	{
 		const std::filesystem::path Path{ Filename };
@@ -132,30 +133,18 @@ struct LogOutputBase
 	virtual void Write(const Detail::LogRecord&) = 0;
 };
 
-class LogManager
+class Logger : public Singleton<Logger>
 {
-#if !BUILD_RELEASE
+#if ENABLE_LOGGING
 private:
 	std::vector<std::unique_ptr<LogOutputBase>> Outputs;
 #endif
 
 public:
-	LogManager() = default;
-	LogManager(const LogManager&) = delete;
-	LogManager(LogManager&&) noexcept = delete;
-	LogManager& operator=(const LogManager&) = delete;
-	LogManager& operator=(LogManager&&) noexcept = delete;
-
-	static inline LogManager& Get()
-	{
-		static LogManager This;
-		return This;
-	}
-
 	template <typename T>
 	void AddOutput()
 	{
-#if !BUILD_RELEASE
+#if ENABLE_LOGGING
 		Outputs.push_back(std::make_unique<T>());
 #endif
 	}
@@ -166,7 +155,7 @@ VGWarningDisable(4100, unused-parameter)
 	void operator+=(const Detail::LogRecord& Record)
 VGWarningPop
 	{
-#if !BUILD_RELEASE
+#if ENABLE_LOGGING
 		for (auto& Output : Outputs)
 		{
 			Output->Write(Record);
@@ -180,7 +169,7 @@ VGWarningPop
 	}
 };
 
-#if BUILD_RELEASE
+#if !ENABLE_LOGGING
 #define _Detail_VGLogBranch if constexpr (true) { do {} while (0); } else
 #define _Detail_VGLogBranchFatal if constexpr (true) { VGBreak(); } else
 #else
@@ -188,7 +177,7 @@ VGWarningPop
 #define _Detail_VGLogBranchFatal
 #endif
 
-#define _Detail_VGLogBase(Subsystem, Severity) LogManager::Get() += Detail::LogRecord{ Detail::SubsysToString(Subsystem), Severity }
+#define _Detail_VGLogBase(Subsystem, Severity) Logger::Get() += Detail::LogRecord{ Detail::SubsysToString(Subsystem), Severity }
 #define _Detail_VGLogIntermediate(Subsystem, Severity) _Detail_VGLogBranch _Detail_VGLogBase(Subsystem, Severity)
 #define _Detail_VGLogIntermediateFatal(Subsystem, Severity) _Detail_VGLogBranchFatal _Detail_VGLogBase(Subsystem, Severity)
 
@@ -197,7 +186,7 @@ VGWarningPop
 #define VGLogError(Subsystem) _Detail_VGLogIntermediate(Subsystem, Detail::LogSeverity::Error)
 #define VGLogFatal(Subsystem) _Detail_VGLogIntermediateFatal(Subsystem, Detail::LogSeverity::Fatal)
 
-#if !BUILD_RELEASE
+#if ENABLE_PROFILING
 #define VGScopedCPUStat(Name) ZoneScopedNC(Name, static_cast<uint32_t>(Detail::ResolveScopeColor(__FILE__)))
 #define VGScopedGPUStat(Name) do {} while (0)  // #TODO: GPU Profiling through PIX. Do we need the command list, command queue, and/or device context?
 #define VGStatFrame FrameMark

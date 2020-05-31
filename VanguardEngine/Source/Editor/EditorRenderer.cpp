@@ -1,15 +1,18 @@
 // Copyright (c) 2019-2020 Andrew Depke
 
 #include <Editor/EditorRenderer.h>
-#include <Editor/UIManager.h>
+#include <Editor/EditorUI.h>
 
-Viewport EditorRenderer::GetSceneViewport()
+namespace EditorRenderer
 {
-	return UIManager::Get().SceneViewport;
-}
+	Viewport GetSceneViewport()
+	{
+		return EditorUI::Get().SceneViewport;
+	}
 
-void EditorRenderer::Render(entt::registry& Registry)
-{
-	UIManager::Get().DrawScene();
-	UIManager::Get().DrawEntityViewer(Registry);
+	void Render(entt::registry& Registry)
+	{
+		EditorUI::Get().DrawScene();
+		EditorUI::Get().DrawEntityViewer(Registry);
+	}
 }

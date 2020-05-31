@@ -22,8 +22,9 @@ project "Tracy"
 		"_USE_MATH_DEFINES",
 	}
 	
-	filter { "configurations:Debug or configurations:Development" }
-		defines { "TRACY_ENABLE" }
+	if EnableProfiling then
+		defines "TRACY_ENABLE"
+	end
 		
 	filter {}
 	

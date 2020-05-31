@@ -2,13 +2,13 @@
 
 #pragma once
 
-#include <Core/Base.h>
 #include <Rendering/RenderComponents.h>
 
 #include <filesystem>
 
-class AssetLoader
+class RenderDevice;
+
+namespace AssetLoader
 {
-public:
-	static MeshComponent Load(std::filesystem::path Path);
-};
+	MeshComponent LoadMesh(RenderDevice& Device, std::filesystem::path Path);
+}

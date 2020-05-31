@@ -14,39 +14,29 @@ enum class CursorRestraint
 	ToWindow,
 };
 
+int64_t __stdcall WndProc(void* hWnd, uint32_t msg, uint64_t wParam, int64_t lParam);
+
 class WindowFrame
 {
+	friend int64_t WndProc(void*, uint32_t, uint64_t, int64_t);
+
 private:
 	void* Handle = nullptr;
 	bool CursorShown = true;
-
-// #NOTE: We need to make a bunch of these variables public in order to be accessible from WndProc. We also can't friend WndProc due to win32 API requirements.
-public:
-	std::function<void(bool)> OnFocusChanged;
-	std::function<void(size_t, size_t, bool)> OnSizeChanged;
 	CursorRestraint ActiveCursorRestraint = CursorRestraint::None;
 	std::pair<int, int> CursorLockPosition;
 
 public:
-	static inline WindowFrame& Get() noexcept
-	{
-		static WindowFrame Singleton;
-		return Singleton;
-	}
+	// #TODO: Use delegates instead of std::function.
+	std::function<void(bool)> OnFocusChanged;
+	std::function<void(uint32_t, uint32_t, bool)> OnSizeChanged;
 
-	WindowFrame() = default;
-	WindowFrame(const WindowFrame&) = delete;
-	WindowFrame(WindowFrame&&) noexcept = delete;
-
-	WindowFrame& operator=(const WindowFrame&) = delete;
-	WindowFrame& operator=(WindowFrame&&) noexcept = delete;
-	
+public:
+	WindowFrame(const std::wstring& Title, uint32_t Width, uint32_t Height);
 	~WindowFrame();
 
-	void Create(const std::wstring& Title, size_t Width, size_t Height);
-
 	void SetTitle(std::wstring Title);
-	void SetSize(size_t Width, size_t Height);
+	void SetSize(uint32_t Width, uint32_t Height);
 	void ShowCursor(bool Visible);
 	void RestrainCursor(CursorRestraint Restraint);
 
