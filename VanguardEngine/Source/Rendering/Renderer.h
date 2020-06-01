@@ -11,6 +11,7 @@
 #include <Rendering/Buffer.h>
 #include <Rendering/Texture.h>
 #include <Rendering/UserInterface.h>
+#include <Rendering/DescriptorAllocator.h>
 
 #include <entt/entt.hpp>
 
@@ -26,6 +27,8 @@ private:
 	std::shared_ptr<Buffer> cameraBuffer;
 	std::vector<Material> Materials;
 	std::unique_ptr<UserInterfaceManager> UserInterface;
+
+	DescriptorHandle NullDescriptor;
 
 private:
 	void UpdateCameraBuffer();
