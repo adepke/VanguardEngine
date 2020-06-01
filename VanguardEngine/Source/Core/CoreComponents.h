@@ -4,7 +4,14 @@
 
 #include <DirectXMath.h>
 
+#include <string>
+
 using namespace DirectX;
+
+struct NameComponent
+{
+	std::string Name;
+};
 
 struct TransformComponent
 {
