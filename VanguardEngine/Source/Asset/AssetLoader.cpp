@@ -74,12 +74,14 @@ namespace AssetLoader
 
 			// #TODO: Assimp sometimes returns an absolute path, sometimes a relative path. We should convert all paths to relative before sending them to LoadTexture.
 
+			// Prefer PBR texture types, but fall back to legacy types (which may still be PBR, just incorrectly set in the asset).
+
 			if (SearchTextureType(std::array{ aiTextureType_BASE_COLOR, aiTextureType_DIFFUSE }))
 			{
 				Materials[Iter]->Albedo = LoadTexture(Device, TrimmedPath / TexturePath.C_Str());
 			}
 			
-			if (SearchTextureType(std::array{ aiTextureType_NORMAL_CAMERA, aiTextureType_NORMALS }))
+			if (SearchTextureType(std::array{ aiTextureType_NORMAL_CAMERA, aiTextureType_NORMALS, aiTextureType_HEIGHT }))
 			{
 				Materials[Iter]->Normal = LoadTexture(Device, TrimmedPath / TexturePath.C_Str());
 			}
