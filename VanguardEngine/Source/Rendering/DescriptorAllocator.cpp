@@ -51,7 +51,7 @@ void DescriptorAllocator::AddTableEntry(DescriptorHandle& Handle, DescriptorTabl
 
 void DescriptorAllocator::BuildTable(RenderDevice& Device, CommandList& List, uint32_t RootParameter)
 {
-	D3D12_GPU_DESCRIPTOR_HANDLE TableStart;
+	D3D12_GPU_DESCRIPTOR_HANDLE TableStart{};
 
 	bool First = true;
 	for (auto& Entry : PendingTableEntries)
