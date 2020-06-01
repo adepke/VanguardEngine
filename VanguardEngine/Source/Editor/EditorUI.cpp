@@ -55,7 +55,8 @@ void EditorUI::DrawEntityHierarchy(entt::registry& Registry)
 
 			else
 			{
-				NodeOpen = ImGui::TreeNodeEx((void*)Entity, NodeFlags, "Entity_%i", Entity);
+				// Strip the version info from the entity, we only care about the actual ID.
+				NodeOpen = ImGui::TreeNodeEx((void*)Entity, NodeFlags, "Entity_%i", Registry.entity(Entity));
 			}
 
 			if (ImGui::IsItemClicked())
