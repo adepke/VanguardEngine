@@ -8,10 +8,10 @@
 
 void EditorUI::DrawScene()
 {
-	ImGui::SetNextWindowSize({ 400, 300 }, ImGuiCond_FirstUseEver);
+	ImGui::SetNextWindowSize({ 400, 300 }, ImGuiCond_FirstUseEver);  // First use prevents the viewport from snapping back to the set size.
 	ImGui::SetNextWindowBgAlpha(0.f);
 
-	ImGui::Begin("Scene", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse);
+	ImGui::Begin("Scene", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse);
 
 	const auto WindowPos = ImGui::GetWindowPos();
 
@@ -31,27 +31,63 @@ void EditorUI::DrawScene()
 	ImGui::End();
 }
 
-void EditorUI::DrawEntityViewer(entt::registry& Registry)
+void EditorUI::DrawEntityHierarchy(entt::registry& Registry)
 {
-	// #TODO: Use reflection to get all entity properties.
+	entt::entity SelectedEntity = entt::null;
 
-	const auto EntityView = Registry.view<TransformComponent>();
-	const auto EntityCount = EntityView.size();
-
-	ImGui::Begin("Entity Viewer");
-	ImGui::Text("%i Entities", EntityCount);
+	ImGui::Begin("Entity Hierarchy", nullptr, ImGuiWindowFlags_NoMove);
+	ImGui::Text("%i Entities", Registry.size());
+	ImGui::Separator();
 	
-	EntityView.each([](auto Entity, auto& Transform)
+	Registry.each([this, &Registry, &SelectedEntity](auto Entity)
 		{
-			if (ImGui::TreeNode((void*)Entity, "ID: %i", Entity))
+			ImGuiTreeNodeFlags NodeFlags = ImGuiTreeNodeFlags_None;
+
+			if (Entity == HierarchySelectedEntity)
+				NodeFlags |= ImGuiTreeNodeFlags_Selected;
+
+			bool NodeOpen = false;
+
+			if (Registry.has<NameComponent>(Entity))
 			{
-				ImGui::InputFloat("X", &Transform.Translation.x);
-				ImGui::InputFloat("Y", &Transform.Translation.y);
-				ImGui::InputFloat("Z", &Transform.Translation.z);
+				NodeOpen = ImGui::TreeNodeEx((void*)Entity, NodeFlags, Registry.get<NameComponent>(Entity).Name.c_str());
+			}
+
+			else
+			{
+				NodeOpen = ImGui::TreeNodeEx((void*)Entity, NodeFlags, "Entity_%i", Entity);
+			}
+
+			if (ImGui::IsItemClicked())
+			{
+				SelectedEntity = Entity;
+			}
+
+			if (NodeOpen)
+			{
+				// #TODO: Draw entity children.
 
 				ImGui::TreePop();
 			}
 		});
+
+	ImGui::End();
+
+	// Check if it's valid first, otherwise deselecting will remove the property viewer.
+	if (Registry.valid(SelectedEntity))
+	{
+		HierarchySelectedEntity = SelectedEntity;
+	}
+}
+
+void EditorUI::DrawEntityPropertyViewer(entt::registry& Registry)
+{
+	ImGui::Begin("Property Viewer", nullptr, ImGuiWindowFlags_NoMove);
+
+	if (Registry.valid(HierarchySelectedEntity))
+	{
+		ImGui::Text("Components!");
+	}
 
 	ImGui::End();
 }
