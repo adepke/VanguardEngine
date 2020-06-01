@@ -437,7 +437,7 @@ void RenderDevice::SyncInterframe(bool FullSync)
 	VGScopedCPUStat("Render Sync Interframe");
 
 	// If we're doing a full sync, wait until the renderer is fully caught up, otherwise make sure it's within the latency limit.
-	const auto TargetValue = FullSync ? std::max(static_cast<uint32_t>(Frame), static_cast<uint32_t>(1)) - 1 : std::max(static_cast<uint32_t>(Frame), FrameCount - 1) - (FrameCount - 1);
+	const auto TargetValue = FullSync ? std::max(static_cast<uint32_t>(Frame), uint32_t{ 1 }) - 1 : std::max(static_cast<uint32_t>(Frame), FrameCount - 2) - (FrameCount - 2);
 
 	if (InterSyncFence->GetCompletedValue() < TargetValue)
 	{
