@@ -193,7 +193,7 @@ void ResourceManager::Initialize(RenderDevice* InDevice, size_t BufferedFrames)
 	UploadOffsets.resize(FrameCount);
 	UploadPtrs.resize(FrameCount);
 
-	constexpr auto UploadResourceSize = 1024 * 1024 * 64;
+	constexpr auto UploadResourceSize = 1024 * 1024 * 512;
 
 	for (uint32_t Index = 0; Index < FrameCount; ++Index)
 	{
@@ -375,22 +375,29 @@ std::shared_ptr<Texture> ResourceManager::AllocateTexture(const TextureDescripti
 	D3D12MA::Allocation* AllocationHandle = nullptr;
 
 	D3D12_CLEAR_VALUE ClearValue{};
-	ClearValue.Format = Description.Format;
-	if (Description.BindFlags & BindFlag::DepthStencil)
-	{
-		ClearValue.DepthStencil.Depth = 1.f;
-		ClearValue.DepthStencil.Stencil = 0;
-	}
+	bool UseClearValue = false;
 
-	else
+	if (Description.BindFlags & BindFlag::RenderTarget)
 	{
+		UseClearValue = true;
+
+		ClearValue.Format = Description.Format;
 		ClearValue.Color[0] = 0.f;
 		ClearValue.Color[1] = 0.f;
 		ClearValue.Color[2] = 0.f;
 		ClearValue.Color[3] = 1.f;
 	}
 
-	auto Result = Device->Allocator->CreateResource(&AllocationDesc, &ResourceDesc, ResourceState, &ClearValue, &AllocationHandle, IID_PPV_ARGS(&RawResource));
+	else if (Description.BindFlags & BindFlag::DepthStencil)
+	{
+		UseClearValue = true;
+
+		ClearValue.Format = Description.Format;
+		ClearValue.DepthStencil.Depth = 1.f;
+		ClearValue.DepthStencil.Stencil = 0;
+	}
+
+	auto Result = Device->Allocator->CreateResource(&AllocationDesc, &ResourceDesc, ResourceState, UseClearValue ? &ClearValue : nullptr, &AllocationHandle, IID_PPV_ARGS(&RawResource));
 	if (FAILED(Result))
 	{
 		VGLogError(Rendering) << "Failed to allocate texture: " << Result;
@@ -417,8 +424,8 @@ std::shared_ptr<Texture> ResourceManager::TextureFromSwapChain(void* Surface, co
 	Description.UpdateRate = ResourceFrequency::Static;
 	Description.BindFlags = BindFlag::RenderTarget;
 	Description.AccessFlags = AccessFlag::GPUWrite;
-	Description.Width = static_cast<uint32_t>(Device->RenderWidth);
-	Description.Height = static_cast<uint32_t>(Device->RenderHeight);
+	Description.Width = Device->RenderWidth;
+	Description.Height = Device->RenderHeight;
 	Description.Depth = 1;
 	Description.Format = /*DXGI_FORMAT_R10G10B10A2_UNORM*/ DXGI_FORMAT_B8G8R8A8_UNORM;
 
@@ -457,7 +464,7 @@ void ResourceManager::WriteBuffer(std::shared_ptr<Buffer>& Target, const std::ve
 		}
 		
 		auto* TargetCommandList = Device->GetDirectList().Native();  // Small writes are more efficiently performed on the direct/compute queue.
-		TargetCommandList->CopyBufferRegion(Target->Native(), TargetOffset, UploadResources[FrameIndex]->GetResource(), UploadOffsets[FrameIndex], Source.size());  // #TODO: If we have offsets of 0, use CopyResource.
+		TargetCommandList->CopyBufferRegion(Target->Native(), TargetOffset, UploadResources[FrameIndex]->GetResource(), UploadOffsets[FrameIndex], Source.size());
 
 		UploadOffsets[FrameIndex] += Source.size();
 	}
@@ -504,12 +511,11 @@ void ResourceManager::WriteTexture(std::shared_ptr<Texture>& Target, const std::
 	D3D12_TEXTURE_COPY_LOCATION SourceCopyDesc{};
 	SourceCopyDesc.pResource = UploadResources[FrameIndex]->GetResource();
 	SourceCopyDesc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-	SourceCopyDesc.PlacedFootprint.Offset = UploadOffsets[FrameIndex];
-	SourceCopyDesc.PlacedFootprint.Footprint.Format = Target->Description.Format;
-	SourceCopyDesc.PlacedFootprint.Footprint.Width = Target->Description.Width;  // #TODO: Support custom copy sizes.
-	SourceCopyDesc.PlacedFootprint.Footprint.Height = Target->Description.Height;
-	SourceCopyDesc.PlacedFootprint.Footprint.Depth = Target->Description.Depth;
-	SourceCopyDesc.PlacedFootprint.Footprint.RowPitch = D3D12_TEXTURE_DATA_PITCH_ALIGNMENT * 256;  // #TODO: Properly determine this number from the source data?
+
+	D3D12_RESOURCE_DESC TargetDescriptionCopy = Target->Allocation->GetResource()->GetDesc();
+
+	uint64_t RequiredCopySize;
+	Device->Native()->GetCopyableFootprints(&TargetDescriptionCopy, 0, 1, UploadOffsets[FrameIndex], &SourceCopyDesc.PlacedFootprint, nullptr, nullptr, &RequiredCopySize);
 
 	D3D12_TEXTURE_COPY_LOCATION TargetCopyDesc{};
 	TargetCopyDesc.pResource = Target->Native();
@@ -533,9 +539,9 @@ void ResourceManager::WriteTexture(std::shared_ptr<Texture>& Target, const std::
 	}
 
 	auto* TargetCommandList = Device->GetDirectList().Native();  // Small writes are more efficiently performed on the direct/compute queue.
-	TargetCommandList->CopyTextureRegion(&TargetCopyDesc, 0, 0, 0, &SourceCopyDesc, &SourceBox);  // #TODO: If we have offsets of 0, use CopyResource.
+	TargetCommandList->CopyTextureRegion(&TargetCopyDesc, 0, 0, 0, &SourceCopyDesc, &SourceBox);
 
-	UploadOffsets[FrameIndex] += Source.size();
+	UploadOffsets[FrameIndex] += RequiredCopySize;
 }
 
 void ResourceManager::CleanupFrameResources(size_t Frame)

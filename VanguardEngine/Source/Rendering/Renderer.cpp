@@ -1,7 +1,6 @@
 // Copyright (c) 2019-2020 Andrew Depke
 
 #include <Rendering/Renderer.h>
-#include <Rendering/Device.h>
 #include <Rendering/Buffer.h>
 #include <Rendering/Texture.h>
 #include <Core/CoreComponents.h>
@@ -12,7 +11,6 @@
 #include <Rendering/MaterialManager.h>
 #include <Editor/EditorRenderer.h>
 
-//#include <entt/entt.hpp>  // #TODO: Include from here instead of in the header.
 #include <imgui.h>
 
 #include <vector>
@@ -52,10 +50,11 @@ Renderer::~Renderer()
 	Device->SyncInterframe(true);
 }
 
-void Renderer::Initialize(std::unique_ptr<RenderDevice>&& InDevice)
+void Renderer::Initialize(std::unique_ptr<WindowFrame>&& InWindow, std::unique_ptr<RenderDevice>&& InDevice)
 {
 	VGScopedCPUStat("Renderer Initialize");
 
+	Window = std::move(InWindow);
 	Device = std::move(InDevice);
 
 	Device->CheckFeatureSupport();
@@ -71,6 +70,15 @@ void Renderer::Initialize(std::unique_ptr<RenderDevice>&& InDevice)
 	cameraBuffer = Device->CreateResource(CameraBufferDesc, VGText("Camera Buffer"));
 
 	UserInterface = std::make_unique<UserInterfaceManager>(Device.get());
+
+	NullDescriptor = Device->AllocateDescriptor(DescriptorType::Default);
+
+	D3D12_SHADER_RESOURCE_VIEW_DESC NullViewDesc{};
+	NullViewDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	NullViewDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	NullViewDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+	Device->Native()->CreateShaderResourceView(nullptr, &NullViewDesc, NullDescriptor);
 }
 
 void Renderer::Render(entt::registry& Registry)
@@ -83,19 +91,18 @@ void Renderer::Render(entt::registry& Registry)
 	// #TODO: Culling.
 
 	// #TODO: Sort by material.
-	
-	// #TEMP: Number of entities with MeshComponent and TransformComponent. Determine this procedurally.
-	const auto RenderCount = 1;
 
 	std::pair<std::shared_ptr<Buffer>, size_t> InstanceBuffer;
 
 	{
 		VGScopedCPUStat("Generate Instance Buffer");
 
-		InstanceBuffer = std::move(Device->FrameAllocate(sizeof(EntityInstance) * RenderCount));
+		const auto InstanceView = Registry.view<const TransformComponent, const MeshComponent>();
+
+		InstanceBuffer = std::move(Device->FrameAllocate(sizeof(EntityInstance) * InstanceView.size()));
 
 		size_t Index = 0;
-		Registry.view<const TransformComponent, const MeshComponent>().each([this, &InstanceBuffer, &Index](auto Entity, const auto& Transform, const auto&)
+		InstanceView.each([this, &InstanceBuffer, &Index](auto Entity, const auto& Transform, const auto&)
 			{
 				const auto Scaling = XMVectorSet(Transform.Scale.x, Transform.Scale.y, Transform.Scale.z, 0.f);
 				const auto Rotation = XMVectorSet(Transform.Rotation.x, Transform.Rotation.y, Transform.Rotation.z, 0.f);
@@ -134,69 +141,90 @@ void Renderer::Render(entt::registry& Registry)
 
 	MainPass.Bind(
 		[this, &Registry, BackBufferTag, DepthStencilTag, CameraBufferTag, InstanceBufferTag, InstanceBufferOffset = InstanceBuffer.second]
-		(RGResolver& Resolver, CommandList& List)
-		{
-			auto& BackBuffer = Resolver.Get<Texture>(BackBufferTag);
-			auto& DepthStencil = Resolver.Get<Texture>(DepthStencilTag);
-			auto& ActualCameraBuffer = Resolver.Get<Buffer>(CameraBufferTag);  // #TODO: Fix naming.
-			auto& InstanceBuffer = Resolver.Get<Buffer>(InstanceBufferTag);
+	(RGResolver& Resolver, CommandList& List)
+	{
+		auto& BackBuffer = Resolver.Get<Texture>(BackBufferTag);
+		auto& DepthStencil = Resolver.Get<Texture>(DepthStencilTag);
+		auto& ActualCameraBuffer = Resolver.Get<Buffer>(CameraBufferTag);  // #TODO: Fix naming.
+		auto& InstanceBuffer = Resolver.Get<Buffer>(InstanceBufferTag);
 
-			List.BindPipelineState(*Materials[0].Pipeline);
-			List.BindDescriptorAllocator(Device->GetDescriptorAllocator());
-			
-			List.Native()->SetGraphicsRootConstantBufferView(2, ActualCameraBuffer.Native()->GetGPUVirtualAddress());
+		List.BindPipelineState(*Materials[0].Pipeline);
+		List.BindDescriptorAllocator(Device->GetDescriptorAllocator());
 
-			// #TODO: Conditionally compile this out.
-			auto Viewport = static_cast<D3D12_VIEWPORT>(EditorRenderer::GetSceneViewport());
+		List.Native()->SetGraphicsRootConstantBufferView(2, ActualCameraBuffer.Native()->GetGPUVirtualAddress());
 
-			// #TODO: If we don't have an editor, use this viewport.
-			/*
-			D3D12_VIEWPORT Viewport{};
-			Viewport.TopLeftX = 0.f;
-			Viewport.TopLeftY = 0.f;
-			Viewport.Width = Device->RenderWidth;
-			Viewport.Height = Device->RenderHeight;
-			Viewport.MinDepth = 0.f;
-			Viewport.MaxDepth = 1.f;
-			*/
+		// #TODO: Conditionally compile this out.
+		auto Viewport = static_cast<D3D12_VIEWPORT>(EditorRenderer::GetSceneViewport());
 
-			D3D12_RECT ScissorRect{};
-			ScissorRect.left = 0;
-			ScissorRect.top = 0;
-			ScissorRect.right = Device->RenderWidth;
-			ScissorRect.bottom = Device->RenderHeight;
+		// #TODO: If we don't have an editor, use this viewport.
+		/*
+		D3D12_VIEWPORT Viewport{};
+		Viewport.TopLeftX = 0.f;
+		Viewport.TopLeftY = 0.f;
+		Viewport.Width = Device->RenderWidth;
+		Viewport.Height = Device->RenderHeight;
+		Viewport.MinDepth = 0.f;
+		Viewport.MaxDepth = 1.f;
+		*/
 
-			List.Native()->RSSetViewports(1, &Viewport);
-			List.Native()->RSSetScissorRects(1, &ScissorRect);
-			List.Native()->OMSetRenderTargets(1, &static_cast<D3D12_CPU_DESCRIPTOR_HANDLE>(*BackBuffer.RTV), false, &static_cast<D3D12_CPU_DESCRIPTOR_HANDLE>(*DepthStencil.DSV));
-			List.Native()->OMSetStencilRef(0);
-			const float ClearColor[] = { 0.2f, 0.2f, 0.2f, 1.f };
-			List.Native()->ClearRenderTargetView(*BackBuffer.RTV, ClearColor, 0, nullptr);
-			List.Native()->ClearDepthStencilView(*DepthStencil.DSV, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0, 0, nullptr);
-			
-			size_t EntityIndex = 0;
-			Registry.view<const TransformComponent, MeshComponent>().each(
-				[&EntityIndex, &List, &InstanceBuffer, InstanceBufferOffset](auto Entity, const auto&, auto& Mesh)
+		D3D12_RECT ScissorRect{};
+		ScissorRect.left = 0;
+		ScissorRect.top = 0;
+		ScissorRect.right = Device->RenderWidth;
+		ScissorRect.bottom = Device->RenderHeight;
+
+		List.Native()->RSSetViewports(1, &Viewport);
+		List.Native()->RSSetScissorRects(1, &ScissorRect);
+		List.Native()->OMSetRenderTargets(1, &static_cast<D3D12_CPU_DESCRIPTOR_HANDLE>(*BackBuffer.RTV), false, &static_cast<D3D12_CPU_DESCRIPTOR_HANDLE>(*DepthStencil.DSV));
+		List.Native()->OMSetStencilRef(0);
+		const float ClearColor[] = { 0.2f, 0.2f, 0.2f, 1.f };
+		List.Native()->ClearRenderTargetView(*BackBuffer.RTV, ClearColor, 0, nullptr);
+		List.Native()->ClearDepthStencilView(*DepthStencil.DSV, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0, 0, nullptr);
+
+		size_t EntityIndex = 0;
+		Registry.view<const TransformComponent, MeshComponent>().each(
+			[this, &EntityIndex, &List, &InstanceBuffer, InstanceBufferOffset](auto Entity, const auto&, auto& Mesh)
+			{
+				// Set the per object buffer.
+				const auto FinalInstanceBufferOffset = InstanceBufferOffset + (EntityIndex * sizeof(EntityInstance));
+				List.Native()->SetGraphicsRootConstantBufferView(0, InstanceBuffer.Native()->GetGPUVirtualAddress() + FinalInstanceBufferOffset);
+
+				// Set the index buffer.
+				D3D12_INDEX_BUFFER_VIEW IndexView{};
+				IndexView.BufferLocation = Mesh.IndexBuffer->Native()->GetGPUVirtualAddress();
+				IndexView.SizeInBytes = static_cast<UINT>(Mesh.IndexBuffer->Description.Size * Mesh.IndexBuffer->Description.Stride);
+				IndexView.Format = DXGI_FORMAT_R32_UINT;
+
+				List.Native()->IASetIndexBuffer(&IndexView);
+
+				for (const auto& Subset : Mesh.Subsets)
 				{
-					// Set the per object buffer.
-					const auto FinalInstanceBufferOffset = InstanceBufferOffset + (EntityIndex * sizeof(EntityInstance));
-					List.Native()->SetGraphicsRootConstantBufferView(0, InstanceBuffer.Native()->GetGPUVirtualAddress() + FinalInstanceBufferOffset);
+					// #TODO: Only bind once per mesh, and pass Subset.VertexOffset into the draw call. This isn't yet supported with DXC, see: https://github.com/microsoft/DirectXShaderCompiler/issues/2907
 
 					// Set the vertex buffer.
-					List.Native()->SetGraphicsRootShaderResourceView(1, Mesh.VertexBuffer->Native()->GetGPUVirtualAddress());
+					List.Native()->SetGraphicsRootShaderResourceView(1, Mesh.VertexBuffer->Native()->GetGPUVirtualAddress() + (Subset.VertexOffset * sizeof(Vertex)));
 
-					D3D12_INDEX_BUFFER_VIEW IndexView{};
-					IndexView.BufferLocation = Mesh.IndexBuffer->Native()->GetGPUVirtualAddress();
-					IndexView.SizeInBytes = static_cast<UINT>(Mesh.IndexBuffer->Description.Size * Mesh.IndexBuffer->Description.Stride);
-					IndexView.Format = DXGI_FORMAT_R32_UINT;
+					if (Subset.Mat)
+					{
+						auto& AlbedoSRV = Subset.Mat->Albedo ? *Subset.Mat->Albedo->SRV : NullDescriptor;
+						auto& NormalSRV = Subset.Mat->Normal ? *Subset.Mat->Normal->SRV : NullDescriptor;
+						auto& RoughnessSRV = Subset.Mat->Roughness ? *Subset.Mat->Roughness->SRV : NullDescriptor;
+						auto& MetallicSRV = Subset.Mat->Metallic ? *Subset.Mat->Metallic->SRV : NullDescriptor;
 
-					List.Native()->IASetIndexBuffer(&IndexView);
+						Device->GetDescriptorAllocator().AddTableEntry(AlbedoSRV, DescriptorTableEntryType::ShaderResource);
+						Device->GetDescriptorAllocator().AddTableEntry(NormalSRV, DescriptorTableEntryType::ShaderResource);
+						Device->GetDescriptorAllocator().AddTableEntry(RoughnessSRV, DescriptorTableEntryType::ShaderResource);
+						Device->GetDescriptorAllocator().AddTableEntry(MetallicSRV, DescriptorTableEntryType::ShaderResource);
 
-					List.Native()->DrawIndexedInstanced(Mesh.IndexBuffer->Description.Size, 1, 0, 0, 0);
+						Device->GetDescriptorAllocator().BuildTable(*Device, List, 3);
+					}
 
-					++EntityIndex;
-				});
-		}
+					List.Native()->DrawIndexedInstanced(static_cast<uint32_t>(Subset.Indices), 1, static_cast<uint32_t>(Subset.IndexOffset), 0, 0);
+				}
+
+				++EntityIndex;
+			});
+	}
 	);
 
 	auto& UIPass = Graph.AddPass("UI Pass");
@@ -224,7 +252,7 @@ void Renderer::Render(entt::registry& Registry)
 					CameraYaw = Transform.Rotation.z * 180.f / 3.14159f;
 					CameraRoll = Transform.Rotation.x * 180.f / 3.14159f;
 				});
-			
+
 			ImGui::Begin("Camera Settings");
 			ImGui::Text("X: %f", CameraPosX);
 			ImGui::Text("Y: %f", CameraPosY);
@@ -237,11 +265,11 @@ void Renderer::Render(entt::registry& Registry)
 
 			// #TODO: Conditionally compile this out.
 			EditorRenderer::Render(Registry);
-			
+
 			List.Native()->OMSetRenderTargets(1, &static_cast<D3D12_CPU_DESCRIPTOR_HANDLE>(*BackBuffer.RTV), false, nullptr);
 			UserInterface->Render(List);
 		});
-		
+
 	Graph.Build();
 
 	Graph.Execute();

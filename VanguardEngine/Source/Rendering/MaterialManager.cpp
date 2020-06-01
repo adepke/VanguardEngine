@@ -17,7 +17,7 @@ std::vector<Material> MaterialManager::ReloadMaterials(RenderDevice& Device)
 
 	std::vector<Material> Materials;
 
-	for (const auto& Entry : std::filesystem::directory_iterator{ Config::Get().MaterialsPath })
+	for (const auto& Entry : std::filesystem::directory_iterator{ Config::MaterialsPath })
 	{
 		// #TODO: Move to standardized asset loading pipeline.
 
@@ -38,7 +38,7 @@ std::vector<Material> MaterialManager::ReloadMaterials(RenderDevice& Device)
 		NewMat.BackFaceCulling = MaterialData["BackFaceCulling"].get<bool>();
 
 		PipelineStateDescription Desc{};
-		Desc.ShaderPath = Config::Get().EngineRoot / MaterialShaders;
+		Desc.ShaderPath = Config::ShadersPath / MaterialShaders;
 		Desc.BlendDescription.AlphaToCoverageEnable = false;
 		Desc.BlendDescription.IndependentBlendEnable = false;
 		Desc.BlendDescription.RenderTarget[0].BlendEnable = false;
@@ -76,7 +76,7 @@ std::vector<Material> MaterialManager::ReloadMaterials(RenderDevice& Device)
 		Desc.DepthStencilDescription.BackFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
 		Desc.DepthStencilDescription.BackFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
 		Desc.DepthStencilDescription.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-		Desc.Topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+		Desc.Topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 
 		NewMat.Pipeline = std::make_unique<PipelineState>();
 		NewMat.Pipeline->Build(Device, Desc);  // #TODO: Pipeline libraries.

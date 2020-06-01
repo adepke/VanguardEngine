@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include <entt/entt.hpp>  // #TODO: Don't include, forward and include in the source.
+#include <entt/entt.hpp>
 
 struct ControlSystem
 {

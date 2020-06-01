@@ -95,11 +95,10 @@ void RenderDevice::ResetFrame(size_t FrameID)
 	FrameCommandLists[FrameIndex].clear();
 }
 
-RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
+RenderDevice::RenderDevice(void* InWindow, bool Software, bool EnableDebugging)
 {
 	VGScopedCPUStat("Render Device Initialize");
 
-	WindowHandle = InWindow;
 	Debugging = EnableDebugging;
 
 	if (EnableDebugging)
@@ -210,8 +209,8 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 	}
 
 	DXGI_SWAP_CHAIN_DESC1 SwapChainDescription{};
-	SwapChainDescription.Width = static_cast<UINT>(RenderWidth);
-	SwapChainDescription.Height = static_cast<UINT>(RenderHeight);
+	SwapChainDescription.Width = RenderWidth;
+	SwapChainDescription.Height = RenderHeight;
 	SwapChainDescription.Format = DXGI_FORMAT_B8G8R8A8_UNORM;  // Non-HDR. #TODO: Support HDR.
 	SwapChainDescription.BufferCount = FrameCount;
 	SwapChainDescription.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
@@ -220,7 +219,7 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 	SwapChainDescription.SampleDesc.Quality = 0;
 	SwapChainDescription.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
 	SwapChainDescription.Stereo = false;
-	SwapChainDescription.Flags = 0;
+	SwapChainDescription.Flags = 0;  // #TODO: Check for tearing support, and enable if available.
 
 	DXGI_SWAP_CHAIN_FULLSCREEN_DESC SwapChainFSDescription{};
 	SwapChainFSDescription.RefreshRate.Numerator = 60;  // #TODO: Determine this based on the current monitor refresh rate?
@@ -230,7 +229,7 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 	SwapChainFSDescription.Windowed = !Fullscreen;
 
 	Microsoft::WRL::ComPtr<IDXGISwapChain1> SwapChainWrapper;
-	Result = Factory->CreateSwapChainForHwnd(DirectCommandQueue.Get(), InWindow, &SwapChainDescription, &SwapChainFSDescription, nullptr, &SwapChainWrapper);
+	Result = Factory->CreateSwapChainForHwnd(DirectCommandQueue.Get(), static_cast<HWND>(InWindow), &SwapChainDescription, &SwapChainFSDescription, nullptr, &SwapChainWrapper);
 	if (FAILED(Result))
 	{
 		VGLogFatal(Rendering) << "Failed to create swap chain: " << Result;
@@ -240,7 +239,7 @@ RenderDevice::RenderDevice(HWND InWindow, bool Software, bool EnableDebugging)
 	SwapChainWrapper.As(&SwapChainWrapperConverted);
 	SwapChain.Reset(SwapChainWrapperConverted.Detach());
 
-	Result = Factory->MakeWindowAssociation(InWindow, DXGI_MWA_NO_ALT_ENTER);
+	Result = Factory->MakeWindowAssociation(static_cast<HWND>(InWindow), DXGI_MWA_NO_ALT_ENTER);
 	if (FAILED(Result))
 	{
 		VGLogFatal(Rendering) << "Failed to bind device to window: " << Result;
@@ -438,7 +437,7 @@ void RenderDevice::SyncInterframe(bool FullSync)
 	VGScopedCPUStat("Render Sync Interframe");
 
 	// If we're doing a full sync, wait until the renderer is fully caught up, otherwise make sure it's within the latency limit.
-	const auto TargetValue = FullSync ? std::max(static_cast<uint32_t>(Frame), static_cast<uint32_t>(1)) - 1 : std::max(static_cast<uint32_t>(Frame), FrameCount - 1) - (FrameCount - 1);
+	const auto TargetValue = FullSync ? std::max(static_cast<uint32_t>(Frame), uint32_t{ 1 }) - 1 : std::max(static_cast<uint32_t>(Frame), FrameCount - 2) - (FrameCount - 2);
 
 	if (InterSyncFence->GetCompletedValue() < TargetValue)
 	{
@@ -517,7 +516,7 @@ void RenderDevice::AdvanceGPU()
 	}
 }
 
-void RenderDevice::SetResolution(size_t Width, size_t Height, bool InFullscreen)
+void RenderDevice::SetResolution(uint32_t Width, uint32_t Height, bool InFullscreen)
 {
 	VGScopedCPUStat("Render Device Change Resolution");
 

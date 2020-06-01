@@ -6,6 +6,8 @@ function IncludeThirdParty()
 	includedirs "VanguardEngine/ThirdParty/Tracy"
 	includedirs "VanguardEngine/ThirdParty/D3D12MemoryAllocator/src"
 	includedirs "VanguardEngine/ThirdParty/DirectXShaderCompiler"
+	includedirs "VanguardEngine/ThirdParty/assimp/Include"
+	includedirs "VanguardEngine/ThirdParty/stb"
 end
 
 function LinkThirdParty()
@@ -14,12 +16,14 @@ function LinkThirdParty()
 	libdirs "Build/ThirdParty/Tracy/Bin/*"
 	libdirs "Build/ThirdParty/D3D12MemoryAllocator/Bin/*"
 	libdirs "VanguardEngine/ThirdParty/DirectXShaderCompiler"
+	libdirs "VanguardEngine/ThirdParty/assimp/Bin/*"
 	
 	links "imgui"
 	links "Jobs"
 	links "Tracy"
 	links "D3D12MemoryAllocator"
 	links "dxcompiler"
+	links "assimp"
 end
 
 function RunThirdParty()
@@ -29,6 +33,7 @@ function RunThirdParty()
 	include "VanguardEngine/ThirdParty/Tracy"
 	include "VanguardEngine/ThirdParty/Tracy/server"
 	include "VanguardEngine/ThirdParty/D3D12MemoryAllocator"
+	include "VanguardEngine/ThirdParty/assimp"
 end
 
 workspace "Vanguard"
@@ -45,6 +50,7 @@ workspace "Vanguard"
 	
 	filter { "platforms:Win64" }
 		defines { "WIN32", "_WIN32" }
+		systemversion "latest"
 	
 	-- Global Configurations
 	
@@ -75,6 +81,11 @@ project "Engine"
 	
 	targetname "Vanguard"
 	
+	-- General Settings
+	
+	EnableLogging = true
+	EnableProfiling = true
+	
 	includedirs { "VanguardEngine/Source" }
 	
 	-- General Build
@@ -86,9 +97,22 @@ project "Engine"
 		clr "Off"
 		rtti "Off"
 		characterset "Unicode"
+		staticruntime "Off"
 		--warnings "Extra"  Disabled Extra warnings indefinitely during early development
 		warnings "Default"
 		disablewarnings { "4324", "4127" }
+		
+		if EnableLogging then
+			defines { "ENABLE_LOGGING=1" }
+		else
+			defines { "ENABLE_LOGGING=0", "JOBS_DISABLE_LOGGING" }
+		end
+		
+		if EnableProfiling then
+			defines { "ENABLE_PROFILING=1", "TRACY_ENABLE" }
+		else
+			defines { "ENABLE_PROFILING=0" }
+		end
 		
 	-- Specific Build
 		
@@ -99,7 +123,7 @@ project "Engine"
 	-- Configurations
 		
 	filter { "configurations:Debug" }
-		defines { "BUILD_DEBUG=1", "D3DCOMPILE_DEBUG=1", "TRACY_ENABLE" }
+		defines { "BUILD_DEBUG=1" }
 		flags { }
 		symbols "On"
 		optimize "Off"
@@ -107,7 +131,7 @@ project "Engine"
 		exceptionhandling "On"
 		
 	filter { "configurations:Development" }
-		defines { "BUILD_DEVELOPMENT=1", "TRACY_ENABLE", "JOBS_DISABLE_LOGGING" }
+		defines { "BUILD_DEVELOPMENT=1" }
 		flags { "LinkTimeOptimization" }
 		symbols "On"
 		optimize "Debug"
@@ -115,18 +139,17 @@ project "Engine"
 		exceptionhandling "On"
 		
 	filter { "configurations:Release" }
-		defines { "BUILD_RELEASE=1", "ENTT_DISABLE_ASSERT", "JOBS_DISABLE_LOGGING" }
+		defines { "BUILD_RELEASE=1", "ENTT_DISABLE_ASSERT" }
 		flags { "LinkTimeOptimization", "NoRuntimeChecks" }
 		symbols "Off"
 		optimize "Speed"  -- /O2 instead of /Ox on MSVS with "Full".
 		omitframepointer "On"
 		exceptionhandling "Off"
 		
-	filter {}
-		
 	-- General Files
 		
 	filter {}
+		files { "VanguardEngine/Source/Asset/*.h", "VanguardEngine/Source/Asset/*.cpp" }
 		files { "VanguardEngine/Source/Core/*.h", "VanguardEngine/Source/Core/*.cpp" }
 		files { "VanguardEngine/Source/Debug/*.h", "VanguardEngine/Source/Debug/*.cpp" }
 		files { "VanguardEngine/Source/Editor/*.h", "VanguardEngine/Source/Editor/*.cpp" }
@@ -138,6 +161,7 @@ project "Engine"
 	-- Specific Files
 		
 	filter { "platforms:Win64" }
+		files { "VanguardEngine/Source/Asset/Windows/*.h", "VanguardEngine/Source/Asset/Windows/*.cpp" }
 		files { "VanguardEngine/Source/Core/Windows/*.h", "VanguardEngine/Source/Core/Windows/*.cpp" }
 		files { "VanguardEngine/Source/Debug/Windows/*.h", "VanguardEngine/Source/Debug/Windows/*.cpp" }
 		files { "VanguardEngine/Source/Editor/Windows/*.h", "VanguardEngine/Source/Editor/Windows/*.cpp" }
@@ -145,7 +169,7 @@ project "Engine"
 		files { "VanguardEngine/Source/Threading/Windows/*.h", "VanguardEngine/Source/Threading/Windows/*.cpp" }
 		files { "VanguardEngine/Source/Utility/Windows/*.h", "VanguardEngine/Source/Utility/Windows/*.cpp" }
 		files { "VanguardEngine/Source/Window/Windows/*.h", "VanguardEngine/Source/Window/Windows/*.cpp" }
-		
+
 	filter {}
 	
 	-- Third Party Files

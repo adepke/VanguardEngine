@@ -3,49 +3,53 @@
 #include <Core/Config.h>
 #include <Core/Base.h>
 
-#include <fstream>
-
 #include <json.hpp>
 
-Config::Config()
+#include <fstream>
+
+namespace Config
 {
-	VGScopedCPUStat("Config Load");
-
-	auto CurrentPath = std::filesystem::current_path();
-
-	constexpr auto IsEngineRoot = [](const auto& Path)
+	void Initialize()
 	{
-		return std::filesystem::exists(Path / EngineConfigPath);
-	};
+		VGScopedCPUStat("Config Load");
 
-	if (IsEngineRoot(CurrentPath))
-	{
-		EngineRoot = CurrentPath;
+		auto CurrentPath = std::filesystem::current_path();
+
+		constexpr auto IsEngineRoot = [](const auto& Path)
+		{
+			return std::filesystem::exists(Path / EngineConfigPath);
+		};
+
+		if (IsEngineRoot(CurrentPath))
+		{
+			EngineRootPath = CurrentPath;
+		}
+
+		// Running from visual studio sandbox.
+		else if (IsEngineRoot(CurrentPath.parent_path().parent_path() / "VanguardEngine"))
+		{
+			EngineRootPath = CurrentPath.parent_path().parent_path() / "VanguardEngine";
+		}
+
+		// Running the binary outside of visual studio.
+		else if (IsEngineRoot(CurrentPath.parent_path().parent_path().parent_path() / "VanguardEngine"))
+		{
+			EngineRootPath = CurrentPath.parent_path().parent_path().parent_path() / "VanguardEngine";
+		}
+
+		else
+		{
+			VGLogFatal(Core) << "Failed to find engine root.";
+		}
+
+		std::ifstream EngineConfigStream{ EngineRootPath / EngineConfigPath };
+
+		VGEnsure(EngineConfigStream.is_open(), "Failed to open engine config file.");
+
+		nlohmann::json EngineConfig;
+		EngineConfigStream >> EngineConfig;
+
+		ShadersPath = EngineRootPath / "Assets" / EngineConfig["ShadersPath"].get<std::string>();
+		MaterialsPath = EngineRootPath / "Assets" / EngineConfig["MaterialsPath"].get<std::string>();
 	}
-
-	// Running from visual studio sandbox.
-	else if (IsEngineRoot(CurrentPath.parent_path().parent_path() / "VanguardEngine"))
-	{
-		EngineRoot = CurrentPath.parent_path().parent_path() / "VanguardEngine";
-	}
-
-	// Running the binary outside of visual studio.
-	else if (IsEngineRoot(CurrentPath.parent_path().parent_path().parent_path() / "VanguardEngine"))
-	{
-		EngineRoot = CurrentPath.parent_path().parent_path().parent_path() / "VanguardEngine";
-	}
-
-	else
-	{
-		VGLogFatal(Core) << "Failed to find engine root.";
-	}
-
-	std::ifstream EngineConfigStream{ EngineRoot / EngineConfigPath };
-	
-	VGEnsure(EngineConfigStream.is_open(), "Failed to open engine config file.");
-	
-	nlohmann::json EngineConfig;
-	EngineConfigStream >> EngineConfig;
-
-	MaterialsPath = EngineRoot / EngineConfig["Assets"]["Materials"].get<std::string>();
 }

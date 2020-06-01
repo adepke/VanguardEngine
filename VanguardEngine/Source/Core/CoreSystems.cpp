@@ -2,23 +2,21 @@
 
 #include <Core/CoreSystems.h>
 #include <Core/CoreComponents.h>
+#include <Rendering/Renderer.h>
 #include <Window/WindowFrame.h>
 
 #include <imgui.h>
-
-#include <Core/Windows/WindowsMinimal.h>
 
 void ControlSystem::Update(entt::registry& Registry)
 {
 	// If any entities have control.
 	if (Registry.view<const ControlComponent>().size())
 	{
-		WindowFrame::Get().RestrainCursor(CursorRestraint::ToCenter);
-		WindowFrame::Get().ShowCursor(false);
+		Renderer::Get().Window->RestrainCursor(CursorRestraint::ToCenter);
+		Renderer::Get().Window->ShowCursor(false);
 
 		// #TODO: Conditionally compile this out if we're not compiling with the editor.
-		auto& IO = ImGui::GetIO();
-		if (IO.KeysDown[VK_ESCAPE])
+		if (ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_Escape)))
 		{
 			Registry.clear<ControlComponent>();  // Rescind all control, returning it to the editor.
 		}
@@ -26,11 +24,10 @@ void ControlSystem::Update(entt::registry& Registry)
 
 	else
 	{
-		WindowFrame::Get().RestrainCursor(CursorRestraint::None);
-		WindowFrame::Get().ShowCursor(true);
+		Renderer::Get().Window->RestrainCursor(CursorRestraint::None);
+		Renderer::Get().Window->ShowCursor(true);
 
-		auto& IO = ImGui::GetIO();
-		if (IO.MouseDown[0] || IO.MouseDown[1])  // Left or right click gives control.
+		if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsMouseClicked(ImGuiMouseButton_Right))  // Left or right click gives control.
 		{
 			// GetHoveredViewport()
 			{

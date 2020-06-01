@@ -3,9 +3,10 @@
 #include <Rendering/UserInterface.h>
 #include <Rendering/Base.h>
 #include <Rendering/Device.h>
+#include <Rendering/Renderer.h>
 #include <Rendering/PipelineState.h>
 #include <Core/Config.h>
-#include <Core/InputManager.h>
+#include <Core/Input.h>
 #include <Window/WindowFrame.h>
 
 #include <imgui.h>
@@ -238,7 +239,7 @@ void UserInterfaceManager::CreateDeviceObjects()
 	Pipeline = std::make_unique<PipelineState>();
 
 	PipelineStateDescription Description{};
-	Description.ShaderPath = Config::Get().EngineRoot / "Assets/Shaders/UserInterface";
+	Description.ShaderPath = Config::ShadersPath / "UserInterface";
 	Description.BlendDescription.AlphaToCoverageEnable = false;
 	Description.BlendDescription.RenderTarget[0].BlendEnable = true;
 	Description.BlendDescription.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
@@ -324,7 +325,7 @@ UserInterfaceManager::UserInterfaceManager(RenderDevice* InDevice) : Device(InDe
 	g_frameIndex = UINT_MAX;
 
 	// Create buffers with a default size (they will later be grown as needed)
-	for (int i = 0; i < g_numFramesInFlight; i++)
+	for (uint32_t i = 0; i < g_numFramesInFlight; i++)
 	{
 		FrameResources* fr = &g_pFrameResources[i];
 		fr->IndexBuffer = NULL;
@@ -355,12 +356,12 @@ void UserInterfaceManager::NewFrame()
 	io.DisplaySize = { static_cast<float>(Device->RenderWidth), static_cast<float>(Device->RenderHeight) };
 
 	// Update inputs.
-	InputManager::Get().UpdateInputDevices();
+	Input::UpdateInputDevices(Renderer::Get().Window->GetHandle());
 
 	ImGui::NewFrame();
 
 	// Update the mouse after computing the movement delta.
-	WindowFrame::Get().UpdateCursor();
+	Renderer::Get().Window->UpdateCursor();
 }
 
 void UserInterfaceManager::Render(CommandList& List)

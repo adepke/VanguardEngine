@@ -9,7 +9,7 @@
 PlatformErrorType GetPlatformError()
 {
 #if PLATFORM_WINDOWS
-	return HRESULT_FROM_WIN32(GetLastError());
+	return HRESULT_FROM_WIN32(::GetLastError());
 #else
 	return 0;
 #endif

@@ -3,6 +3,9 @@
 #include <Rendering/DescriptorAllocator.h>
 #include <Rendering/Device.h>
 
+// #TEMP
+#include <Rendering/Renderer.h>
+
 void DescriptorAllocator::Initialize(RenderDevice* InDevice, size_t OfflineDescriptors, size_t OnlineDescriptors)
 {
 	OfflineHeaps[0].Create(InDevice, DescriptorType::Default, OfflineDescriptors, false);
@@ -39,6 +42,37 @@ DescriptorHandle DescriptorAllocator::Allocate(DescriptorType Type)
 	}
 
 	return {};
+}
+
+void DescriptorAllocator::AddTableEntry(DescriptorHandle& Handle, DescriptorTableEntryType Type)
+{
+	PendingTableEntries.push_back(PendingDescriptorTableEntry{ Handle, Type });
+}
+
+void DescriptorAllocator::BuildTable(RenderDevice& Device, CommandList& List, uint32_t RootParameter)
+{
+	D3D12_GPU_DESCRIPTOR_HANDLE TableStart{};
+
+	bool First = true;
+	for (auto& Entry : PendingTableEntries)
+	{
+		const auto TargetHeapIndex = Entry.Type == DescriptorTableEntryType::Sampler ? 1 : 0;
+		auto& TargetHeap = OnlineHeaps[TargetHeapIndex][Device.GetFrameIndex()];
+
+		auto Destination = TargetHeap.Allocate();
+
+		if (First)
+		{
+			TableStart = Destination;
+			First = false;
+		}
+
+		Device.Native()->CopyDescriptorsSimple(1, Destination, Entry.Handle, TargetHeapIndex == 0 ? D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV : D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+	}
+
+	PendingTableEntries.clear();
+
+	List.Native()->SetGraphicsRootDescriptorTable(RootParameter, TableStart);
 }
 
 void DescriptorAllocator::FrameStep(size_t FrameIndex)

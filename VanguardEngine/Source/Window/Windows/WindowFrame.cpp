@@ -1,17 +1,18 @@
 // Copyright (c) 2019-2020 Andrew Depke
 
 #include <Window/WindowFrame.h>
-#include <Core/Windows/WindowsMinimal.h>
-#include <Core/InputManager.h>
+#include <Core/Input.h>
 
 #include <imgui.h>
+
+#include <Core/Windows/WindowsMinimal.h>
 
 constexpr auto WindowStyle = WS_OVERLAPPED | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_SIZEBOX | WS_VISIBLE | CS_HREDRAW | CS_VREDRAW;
 constexpr auto WindowStyleEx = 0;
 constexpr auto WindowClassStyle = CS_CLASSDC;
 constexpr auto WindowClassName = VGText("VanguardEngine");
 
-RECT CreateCenteredRect(size_t Width, size_t Height)
+RECT CreateCenteredRect(uint32_t Width, uint32_t Height)
 {
 	RECT Result{};
 	Result.left = (::GetSystemMetrics(SM_CXSCREEN) / 2) - (static_cast<int>(Width) / 2);
@@ -23,9 +24,15 @@ RECT CreateCenteredRect(size_t Width, size_t Height)
 	return Result;
 }
 
-LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+int64_t __stdcall WndProc(void* hWnd, uint32_t msg, uint64_t wParam, int64_t lParam)
 {
 	VGScopedCPUStat("Window Message Pump");
+
+	auto* OwningFrame = (WindowFrame*)::GetWindowLongPtr(static_cast<HWND>(hWnd), 0);  // Compiler won't allow a static cast here.
+	if (!OwningFrame)
+	{
+		return ::DefWindowProc(static_cast<HWND>(hWnd), msg, wParam, lParam);
+	}
 
 	switch (msg)
 	{
@@ -35,15 +42,15 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 
 	case WM_MOVE:
 		// #TODO: Not working.
-		WindowFrame::Get().RestrainCursor(WindowFrame::Get().ActiveCursorRestraint);
+		OwningFrame->RestrainCursor(OwningFrame->ActiveCursorRestraint);
 
-		return ::DefWindowProc(hWnd, msg, wParam, lParam);
+		return ::DefWindowProc(static_cast<HWND>(hWnd), msg, wParam, lParam);
 
 	case WM_SIZE:
-		if (wParam != SIZE_MINIMIZED && WindowFrame::Get().OnSizeChanged)
+		if (wParam != SIZE_MINIMIZED && OwningFrame->OnSizeChanged)
 		{
 			// #TODO: Handle fullscreen.
-			WindowFrame::Get().OnSizeChanged(static_cast<size_t>(LOWORD(lParam)), static_cast<size_t>(HIWORD(lParam)), false);
+			OwningFrame->OnSizeChanged(static_cast<uint32_t>(LOWORD(lParam)), static_cast<uint32_t>(HIWORD(lParam)), false);
 		}
 
 		return 0;
@@ -52,36 +59,29 @@ LRESULT WINAPI WndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
 		const auto Active = LOWORD(wParam);
 		if (Active == WA_ACTIVE || Active == WA_CLICKACTIVE)
 		{
-			if (WindowFrame::Get().OnFocusChanged)
+			if (OwningFrame->OnFocusChanged)
 			{
-				WindowFrame::Get().OnFocusChanged(true);
+				OwningFrame->OnFocusChanged(true);
 			}
 
-			WindowFrame::Get().RestrainCursor(WindowFrame::Get().ActiveCursorRestraint);
+			OwningFrame->RestrainCursor(OwningFrame->ActiveCursorRestraint);
 		}
 
 		else
 		{
-			if (WindowFrame::Get().OnFocusChanged)
+			if (OwningFrame->OnFocusChanged)
 			{
-				WindowFrame::Get().OnFocusChanged(false);
+				OwningFrame->OnFocusChanged(false);
 			}
 		}
 
 		return 0;
 	}
 
-	return InputManager::Get().ProcessWindowMessage(msg, wParam, lParam) ? 0 : ::DefWindowProc(hWnd, msg, wParam, lParam);
+	return Input::ProcessWindowMessage(hWnd, msg, wParam, lParam) ? 0 : ::DefWindowProc(static_cast<HWND>(hWnd), msg, wParam, lParam);
 }
 
-WindowFrame::~WindowFrame()
-{
-	VGScopedCPUStat("Destroy Window");
-
-	::UnregisterClass(WindowClassName, ::GetModuleHandle(nullptr));
-}
-
-void WindowFrame::Create(const std::wstring& Title, size_t Width, size_t Height)
+WindowFrame::WindowFrame(const std::wstring& Title, uint32_t Width, uint32_t Height)
 {
 	VGScopedCPUStat("Create Window");
 
@@ -92,9 +92,9 @@ void WindowFrame::Create(const std::wstring& Title, size_t Width, size_t Height)
 	WNDCLASSEX WindowDesc{};
 	WindowDesc.cbSize = sizeof(WindowDesc);
 	WindowDesc.style = WindowClassStyle;
-	WindowDesc.lpfnWndProc = &WndProc;
+	WindowDesc.lpfnWndProc = (WNDPROC)&WndProc;
 	WindowDesc.cbClsExtra = 0;
-	WindowDesc.cbWndExtra = 0;
+	WindowDesc.cbWndExtra = sizeof(this);  // Each instance stores the owning class pointer.
 	WindowDesc.hInstance = ModuleHandle;
 	WindowDesc.hIcon = nullptr;
 	WindowDesc.hCursor = nullptr;
@@ -124,6 +124,16 @@ void WindowFrame::Create(const std::wstring& Title, size_t Width, size_t Height)
 	{
 		VGLogFatal(Window) << "Failed to create window: " << GetPlatformError();
 	}
+
+	// Save this class instance in the per-window memory.
+	::SetWindowLongPtr(static_cast<HWND>(Handle), 0, (LONG_PTR)this);  // Compiler won't allow a static cast here.
+}
+
+WindowFrame::~WindowFrame()
+{
+	VGScopedCPUStat("Destroy Window");
+
+	::UnregisterClass(WindowClassName, ::GetModuleHandle(nullptr));
 }
 
 void WindowFrame::SetTitle(std::wstring Title)
@@ -137,7 +147,7 @@ void WindowFrame::SetTitle(std::wstring Title)
 	}
 }
 
-void WindowFrame::SetSize(size_t Width, size_t Height)
+void WindowFrame::SetSize(uint32_t Width, uint32_t Height)
 {
 	VGScopedCPUStat("Set Window Size");
 
@@ -211,7 +221,7 @@ void WindowFrame::RestrainCursor(CursorRestraint Restraint)
 		::ClientToScreen(static_cast<HWND>(Handle), &TopLeft);
 		::ClientToScreen(static_cast<HWND>(Handle), &BottomRight);
 
-		CursorLockPosition = std::make_pair(TopLeft.x + (BottomRight.x - TopLeft.x) * 0.5f, TopLeft.y + (BottomRight.y - TopLeft.y) * 0.5f);
+		CursorLockPosition = std::make_pair(static_cast<int>(TopLeft.x + (BottomRight.x - TopLeft.x) * 0.5f), static_cast<int>(TopLeft.y + (BottomRight.y - TopLeft.y) * 0.5f));
 
 		break;
 	}

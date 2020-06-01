@@ -7,12 +7,14 @@
 class PipelineState;
 struct Texture;
 
-// #TODO: Physically based rendering.
 struct Material
 {
 	std::unique_ptr<PipelineState> Pipeline;
 
-	std::shared_ptr<Texture> DiffuseMap;
+	std::shared_ptr<Texture> Albedo;
+	std::shared_ptr<Texture> Normal;
+	std::shared_ptr<Texture> Roughness;
+	std::shared_ptr<Texture> Metallic;
 
 	bool BackFaceCulling;
 };

@@ -4,25 +4,15 @@
 
 #include <filesystem>
 
-static const std::filesystem::path EngineConfigPath{ "Config/Engine.json" };
-
-class Config
+namespace Config
 {
-public:
-	std::filesystem::path EngineRoot;
-	std::filesystem::path MaterialsPath;
+	inline const std::filesystem::path EngineConfigPath{ "Config/Engine.json" };
 
-public:
-	static inline Config& Get() noexcept
-	{
-		static Config Singleton;
-		return Singleton;
-	}
+	// Loaded from config. All paths are absolute.
 
-	Config();
-	Config(const Config&) = delete;
-	Config(Config&&) noexcept = delete;
+	inline std::filesystem::path EngineRootPath;
+	inline std::filesystem::path ShadersPath;
+	inline std::filesystem::path MaterialsPath;
 
-	Config& operator=(const Config&) = delete;
-	Config& operator=(Config&&) noexcept = delete;
+	void Initialize();
 };

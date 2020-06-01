@@ -16,7 +16,7 @@
 XMMATRIX SpectatorCameraView(TransformComponent& Transform, const CameraComponent& Camera, float DeltaPitch, float DeltaYaw,
 	bool MoveForward, bool MoveBackward, bool MoveLeft, bool MoveRight, bool MoveUp, bool MoveDown)
 {
-	constexpr auto MovementSpeed = 0.4f;  // #TODO: Multiply by delta time.
+	constexpr auto MovementSpeed = 0.5f;  // #TODO: Multiply by delta time.
 	constexpr auto RotationSpeed = 0.4f;
 
 	// #TODO: Pitch locking.
@@ -59,6 +59,7 @@ void CameraSystem::Update(entt::registry& Registry)
 	const auto PitchDelta = IO.MouseDelta.y * 0.005f;
 	const auto YawDelta = IO.MouseDelta.x * 0.005f;
 
+	// #TODO: Use ImGui::IsKeyDown or ImGui::IsKeyPressed here.
 	if (IO.KeysDown[0x57]) MoveForward = true;  // W
 	if (IO.KeysDown[0x53]) MoveBackward = true;  // S
 	if (IO.KeysDown[0x41]) MoveLeft = true;  // A

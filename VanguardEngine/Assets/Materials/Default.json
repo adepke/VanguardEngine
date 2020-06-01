@@ -1,4 +1,4 @@
 {
-	"Shaders": "Assets/Shaders/Default",
+	"Shaders": "Default",
 	"BackFaceCulling": false
 }

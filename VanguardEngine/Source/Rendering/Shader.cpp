@@ -163,7 +163,7 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& Path, ShaderT
 	ShaderCompiler->Compile(
 		&SourceBuffer,
 		CompileArguments.size() ? CompileArguments.data() : nullptr,
-		CompileArguments.size(),
+		static_cast<uint32_t>(CompileArguments.size()),
 		ShaderIncludeHandler.Get(),
 		IID_PPV_ARGS(CompileResult.Indirect())
 	);
