@@ -42,6 +42,12 @@ workspace "Vanguard"
 	configurations { "Debug", "Development", "Release" }
 	startproject "Engine"  -- #TODO: Set to empty project, similar to UE4's BlankProgram.
 	
+	-- General Settings
+	
+	EnableLogging = true
+	EnableProfiling = true
+	EnableEditor = true
+	
 	cppdialect "C++17"
 	
 	-- Global Platform
@@ -81,11 +87,6 @@ project "Engine"
 	
 	targetname "Vanguard"
 	
-	-- General Settings
-	
-	EnableLogging = true
-	EnableProfiling = true
-	
 	includedirs { "VanguardEngine/Source" }
 	
 	-- General Build
@@ -112,6 +113,12 @@ project "Engine"
 			defines { "ENABLE_PROFILING=1", "TRACY_ENABLE" }
 		else
 			defines { "ENABLE_PROFILING=0" }
+		end
+		
+		if EnableEditor then
+			defines { "ENABLE_EDITOR=1" }
+		else
+			defines { "ENABLE_EDITOR=0" }
 		end
 		
 	-- Specific Build
