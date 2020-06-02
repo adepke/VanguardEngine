@@ -3,8 +3,11 @@
 #include <Editor/EditorUI.h>
 #include <Core/CoreComponents.h>
 #include <Rendering/RenderComponents.h>
+#include <Editor/EntityReflection.h>
 
 #include <imgui.h>
+
+#include <iterator>
 
 void EditorUI::DrawScene()
 {
@@ -87,7 +90,26 @@ void EditorUI::DrawEntityPropertyViewer(entt::registry& Registry)
 
 	if (Registry.valid(HierarchySelectedEntity))
 	{
-		ImGui::Text("Components!");
+		uint32_t ComponentCount = 0;
+
+		for (auto& [MetaID, RenderFunction] : EntityReflection::ComponentMap)
+		{
+			entt::id_type MetaList[] = { MetaID };
+
+			if (Registry.runtime_view(std::cbegin(MetaList), std::cend(MetaList)).contains(HierarchySelectedEntity))
+			{
+				++ComponentCount;
+
+				RenderFunction(Registry, HierarchySelectedEntity);
+
+				ImGui::Separator();
+			}
+		}
+
+		if (ComponentCount == 0)
+		{
+			ImGui::Text("No components.");
+		}
 	}
 
 	ImGui::End();
