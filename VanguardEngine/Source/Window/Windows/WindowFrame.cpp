@@ -127,6 +127,16 @@ WindowFrame::WindowFrame(const std::wstring& Title, uint32_t Width, uint32_t Hei
 
 	// Save this class instance in the per-window memory.
 	::SetWindowLongPtr(static_cast<HWND>(Handle), 0, (LONG_PTR)this);  // Compiler won't allow a static cast here.
+
+	// We need to resend the initial WM_SIZE message since the first one arrives before our per-instance memory is set (thus getting ignored).
+	// Without this, the UI scaling is off until the next WM_SIZE message.
+
+	RECT ClientRect;
+	::GetClientRect(static_cast<HWND>(Handle), &ClientRect);
+	const auto ClientWidth = ClientRect.right - ClientRect.left;
+	const auto ClientHeight = ClientRect.bottom - ClientRect.top;
+
+	::PostMessage(static_cast<HWND>(Handle), WM_SIZE, SIZE_RESTORED, (ClientWidth & 0xFFFF) | ((ClientHeight & 0xFFFF) << 16));
 }
 
 WindowFrame::~WindowFrame()
