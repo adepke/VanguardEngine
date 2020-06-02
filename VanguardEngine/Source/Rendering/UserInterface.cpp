@@ -318,7 +318,7 @@ UserInterfaceManager::UserInterfaceManager(RenderDevice* InDevice) : Device(InDe
 	ImGuiIO& io = ImGui::GetIO();
 	io.BackendRendererName = "ImGui DirectX 12";
 	io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;  // We can honor the ImDrawCmd::VtxOffset field, allowing for large meshes.
-	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
+	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable | ImGuiConfigFlags_ViewportsEnable;  // #TODO: Navigation features.
 
 	g_pFrameResources = new FrameResources[Device->FrameCount];
 	g_numFramesInFlight = Device->FrameCount;
