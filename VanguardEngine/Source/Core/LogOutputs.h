@@ -14,6 +14,10 @@
 #include <Core/Windows/WindowsMinimal.h>
 #endif
 
+#if ENABLE_PROFILING
+#include <Tracy.hpp>
+#endif
+
 struct LogFileOutput : LogOutputBase
 {
 	CriticalSection Lock;
@@ -50,6 +54,34 @@ struct LogWindowsOutput : LogOutputBase
 		std::lock_guard Guard{ Lock };
 
 		OutputDebugString(Stream.str().c_str());
+	}
+};
+
+#endif
+
+#if ENABLE_PROFILING
+
+struct LogProfilerOutput : LogOutputBase
+{
+	CriticalSection Lock;
+
+	virtual ~LogProfilerOutput() = default;
+
+	virtual void Write(const Detail::LogRecord& Out) override
+	{
+		std::wstringstream Stream{};
+		Stream << "[" << Out.Subsystem << "." << Detail::SeverityToString(Out.Severity) << "] " << Out.MessageStream.str() << std::endl;
+
+		const auto WideMessageString{ Stream.str() };
+		const std::string MessageString{ WideMessageString.cbegin(), WideMessageString.cend() };  // Unsafe conversion, should probably put a safer system in place.
+
+		switch (Out.Severity)
+		{
+		case Detail::LogSeverity::Warning: TracyMessageC(MessageString.c_str(), MessageString.size(), tracy::Color::Yellow); break;
+		case Detail::LogSeverity::Error: TracyMessageC(MessageString.c_str(), MessageString.size(), tracy::Color::Red); break;
+		case Detail::LogSeverity::Fatal: TracyMessageC(MessageString.c_str(), MessageString.size(), tracy::Color::Red); break;
+		default: TracyMessage(MessageString.c_str(), MessageString.size()); break;
+		}
 	}
 };
 

@@ -42,7 +42,9 @@ void EngineBoot()
 {
 	VGScopedCPUStat("Engine Boot");
 
-	Logger::Get().AddOutput<DefaultLogOutput>();
+	// Send the output to the profiler and to the VS debugger.
+	Logger::Get().AddOutput<LogWindowsOutput>();
+	Logger::Get().AddOutput<LogProfilerOutput>();
 
 	Config::Initialize();
 
@@ -79,16 +81,16 @@ void EngineLoop()
 	SpectatorTransform.Translation.y = 0.f;
 	SpectatorTransform.Translation.z = 1.f;
 
-	CameraComponent SpectatorCamera{};
-
 	const auto Spectator = TempReg.create();
+	TempReg.emplace<NameComponent>(Spectator, "Spectator");
 	TempReg.emplace<TransformComponent>(Spectator, std::move(SpectatorTransform));
-	TempReg.emplace<CameraComponent>(Spectator, std::move(SpectatorCamera));
+	TempReg.emplace<CameraComponent>(Spectator);
 	TempReg.emplace<ControlComponent>(Spectator);  // #TEMP
 
-	const auto Entity = TempReg.create();
-	TempReg.emplace<TransformComponent>(Entity);
-	TempReg.emplace<MeshComponent>(Entity, AssetLoader::LoadMesh(*Renderer::Get().Device, Config::ShadersPath / "../Models/Sponza.fbx"));  // #TEMP
+	const auto Sponza = TempReg.create();
+	TempReg.emplace<NameComponent>(Sponza, "Sponza");
+	TempReg.emplace<TransformComponent>(Sponza);
+	TempReg.emplace<MeshComponent>(Sponza, AssetLoader::LoadMesh(*Renderer::Get().Device, Config::ShadersPath / "../Models/Sponza.obj"));  // #TEMP
 
 	while (true)
 	{
