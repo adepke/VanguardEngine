@@ -17,6 +17,8 @@ public:
 
 public:
 	void DrawScene();
+	void DrawToolbar();
 	void DrawEntityHierarchy(entt::registry& Registry);
 	void DrawEntityPropertyViewer(entt::registry& Registry);
+	void DrawAssetBrowser();
 };

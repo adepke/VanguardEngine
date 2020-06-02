@@ -34,6 +34,13 @@ void EditorUI::DrawScene()
 	ImGui::End();
 }
 
+void EditorUI::DrawToolbar()
+{
+	ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoMove);
+
+	ImGui::End();
+}
+
 void EditorUI::DrawEntityHierarchy(entt::registry& Registry)
 {
 	entt::entity SelectedEntity = entt::null;
@@ -111,6 +118,13 @@ void EditorUI::DrawEntityPropertyViewer(entt::registry& Registry)
 			ImGui::Text("No components.");
 		}
 	}
+
+	ImGui::End();
+}
+
+void EditorUI::DrawAssetBrowser()
+{
+	ImGui::Begin("Asset Browser", nullptr, ImGuiWindowFlags_NoMove);
 
 	ImGui::End();
 }

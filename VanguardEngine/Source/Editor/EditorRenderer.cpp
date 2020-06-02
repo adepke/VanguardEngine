@@ -13,7 +13,9 @@ namespace EditorRenderer
 	void Render(entt::registry& Registry)
 	{
 		EditorUI::Get().DrawScene();
+		EditorUI::Get().DrawToolbar();
 		EditorUI::Get().DrawEntityHierarchy(Registry);
 		EditorUI::Get().DrawEntityPropertyViewer(Registry);
+		EditorUI::Get().DrawAssetBrowser();
 	}
 }

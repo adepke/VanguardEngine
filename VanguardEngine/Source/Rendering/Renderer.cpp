@@ -239,32 +239,6 @@ void Renderer::Render(entt::registry& Registry)
 
 			UserInterface->NewFrame();
 
-			// #TEMP: Temporary camera settings utility for debugging.
-
-			float CameraPosX, CameraPosY, CameraPosZ, FOV, CameraPitch, CameraYaw, CameraRoll;
-
-			Registry.view<TransformComponent, CameraComponent>().each(
-				[&](auto Entity, auto& Transform, auto& Camera)
-				{
-					CameraPosX = Transform.Translation.x;
-					CameraPosY = Transform.Translation.y;
-					CameraPosZ = Transform.Translation.z;
-					FOV = Camera.FieldOfView * 180.f / 3.14159f;
-					CameraPitch = Transform.Rotation.y * 180.f / 3.14159f;
-					CameraYaw = Transform.Rotation.z * 180.f / 3.14159f;
-					CameraRoll = Transform.Rotation.x * 180.f / 3.14159f;
-				});
-
-			ImGui::Begin("Camera Settings");
-			ImGui::Text("X: %f", CameraPosX);
-			ImGui::Text("Y: %f", CameraPosY);
-			ImGui::Text("Z: %f", CameraPosZ);
-			ImGui::Text("Pitch: %f", CameraPitch);
-			ImGui::Text("Yaw: %f", CameraYaw);
-			ImGui::Text("Roll: %f", CameraRoll);
-			ImGui::Text("FOV: %f", FOV);
-			ImGui::End();
-
 #if ENABLE_EDITOR
 			EditorRenderer::Render(Registry);
 #endif
