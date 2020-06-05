@@ -5,6 +5,8 @@
 
 void DescriptorHeapBase::Create(RenderDevice* Device, DescriptorType Type, size_t Descriptors, bool Visible)
 {
+	VGScopedCPUStat("Descriptor Heap Create");
+
 	D3D12_DESCRIPTOR_HEAP_TYPE HeapType{};
 
 	switch (Type)
@@ -35,6 +37,8 @@ void DescriptorHeapBase::Create(RenderDevice* Device, DescriptorType Type, size_
 
 DescriptorHandle LinearDescriptorHeap::Allocate()
 {
+	VGScopedCPUStat("Descriptor Heap Allocate");
+
 	VGEnsure(AllocatedDescriptors < TotalDescriptors, "Ran out of linear descriptor heap memory.");
 	AllocatedDescriptors++;
 
@@ -49,6 +53,8 @@ DescriptorHandle LinearDescriptorHeap::Allocate()
 
 DescriptorHandle FreeQueueDescriptorHeap::Allocate()
 {
+	VGScopedCPUStat("Descriptor Heap Allocate");
+
 	// If we have readily available space in the heap, use that first.
 	if (AllocatedDescriptors < TotalDescriptors)
 	{
@@ -77,6 +83,8 @@ DescriptorHandle FreeQueueDescriptorHeap::Allocate()
 
 void FreeQueueDescriptorHeap::Free(DescriptorHandle&& Handle)
 {
+	VGScopedCPUStat("Descriptor Heap Free");
+
 	FreeQueue.push(std::move(Handle));
 }
 

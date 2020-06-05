@@ -69,17 +69,16 @@ void CommandList::FlushBarriers()
 
 void CommandList::BindPipelineState(PipelineState& State)
 {
-	VGScopedCPUStat("Command List Bind Pipeline");
+	VGScopedCPUStat("Bind Pipeline");
 
 	List->IASetPrimitiveTopology(State.Description.Topology);
 	List->SetGraphicsRootSignature(State.RootSignature.Get());
-	//List->SetGraphicsRootDescriptorTable()  // #TODO: Set the descriptor table?
 	List->SetPipelineState(State.Native());
 }
 
 void CommandList::BindDescriptorAllocator(DescriptorAllocator& Allocator)
 {
-	VGScopedCPUStat("Command List Bind Descriptor Allocator");
+	VGScopedCPUStat("Bind Descriptor Allocator");
 
 	std::vector<ID3D12DescriptorHeap*> Heaps;
 	Heaps.reserve(Allocator.OnlineHeaps.size());

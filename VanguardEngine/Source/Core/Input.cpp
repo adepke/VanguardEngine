@@ -32,6 +32,8 @@ namespace Input
 
 	void UpdateMonitors()
 	{
+		VGScopedCPUStat("Update Monitors");
+
 		PendingMonitorUpdate = false;
 
 		ImGui::GetPlatformIO().Monitors.resize(0);
@@ -73,6 +75,8 @@ namespace Input
 
 	void UpdateKeyboard()
 	{
+		VGScopedCPUStat("Update Keyboard");
+
 		auto& IO = ImGui::GetIO();
 
 		// Update key modifiers that aren't handled by the input processing.
@@ -84,6 +88,8 @@ namespace Input
 
 	void UpdateMouse(void* Window)
 	{
+		VGScopedCPUStat("Update Mouse");
+
 		auto& IO = ImGui::GetIO();
 
 		if (IO.WantSetMousePos)
@@ -177,11 +183,15 @@ namespace Input
 
 	void UpdateGamepad()
 	{
+		VGScopedCPUStat("Update Gamepad");
+
 		// #TODO: Implement support for gamepads.
 	}
 
 	void Initialize(void* Window)
 	{
+		VGScopedCPUStat("Input Initialize");
+
 		// Ensure we have an ImGui context.
 		if (!ImGui::GetCurrentContext())
 		{
@@ -229,6 +239,8 @@ namespace Input
 
 	bool ProcessWindowMessage(void* Window, uint32_t Message, int64_t wParam, uint64_t lParam)
 	{
+		VGScopedCPUStat("Process Input Messages");
+
 		// Ensure we have an ImGui context.
 		if (!ImGui::GetCurrentContext())
 			return false;

@@ -39,6 +39,8 @@ struct VertexConstantBuffer
 
 void UserInterfaceManager::SetupRenderState(ImDrawData* DrawData, CommandList& List, FrameResources* Resources)
 {
+	VGScopedCPUStat("Setup Render State");
+
 	// Setup orthographic projection matrix into our constant buffer
 	// Our visible imgui space lies from draw_data->DisplayPos (top left) to draw_data->DisplayPos+data_data->DisplaySize (bottom right).
 	VertexConstantBuffer vertex_constant_buffer;
@@ -86,6 +88,8 @@ void UserInterfaceManager::SetupRenderState(ImDrawData* DrawData, CommandList& L
 
 void UserInterfaceManager::CreateFontTexture()
 {
+	VGScopedCPUStat("Create Font Texture");
+
 	// Build texture atlas
 	ImGuiIO& io = ImGui::GetIO();
 	unsigned char* pixels;
@@ -233,6 +237,8 @@ void UserInterfaceManager::CreateFontTexture()
 
 void UserInterfaceManager::CreateDeviceObjects()
 {
+	VGScopedCPUStat("Create Device Objects");
+
 	if (Pipeline)
 		InvalidateDeviceObjects();
 
@@ -288,6 +294,8 @@ void UserInterfaceManager::CreateDeviceObjects()
 
 void UserInterfaceManager::InvalidateDeviceObjects()
 {
+	VGScopedCPUStat("Invalidate Device Objects");
+
 	g_pVertexShaderBlob = {};
 	g_pPixelShaderBlob = {};
 	Pipeline.reset();
@@ -307,6 +315,8 @@ void UserInterfaceManager::InvalidateDeviceObjects()
 
 UserInterfaceManager::UserInterfaceManager(RenderDevice* InDevice) : Device(InDevice)
 {
+	VGScopedCPUStat("UI Initialize");
+
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 	ImGui::StyleColorsDark();
@@ -337,6 +347,8 @@ UserInterfaceManager::UserInterfaceManager(RenderDevice* InDevice) : Device(InDe
 
 UserInterfaceManager::~UserInterfaceManager()
 {
+	VGScopedCPUStat("UI Destroy");
+
 	InvalidateDeviceObjects();
 	delete[] g_pFrameResources;
 	g_pFrameResources = NULL;
@@ -349,6 +361,8 @@ UserInterfaceManager::~UserInterfaceManager()
 
 void UserInterfaceManager::NewFrame()
 {
+	VGScopedCPUStat("UI New Frame");
+
 	if (!Pipeline)
 		CreateDeviceObjects();
 
@@ -366,6 +380,8 @@ void UserInterfaceManager::NewFrame()
 
 void UserInterfaceManager::Render(CommandList& List)
 {
+	VGScopedCPUStat("UI Render");
+
 	ImGui::Render();
 	auto* DrawData = ImGui::GetDrawData();
 

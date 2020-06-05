@@ -36,6 +36,8 @@ struct CameraBuffer
 
 void Renderer::UpdateCameraBuffer()
 {
+	VGScopedCPUStat("Update Camera Buffer");
+
 	CameraBuffer BufferData;
 	BufferData.ViewMatrix = GlobalViewMatrix;
 	BufferData.ProjectionMatrix = GlobalProjectionMatrix;

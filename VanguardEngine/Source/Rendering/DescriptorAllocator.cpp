@@ -8,6 +8,8 @@
 
 void DescriptorAllocator::Initialize(RenderDevice* InDevice, size_t OfflineDescriptors, size_t OnlineDescriptors)
 {
+	VGScopedCPUStat("Descriptor Allocator Initialize");
+
 	OfflineHeaps[0].Create(InDevice, DescriptorType::Default, OfflineDescriptors, false);
 	OfflineHeaps[1].Create(InDevice, DescriptorType::Sampler, OfflineDescriptors, false);
 
@@ -51,6 +53,8 @@ void DescriptorAllocator::AddTableEntry(DescriptorHandle& Handle, DescriptorTabl
 
 void DescriptorAllocator::BuildTable(RenderDevice& Device, CommandList& List, uint32_t RootParameter)
 {
+	VGScopedCPUStat("Build Descriptor Table");
+
 	D3D12_GPU_DESCRIPTOR_HANDLE TableStart{};
 
 	bool First = true;
@@ -77,6 +81,8 @@ void DescriptorAllocator::BuildTable(RenderDevice& Device, CommandList& List, ui
 
 void DescriptorAllocator::FrameStep(size_t FrameIndex)
 {
+	VGScopedCPUStat("Descriptor Allocator Frame Step");
+
 	for (auto& OnlineHeap : OnlineHeaps)
 	{
 		OnlineHeap[FrameIndex].Reset();

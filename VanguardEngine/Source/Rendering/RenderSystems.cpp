@@ -16,6 +16,8 @@
 XMMATRIX SpectatorCameraView(TransformComponent& Transform, const CameraComponent& Camera, float DeltaPitch, float DeltaYaw,
 	bool MoveForward, bool MoveBackward, bool MoveLeft, bool MoveRight, bool MoveUp, bool MoveDown)
 {
+	VGScopedCPUStat("Spectator Camera View");
+
 	constexpr auto MovementSpeed = 0.5f;  // #TODO: Multiply by delta time.
 	constexpr auto RotationSpeed = 0.4f;
 
@@ -48,6 +50,8 @@ XMMATRIX SpectatorCameraView(TransformComponent& Transform, const CameraComponen
 
 void CameraSystem::Update(entt::registry& Registry)
 {
+	VGScopedCPUStat("Camera System");
+
 	bool MoveForward = false;
 	bool MoveBackward = false;
 	bool MoveLeft = false;

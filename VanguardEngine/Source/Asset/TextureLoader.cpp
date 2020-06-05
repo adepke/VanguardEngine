@@ -17,7 +17,14 @@ namespace AssetLoader
 		int PixelsY;
 		int ComponentsPerPixel;
 
-		auto* Data = stbi_load(Path.generic_string().c_str(), &PixelsX, &PixelsY, &ComponentsPerPixel, STBI_rgb_alpha);
+		unsigned char* Data = nullptr;
+
+		{
+			VGScopedCPUStat("STB Load");
+
+			Data = stbi_load(Path.generic_string().c_str(), &PixelsX, &PixelsY, &ComponentsPerPixel, STBI_rgb_alpha);
+		}
+
 		if (!Data)
 		{
 			VGLogError(Asset) << "Failed to load texture at '" << Path.generic_wstring() << "'.";
@@ -25,11 +32,16 @@ namespace AssetLoader
 		}
 
 		std::vector<uint8_t> DataResource;
-		DataResource.resize(static_cast<size_t>(PixelsX) * static_cast<size_t>(PixelsY) * static_cast<size_t>(STBI_rgb_alpha));
 
-		std::memcpy(DataResource.data(), Data, DataResource.size());
+		{
+			VGScopedCPUStat("Copy");
 
-		STBI_FREE(Data);
+			DataResource.resize(static_cast<size_t>(PixelsX)* static_cast<size_t>(PixelsY)* static_cast<size_t>(STBI_rgb_alpha));
+
+			std::memcpy(DataResource.data(), Data, DataResource.size());
+
+			STBI_FREE(Data);
+		}
 
 		TextureDescription Description{};
 		Description.Width = PixelsX;

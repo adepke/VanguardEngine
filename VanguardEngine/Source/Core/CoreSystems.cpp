@@ -9,6 +9,8 @@
 
 void ControlSystem::Update(entt::registry& Registry)
 {
+	VGScopedCPUStat("Control System");
+
 	// If any entities have control.
 	if (Registry.view<const ControlComponent>().size())
 	{

@@ -22,7 +22,14 @@ namespace AssetLoader
 
 		Assimp::Importer Importer{};
 
-		auto* Scene = Importer.ReadFile(Path.generic_string(), 0);
+		const aiScene* Scene = nullptr;
+
+		{
+			VGScopedCPUStat("Importer Read");
+
+			Scene = Importer.ReadFile(Path.generic_string(), 0);
+		}
+
 		if (!Scene || !Scene->mNumMeshes)
 		{
 			VGLogError(Asset) << "Failed to load asset at '" << Path.generic_wstring() << "'.";
@@ -45,7 +52,11 @@ namespace AssetLoader
 			aiProcess_PreTransformVertices |  // Mesh merging.
 			aiProcess_OptimizeMeshes;  // Mesh merging.
 
-		Scene = Importer.ApplyPostProcessing(PostProcessFlags);
+		{
+			VGScopedCPUStat("Post Process");
+
+			Scene = Importer.ApplyPostProcessing(PostProcessFlags);
+		}
 
 		auto TrimmedPath = Path;
 		TrimmedPath.remove_filename();
@@ -155,52 +166,56 @@ namespace AssetLoader
 		size_t VertexOffset = 0;
 		size_t IndexOffset = 0;
 
-		for (uint32_t MeshIter = 0; MeshIter < Scene->mNumMeshes; ++MeshIter)
 		{
-			const auto* Mesh = Scene->mMeshes[MeshIter];
+			VGScopedCPUStat("Mesh Building");
 
-			MeshComponent::Subset Subset{};
-			Subset.VertexOffset = VertexOffset;
-			Subset.IndexOffset = IndexOffset;
-			Subset.Indices = Mesh->mNumFaces * 3;
-
-			VertexOffset += Mesh->mNumVertices;
-			IndexOffset += Subset.Indices;
-
-			for (uint32_t Iter = 0; Iter < Mesh->mNumVertices; ++Iter)
+			for (uint32_t MeshIter = 0; MeshIter < Scene->mNumMeshes; ++MeshIter)
 			{
-				const auto& Position = Mesh->mVertices[Iter];
-				const auto& Normal = Mesh->mVertices[Iter];
-				const auto& TexCoord = Mesh->mTextureCoords[0][Iter];
-				const auto& Tangent = Mesh->mTangents[Iter];
-				const auto& Bitangent = Mesh->mBitangents[Iter];
+				const auto* Mesh = Scene->mMeshes[MeshIter];
 
-				Vertex Result{
-					{ Position.x, Position.y, Position.z },
-					{ Normal.x, Normal.y, Normal.z },
-					{ TexCoord.x, TexCoord.y },
-					{ Tangent.x, Tangent.y, Tangent.z },
-					{ Bitangent.x, Bitangent.y, Bitangent.z }
-				};
+				MeshComponent::Subset Subset{};
+				Subset.VertexOffset = VertexOffset;
+				Subset.IndexOffset = IndexOffset;
+				Subset.Indices = Mesh->mNumFaces * 3;
 
-				Vertices.emplace_back(Result);
+				VertexOffset += Mesh->mNumVertices;
+				IndexOffset += Subset.Indices;
+
+				for (uint32_t Iter = 0; Iter < Mesh->mNumVertices; ++Iter)
+				{
+					const auto& Position = Mesh->mVertices[Iter];
+					const auto& Normal = Mesh->mVertices[Iter];
+					const auto& TexCoord = Mesh->mTextureCoords[0][Iter];
+					const auto& Tangent = Mesh->mTangents[Iter];
+					const auto& Bitangent = Mesh->mBitangents[Iter];
+
+					Vertex Result{
+						{ Position.x, Position.y, Position.z },
+						{ Normal.x, Normal.y, Normal.z },
+						{ TexCoord.x, TexCoord.y },
+						{ Tangent.x, Tangent.y, Tangent.z },
+						{ Bitangent.x, Bitangent.y, Bitangent.z }
+					};
+
+					Vertices.emplace_back(Result);
+				}
+
+				for (uint32_t Iter = 0; Iter < Mesh->mNumFaces; ++Iter)
+				{
+					const auto& Face = Mesh->mFaces[Iter];
+
+					Indices.emplace_back(Face.mIndices[0]);
+					Indices.emplace_back(Face.mIndices[1]);
+					Indices.emplace_back(Face.mIndices[2]);
+				}
+
+				// Copy the submesh material, don't move since multiple submeshes can share a material.
+				Subset.Mat = Materials[Mesh->mMaterialIndex];
+
+				// #TODO: Get the mesh AABB.
+
+				Subsets.emplace_back(std::move(Subset));
 			}
-
-			for (uint32_t Iter = 0; Iter < Mesh->mNumFaces; ++Iter)
-			{
-				const auto& Face = Mesh->mFaces[Iter];
-
-				Indices.emplace_back(Face.mIndices[0]);
-				Indices.emplace_back(Face.mIndices[1]);
-				Indices.emplace_back(Face.mIndices[2]);
-			}
-
-			// Copy the submesh material, don't move since multiple submeshes can share a material.
-			Subset.Mat = Materials[Mesh->mMaterialIndex];
-
-			// #TODO: Get the mesh AABB.
-
-			Subsets.emplace_back(std::move(Subset));
 		}
 
 		auto MeshComp = std::move(CreateMeshComponent(Device, Vertices, Indices));
