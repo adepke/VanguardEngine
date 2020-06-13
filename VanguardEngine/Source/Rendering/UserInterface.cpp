@@ -8,9 +8,12 @@
 #include <Core/Config.h>
 #include <Core/Input.h>
 #include <Window/WindowFrame.h>
+#include <Utility/ArraySize.h>
 
 #include <imgui.h>
 #include <d3dcompiler.h>
+
+#include <cstring>
 
 struct FrameResources
 {
@@ -324,8 +327,13 @@ UserInterfaceManager::UserInterfaceManager(RenderDevice* InDevice) : Device(InDe
 	auto& Style = ImGui::GetStyle();
 	Style.Colors[ImGuiCol_WindowBg].w = 1.f;  // Opaque window backgrounds.
 
-	// Setup back-end capabilities flags
+	const auto ConfigPath = (Config::EngineRootPath / "Config/UserInterface.ini").generic_string();
+
+	static char StableIniFilePath[260];  // We need to extend the lifetime of the config path to be available throughout the entire application lifetime.
+	strcpy_s(StableIniFilePath, ArraySize(StableIniFilePath), ConfigPath.c_str());
+
 	ImGuiIO& io = ImGui::GetIO();
+	io.IniFilename = StableIniFilePath;
 	io.BackendRendererName = "ImGui DirectX 12";
 	io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;  // We can honor the ImDrawCmd::VtxOffset field, allowing for large meshes.
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable | ImGuiConfigFlags_ViewportsEnable;  // #TODO: Navigation features.
