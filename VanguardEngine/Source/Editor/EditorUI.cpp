@@ -14,7 +14,7 @@ void EditorUI::DrawScene()
 	ImGui::SetNextWindowSize({ 400, 300 }, ImGuiCond_FirstUseEver);  // First use prevents the viewport from snapping back to the set size.
 	ImGui::SetNextWindowBgAlpha(0.f);
 
-	ImGui::Begin("Scene", nullptr, ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse);
+	ImGui::Begin("Scene", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse);
 
 	const auto WindowPos = ImGui::GetWindowPos();
 
@@ -36,7 +36,7 @@ void EditorUI::DrawScene()
 
 void EditorUI::DrawToolbar()
 {
-	ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_NoMove);
+	ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_None);
 
 	ImGui::End();
 }
@@ -45,7 +45,7 @@ void EditorUI::DrawEntityHierarchy(entt::registry& Registry)
 {
 	entt::entity SelectedEntity = entt::null;
 
-	ImGui::Begin("Entity Hierarchy", nullptr, ImGuiWindowFlags_NoMove);
+	ImGui::Begin("Entity Hierarchy", nullptr, ImGuiWindowFlags_None);
 	ImGui::Text("%i Entities", Registry.size());
 	ImGui::Separator();
 	
@@ -58,15 +58,17 @@ void EditorUI::DrawEntityHierarchy(entt::registry& Registry)
 
 			bool NodeOpen = false;
 
+			ImGui::PushID(static_cast<int32_t>(Entity));  // Use the entity as the ID.
+
 			if (Registry.has<NameComponent>(Entity))
 			{
-				NodeOpen = ImGui::TreeNodeEx((void*)Entity, NodeFlags, Registry.get<NameComponent>(Entity).Name.c_str());
+				NodeOpen = ImGui::TreeNodeEx("EntityTreeNode", NodeFlags, Registry.get<NameComponent>(Entity).Name.c_str());
 			}
 
 			else
 			{
 				// Strip the version info from the entity, we only care about the actual ID.
-				NodeOpen = ImGui::TreeNodeEx((void*)Entity, NodeFlags, "Entity_%i", Registry.entity(Entity));
+				NodeOpen = ImGui::TreeNodeEx("EntityTreeNode", NodeFlags, "Entity_%i", Registry.entity(Entity));
 			}
 
 			if (ImGui::IsItemClicked())
@@ -80,6 +82,8 @@ void EditorUI::DrawEntityHierarchy(entt::registry& Registry)
 
 				ImGui::TreePop();
 			}
+
+			ImGui::PopID();
 		});
 
 	ImGui::End();
@@ -93,7 +97,7 @@ void EditorUI::DrawEntityHierarchy(entt::registry& Registry)
 
 void EditorUI::DrawEntityPropertyViewer(entt::registry& Registry)
 {
-	ImGui::Begin("Property Viewer", nullptr, ImGuiWindowFlags_NoMove);
+	ImGui::Begin("Property Viewer", nullptr, ImGuiWindowFlags_None);
 
 	if (Registry.valid(HierarchySelectedEntity))
 	{
@@ -124,7 +128,7 @@ void EditorUI::DrawEntityPropertyViewer(entt::registry& Registry)
 
 void EditorUI::DrawAssetBrowser()
 {
-	ImGui::Begin("Asset Browser", nullptr, ImGuiWindowFlags_NoMove);
+	ImGui::Begin("Asset Browser", nullptr, ImGuiWindowFlags_None);
 
 	ImGui::End();
 }
