@@ -8,6 +8,7 @@ function IncludeThirdParty()
 	includedirs "VanguardEngine/ThirdParty/DirectXShaderCompiler"
 	includedirs "VanguardEngine/ThirdParty/assimp/Include"
 	includedirs "VanguardEngine/ThirdParty/stb"
+	includedirs "VanguardEngine/ThirdParty/IconFontCppHeaders"
 end
 
 function LinkThirdParty()
