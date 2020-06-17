@@ -11,6 +11,8 @@
 
 void EditorUI::DrawScene()
 {
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 0.f, 0.f });  // Remove window padding.
+
 	ImGui::SetNextWindowSize({ 400, 300 }, ImGuiCond_FirstUseEver);  // First use prevents the viewport from snapping back to the set size.
 	ImGui::SetNextWindowBgAlpha(0.f);
 
@@ -32,6 +34,8 @@ void EditorUI::DrawScene()
 	SceneViewport.Height = ContentMax.y - ContentMin.y;
 
 	ImGui::End();
+
+	ImGui::PopStyleVar();
 }
 
 void EditorUI::DrawToolbar()
