@@ -17,7 +17,11 @@
 #define ZoneScopedNC(x,y)
 
 #define ZoneText(x,y)
+#define ZoneTextV(x,y,z)
 #define ZoneName(x,y)
+#define ZoneNameV(x,y,z)
+#define ZoneValue(x)
+#define ZoneValueV(x,y)
 
 #define FrameMark
 #define FrameMarkNamed(x)
@@ -33,6 +37,7 @@
 #define LockableBase( type ) type
 #define SharedLockableBase( type ) type
 #define LockMark(x) (void)x;
+#define LockableName(x,y,z);
 
 #define TracyPlot(x,y)
 #define TracyPlotConfig(x,y)
@@ -91,7 +96,11 @@
 #define ZoneScopedNC( name, color ) ZoneNamedNC( ___tracy_scoped_zone, name, color, true )
 
 #define ZoneText( txt, size ) ___tracy_scoped_zone.Text( txt, size );
+#define ZoneTextV( varname, txt, size ) varname.Text( txt, size );
 #define ZoneName( txt, size ) ___tracy_scoped_zone.Name( txt, size );
+#define ZoneNameV( varname, txt, size ) varname.Name( txt, size );
+#define ZoneValue( value ) ___tracy_scoped_zone.Value( value );
+#define ZoneValueV( varname, value ) varname.Value( value );
 
 #define FrameMark tracy::Profiler::SendFrameMark( nullptr );
 #define FrameMarkNamed( name ) tracy::Profiler::SendFrameMark( name );
@@ -107,6 +116,7 @@
 #define LockableBase( type ) tracy::Lockable<type>
 #define SharedLockableBase( type ) tracy::SharedLockable<type>
 #define LockMark( varname ) static const tracy::SourceLocationData __tracy_lock_location_##varname { nullptr, __FUNCTION__,  __FILE__, (uint32_t)__LINE__, 0 }; varname.Mark( &__tracy_lock_location_##varname );
+#define LockableName( varname, txt, size ) varname.CustomName( txt, size );
 
 #define TracyPlot( name, val ) tracy::Profiler::PlotData( name, val );
 #define TracyPlotConfig( name, type ) tracy::Profiler::ConfigurePlot( name, type );
@@ -140,7 +150,7 @@
 #  define ZoneScopedS( depth ) ZoneNamedS( ___tracy_scoped_zone, depth, true )
 #  define ZoneScopedNS( name, depth ) ZoneNamedNS( ___tracy_scoped_zone, name, depth, true )
 #  define ZoneScopedCS( color, depth ) ZoneNamedCS( ___tracy_scoped_zone, color, depth, true )
-#  define ZoneScopedNCS( name, color, depth ) ZoneNamedNCS( ___tracy_scoped_zone, name, color depth, true )
+#  define ZoneScopedNCS( name, color, depth ) ZoneNamedNCS( ___tracy_scoped_zone, name, color, depth, true )
 
 #  define TracyAllocS( ptr, size, depth ) tracy::Profiler::MemAllocCallstack( ptr, size, depth );
 #  define TracyFreeS( ptr, depth ) tracy::Profiler::MemFreeCallstack( ptr, depth );

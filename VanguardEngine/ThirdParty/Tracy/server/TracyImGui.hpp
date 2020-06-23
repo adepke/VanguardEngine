@@ -25,10 +25,17 @@ namespace tracy
         ImGui::TextUnformatted( text );
     }
 
-    static inline void TextColoredUnformatted( const ImVec4& col, const char* text )
+    static inline void TextColoredUnformatted( uint32_t col, const char* text, const char* end = nullptr )
     {
         ImGui::PushStyleColor( ImGuiCol_Text, col );
-        ImGui::TextUnformatted( text );
+        ImGui::TextUnformatted( text, end );
+        ImGui::PopStyleColor();
+    }
+
+    static inline void TextColoredUnformatted( const ImVec4& col, const char* text, const char* end = nullptr )
+    {
+        ImGui::PushStyleColor( ImGuiCol_Text, col );
+        ImGui::TextUnformatted( text, end );
         ImGui::PopStyleColor();
     }
 
@@ -87,6 +94,37 @@ namespace tracy
         {
             return ImGui::Button( label );
         }
+    }
+
+    static inline void DrawTextContrast( ImDrawList* draw, const ImVec2& pos, uint32_t color, const char* text )
+    {
+        draw->AddText( pos + ImVec2( 1, 1 ), 0xAA000000, text );
+        draw->AddText( pos, color, text );
+    }
+
+    static void SetButtonHighlightColor()
+    {
+        ImGui::PushStyleColor( ImGuiCol_Button, (ImVec4)ImColor::HSV( 0.35f, 0.6f, 0.6f ) );
+        ImGui::PushStyleColor( ImGuiCol_ButtonHovered, (ImVec4)ImColor::HSV( 0.35f, 0.8f, 0.8f ) );
+        ImGui::PushStyleColor( ImGuiCol_ButtonActive, (ImVec4)ImColor::HSV( 0.35f, 0.7f, 0.7f ) );
+    }
+
+    static void ToggleButton( const char* label, bool& toggle )
+    {
+        const auto active = toggle;
+        if( active ) SetButtonHighlightColor();
+        if( ImGui::Button( label ) ) toggle = !toggle;
+        if( active ) ImGui::PopStyleColor( 3 );
+    }
+
+    static void SmallToggleButton( const char* label, bool& toggle )
+    {
+        const auto active = toggle;
+        if( active ) SetButtonHighlightColor();
+        ImGui::PushStyleVar( ImGuiStyleVar_FramePadding, ImVec2( 0, 0 ) );
+        if( ImGui::Button( label ) ) toggle = !toggle;
+        ImGui::PopStyleVar( 1 );
+        if( active ) ImGui::PopStyleColor( 3 );
     }
 
 }

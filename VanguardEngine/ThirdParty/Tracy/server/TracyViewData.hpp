@@ -2,6 +2,7 @@
 #define __TRACYVIEWDATA_HPP__
 
 #include <stdint.h>
+#include <regex>
 
 namespace tracy
 {
@@ -25,7 +26,9 @@ struct ViewData
     uint8_t darkenContextSwitches = true;
     uint8_t drawCpuData = true;
     uint8_t drawCpuUsageGraph = true;
+    uint8_t drawSamples = true;
     uint8_t dynamicColors = 1;
+    uint8_t ghostZones = true;
 };
 
 struct Annotation
@@ -34,6 +37,13 @@ struct Annotation
     int64_t start;
     int64_t end;
     uint32_t color;
+};
+
+struct SourceRegex
+{
+    std::string pattern;
+    std::string target;
+    std::regex regex;
 };
 
 }

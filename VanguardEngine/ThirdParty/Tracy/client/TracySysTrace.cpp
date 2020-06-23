@@ -25,9 +25,18 @@
 namespace tracy
 {
 
-TRACEHANDLE s_traceHandle;
-TRACEHANDLE s_traceHandle2;
-EVENT_TRACE_PROPERTIES* s_prop;
+DEFINE_GUID ( /* ce1dbfb4-137e-4da6-87b0-3f59aa102cbc */
+    PerfInfoGuid,
+    0xce1dbfb4,
+    0x137e,
+    0x4da6,
+    0x87, 0xb0, 0x3f, 0x59, 0xaa, 0x10, 0x2c, 0xbc
+);
+
+static TRACEHANDLE s_traceHandle;
+static TRACEHANDLE s_traceHandle2;
+static EVENT_TRACE_PROPERTIES* s_prop;
+static DWORD s_pid;
 
 struct CSwitch
 {
@@ -54,6 +63,50 @@ struct ReadyThread
     int8_t      reserverd;
 };
 
+struct ThreadTrace
+{
+    uint32_t processId;
+    uint32_t threadId;
+    uint32_t stackBase;
+    uint32_t stackLimit;
+    uint32_t userStackBase;
+    uint32_t userStackLimit;
+    uint32_t startAddr;
+    uint32_t win32StartAddr;
+    uint32_t tebBase;
+    uint32_t subProcessTag;
+};
+
+struct StackWalkEvent
+{
+    uint64_t eventTimeStamp;
+    uint32_t stackProcess;
+    uint32_t stackThread;
+    uint64_t stack[192];
+};
+
+#ifdef __CYGWIN__
+extern "C" typedef DWORD (WINAPI *t_GetProcessIdOfThread)( HANDLE );
+extern "C" typedef DWORD (WINAPI *t_GetProcessImageFileNameA)( HANDLE, LPSTR, DWORD );
+extern "C" ULONG WMIAPI TraceSetInformation(TRACEHANDLE SessionHandle, TRACE_INFO_CLASS InformationClass, PVOID TraceInformation, ULONG InformationLength);
+t_GetProcessIdOfThread GetProcessIdOfThread = (t_GetProcessIdOfThread)GetProcAddress( GetModuleHandleA( "kernel32.dll" ), "GetProcessIdOfThread" );
+t_GetProcessImageFileNameA GetProcessImageFileNameA = (t_GetProcessImageFileNameA)GetProcAddress( GetModuleHandleA( "kernel32.dll" ), "K32GetProcessImageFileNameA" );
+#endif
+
+extern "C" typedef NTSTATUS (WINAPI *t_NtQueryInformationThread)( HANDLE, THREADINFOCLASS, PVOID, ULONG, PULONG );
+extern "C" typedef BOOL (WINAPI *t_EnumProcessModules)( HANDLE, HMODULE*, DWORD, LPDWORD );
+extern "C" typedef BOOL (WINAPI *t_GetModuleInformation)( HANDLE, HMODULE, LPMODULEINFO, DWORD );
+extern "C" typedef DWORD (WINAPI *t_GetModuleBaseNameA)( HANDLE, HMODULE, LPSTR, DWORD );
+extern "C" typedef HRESULT (WINAPI *t_GetThreadDescription)( HANDLE, PWSTR* );
+
+t_NtQueryInformationThread NtQueryInformationThread = (t_NtQueryInformationThread)GetProcAddress( GetModuleHandleA( "ntdll.dll" ), "NtQueryInformationThread" );
+t_EnumProcessModules _EnumProcessModules = (t_EnumProcessModules)GetProcAddress( GetModuleHandleA( "kernel32.dll" ), "K32EnumProcessModules" );
+t_GetModuleInformation _GetModuleInformation = (t_GetModuleInformation)GetProcAddress( GetModuleHandleA( "kernel32.dll" ), "K32GetModuleInformation" );
+t_GetModuleBaseNameA _GetModuleBaseNameA = (t_GetModuleBaseNameA)GetProcAddress( GetModuleHandleA( "kernel32.dll" ), "K32GetModuleBaseNameA" );
+
+static t_GetThreadDescription _GetThreadDescription = 0;
+
+
 void WINAPI EventRecordCallback( PEVENT_RECORD record )
 {
 #ifdef TRACY_ON_DEMAND
@@ -61,43 +114,87 @@ void WINAPI EventRecordCallback( PEVENT_RECORD record )
 #endif
 
     const auto& hdr = record->EventHeader;
-    if( hdr.EventDescriptor.Opcode == 36 )
+    switch( hdr.ProviderId.Data1 )
     {
-        const auto cswitch = (const CSwitch*)record->UserData;
+    case 0x3d6fa8d1:    // Thread Guid
+        if( hdr.EventDescriptor.Opcode == 36 )
+        {
+            const auto cswitch = (const CSwitch*)record->UserData;
 
-        Magic magic;
-        auto token = GetToken();
-        auto& tail = token->get_tail_index();
-        auto item = token->enqueue_begin( magic );
-        MemWrite( &item->hdr.type, QueueType::ContextSwitch );
-        MemWrite( &item->contextSwitch.time, hdr.TimeStamp.QuadPart );
-        memcpy( &item->contextSwitch.oldThread, &cswitch->oldThreadId, sizeof( cswitch->oldThreadId ) );
-        memcpy( &item->contextSwitch.newThread, &cswitch->newThreadId, sizeof( cswitch->newThreadId ) );
-        memset( ((char*)&item->contextSwitch.oldThread)+4, 0, 4 );
-        memset( ((char*)&item->contextSwitch.newThread)+4, 0, 4 );
-        MemWrite( &item->contextSwitch.cpu, record->BufferContext.ProcessorNumber );
-        MemWrite( &item->contextSwitch.reason, cswitch->oldThreadWaitReason );
-        MemWrite( &item->contextSwitch.state, cswitch->oldThreadState );
-        tail.store( magic + 1, std::memory_order_release );
-    }
-    else if( hdr.EventDescriptor.Opcode == 50 )
-    {
-        const auto rt = (const ReadyThread*)record->UserData;
+            TracyLfqPrepare( QueueType::ContextSwitch );
+            MemWrite( &item->contextSwitch.time, hdr.TimeStamp.QuadPart );
+            memcpy( &item->contextSwitch.oldThread, &cswitch->oldThreadId, sizeof( cswitch->oldThreadId ) );
+            memcpy( &item->contextSwitch.newThread, &cswitch->newThreadId, sizeof( cswitch->newThreadId ) );
+            memset( ((char*)&item->contextSwitch.oldThread)+4, 0, 4 );
+            memset( ((char*)&item->contextSwitch.newThread)+4, 0, 4 );
+            MemWrite( &item->contextSwitch.cpu, record->BufferContext.ProcessorNumber );
+            MemWrite( &item->contextSwitch.reason, cswitch->oldThreadWaitReason );
+            MemWrite( &item->contextSwitch.state, cswitch->oldThreadState );
+            TracyLfqCommit;
+        }
+        else if( hdr.EventDescriptor.Opcode == 50 )
+        {
+            const auto rt = (const ReadyThread*)record->UserData;
 
-        Magic magic;
-        auto token = GetToken();
-        auto& tail = token->get_tail_index();
-        auto item = token->enqueue_begin( magic );
-        MemWrite( &item->hdr.type, QueueType::ThreadWakeup );
-        MemWrite( &item->threadWakeup.time, hdr.TimeStamp.QuadPart );
-        memcpy( &item->threadWakeup.thread, &rt->threadId, sizeof( rt->threadId ) );
-        memset( ((char*)&item->threadWakeup.thread)+4, 0, 4 );
-        tail.store( magic + 1, std::memory_order_release );
+            TracyLfqPrepare( QueueType::ThreadWakeup );
+            MemWrite( &item->threadWakeup.time, hdr.TimeStamp.QuadPart );
+            memcpy( &item->threadWakeup.thread, &rt->threadId, sizeof( rt->threadId ) );
+            memset( ((char*)&item->threadWakeup.thread)+4, 0, 4 );
+            TracyLfqCommit;
+        }
+        else if( hdr.EventDescriptor.Opcode == 1 || hdr.EventDescriptor.Opcode == 3 )
+        {
+            const auto tt = (const ThreadTrace*)record->UserData;
+
+            uint64_t tid = tt->threadId;
+            if( tid == 0 ) return;
+            uint64_t pid = tt->processId;
+            TracyLfqPrepare( QueueType::TidToPid );
+            MemWrite( &item->tidToPid.tid, tid );
+            MemWrite( &item->tidToPid.pid, pid );
+            TracyLfqCommit;
+        }
+        break;
+    case 0xdef2fe46:    // StackWalk Guid
+        if( hdr.EventDescriptor.Opcode == 32 )
+        {
+            const auto sw = (const StackWalkEvent*)record->UserData;
+            if( sw->stackProcess == s_pid && ( sw->stack[0] & 0x8000000000000000 ) == 0 )
+            {
+                const uint64_t sz = ( record->UserDataLength - 16 ) / 8;
+                if( sz > 0 )
+                {
+                    auto trace = (uint64_t*)tracy_malloc( ( 1 + sz ) * sizeof( uint64_t ) );
+                    memcpy( trace, &sz, sizeof( uint64_t ) );
+                    memcpy( trace+1, sw->stack, sizeof( uint64_t ) * sz );
+                    TracyLfqPrepare( QueueType::CallstackSample );
+                    MemWrite( &item->callstackSample.time, sw->eventTimeStamp );
+                    MemWrite( &item->callstackSample.thread, (uint64_t)sw->stackThread );
+                    MemWrite( &item->callstackSample.ptr, (uint64_t)trace );
+                    TracyLfqCommit;
+                }
+            }
+        }
+        break;
+    default:
+        break;
     }
 }
 
-bool SysTraceStart()
+bool SysTraceStart( int64_t& samplingPeriod )
 {
+    if( !_GetThreadDescription ) _GetThreadDescription = (t_GetThreadDescription)GetProcAddress( GetModuleHandleA( "kernel32.dll" ), "GetThreadDescription" );
+
+    s_pid = GetCurrentProcessId();
+
+#if defined _WIN64
+    constexpr bool isOs64Bit = true;
+#else
+    BOOL _iswow64;
+    IsWow64Process( GetCurrentProcess(), &_iswow64 );
+    const bool isOs64Bit = _iswow64;
+#endif
+
     TOKEN_PRIVILEGES priv = {};
     priv.PrivilegeCount = 1;
     priv.Privileges[0].Attributes = SE_PRIVILEGE_ENABLED;
@@ -111,15 +208,31 @@ bool SysTraceStart()
     const auto status = GetLastError();
     if( status != ERROR_SUCCESS ) return false;
 
+    if( isOs64Bit )
+    {
+        TRACE_PROFILE_INTERVAL interval = {};
+        interval.Interval = 1250;   // 8 kHz
+        const auto intervalStatus = TraceSetInformation( 0, TraceSampledProfileIntervalInfo, &interval, sizeof( interval ) );
+        if( intervalStatus != ERROR_SUCCESS ) return false;
+        samplingPeriod = 125*1000;
+    }
+
     const auto psz = sizeof( EVENT_TRACE_PROPERTIES ) + sizeof( KERNEL_LOGGER_NAME );
     s_prop = (EVENT_TRACE_PROPERTIES*)tracy_malloc( psz );
     memset( s_prop, 0, sizeof( EVENT_TRACE_PROPERTIES ) );
-    s_prop->EnableFlags = EVENT_TRACE_FLAG_CSWITCH | EVENT_TRACE_FLAG_DISPATCHER;
+    ULONG flags = EVENT_TRACE_FLAG_CSWITCH | EVENT_TRACE_FLAG_DISPATCHER | EVENT_TRACE_FLAG_THREAD;
+    if( isOs64Bit ) flags |= EVENT_TRACE_FLAG_PROFILE;
+    s_prop->EnableFlags = flags;
     s_prop->LogFileMode = EVENT_TRACE_REAL_TIME_MODE;
     s_prop->Wnode.BufferSize = psz;
     s_prop->Wnode.Flags = WNODE_FLAG_TRACED_GUID;
+#ifdef TRACY_TIMER_QPC
+    s_prop->Wnode.ClientContext = 1;
+#else
     s_prop->Wnode.ClientContext = 3;
+#endif
     s_prop->Wnode.Guid = SystemTraceControlGuid;
+    s_prop->BufferSize = 1024;
     s_prop->LoggerNameOffset = sizeof( EVENT_TRACE_PROPERTIES );
     memcpy( ((char*)s_prop) + sizeof( EVENT_TRACE_PROPERTIES ), KERNEL_LOGGER_NAME, sizeof( KERNEL_LOGGER_NAME ) );
 
@@ -141,6 +254,19 @@ bool SysTraceStart()
     {
         tracy_free( s_prop );
         return false;
+    }
+
+    if( isOs64Bit )
+    {
+        CLASSIC_EVENT_ID stackId;
+        stackId.EventGuid = PerfInfoGuid;
+        stackId.Type = 46;
+        const auto stackStatus = TraceSetInformation( s_traceHandle, TraceStackTracingInfo, &stackId, sizeof( stackId ) );
+        if( stackStatus != ERROR_SUCCESS )
+        {
+            tracy_free( s_prop );
+            return false;
+        }
     }
 
 #ifdef UNICODE
@@ -179,35 +305,6 @@ void SysTraceWorker( void* ptr )
     tracy_free( s_prop );
 }
 
-#ifdef __CYGWIN__
-extern "C" typedef DWORD (WINAPI *t_GetProcessIdOfThread)( HANDLE );
-extern "C" typedef DWORD (WINAPI *t_GetProcessImageFileNameA)( HANDLE, LPSTR, DWORD );
-#  ifdef UNICODE
-t_GetProcessIdOfThread GetProcessIdOfThread = (t_GetProcessIdOfThread)GetProcAddress( GetModuleHandle( L"kernel32.dll" ), "GetProcessIdOfThread" );
-t_GetProcessImageFileNameA GetProcessImageFileNameA = (t_GetProcessImageFileNameA)GetProcAddress( GetModuleHandle( L"kernel32.dll" ), "K32GetProcessImageFileNameA" );
-#  else
-t_GetProcessIdOfThread GetProcessIdOfThread = (t_GetProcessIdOfThread)GetProcAddress( GetModuleHandle( "kernel32.dll" ), "GetProcessIdOfThread" );
-t_GetProcessImageFileNameA GetProcessImageFileNameA = (t_GetProcessImageFileNameA)GetProcAddress( GetModuleHandle( "kernel32.dll" ), "K32GetProcessImageFileNameA" );
-#  endif
-#endif
-
-extern "C" typedef NTSTATUS (WINAPI *t_NtQueryInformationThread)( HANDLE, THREADINFOCLASS, PVOID, ULONG, PULONG );
-extern "C" typedef BOOL (WINAPI *t_EnumProcessModules)( HANDLE, HMODULE*, DWORD, LPDWORD );
-extern "C" typedef BOOL (WINAPI *t_GetModuleInformation)( HANDLE, HMODULE, LPMODULEINFO, DWORD );
-extern "C" typedef DWORD (WINAPI *t_GetModuleBaseNameA)( HANDLE, HMODULE, LPSTR, DWORD );
-#ifdef UNICODE
-t_NtQueryInformationThread NtQueryInformationThread = (t_NtQueryInformationThread)GetProcAddress( GetModuleHandle( L"ntdll.dll" ), "NtQueryInformationThread" );
-t_EnumProcessModules _EnumProcessModules = (t_EnumProcessModules)GetProcAddress( GetModuleHandle( L"kernel32.dll" ), "K32EnumProcessModules" );
-t_GetModuleInformation _GetModuleInformation = (t_GetModuleInformation)GetProcAddress( GetModuleHandle( L"kernel32.dll" ), "K32GetModuleInformation" );
-t_GetModuleBaseNameA _GetModuleBaseNameA = (t_GetModuleBaseNameA)GetProcAddress( GetModuleHandle( L"kernel32.dll" ), "K32GetModuleBaseNameA" );
-#else
-t_NtQueryInformationThread NtQueryInformationThread = (t_NtQueryInformationThread)GetProcAddress( GetModuleHandle( "ntdll.dll" ), "NtQueryInformationThread" );
-t_EnumProcessModules _EnumProcessModules = (t_EnumProcessModules)GetProcAddress( GetModuleHandle( "kernel32.dll" ), "K32EnumProcessModules" );
-t_GetModuleInformation _GetModuleInformation = (t_GetModuleInformation)GetProcAddress( GetModuleHandle( "kernel32.dll" ), "K32GetModuleInformation" );
-t_GetModuleBaseNameA _GetModuleBaseNameA = (t_GetModuleBaseNameA)GetProcAddress( GetModuleHandle( "kernel32.dll" ), "K32GetModuleBaseNameA" );
-#endif
-
-
 void SysTraceSendExternalName( uint64_t thread )
 {
     bool threadSent = false;
@@ -218,9 +315,8 @@ void SysTraceSendExternalName( uint64_t thread )
     }
     if( hnd != 0 )
     {
-#if defined NTDDI_WIN10_RS2 && NTDDI_VERSION >= NTDDI_WIN10_RS2
         PWSTR tmp;
-        GetThreadDescription( hnd, &tmp );
+        _GetThreadDescription( hnd, &tmp );
         char buf[256];
         if( tmp )
         {
@@ -231,7 +327,6 @@ void SysTraceSendExternalName( uint64_t thread )
                 threadSent = true;
             }
         }
-#endif
         const auto pid = GetProcessIdOfThread( hnd );
         if( !threadSent && NtQueryInformationThread && _EnumProcessModules && _GetModuleInformation && _GetModuleBaseNameA )
         {
@@ -255,10 +350,10 @@ void SysTraceSendExternalName( uint64_t thread )
                             {
                                 if( (uint64_t)ptr >= (uint64_t)info.lpBaseOfDll && (uint64_t)ptr <= (uint64_t)info.lpBaseOfDll + (uint64_t)info.SizeOfImage )
                                 {
-                                    char buf[1024];
-                                    if( _GetModuleBaseNameA( phnd, modules[i], buf, 1024 ) != 0 )
+                                    char buf2[1024];
+                                    if( _GetModuleBaseNameA( phnd, modules[i], buf2, 1024 ) != 0 )
                                     {
-                                        GetProfiler().SendString( thread, buf, QueueType::ExternalThreadName );
+                                        GetProfiler().SendString( thread, buf2, QueueType::ExternalThreadName );
                                         threadSent = true;
                                     }
                                 }
@@ -279,14 +374,10 @@ void SysTraceSendExternalName( uint64_t thread )
         {
             {
                 uint64_t _pid = pid;
-                Magic magic;
-                auto token = GetToken();
-                auto& tail = token->get_tail_index();
-                auto item = token->enqueue_begin( magic );
-                MemWrite( &item->hdr.type, QueueType::TidToPid );
+                TracyLfqPrepare( QueueType::TidToPid );
                 MemWrite( &item->tidToPid.tid, thread );
                 MemWrite( &item->tidToPid.pid, _pid );
-                tail.store( magic + 1, std::memory_order_release );
+                TracyLfqCommit;
             }
             if( pid == 4 )
             {
@@ -298,13 +389,13 @@ void SysTraceSendExternalName( uint64_t thread )
                 const auto phnd = OpenProcess( PROCESS_QUERY_LIMITED_INFORMATION, FALSE, pid );
                 if( phnd != INVALID_HANDLE_VALUE )
                 {
-                    char buf[1024];
-                    const auto sz = GetProcessImageFileNameA( phnd, buf, 1024 );
+                    char buf2[1024];
+                    const auto sz = GetProcessImageFileNameA( phnd, buf2, 1024 );
                     CloseHandle( phnd );
                     if( sz != 0 )
                     {
-                        auto ptr = buf + sz - 1;
-                        while( ptr > buf && *ptr != '\\' ) ptr--;
+                        auto ptr = buf2 + sz - 1;
+                        while( ptr > buf2 && *ptr != '\\' ) ptr--;
                         if( *ptr == '\\' ) ptr++;
                         GetProfiler().SendString( thread, ptr, QueueType::ExternalName );
                         return;
@@ -336,6 +427,7 @@ void SysTraceSendExternalName( uint64_t thread )
 #    include <stdlib.h>
 #    include <string.h>
 #    include <unistd.h>
+#    include <atomic>
 
 #    include "TracyProfiler.hpp"
 
@@ -355,6 +447,8 @@ static const char SchedSwitch[] = "events/sched/sched_switch/enable";
 static const char SchedWakeup[] = "events/sched/sched_wakeup/enable";
 static const char BufferSizeKb[] = "buffer_size_kb";
 static const char TracePipe[] = "trace_pipe";
+
+static std::atomic<bool> traceActive { false };
 
 #ifdef __ANDROID__
 static bool TraceWrite( const char* path, size_t psz, const char* val, size_t vsz )
@@ -429,13 +523,14 @@ void SysTraceInjectPayload()
 }
 #endif
 
-bool SysTraceStart()
+bool SysTraceStart( int64_t& samplingPeriod )
 {
     if( !TraceWrite( TracingOn, sizeof( TracingOn ), "0", 2 ) ) return false;
     if( !TraceWrite( CurrentTracer, sizeof( CurrentTracer ), "nop", 4 ) ) return false;
     TraceWrite( TraceOptions, sizeof( TraceOptions ), "norecord-cmd", 13 );
     TraceWrite( TraceOptions, sizeof( TraceOptions ), "norecord-tgid", 14 );
     TraceWrite( TraceOptions, sizeof( TraceOptions ), "noirq-info", 11 );
+    TraceWrite( TraceOptions, sizeof( TraceOptions ), "noannotate", 11 );
 #if defined TRACY_HW_TIMER && ( defined __i386 || defined _M_IX86 || defined __x86_64__ || defined _M_X64 )
     if( !TraceWrite( TraceClock, sizeof( TraceClock ), "x86-tsc", 8 ) ) return false;
 #elif __ARM_ARCH >= 6
@@ -450,6 +545,7 @@ bool SysTraceStart()
 #endif
 
     if( !TraceWrite( TracingOn, sizeof( TracingOn ), "1", 2 ) ) return false;
+    traceActive.store( true, std::memory_order_relaxed );
 
     return true;
 }
@@ -457,6 +553,7 @@ bool SysTraceStart()
 void SysTraceStop()
 {
     TraceWrite( TracingOn, sizeof( TracingOn ), "0", 2 );
+    traceActive.store( false, std::memory_order_relaxed );
 }
 
 static uint64_t ReadNumber( const char*& ptr )
@@ -568,9 +665,10 @@ ssize_t getline(char **buf, size_t *bufsiz, FILE *fp)
 
 static void HandleTraceLine( const char* line )
 {
-    line += 24;
+    line += 23;
+    while( *line != '[' ) line++;
+    line++;
     const auto cpu = (uint8_t)ReadNumber( line );
-
     line++;      // ']'
     while( *line == ' ' ) line++;
 
@@ -607,18 +705,14 @@ static void HandleTraceLine( const char* line )
 
         uint8_t reason = 100;
 
-        Magic magic;
-        auto token = GetToken();
-        auto& tail = token->get_tail_index();
-        auto item = token->enqueue_begin( magic );
-        MemWrite( &item->hdr.type, QueueType::ContextSwitch );
+        TracyLfqPrepare( QueueType::ContextSwitch );
         MemWrite( &item->contextSwitch.time, time );
         MemWrite( &item->contextSwitch.oldThread, oldPid );
         MemWrite( &item->contextSwitch.newThread, newPid );
         MemWrite( &item->contextSwitch.cpu, cpu );
         MemWrite( &item->contextSwitch.reason, reason );
         MemWrite( &item->contextSwitch.state, oldState );
-        tail.store( magic + 1, std::memory_order_release );
+        TracyLfqCommit;
     }
     else if( memcmp( line, "sched_wakeup", 12 ) == 0 )
     {
@@ -629,14 +723,10 @@ static void HandleTraceLine( const char* line )
 
         const auto pid = ReadNumber( line );
 
-        Magic magic;
-        auto token = GetToken();
-        auto& tail = token->get_tail_index();
-        auto item = token->enqueue_begin( magic );
-        MemWrite( &item->hdr.type, QueueType::ThreadWakeup );
+        TracyLfqPrepare( QueueType::ThreadWakeup );
         MemWrite( &item->threadWakeup.time, time );
         MemWrite( &item->threadWakeup.thread, pid );
-        tail.store( magic + 1, std::memory_order_release );
+        TracyLfqCommit;
     }
 }
 
@@ -649,6 +739,8 @@ static void ProcessTraceLines( int fd )
 
     for(;;)
     {
+        if( !traceActive.load( std::memory_order_relaxed ) ) break;
+
         const auto rd = read( fd, line, 64*1024 );
         if( rd <= 0 ) break;
 
@@ -747,7 +839,11 @@ static void ProcessTraceLines( int fd )
 
     for(;;)
     {
-        while( poll( &pfd, 1, 0 ) <= 0 ) std::this_thread::sleep_for( std::chrono::milliseconds( 10 ) );
+        while( poll( &pfd, 1, 0 ) <= 0 )
+        {
+            if( !traceActive.load( std::memory_order_relaxed ) ) break;
+            std::this_thread::sleep_for( std::chrono::milliseconds( 10 ) );
+        }
 
         const auto rd = read( fd, buf, 64*1024 );
         if( rd <= 0 ) break;
@@ -830,14 +926,10 @@ void SysTraceSendExternalName( uint64_t thread )
         {
             {
                 uint64_t _pid = pid;
-                Magic magic;
-                auto token = GetToken();
-                auto& tail = token->get_tail_index();
-                auto item = token->enqueue_begin( magic );
-                MemWrite( &item->hdr.type, QueueType::TidToPid );
+                TracyLfqPrepare( QueueType::TidToPid );
                 MemWrite( &item->tidToPid.tid, thread );
                 MemWrite( &item->tidToPid.pid, _pid );
-                tail.store( magic + 1, std::memory_order_release );
+                TracyLfqCommit;
             }
             sprintf( fn, "/proc/%i/comm", pid );
             f = fopen( fn, "rb" );

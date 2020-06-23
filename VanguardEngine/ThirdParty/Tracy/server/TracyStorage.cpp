@@ -37,7 +37,7 @@ static bool CreateDirStruct( const std::string& path )
     {
         pos = path.find( '/', pos+1 );
 #ifdef _WIN32
-        if( pos == 2 ) continue;    // Don't create drive name.
+        if( pos == 2 && path[1] == ':' ) continue;    // Don't create drive name.
         if( _mkdir( path.substr( 0, pos ).c_str() ) != 0 )
 #else
         if( mkdir( path.substr( 0, pos ).c_str(), S_IRWXU ) != 0 )
@@ -117,7 +117,6 @@ const char* GetSavePath( const char* file )
 
 const char* GetSavePath( const char* program, uint64_t time, const char* file, bool create )
 {
-    assert( file && *file );
     assert( program && *program );
 
     enum { Pool = 8 };
@@ -195,9 +194,16 @@ const char* GetSavePath( const char* program, uint64_t time, const char* file, b
         assert( status );
     }
 
-    const auto fsz = strlen( file );
-    assert( sz + fsz < MaxPath );
-    memcpy( buf+sz, file, fsz+1 );
+    if( file )
+    {
+        const auto fsz = strlen( file );
+        assert( sz + fsz < MaxPath );
+        memcpy( buf+sz, file, fsz+1 );
+    }
+    else
+    {
+        buf[sz] = '\0';
+    }
 
     return buf;
 }

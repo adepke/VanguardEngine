@@ -5,9 +5,10 @@
 #include <stdint.h>
 #include <string.h>
 
-#define XXH_STATIC_LINKING_ONLY
+#ifndef XXH_STATIC_LINKING_ONLY
+#  define XXH_STATIC_LINKING_ONLY
+#endif
 #include "tracy_xxh3.h"
-#include "tracy_flat_hash_map.hpp"
 
 namespace tracy
 {
@@ -31,11 +32,6 @@ struct Hasher
     {
         return hash( key );
     }
-};
-
-struct HasherPOT : public Hasher
-{
-    typedef tracy::power_of_two_hash_policy hash_policy;
 };
 
 struct Comparator
@@ -65,11 +61,6 @@ struct StringKey
         {
             return hash( key.ptr, key.sz );
         }
-    };
-
-    struct HasherPOT : public Hasher
-    {
-        typedef tracy::power_of_two_hash_policy hash_policy;
     };
 
     struct Comparator

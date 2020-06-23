@@ -17,20 +17,17 @@
 #include "../../server/TracyWorker.hpp"
 #include "getopt.h"
 
-#ifndef _MSC_VER
-struct sigaction oldsigint;
+
 bool disconnect = false;
 
 void SigInt( int )
 {
     disconnect = true;
 }
-#endif
-
 
 void Usage()
 {
-    printf( "Usage: capture -a address -o output.tracy [-p port]\n" );
+    printf( "Usage: capture -o output.tracy [-a address] [-p port]\n" );
     exit( 1 );
 }
 
@@ -44,7 +41,7 @@ int main( int argc, char** argv )
     }
 #endif
 
-    const char* address = nullptr;
+    const char* address = "localhost";
     const char* output = nullptr;
     int port = 8086;
 
@@ -95,8 +92,10 @@ int main( int argc, char** argv )
     while( !worker.HasData() ) std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
     printf( "\nQueue delay: %s\nTimer resolution: %s\n", tracy::TimeToString( worker.GetDelay() ), tracy::TimeToString( worker.GetResolution() ) );
 
-#ifndef _MSC_VER
-    struct sigaction sigint;
+#ifdef _WIN32
+    signal( SIGINT, SigInt );
+#else
+    struct sigaction sigint, oldsigint;
     memset( &sigint, 0, sizeof( sigint ) );
     sigint.sa_handler = SigInt;
     sigaction( SIGINT, &sigint, &oldsigint );
@@ -107,13 +106,11 @@ int main( int argc, char** argv )
     const auto t0 = std::chrono::high_resolution_clock::now();
     while( worker.IsConnected() )
     {
-#ifndef _MSC_VER
         if( disconnect )
         {
             worker.Disconnect();
             disconnect = false;
         }
-#endif
 
         lock.lock();
         const auto mbps = worker.GetMbpsData().back();
@@ -148,7 +145,7 @@ int main( int argc, char** argv )
     }
 
     printf( "\nFrames: %" PRIu64 "\nTime span: %s\nZones: %s\nElapsed time: %s\nSaving trace...",
-        worker.GetFrameCount( *worker.GetFramesBase() ), tracy::TimeToString( worker.GetLastTime() ), tracy::RealToString( worker.GetZoneCount(), true ),
+        worker.GetFrameCount( *worker.GetFramesBase() ), tracy::TimeToString( worker.GetLastTime() ), tracy::RealToString( worker.GetZoneCount() ),
         tracy::TimeToString( std::chrono::duration_cast<std::chrono::nanoseconds>( t1 - t0 ).count() ) );
     fflush( stdout );
     auto f = std::unique_ptr<tracy::FileWrite>( tracy::FileWrite::Open( output ) );
@@ -156,6 +153,9 @@ int main( int argc, char** argv )
     {
         worker.Write( *f );
         printf( " \033[32;1mdone!\033[0m\n" );
+        f->Finish();
+        const auto stats = f->GetCompressionStatistics();
+        printf( "Trace size %s (%.2f%% ratio)\n", tracy::MemSizeToString( stats.second ), 100.f * stats.second / stats.first );
     }
     else
     {

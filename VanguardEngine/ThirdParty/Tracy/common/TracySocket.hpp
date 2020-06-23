@@ -1,8 +1,12 @@
 #ifndef __TRACYSOCKET_HPP__
 #define __TRACYSOCKET_HPP__
 
-#include <functional>
+#include <atomic>
+#include <stdint.h>
 
+#include "TracyForceInline.hpp"
+
+struct addrinfo;
 struct sockaddr;
 
 namespace tracy
@@ -14,8 +18,6 @@ void InitWinSock();
 
 class Socket
 {
-    enum { BufSize = 128 * 1024 };
-
 public:
     Socket();
     Socket( int sock );
@@ -27,9 +29,23 @@ public:
     int Send( const void* buf, int len );
     int GetSendBufSize();
 
-    bool Read( void* buf, int len, int timeout, std::function<bool()> exitCb );
+    bool Read( void* buf, int len, int timeout );
+
+    template<typename ShouldExit>
+    bool Read( void* buf, int len, int timeout, ShouldExit exitCb )
+    {
+        auto cbuf = (char*)buf;
+        while( len > 0 )
+        {
+            if( exitCb() ) return false;
+            if( !ReadImpl( cbuf, len, timeout ) ) return false;
+        }
+        return true;
+    }
+
     bool ReadRaw( void* buf, int len, int timeout );
     bool HasData();
+    bool IsValid() const;
 
     Socket( const Socket& ) = delete;
     Socket( Socket&& ) = delete;
@@ -40,10 +56,16 @@ private:
     int RecvBuffered( void* buf, int len, int timeout );
     int Recv( void* buf, int len, int timeout );
 
+    bool ReadImpl( char*& buf, int& len, int timeout );
+
     char* m_buf;
     char* m_bufPtr;
-    int m_sock;
+    std::atomic<int> m_sock;
     int m_bufLeft;
+
+    struct addrinfo *m_res;
+    struct addrinfo *m_ptr;
+    int m_connSock;
 };
 
 class ListenSocket

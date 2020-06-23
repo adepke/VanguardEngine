@@ -15,8 +15,8 @@ project "TracyServer"
 	
 	targetname "TracyServer"
 	
-	includedirs { "../profiler/libs/gl3w", "../imgui", "../lib/freetype/include", "../lib/glfw/include" }
-	libdirs { "../lib/bzip2/bin/win32", "../lib/freetype/bin/win32", "../lib/glfw/bin/win32", "../lib/libpng/bin/win32", "../lib/zlib/bin/win32" }
+	includedirs { "../profiler/libs/gl3w", "../imgui", "../lib/freetype/include", "../lib/glfw/include", "../lib/capstone/include" }
+	libdirs { "../lib/bzip2/bin/win32", "../lib/freetype/bin/win32", "../lib/glfw/bin/win32", "../lib/libpng/bin/win32", "../lib/zlib/bin/win32", "../lib/capstone/bin/win32" }
 	
 	optimize "Speed"
 	characterset "MBCS"
@@ -34,8 +34,7 @@ project "TracyServer"
 		"_CRT_NONSTDC_NO_DEPRECATE",
 		"WIN32_LEAN_AND_MEAN",
 		"NOMINMAX",
-		"_USE_MATH_DEFINES",
-		"NDEBUG"
+		"_USE_MATH_DEFINES"
 	}
 	
 	files {
@@ -52,19 +51,18 @@ project "TracyServer"
 		"../common/tracy_sema.h",
 		"../common/*.cpp",
 		"../imgui/*.*",
-		"../imguicolortextedit/*.*",
 		"../nfd/*.h",
 		"../nfd/nfd_common.c",
 		"../nfd/nfd_win.cpp",
+		"../zstd/*.c",
+		"../zstd/*.h",
 		"*.hpp",
 		"*.cpp",
 		"IconsFontAwesome5.h",
-		"tracy_pdqsort.h",
-		"tracy_xxh3.h",
 		"../profiler/libs/**.*",
 		"../profiler/src/*.*",
 	}
 		
 	filter {}
 		
-	links { "ws2_32", "opengl32", "bz2", "freetype", "glfw3", "libpng16", "zlib" }
+	links { "ws2_32", "opengl32", "bz2", "freetype", "glfw3", "libpng16", "zlib", "capstone" }

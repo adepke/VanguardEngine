@@ -231,12 +231,12 @@ static unsigned LZ4_isLittleEndian(void)
 #if defined(LZ4_FORCE_MEMORY_ACCESS) && (LZ4_FORCE_MEMORY_ACCESS==2)
 /* lie to the compiler about data alignment; use with caution */
 
-static U16 LZ4_read16(const void* memPtr) { return *(const U16*) memPtr; }
-static U32 LZ4_read32(const void* memPtr) { return *(const U32*) memPtr; }
-static reg_t LZ4_read_ARCH(const void* memPtr) { return *(const reg_t*) memPtr; }
+LZ4_FORCE_INLINE U16 LZ4_read16(const void* memPtr) { return *(const U16*) memPtr; }
+LZ4_FORCE_INLINE U32 LZ4_read32(const void* memPtr) { return *(const U32*) memPtr; }
+LZ4_FORCE_INLINE reg_t LZ4_read_ARCH(const void* memPtr) { return *(const reg_t*) memPtr; }
 
-static void LZ4_write16(void* memPtr, U16 value) { *(U16*)memPtr = value; }
-static void LZ4_write32(void* memPtr, U32 value) { *(U32*)memPtr = value; }
+LZ4_FORCE_INLINE void LZ4_write16(void* memPtr, U16 value) { *(U16*)memPtr = value; }
+LZ4_FORCE_INLINE void LZ4_write32(void* memPtr, U32 value) { *(U32*)memPtr = value; }
 
 #elif defined(LZ4_FORCE_MEMORY_ACCESS) && (LZ4_FORCE_MEMORY_ACCESS==1)
 
@@ -244,36 +244,36 @@ static void LZ4_write32(void* memPtr, U32 value) { *(U32*)memPtr = value; }
 /* currently only defined for gcc and icc */
 typedef union { U16 u16; U32 u32; reg_t uArch; } __attribute__((packed)) unalign;
 
-static U16 LZ4_read16(const void* ptr) { return ((const unalign*)ptr)->u16; }
-static U32 LZ4_read32(const void* ptr) { return ((const unalign*)ptr)->u32; }
-static reg_t LZ4_read_ARCH(const void* ptr) { return ((const unalign*)ptr)->uArch; }
+LZ4_FORCE_INLINE U16 LZ4_read16(const void* ptr) { return ((const unalign*)ptr)->u16; }
+LZ4_FORCE_INLINE U32 LZ4_read32(const void* ptr) { return ((const unalign*)ptr)->u32; }
+LZ4_FORCE_INLINE reg_t LZ4_read_ARCH(const void* ptr) { return ((const unalign*)ptr)->uArch; }
 
-static void LZ4_write16(void* memPtr, U16 value) { ((unalign*)memPtr)->u16 = value; }
-static void LZ4_write32(void* memPtr, U32 value) { ((unalign*)memPtr)->u32 = value; }
+LZ4_FORCE_INLINE void LZ4_write16(void* memPtr, U16 value) { ((unalign*)memPtr)->u16 = value; }
+LZ4_FORCE_INLINE void LZ4_write32(void* memPtr, U32 value) { ((unalign*)memPtr)->u32 = value; }
 
 #else  /* safe and portable access using memcpy() */
 
-static U16 LZ4_read16(const void* memPtr)
+LZ4_FORCE_INLINE U16 LZ4_read16(const void* memPtr)
 {
     U16 val; memcpy(&val, memPtr, sizeof(val)); return val;
 }
 
-static U32 LZ4_read32(const void* memPtr)
+LZ4_FORCE_INLINE U32 LZ4_read32(const void* memPtr)
 {
     U32 val; memcpy(&val, memPtr, sizeof(val)); return val;
 }
 
-static reg_t LZ4_read_ARCH(const void* memPtr)
+LZ4_FORCE_INLINE reg_t LZ4_read_ARCH(const void* memPtr)
 {
     reg_t val; memcpy(&val, memPtr, sizeof(val)); return val;
 }
 
-static void LZ4_write16(void* memPtr, U16 value)
+LZ4_FORCE_INLINE void LZ4_write16(void* memPtr, U16 value)
 {
     memcpy(memPtr, &value, sizeof(value));
 }
 
-static void LZ4_write32(void* memPtr, U32 value)
+LZ4_FORCE_INLINE void LZ4_write32(void* memPtr, U32 value)
 {
     memcpy(memPtr, &value, sizeof(value));
 }
@@ -281,7 +281,7 @@ static void LZ4_write32(void* memPtr, U32 value)
 #endif /* LZ4_FORCE_MEMORY_ACCESS */
 
 
-static U16 LZ4_readLE16(const void* memPtr)
+LZ4_FORCE_INLINE U16 LZ4_readLE16(const void* memPtr)
 {
     if (LZ4_isLittleEndian()) {
         return LZ4_read16(memPtr);
@@ -291,7 +291,7 @@ static U16 LZ4_readLE16(const void* memPtr)
     }
 }
 
-static void LZ4_writeLE16(void* memPtr, U16 value)
+LZ4_FORCE_INLINE void LZ4_writeLE16(void* memPtr, U16 value)
 {
     if (LZ4_isLittleEndian()) {
         LZ4_write16(memPtr, value);
@@ -367,16 +367,35 @@ LZ4_memcpy_using_offset(BYTE* dstPtr, const BYTE* srcPtr, BYTE* dstEnd, const si
     BYTE v[8];
     switch(offset) {
     case 1:
-        memset(v, *srcPtr, 8);
+        if(sizeof(void*) == 8) {
+            U64 m = *srcPtr * 0x0101010101010101;
+            memcpy(v, &m, 8);
+        } else {
+            memset(v, *srcPtr, 8);
+        }
         goto copy_loop;
     case 2:
-        memcpy(v, srcPtr, 2);
-        memcpy(&v[2], srcPtr, 2);
-        memcpy(&v[4], &v[0], 4);
+        if(sizeof(void*) == 8) {
+            U16 m;
+            memcpy(&m, srcPtr, 2);
+            U64 n = m * 0x0001000100010001;
+            memcpy(v, &n, 8);
+        } else {
+            memcpy(v, srcPtr, 2);
+            memcpy(&v[2], srcPtr, 2);
+            memcpy(&v[4], &v[0], 4);
+        }
         goto copy_loop;
     case 4:
-        memcpy(v, srcPtr, 4);
-        memcpy(&v[4], srcPtr, 4);
+        if(sizeof(void*) == 8) {
+            U32 m;
+            memcpy(&m, srcPtr, 4);
+            U64 n = m | (U64(m) << 32);
+            memcpy(v, &n, 8);
+        } else {
+            memcpy(v, srcPtr, 4);
+            memcpy(&v[4], srcPtr, 4);
+        }
         goto copy_loop;
     default:
         LZ4_memcpy_using_offset_base(dstPtr, srcPtr, dstEnd, offset);
@@ -454,14 +473,13 @@ static int g_debuglog_enable = 1;
 /*-************************************
 *  Common functions
 **************************************/
-static unsigned LZ4_NbCommonBytes (reg_t val)
+LZ4_FORCE_INLINE
+unsigned LZ4_NbCommonBytes (reg_t val)
 {
     if (LZ4_isLittleEndian()) {
         if (sizeof(val)==8) {
 #       if defined(_MSC_VER) && defined(_WIN64) && !defined(LZ4_FORCE_SW_BITCOUNT)
-            unsigned long r = 0;
-            _BitScanForward64( &r, (U64)val );
-            return (int)(r>>3);
+            return (unsigned)_tzcnt_u64((U64)val)>>3;
 #       elif (defined(__clang__) || (defined(__GNUC__) && (__GNUC__>=3))) && !defined(LZ4_FORCE_SW_BITCOUNT)
             return (__builtin_ctzll((U64)val) >> 3);
 #       else
@@ -477,9 +495,7 @@ static unsigned LZ4_NbCommonBytes (reg_t val)
 #       endif
         } else /* 32 bits */ {
 #       if defined(_MSC_VER) && !defined(LZ4_FORCE_SW_BITCOUNT)
-            unsigned long r;
-            _BitScanForward( &r, (U32)val );
-            return (int)(r>>3);
+            return (unsigned)_tzcnt_u32((U32)val)>>3;
 #       elif (defined(__clang__) || (defined(__GNUC__) && (__GNUC__>=3))) && !defined(LZ4_FORCE_SW_BITCOUNT)
             return (__builtin_ctz((U32)val) >> 3);
 #       else
@@ -613,7 +629,7 @@ int LZ4_decompress_safe_forceExtDict(const char* in, char* out, int inSize, int 
 /*-******************************
 *  Compression functions
 ********************************/
-static U32 LZ4_hash4(U32 sequence, tableType_t const tableType)
+LZ4_FORCE_INLINE U32 LZ4_hash4(U32 sequence, tableType_t const tableType)
 {
     if (tableType == byU16)
         return ((sequence * 2654435761U) >> ((MINMATCH*8)-(LZ4_HASHLOG+1)));
@@ -621,7 +637,7 @@ static U32 LZ4_hash4(U32 sequence, tableType_t const tableType)
         return ((sequence * 2654435761U) >> ((MINMATCH*8)-LZ4_HASHLOG));
 }
 
-static U32 LZ4_hash5(U64 sequence, tableType_t const tableType)
+LZ4_FORCE_INLINE U32 LZ4_hash5(U64 sequence, tableType_t const tableType)
 {
     const U32 hashLog = (tableType == byU16) ? LZ4_HASHLOG+1 : LZ4_HASHLOG;
     if (LZ4_isLittleEndian()) {
@@ -639,7 +655,7 @@ LZ4_FORCE_INLINE U32 LZ4_hashPosition(const void* const p, tableType_t const tab
     return LZ4_hash4(LZ4_read32(p), tableType);
 }
 
-static void LZ4_putIndexOnHash(U32 idx, U32 h, void* tableBase, tableType_t const tableType)
+LZ4_FORCE_INLINE void LZ4_putIndexOnHash(U32 idx, U32 h, void* tableBase, tableType_t const tableType)
 {
     switch (tableType)
     {
@@ -651,7 +667,7 @@ static void LZ4_putIndexOnHash(U32 idx, U32 h, void* tableBase, tableType_t cons
     }
 }
 
-static void LZ4_putPositionOnHash(const BYTE* p, U32 h,
+LZ4_FORCE_INLINE void LZ4_putPositionOnHash(const BYTE* p, U32 h,
                                   void* tableBase, tableType_t const tableType,
                             const BYTE* srcBase)
 {
@@ -676,7 +692,7 @@ LZ4_FORCE_INLINE void LZ4_putPosition(const BYTE* p, void* tableBase, tableType_
  * Assumption 1 : only valid if tableType == byU32 or byU16.
  * Assumption 2 : h is presumed valid (within limits of hash table)
  */
-static U32 LZ4_getIndexOnHash(U32 h, const void* tableBase, tableType_t tableType)
+LZ4_FORCE_INLINE U32 LZ4_getIndexOnHash(U32 h, const void* tableBase, tableType_t tableType)
 {
     LZ4_STATIC_ASSERT(LZ4_MEMORY_USAGE > 2);
     if (tableType == byU32) {
@@ -692,7 +708,7 @@ static U32 LZ4_getIndexOnHash(U32 h, const void* tableBase, tableType_t tableTyp
     assert(0); return 0;  /* forbidden case */
 }
 
-static const BYTE* LZ4_getPositionOnHash(U32 h, const void* tableBase, tableType_t tableType, const BYTE* srcBase)
+LZ4_FORCE_INLINE const BYTE* LZ4_getPositionOnHash(U32 h, const void* tableBase, tableType_t tableType, const BYTE* srcBase)
 {
     if (tableType == byPtr) { const BYTE* const* hashTable = (const BYTE* const*) tableBase; return hashTable[h]; }
     if (tableType == byU32) { const U32* const hashTable = (const U32*) tableBase; return hashTable[h] + srcBase; }
