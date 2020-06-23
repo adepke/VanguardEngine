@@ -8,7 +8,6 @@
 #include <Core/Config.h>
 #include <Core/Input.h>
 #include <Window/WindowFrame.h>
-#include <Utility/ArraySize.h>
 
 #include <imgui.h>
 #include <d3dcompiler.h>
@@ -330,7 +329,7 @@ UserInterfaceManager::UserInterfaceManager(RenderDevice* InDevice) : Device(InDe
 	const auto ConfigPath = (Config::EngineRootPath / "Config/UserInterface.ini").generic_string();
 
 	static char StableIniFilePath[260];  // We need to extend the lifetime of the config path to be available throughout the entire application lifetime.
-	strcpy_s(StableIniFilePath, ArraySize(StableIniFilePath), ConfigPath.c_str());
+	strcpy_s(StableIniFilePath, std::size(StableIniFilePath), ConfigPath.c_str());
 
 	ImGuiIO& io = ImGui::GetIO();
 	io.IniFilename = StableIniFilePath;

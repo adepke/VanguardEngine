@@ -2,7 +2,6 @@
 
 #include <Asset/AssetLoader.h>
 #include <Asset/TextureLoader.h>
-#include <Utility/ArraySize.h>
 
 #include <assimp/Importer.hpp>
 #include <assimp/scene.h>
@@ -74,7 +73,7 @@ namespace AssetLoader
 
 			const auto SearchTextureType = [&Mat, TexturePathPtr = &TexturePath](auto& TextureTypeList)
 			{
-				for (size_t Iter = 0; Iter < ArraySize(TextureTypeList); ++Iter)
+				for (size_t Iter = 0; Iter < std::size(TextureTypeList); ++Iter)
 				{
 					if (Mat.GetTexture(TextureTypeList[Iter], 0, TexturePathPtr) == aiReturn_SUCCESS)
 						return true;
