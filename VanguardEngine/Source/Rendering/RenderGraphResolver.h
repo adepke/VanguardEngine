@@ -17,44 +17,44 @@ class RenderDevice;
 class RGResolver
 {
 private:
-	size_t Counter = 0;
-	std::unordered_map<size_t, std::shared_ptr<Buffer>> BufferResources;
-	std::unordered_map<size_t, std::shared_ptr<Texture>> TextureResources;
+	size_t counter = 0;
+	std::unordered_map<size_t, std::shared_ptr<Buffer>> bufferResources;
+	std::unordered_map<size_t, std::shared_ptr<Texture>> textureResources;
 
-	std::unordered_map<size_t, std::pair<RGBufferDescription, std::wstring>> TransientBufferResources;
-	std::unordered_map<size_t, std::pair<RGTextureDescription, std::wstring>> TransientTextureResources;
+	std::unordered_map<size_t, std::pair<RGBufferDescription, std::wstring>> transientBufferResources;
+	std::unordered_map<size_t, std::pair<RGTextureDescription, std::wstring>> transientTextureResources;
 
 public:  // Utilities for the render graph.
-	size_t AddResource(const std::shared_ptr<Buffer>& Resource) { const auto Tag = Counter++; BufferResources[Tag] = Resource; return Tag; }
-	size_t AddResource(const std::shared_ptr<Texture>& Resource) { const auto Tag = Counter++; TextureResources[Tag] = Resource; return Tag; }
+	size_t AddResource(const std::shared_ptr<Buffer>& resource) { const auto tag = counter++; bufferResources[tag] = resource; return tag; }
+	size_t AddResource(const std::shared_ptr<Texture>& resource) { const auto tag = counter++; textureResources[tag] = resource; return tag; }
 
-	size_t AddTransientResource(const RGBufferDescription& Description) { const auto Tag = Counter++; TransientBufferResources[Tag].first = Description; return Tag; }
-	size_t AddTransientResource(const RGTextureDescription& Description) { const auto Tag = Counter++; TransientTextureResources[Tag].first = Description; return Tag; }
+	size_t AddTransientResource(const RGBufferDescription& description) { const auto tag = counter++; transientBufferResources[tag].first = description; return tag; }
+	size_t AddTransientResource(const RGTextureDescription& description) { const auto tag = counter++; transientTextureResources[tag].first = description; return tag; }
 
-	void NameTransientBuffer(size_t ResourceTag, const std::wstring& Name) { TransientBufferResources[ResourceTag].second = Name; }
-	void NameTransientTexture(size_t ResourceTag, const std::wstring& Name) { TransientTextureResources[ResourceTag].second = Name; }
+	void NameTransientBuffer(size_t resourceTag, const std::wstring& name) { transientBufferResources[resourceTag].second = name; }
+	void NameTransientTexture(size_t resourceTag, const std::wstring& name) { transientTextureResources[resourceTag].second = name; }
 
-	void BuildTransients(RenderDevice* Device, std::unordered_map<size_t, ResourceDependencyData>& Dependencies, std::unordered_map<size_t, ResourceUsageData>& Usages);
+	void BuildTransients(RenderDevice* device, std::unordered_map<size_t, ResourceDependencyData>& dependencies, std::unordered_map<size_t, ResourceUsageData>& usages);
 
-	D3D12_RESOURCE_STATES DetermineInitialState(size_t ResourceTag);
+	D3D12_RESOURCE_STATES DetermineInitialState(size_t resourceTag);
 
-	inline std::shared_ptr<Buffer> FetchAsBuffer(size_t ResourceTag);
-	inline std::shared_ptr<Texture> FetchAsTexture(size_t ResourceTag);
+	inline std::shared_ptr<Buffer> FetchAsBuffer(size_t resourceTag);
+	inline std::shared_ptr<Texture> FetchAsTexture(size_t resourceTag);
 
 public:
 	template <typename T>
-	T& Get(size_t ResourceTag)
+	T& Get(size_t resourceTag)
 	{
 		if constexpr (std::is_same_v<T, Buffer>)
 		{
-			VGAssert(BufferResources.count(ResourceTag), "Failed to resolve the resource as a buffer.");		
-			return *BufferResources[ResourceTag];
+			VGAssert(bufferResources.count(resourceTag), "Failed to resolve the resource as a buffer.");		
+			return *bufferResources[resourceTag];
 		}
 
 		else if constexpr (std::is_same_v<T, Texture>)
 		{
-			VGAssert(TextureResources.count(ResourceTag), "Failed to resolve the resource as a texture.");
-			return *TextureResources[ResourceTag];
+			VGAssert(textureResources.count(resourceTag), "Failed to resolve the resource as a texture.");
+			return *textureResources[resourceTag];
 		}
 
 		else
@@ -65,18 +65,18 @@ public:
 	}
 };
 
-inline std::shared_ptr<Buffer> RGResolver::FetchAsBuffer(size_t ResourceTag)
+inline std::shared_ptr<Buffer> RGResolver::FetchAsBuffer(size_t resourceTag)
 {
-	if (BufferResources.count(ResourceTag))
-		return BufferResources[ResourceTag];
+	if (bufferResources.count(resourceTag))
+		return bufferResources[resourceTag];
 
 	return {};
 }
 
-inline std::shared_ptr<Texture> RGResolver::FetchAsTexture(size_t ResourceTag)
+inline std::shared_ptr<Texture> RGResolver::FetchAsTexture(size_t resourceTag)
 {
-	if (TextureResources.count(ResourceTag))
-		return TextureResources[ResourceTag];
+	if (textureResources.count(resourceTag))
+		return textureResources[resourceTag];
 
 	return {};
 }

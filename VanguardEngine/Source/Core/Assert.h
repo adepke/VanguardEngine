@@ -10,24 +10,24 @@
 
 // MSVC doesn't yet support __VA_OPT__, see https://en.cppreference.com/w/cpp/compiler_support
 #ifdef _MSC_VER
-#define VGEnsure(Condition, ...) \
+#define VGEnsure(condition, ...) \
 	do \
 	{ \
-		if (!(Condition)) VGUnlikely \
+		if (!(condition)) VGUnlikely \
 		{ \
-			std::cerr << "Assertion \"" << #Condition << "\" failed in " << __FILE__ << ", line " << __LINE__ << ": " << __VA_ARGS__; \
+			std::cerr << "Assertion \"" << #condition << "\" failed in " << __FILE__ << ", line " << __LINE__ << ": " << __VA_ARGS__; \
 			VGBreak(); \
 			std::abort(); \
 		} \
 	} \
 	while (0)
 #else
-#define VGEnsure(Condition, ...) \
+#define VGEnsure(condition, ...) \
 	do \
 	{ \
-		if (!(Condition)) VGUnlikely \
+		if (!(condition)) VGUnlikely \
 		{ \
-			std::cerr << "Assertion \"" << #Condition << "\" failed in " << __FILE__ << ", line " << __LINE__ __VA_OPT__(<< ": " << __VA_ARGS__); \
+			std::cerr << "Assertion \"" << #condition << "\" failed in " << __FILE__ << ", line " << __LINE__ __VA_OPT__(<< ": " << __VA_ARGS__); \
 			VGBreak(); \
 			std::abort(); \
 		} \
@@ -36,7 +36,7 @@
 #endif
 
 #if !BUILD_RELEASE
-#define VGAssert(Condition, ...) VGEnsure(Condition, __VA_ARGS__)
+#define VGAssert(condition, ...) VGEnsure(condition, __VA_ARGS__)
 #else
-#define VGAssert(Condition, ...) do {} while (0)
+#define VGAssert(condition, ...) do {} while (0)
 #endif

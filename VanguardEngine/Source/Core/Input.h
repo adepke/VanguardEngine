@@ -6,10 +6,10 @@
 
 namespace Input
 {
-	void Initialize(void* Window);
+	void Initialize(void* window);
 
 	void EnableDPIAwareness();
 
-	bool ProcessWindowMessage(void* Window, uint32_t Message, int64_t wParam, uint64_t lParam);
-	void UpdateInputDevices(void* Window);
+	bool ProcessWindowMessage(void* window, uint32_t message, int64_t wParam, uint64_t lParam);
+	void UpdateInputDevices(void* window);
 };

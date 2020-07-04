@@ -6,13 +6,13 @@
 
 namespace Config
 {
-	inline const std::filesystem::path EngineConfigPath{ "Config/Engine.json" };
+	inline const std::filesystem::path engineConfigPath{ "Config/Engine.json" };
 
 	// Loaded from config. All paths are absolute.
 
-	inline std::filesystem::path EngineRootPath;
-	inline std::filesystem::path ShadersPath;
-	inline std::filesystem::path MaterialsPath;
+	inline std::filesystem::path engineRootPath;
+	inline std::filesystem::path shadersPath;
+	inline std::filesystem::path materialsPath;
 
 	void Initialize();
 };

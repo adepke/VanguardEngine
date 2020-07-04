@@ -11,13 +11,13 @@ using namespace DirectX;
 
 struct Vertex
 {
-	XMFLOAT3 Position;
-	XMFLOAT3 Normal;
-	XMFLOAT2 UV;
-	XMFLOAT3 Tangent;
-	XMFLOAT3 Bitangent;
+	XMFLOAT3 position;
+	XMFLOAT3 normal;
+	XMFLOAT2 uv;
+	XMFLOAT3 tangent;
+	XMFLOAT3 bitangent;
 };
 
 // #TODO: Temporary globals.
-inline XMMATRIX GlobalViewMatrix;
-inline XMMATRIX GlobalProjectionMatrix;
+inline XMMATRIX globalViewMatrix;
+inline XMMATRIX globalProjectionMatrix;

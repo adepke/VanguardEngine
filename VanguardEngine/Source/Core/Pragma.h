@@ -2,20 +2,20 @@
 
 #pragma once
 
-#define VGConcat(Left, Right) Left ## Right
-#define VGStringify(Raw) #Raw
+#define VGConcat(left, right) left ## right
+#define VGStringify(raw) #raw
 
 #ifdef _MSC_VER
 #define VGWarningPush __pragma(warning(push))
 #define VGWarningPop __pragma(warning(pop))
-#define VGWarningDisable(Number, String) __pragma(warning(disable:Number))
+#define VGWarningDisable(number, string) __pragma(warning(disable:number))
 #elif defined(__GNUC__) || defined(__clang__)
-#define _Detail_VGExpandStringify(Token) VGStringify(Token)
+#define _Detail_VGExpandStringify(token) VGStringify(token)
 #define VGWarningPush _Pragma("GCC diagnostic push")
 #define VGWarningPop _Pragma("GCC diagnostic pop")
-#define VGWarningDisable(Number, String) _Pragma(_Detail_VGExpandStringify(GCC diagnostic ignored VGStringify(-W##String)))
+#define VGWarningDisable(number, string) _Pragma(_Detail_VGExpandStringify(GCC diagnostic ignored VGStringify(-W##string)))
 #else
 #define VGWarningPush
 #define VGWarningPop
-#define VGWarningDisable(Number, String)
+#define VGWarningDisable(number, string)
 #endif

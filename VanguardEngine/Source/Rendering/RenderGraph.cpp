@@ -10,63 +10,63 @@
 #include <limits>
 #include <cstring>
 
-D3D12_RESOURCE_STATES UsageToState(const std::shared_ptr<Buffer>& Resource, RGUsage Usage, bool Write)
+D3D12_RESOURCE_STATES UsageToState(const std::shared_ptr<Buffer>& resource, RGUsage usage, bool write)
 {
-	D3D12_RESOURCE_STATES ReadState{};
-	if (!Write)
+	D3D12_RESOURCE_STATES readState{};
+	if (!write)
 	{
-		if (Resource->Description.BindFlags & BindFlag::ConstantBuffer) ReadState |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
-		else if (Resource->Description.BindFlags & BindFlag::VertexBuffer) ReadState |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
-		if (Resource->Description.BindFlags & BindFlag::IndexBuffer) ReadState |= D3D12_RESOURCE_STATE_INDEX_BUFFER;
-		if (Resource->Description.BindFlags & BindFlag::ShaderResource) ReadState |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+		if (resource->description.bindFlags & BindFlag::ConstantBuffer) readState |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+		else if (resource->description.bindFlags & BindFlag::VertexBuffer) readState |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+		if (resource->description.bindFlags & BindFlag::IndexBuffer) readState |= D3D12_RESOURCE_STATE_INDEX_BUFFER;
+		if (resource->description.bindFlags & BindFlag::ShaderResource) readState |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 	}
 
-	switch (Usage)
+	switch (usage)
 	{
-	case RGUsage::Default: return Write ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS : ReadState;
+	case RGUsage::Default: return write ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS : readState;
 	}
 
 	VGEnsure(false, "Buffer resource cannot have specified usage.");
 	return {};
 }
 
-D3D12_RESOURCE_STATES UsageToState(const std::shared_ptr<Texture>& Resource, RGUsage Usage, bool Write)
+D3D12_RESOURCE_STATES UsageToState(const std::shared_ptr<Texture>& resource, RGUsage usage, bool write)
 {
-	D3D12_RESOURCE_STATES ReadAdditiveState{};
-	if (!Write)
+	D3D12_RESOURCE_STATES readAdditiveState{};
+	if (!write)
 	{
-		if (Resource->Description.BindFlags & BindFlag::ShaderResource) ReadAdditiveState |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+		if (resource->description.bindFlags & BindFlag::ShaderResource) readAdditiveState |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 	}
 
-	switch (Usage)
+	switch (usage)
 	{
-	case RGUsage::Default: return Write ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS : ReadAdditiveState;
-	case RGUsage::RenderTarget: return Write ? D3D12_RESOURCE_STATE_RENDER_TARGET : ReadAdditiveState;
-	case RGUsage::DepthStencil: return Write ? D3D12_RESOURCE_STATE_DEPTH_WRITE : D3D12_RESOURCE_STATE_DEPTH_READ | ReadAdditiveState;
-	case RGUsage::BackBuffer: return Write ? D3D12_RESOURCE_STATE_RENDER_TARGET : ReadAdditiveState;
+	case RGUsage::Default: return write ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS : readAdditiveState;
+	case RGUsage::RenderTarget: return write ? D3D12_RESOURCE_STATE_RENDER_TARGET : readAdditiveState;
+	case RGUsage::DepthStencil: return write ? D3D12_RESOURCE_STATE_DEPTH_WRITE : D3D12_RESOURCE_STATE_DEPTH_READ | readAdditiveState;
+	case RGUsage::BackBuffer: return write ? D3D12_RESOURCE_STATE_RENDER_TARGET : readAdditiveState;
 	}
 
 	VGEnsure(false, "Texture resource cannot have specified usage.");
 	return {};
 }
 
-std::optional<size_t> RenderGraph::FindUsage(RGUsage Usage)
+std::optional<size_t> RenderGraph::FindUsage(RGUsage usage)
 {
 	VGScopedCPUStat("Render Graph Find Usage");
 
-	 const auto Iter = std::find_if(ResourceUsages.begin(), ResourceUsages.end(), [Usage](const auto& Pair)
+	 const auto iter = std::find_if(resourceUsages.begin(), resourceUsages.end(), [usage](const auto& Pair)
 		{
-			const auto& UsageMap = Pair.second.PassUsage;  // Mapping of pass indexes to usages.
+			const auto& usageMap = Pair.second.passUsage;  // Mapping of pass indexes to usages.
 
-			return std::find_if(UsageMap.begin(), UsageMap.end(), [Usage](const auto& Pair)
+			return std::find_if(usageMap.begin(), usageMap.end(), [usage](const auto& Pair)
 				{
-					return Pair.second == Usage;
-				}) != UsageMap.end();
+					return Pair.second == usage;
+				}) != usageMap.end();
 		});
 
-	 if (Iter != ResourceUsages.end())
+	 if (iter != resourceUsages.end())
 	 {
-		 return Iter->first;
+		 return iter->first;
 	 }
 
 	 return std::nullopt;
@@ -84,50 +84,50 @@ bool RenderGraph::Validate()
 	return true;
 }
 
-std::unordered_set<size_t> RenderGraph::FindReadResources(size_t PassIndex)
+std::unordered_set<size_t> RenderGraph::FindReadResources(size_t passIndex)
 {
-	std::unordered_set<size_t> Result;
+	std::unordered_set<size_t> result;
 
-	for (const auto& [ResourceTag, Dependency] : ResourceDependencies)
+	for (const auto& [resourceTag, dependency] : resourceDependencies)
 	{
-		if (Dependency.ReadingPasses.count(PassIndex))
-			Result.insert(ResourceTag);
+		if (dependency.readingPasses.count(passIndex))
+			result.insert(resourceTag);
 	}
 
-	return std::move(Result);
+	return std::move(result);
 }
 
-std::unordered_set<size_t> RenderGraph::FindWrittenResources(size_t PassIndex)
+std::unordered_set<size_t> RenderGraph::FindWrittenResources(size_t passIndex)
 {
-	std::unordered_set<size_t> Result;
+	std::unordered_set<size_t> result;
 
-	for (const auto& [ResourceTag, Dependency] : ResourceDependencies)
+	for (const auto& [resourceTag, dependency] : resourceDependencies)
 	{
-		if (Dependency.WritingPasses.count(PassIndex))
-			Result.insert(ResourceTag);
+		if (dependency.writingPasses.count(passIndex))
+			result.insert(resourceTag);
 	}
 
-	return std::move(Result);
+	return std::move(result);
 }
 
-void RenderGraph::Traverse(std::unordered_set<size_t>& TrackedPasses, size_t ResourceTag)
+void RenderGraph::Traverse(std::unordered_set<size_t>& trackedPasses, size_t resourceTag)
 {
-	for (const size_t PassIndex : ResourceDependencies[ResourceTag].WritingPasses)
+	for (const size_t passIndex : resourceDependencies[resourceTag].writingPasses)
 	{
 		// If this pass has been added to the pipeline by a previous dependency, skip it.
-		if (TrackedPasses.count(PassIndex))
+		if (trackedPasses.count(passIndex))
 			continue;
 
-		TrackedPasses.insert(PassIndex);
+		trackedPasses.insert(passIndex);
 
-		for (const size_t Tag : FindWrittenResources(PassIndex))
+		for (const size_t tag : FindWrittenResources(passIndex))
 		{
 			// We don't want an infinite loop.
-			if (Tag != ResourceTag)
-				Traverse(TrackedPasses, Tag);
+			if (tag != resourceTag)
+				Traverse(trackedPasses, tag);
 		}
 
-		PassPipeline.push_back(PassIndex);
+		passPipeline.push_back(passIndex);
 	}
 }
 
@@ -135,112 +135,112 @@ void RenderGraph::Serialize()
 {
 	VGScopedCPUStat("Render Graph Serialize");
 
-	PassPipeline.reserve(Passes.size());  // Unlikely that a significant number of passes are going to be trimmed.
+	passPipeline.reserve(passes.size());  // Unlikely that a significant number of passes are going to be trimmed.
 
-	const size_t SwapChainTag = *FindUsage(RGUsage::BackBuffer);  // #TODO: This will only work if we have 1 pass write to the swap chain.
-	std::unordered_set<size_t> TrackedPasses;
-	Traverse(TrackedPasses, SwapChainTag);
+	const size_t swapChainTag = *FindUsage(RGUsage::BackBuffer);  // #TODO: This will only work if we have 1 pass write to the swap chain.
+	std::unordered_set<size_t> trackedPasses;
+	Traverse(trackedPasses, swapChainTag);
 
 	// #TODO: Optimize the pipeline.
 }
 
-void RenderGraph::InjectStateBarriers(std::vector<std::shared_ptr<CommandList>>& Lists)
+void RenderGraph::InjectStateBarriers(std::vector<std::shared_ptr<CommandList>>& lists)
 {
 	VGScopedCPUStat("Render Graph Barriers");
 
-	std::unordered_map<size_t, std::pair<D3D12_RESOURCE_STATES, size_t>> StateMap;  // Maps resource tag to the state and which pass last modified it.
-	constexpr auto InvalidPassIndex = std::numeric_limits<size_t>::max();
+	std::unordered_map<size_t, std::pair<D3D12_RESOURCE_STATES, size_t>> stateMap;  // Maps resource tag to the state and which pass last modified it.
+	constexpr auto invalidPassIndex = std::numeric_limits<size_t>::max();
 
-	for (const auto& [ResourceTag, Usage] : ResourceUsages)
+	for (const auto& [resourceTag, usage] : resourceUsages)
 	{
-		StateMap.emplace(ResourceTag, std::make_pair(Resolver.DetermineInitialState(ResourceTag), InvalidPassIndex));
+		stateMap.emplace(resourceTag, std::make_pair(resolver.DetermineInitialState(resourceTag), invalidPassIndex));
 	}
 
-	const auto CheckState = [this, &StateMap, &Lists](size_t PassIndex, const auto& Resources, bool Write)
+	const auto checkState = [this, &stateMap, &lists](size_t passIndex, const auto& resources, bool write)
 	{
-		for (size_t Resource : Resources)
+		for (size_t resource : resources)
 		{
-			auto ResourceBuffer = Resolver.FetchAsBuffer(Resource);
-			auto ResourceTexture = Resolver.FetchAsTexture(Resource);
+			auto resourceBuffer = resolver.FetchAsBuffer(resource);
+			auto resourceTexture = resolver.FetchAsTexture(resource);
 
-			VGAssert(ResourceBuffer || ResourceTexture, "Failed to fetch the resource.");
+			VGAssert(resourceBuffer || resourceTexture, "Failed to fetch the resource.");
 
 			// Dynamic resources don't ever transition states, so we can skip them.
-			if (ResourceBuffer && ResourceBuffer->Description.UpdateRate == ResourceFrequency::Dynamic) continue;
-			if (ResourceTexture && ResourceTexture->Description.UpdateRate == ResourceFrequency::Dynamic) continue;
+			if (resourceBuffer && resourceBuffer->description.updateRate == ResourceFrequency::Dynamic) continue;
+			if (resourceTexture && resourceTexture->description.updateRate == ResourceFrequency::Dynamic) continue;
 
 			// #TEMP: We can't use PassIndex directly, since it might be a size_t::max.
-			D3D12_RESOURCE_STATES NewState;
+			D3D12_RESOURCE_STATES newState;
 
-			if (ResourceBuffer)
-				NewState = UsageToState(ResourceBuffer, ResourceUsages[Resource].PassUsage[PassIndex], Write);
+			if (resourceBuffer)
+				newState = UsageToState(resourceBuffer, resourceUsages[resource].passUsage[passIndex], write);
 			else
-				NewState = UsageToState(ResourceTexture, ResourceUsages[Resource].PassUsage[PassIndex], Write);
+				newState = UsageToState(resourceTexture, resourceUsages[resource].passUsage[passIndex], write);
 
-			if (NewState != StateMap[Resource].first)
+			if (newState != stateMap[resource].first)
 			{
 				// The state changed, which means we need to inject a barrier at the end of the last list to use the resource.
 				// #TODO: Potentially use split barriers.
 
-				if (ResourceBuffer)
-					Lists[PassIndex]->TransitionBarrier(ResourceBuffer, NewState);  // #TEMP: After reordering we can't access lists like this, need a map.
+				if (resourceBuffer)
+					lists[passIndex]->TransitionBarrier(resourceBuffer, newState);  // #TEMP: After reordering we can't access lists like this, need a map.
 				else
-					Lists[PassIndex]->TransitionBarrier(ResourceTexture, NewState);
+					lists[passIndex]->TransitionBarrier(resourceTexture, newState);
 
-				StateMap[Resource] = { NewState, PassIndex };
+				stateMap[resource] = { newState, passIndex };
 			}
 		}
 	};
 
-	for (size_t Iter = 0; Iter < PassPipeline.size(); ++Iter)
+	for (size_t i = 0; i < passPipeline.size(); ++i)
 	{
-		auto Reads = FindReadResources(PassPipeline[Iter]);
-		const auto Writes = FindWrittenResources(PassPipeline[Iter]);
+		auto reads = FindReadResources(passPipeline[i]);
+		const auto writes = FindWrittenResources(passPipeline[i]);
 
 		// We need to remove resource that are both read and write during this pass from the read-only list.
-		for (auto Iter = Reads.begin(); Iter != Reads.end();)
+		for (auto iter = reads.begin(); iter != reads.end();)
 		{
-			if (Writes.count(*Iter))
-				Iter = Reads.erase(Iter);
+			if (writes.count(*iter))
+				iter = reads.erase(iter);
 			else
-				++Iter;
+				++iter;
 		}
 
-		CheckState(Iter, Reads, false);
-		CheckState(Iter, Writes, true);
+		checkState(i, reads, false);
+		checkState(i, writes, true);
 	}
 
 	// #TODO: Strongly consider looking ahead at sequential reading passes (up until a write pass) and merge their required
 	// read state into the current barrier in order to avoid transitions from a read-only state to another read-only state.
 
 	// Placed all the barriers, now flush them.
-	for (auto& List : Lists)
+	for (auto& list : lists)
 	{
-		List->FlushBarriers();
+		list->FlushBarriers();
 	}
 }
 
-void RenderGraph::InjectRaceBarriers(std::vector<std::shared_ptr<CommandList>>& Lists)
+void RenderGraph::InjectRaceBarriers(std::vector<std::shared_ptr<CommandList>>& lists)
 {
 	// #TODO: Place UAV barriers when needed.
 
 	// Placed all the barriers, now flush them.
-	for (auto& List : Lists)
+	for (auto& list : lists)
 	{
-		List->FlushBarriers();
+		list->FlushBarriers();
 	}
 }
 
-RenderPass& RenderGraph::AddPass(const std::string_view StaticName)
+RenderPass& RenderGraph::AddPass(const std::string_view staticName)
 {
 	VGScopedCPUStat("Render Graph Add Pass");
 
-	for (const auto& Pass : Passes)
+	for (const auto& pass : passes)
 	{
-		VGAssert(std::strcmp(Pass->StaticName, StaticName.data()) != 0, "Attempted to add multiple passes with the same name!");
+		VGAssert(std::strcmp(pass->staticName, staticName.data()) != 0, "Attempted to add multiple passes with the same name!");
 	}
 
-	return *Passes.emplace_back(std::make_unique<RenderPass>(*this, StaticName, Passes.size()));
+	return *passes.emplace_back(std::make_unique<RenderPass>(*this, staticName, passes.size()));
 }
 
 void RenderGraph::Build()
@@ -252,55 +252,55 @@ void RenderGraph::Build()
 	// Serialize the execution pipeline, we need to do this to resolve resource state and barriers.
 	Serialize();
 
-	Resolver.BuildTransients(Device, ResourceDependencies, ResourceUsages);
+	resolver.BuildTransients(device, resourceDependencies, resourceUsages);
 }
 
 void RenderGraph::Execute()
 {
 	VGScopedCPUStat("Render Graph Execute");
 
-	VGAssert(PassPipeline.size(), "Render graph is empty, ensure you built the graph before execution.");
+	VGAssert(passPipeline.size(), "Render graph is empty, ensure you built the graph before execution.");
 
-	std::vector<std::shared_ptr<CommandList>> PassCommands;
-	PassCommands.resize(PassPipeline.size());
+	std::vector<std::shared_ptr<CommandList>> passCommands;
+	passCommands.resize(passPipeline.size());
 
-	size_t Index = 0;
-	for (auto PassIndex : PassPipeline)
+	size_t index = 0;
+	for (auto passIndex : passPipeline)
 	{
-		PassCommands[Index] = Device->AllocateFrameCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
-		++Index;
+		passCommands[index] = device->AllocateFrameCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
+		++index;
 	}
 
-	InjectStateBarriers(PassCommands);
+	InjectStateBarriers(passCommands);
 
 	// #TODO: Parallel recording.
-	Index = 0;
-	for (auto PassIndex : PassPipeline)
+	index = 0;
+	for (auto passIndex : passPipeline)
 	{
-		VGScopedCPUStat(Passes[PassIndex]->StaticName);
+		VGScopedCPUStat(passes[passIndex]->staticName);
 
-		Passes[PassIndex]->Execution(Resolver, *PassCommands[Index]);
-		++Index;
+		passes[passIndex]->execution(resolver, *passCommands[index]);
+		++index;
 	}
 
-	InjectRaceBarriers(PassCommands);
+	InjectRaceBarriers(passCommands);
 
 	// Ensure the back buffer is in presentation state at the very end of the graph.
-	PassCommands[PassCommands.size() - 1]->TransitionBarrier(Resolver.FetchAsTexture(*FindUsage(RGUsage::BackBuffer)), D3D12_RESOURCE_STATE_PRESENT);
+	passCommands[passCommands.size() - 1]->TransitionBarrier(resolver.FetchAsTexture(*FindUsage(RGUsage::BackBuffer)), D3D12_RESOURCE_STATE_PRESENT);
 
-	std::vector<ID3D12CommandList*> PassLists;
-	PassLists.reserve(PassCommands.size() + 1);
+	std::vector<ID3D12CommandList*> passLists;
+	passLists.reserve(passCommands.size() + 1);
 
-	Device->GetDirectList().FlushBarriers();
-	Device->GetDirectList().Close();
-	PassLists.emplace_back(Device->GetDirectList().Native());  // Add the device's main draw list. #TEMP: Get rid of this monolithic list.
+	device->GetDirectList().FlushBarriers();
+	device->GetDirectList().Close();
+	passLists.emplace_back(device->GetDirectList().Native());  // Add the device's main draw list. #TEMP: Get rid of this monolithic list.
 
-	for (auto& List : PassCommands)
+	for (auto& list : passCommands)
 	{
-		List->FlushBarriers();
-		List->Close();
-		PassLists.emplace_back(List->Native());
+		list->FlushBarriers();
+		list->Close();
+		passLists.emplace_back(list->Native());
 	}
 
-	Device->GetDirectQueue()->ExecuteCommandLists(static_cast<UINT>(PassLists.size()), PassLists.data());
+	device->GetDirectQueue()->ExecuteCommandLists(static_cast<UINT>(passLists.size()), passLists.data());
 }

@@ -25,68 +25,68 @@ struct EntityInstance
 {
 	// #TODO: Create from some form of shader interop.
 
-	XMMATRIX WorldMatrix;
+	XMMATRIX worldMatrix;
 };
 
 struct CameraBuffer
 {
-	XMMATRIX ViewMatrix;
-	XMMATRIX ProjectionMatrix;
+	XMMATRIX viewMatrix;
+	XMMATRIX projectionMatrix;
 };
 
 void Renderer::UpdateCameraBuffer()
 {
 	VGScopedCPUStat("Update Camera Buffer");
 
-	CameraBuffer BufferData;
-	BufferData.ViewMatrix = GlobalViewMatrix;
-	BufferData.ProjectionMatrix = GlobalProjectionMatrix;
+	CameraBuffer bufferData;
+	bufferData.viewMatrix = globalViewMatrix;
+	bufferData.projectionMatrix = globalProjectionMatrix;
 
-	std::vector<uint8_t> ByteData;
-	ByteData.resize(sizeof(CameraBuffer));
-	std::memcpy(ByteData.data(), &BufferData, sizeof(BufferData));
+	std::vector<uint8_t> byteData;
+	byteData.resize(sizeof(CameraBuffer));
+	std::memcpy(byteData.data(), &bufferData, sizeof(bufferData));
 
-	Device->WriteResource(cameraBuffer, ByteData);
+	device->WriteResource(cameraBuffer, byteData);
 }
 
 Renderer::~Renderer()
 {
 	// Sync the device so that resource members in Renderer.h don't get destroyed while in-flight.
-	Device->SyncInterframe(true);
+	device->SyncInterframe(true);
 }
 
-void Renderer::Initialize(std::unique_ptr<WindowFrame>&& InWindow, std::unique_ptr<RenderDevice>&& InDevice)
+void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_ptr<RenderDevice>&& inDevice)
 {
 	VGScopedCPUStat("Renderer Initialize");
 
-	Window = std::move(InWindow);
-	Device = std::move(InDevice);
+	window = std::move(inWindow);
+	device = std::move(inDevice);
 
-	Device->CheckFeatureSupport();
-	Materials = std::move(MaterialManager::Get().ReloadMaterials(*Device));
+	device->CheckFeatureSupport();
+	materials = std::move(MaterialManager::Get().ReloadMaterials(*device));
 
-	BufferDescription CameraBufferDesc{};
-	CameraBufferDesc.UpdateRate = ResourceFrequency::Static;
-	CameraBufferDesc.BindFlags = BindFlag::ConstantBuffer;
-	CameraBufferDesc.AccessFlags = AccessFlag::CPUWrite;
-	CameraBufferDesc.Size = 1;  // #TODO: Support multiple cameras.
-	CameraBufferDesc.Stride = sizeof(CameraBuffer);
+	BufferDescription cameraBufferDesc{};
+	cameraBufferDesc.updateRate = ResourceFrequency::Static;
+	cameraBufferDesc.bindFlags = BindFlag::ConstantBuffer;
+	cameraBufferDesc.accessFlags = AccessFlag::CPUWrite;
+	cameraBufferDesc.size = 1;  // #TODO: Support multiple cameras.
+	cameraBufferDesc.stride = sizeof(CameraBuffer);
 
-	cameraBuffer = Device->CreateResource(CameraBufferDesc, VGText("Camera Buffer"));
+	cameraBuffer = device->CreateResource(cameraBufferDesc, VGText("Camera Buffer"));
 
-	UserInterface = std::make_unique<UserInterfaceManager>(Device.get());
+	userInterface = std::make_unique<UserInterfaceManager>(device.get());
 
-	NullDescriptor = Device->AllocateDescriptor(DescriptorType::Default);
+	nullDescriptor = device->AllocateDescriptor(DescriptorType::Default);
 
-	D3D12_SHADER_RESOURCE_VIEW_DESC NullViewDesc{};
-	NullViewDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	NullViewDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-	NullViewDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+	D3D12_SHADER_RESOURCE_VIEW_DESC nullViewDesc{};
+	nullViewDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+	nullViewDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+	nullViewDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 
-	Device->Native()->CreateShaderResourceView(nullptr, &NullViewDesc, NullDescriptor);
+	device->Native()->CreateShaderResourceView(nullptr, &nullViewDesc, nullDescriptor);
 }
 
-void Renderer::Render(entt::registry& Registry)
+void Renderer::Render(entt::registry& registry)
 {
 	VGScopedCPUStat("Render");
 
@@ -97,167 +97,167 @@ void Renderer::Render(entt::registry& Registry)
 
 	// #TODO: Sort by material.
 
-	std::pair<std::shared_ptr<Buffer>, size_t> InstanceBuffer;
+	std::pair<std::shared_ptr<Buffer>, size_t> instanceBuffer;
 
 	{
 		VGScopedCPUStat("Generate Instance Buffer");
 
-		const auto InstanceView = Registry.view<const TransformComponent, const MeshComponent>();
+		const auto instanceView = registry.view<const TransformComponent, const MeshComponent>();
 
-		InstanceBuffer = std::move(Device->FrameAllocate(sizeof(EntityInstance) * InstanceView.size()));
+		instanceBuffer = std::move(device->FrameAllocate(sizeof(EntityInstance) * instanceView.size()));
 
-		size_t Index = 0;
-		InstanceView.each([this, &InstanceBuffer, &Index](auto Entity, const auto& Transform, const auto&)
+		size_t index = 0;
+		instanceView.each([this, &instanceBuffer, &index](auto entity, const auto& transform, const auto&)
 			{
-				const auto Scaling = XMVectorSet(Transform.Scale.x, Transform.Scale.y, Transform.Scale.z, 0.f);
-				const auto Rotation = XMVectorSet(Transform.Rotation.x, Transform.Rotation.y, Transform.Rotation.z, 0.f);
-				const auto Translation = XMVectorSet(Transform.Translation.x, Transform.Translation.y, Transform.Translation.z, 0.f);
+				const auto scaling = XMVectorSet(transform.scale.x, transform.scale.y, transform.scale.z, 0.f);
+				const auto rotation = XMVectorSet(transform.rotation.x, transform.rotation.y, transform.rotation.z, 0.f);
+				const auto translation = XMVectorSet(transform.translation.x, transform.translation.y, transform.translation.z, 0.f);
 
-				EntityInstance Instance;
-				Instance.WorldMatrix = XMMatrixAffineTransformation(Scaling, XMVectorZero(), Rotation, Translation);
+				EntityInstance instance;
+				instance.worldMatrix = XMMatrixAffineTransformation(scaling, XMVectorZero(), rotation, translation);
 
-				std::vector<uint8_t> InstanceData{};
-				InstanceData.resize(sizeof(EntityInstance));
-				std::memcpy(InstanceData.data(), &Instance, InstanceData.size());
+				std::vector<uint8_t> instanceData{};
+				instanceData.resize(sizeof(EntityInstance));
+				std::memcpy(instanceData.data(), &instance, instanceData.size());
 
-				Device->WriteResource(InstanceBuffer.first, InstanceData, InstanceBuffer.second + (Index * sizeof(EntityInstance)));
+				device->WriteResource(instanceBuffer.first, instanceData, instanceBuffer.second + (index * sizeof(EntityInstance)));
 
-				++Index;
+				++index;
 			});
 	}
 
-	RenderGraph Graph{ Device.get() };
+	RenderGraph graph{ device.get() };
 
-	const size_t BackBufferTag = Graph.ImportResource(Device->GetBackBuffer());
-	const size_t CameraBufferTag = Graph.ImportResource(cameraBuffer);
-	const size_t InstanceBufferTag = Graph.ImportResource(InstanceBuffer.first);
+	const size_t backBufferTag = graph.ImportResource(device->GetBackBuffer());
+	const size_t cameraBufferTag = graph.ImportResource(cameraBuffer);
+	const size_t instanceBufferTag = graph.ImportResource(instanceBuffer.first);
 
-	RGTextureDescription DepthStencilDesc{};
-	DepthStencilDesc.Width = Device->RenderWidth;
-	DepthStencilDesc.Height = Device->RenderHeight;
-	DepthStencilDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	RGTextureDescription depthStencilDesc{};
+	depthStencilDesc.width = device->renderWidth;
+	depthStencilDesc.height = device->renderHeight;
+	depthStencilDesc.format = DXGI_FORMAT_D24_UNORM_S8_UINT;
 
-	auto& MainPass = Graph.AddPass("Main Pass");
-	const size_t DepthStencilTag = MainPass.CreateResource(DepthStencilDesc, VGText("Depth Stencil"));
-	MainPass.WriteResource(DepthStencilTag, RGUsage::DepthStencil);
-	MainPass.WriteResource(BackBufferTag, RGUsage::BackBuffer);
-	MainPass.ReadResource(CameraBufferTag, RGUsage::Default);
-	MainPass.ReadResource(InstanceBufferTag, RGUsage::Default);
+	auto& mainPass = graph.AddPass("Main Pass");
+	const size_t depthStencilTag = mainPass.CreateResource(depthStencilDesc, VGText("Depth Stencil"));
+	mainPass.WriteResource(depthStencilTag, RGUsage::DepthStencil);
+	mainPass.WriteResource(backBufferTag, RGUsage::BackBuffer);
+	mainPass.ReadResource(cameraBufferTag, RGUsage::Default);
+	mainPass.ReadResource(instanceBufferTag, RGUsage::Default);
 
-	MainPass.Bind(
-		[this, &Registry, BackBufferTag, DepthStencilTag, CameraBufferTag, InstanceBufferTag, InstanceBufferOffset = InstanceBuffer.second]
-	(RGResolver& Resolver, CommandList& List)
+	mainPass.Bind(
+		[this, &registry, backBufferTag, depthStencilTag, cameraBufferTag, instanceBufferTag, instanceBufferOffset = instanceBuffer.second]
+	(RGResolver& resolver, CommandList& list)
 	{
-		auto& BackBuffer = Resolver.Get<Texture>(BackBufferTag);
-		auto& DepthStencil = Resolver.Get<Texture>(DepthStencilTag);
-		auto& ActualCameraBuffer = Resolver.Get<Buffer>(CameraBufferTag);  // #TODO: Fix naming.
-		auto& InstanceBuffer = Resolver.Get<Buffer>(InstanceBufferTag);
+		auto& backBuffer = resolver.Get<Texture>(backBufferTag);
+		auto& depthStencil = resolver.Get<Texture>(depthStencilTag);
+		auto& cameraBuffer = resolver.Get<Buffer>(cameraBufferTag);
+		auto& instanceBuffer = resolver.Get<Buffer>(instanceBufferTag);
 
-		List.BindPipelineState(*Materials[0].Pipeline);
-		List.BindDescriptorAllocator(Device->GetDescriptorAllocator());
+		list.BindPipelineState(*materials[0].pipeline);
+		list.BindDescriptorAllocator(device->GetDescriptorAllocator());
 
-		List.Native()->SetGraphicsRootConstantBufferView(2, ActualCameraBuffer.Native()->GetGPUVirtualAddress());
+		list.Native()->SetGraphicsRootConstantBufferView(2, cameraBuffer.Native()->GetGPUVirtualAddress());
 
-		D3D12_VIEWPORT Viewport{};
+		D3D12_VIEWPORT viewport{};
 
 #if ENABLE_EDITOR
-		Viewport = EditorRenderer::GetSceneViewport();
+		viewport = EditorRenderer::GetSceneViewport();
 #else
-		Viewport.TopLeftX = 0.f;
-		Viewport.TopLeftY = 0.f;
-		Viewport.Width = Device->RenderWidth;
-		Viewport.Height = Device->RenderHeight;
-		Viewport.MinDepth = 0.f;
-		Viewport.MaxDepth = 1.f;
+		viewport.TopLeftX = 0.f;
+		viewport.TopLeftY = 0.f;
+		viewport.Width = device->renderWidth;
+		viewport.Height = device->renderHeight;
+		viewport.MinDepth = 0.f;
+		viewport.MaxDepth = 1.f;
 #endif
 
-		D3D12_RECT ScissorRect{};
-		ScissorRect.left = 0;
-		ScissorRect.top = 0;
-		ScissorRect.right = Device->RenderWidth;
-		ScissorRect.bottom = Device->RenderHeight;
+		D3D12_RECT scissorRect{};
+		scissorRect.left = 0;
+		scissorRect.top = 0;
+		scissorRect.right = device->renderWidth;
+		scissorRect.bottom = device->renderHeight;
 
-		List.Native()->RSSetViewports(1, &Viewport);
-		List.Native()->RSSetScissorRects(1, &ScissorRect);
-		List.Native()->OMSetRenderTargets(1, &static_cast<D3D12_CPU_DESCRIPTOR_HANDLE>(*BackBuffer.RTV), false, &static_cast<D3D12_CPU_DESCRIPTOR_HANDLE>(*DepthStencil.DSV));
-		List.Native()->OMSetStencilRef(0);
+		list.Native()->RSSetViewports(1, &viewport);
+		list.Native()->RSSetScissorRects(1, &scissorRect);
+		list.Native()->OMSetRenderTargets(1, &static_cast<D3D12_CPU_DESCRIPTOR_HANDLE>(*backBuffer.RTV), false, &static_cast<D3D12_CPU_DESCRIPTOR_HANDLE>(*depthStencil.DSV));
+		list.Native()->OMSetStencilRef(0);
 		const float ClearColor[] = { 0.2f, 0.2f, 0.2f, 1.f };
-		List.Native()->ClearRenderTargetView(*BackBuffer.RTV, ClearColor, 0, nullptr);
-		List.Native()->ClearDepthStencilView(*DepthStencil.DSV, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0, 0, nullptr);
+		list.Native()->ClearRenderTargetView(*backBuffer.RTV, ClearColor, 0, nullptr);
+		list.Native()->ClearDepthStencilView(*depthStencil.DSV, D3D12_CLEAR_FLAG_DEPTH, 1.f, 0, 0, nullptr);
 
-		size_t EntityIndex = 0;
-		Registry.view<const TransformComponent, MeshComponent>().each(
-			[this, &EntityIndex, &List, &InstanceBuffer, InstanceBufferOffset](auto Entity, const auto&, auto& Mesh)
+		size_t entityIndex = 0;
+		registry.view<const TransformComponent, MeshComponent>().each(
+			[this, &entityIndex, &list, &instanceBuffer, instanceBufferOffset](auto entity, const auto&, auto& mesh)
 			{
 				// Set the per object buffer.
-				const auto FinalInstanceBufferOffset = InstanceBufferOffset + (EntityIndex * sizeof(EntityInstance));
-				List.Native()->SetGraphicsRootConstantBufferView(0, InstanceBuffer.Native()->GetGPUVirtualAddress() + FinalInstanceBufferOffset);
+				const auto finalInstanceBufferOffset = instanceBufferOffset + (entityIndex * sizeof(EntityInstance));
+				list.Native()->SetGraphicsRootConstantBufferView(0, instanceBuffer.Native()->GetGPUVirtualAddress() + finalInstanceBufferOffset);
 
 				// Set the index buffer.
-				D3D12_INDEX_BUFFER_VIEW IndexView{};
-				IndexView.BufferLocation = Mesh.IndexBuffer->Native()->GetGPUVirtualAddress();
-				IndexView.SizeInBytes = static_cast<UINT>(Mesh.IndexBuffer->Description.Size * Mesh.IndexBuffer->Description.Stride);
-				IndexView.Format = DXGI_FORMAT_R32_UINT;
+				D3D12_INDEX_BUFFER_VIEW indexView{};
+				indexView.BufferLocation = mesh.indexBuffer->Native()->GetGPUVirtualAddress();
+				indexView.SizeInBytes = static_cast<UINT>(mesh.indexBuffer->description.size * mesh.indexBuffer->description.stride);
+				indexView.Format = DXGI_FORMAT_R32_UINT;
 
-				List.Native()->IASetIndexBuffer(&IndexView);
+				list.Native()->IASetIndexBuffer(&indexView);
 
-				for (const auto& Subset : Mesh.Subsets)
+				for (const auto& subset : mesh.subsets)
 				{
 					// #TODO: Only bind once per mesh, and pass Subset.VertexOffset into the draw call. This isn't yet supported with DXC, see: https://github.com/microsoft/DirectXShaderCompiler/issues/2907
 
 					// Set the vertex buffer.
-					List.Native()->SetGraphicsRootShaderResourceView(1, Mesh.VertexBuffer->Native()->GetGPUVirtualAddress() + (Subset.VertexOffset * sizeof(Vertex)));
+					list.Native()->SetGraphicsRootShaderResourceView(1, mesh.vertexBuffer->Native()->GetGPUVirtualAddress() + (subset.vertexOffset * sizeof(Vertex)));
 
-					if (Subset.Mat)
+					if (subset.material)
 					{
-						auto& AlbedoSRV = Subset.Mat->Albedo ? *Subset.Mat->Albedo->SRV : NullDescriptor;
-						auto& NormalSRV = Subset.Mat->Normal ? *Subset.Mat->Normal->SRV : NullDescriptor;
-						auto& RoughnessSRV = Subset.Mat->Roughness ? *Subset.Mat->Roughness->SRV : NullDescriptor;
-						auto& MetallicSRV = Subset.Mat->Metallic ? *Subset.Mat->Metallic->SRV : NullDescriptor;
+						auto& albedoSRV = subset.material->albedo ? *subset.material->albedo->SRV : nullDescriptor;
+						auto& normalSRV = subset.material->normal ? *subset.material->normal->SRV : nullDescriptor;
+						auto& roughnessSRV = subset.material->roughness ? *subset.material->roughness->SRV : nullDescriptor;
+						auto& metallicSRV = subset.material->metallic ? *subset.material->metallic->SRV : nullDescriptor;
 
-						Device->GetDescriptorAllocator().AddTableEntry(AlbedoSRV, DescriptorTableEntryType::ShaderResource);
-						Device->GetDescriptorAllocator().AddTableEntry(NormalSRV, DescriptorTableEntryType::ShaderResource);
-						Device->GetDescriptorAllocator().AddTableEntry(RoughnessSRV, DescriptorTableEntryType::ShaderResource);
-						Device->GetDescriptorAllocator().AddTableEntry(MetallicSRV, DescriptorTableEntryType::ShaderResource);
+						device->GetDescriptorAllocator().AddTableEntry(albedoSRV, DescriptorTableEntryType::ShaderResource);
+						device->GetDescriptorAllocator().AddTableEntry(normalSRV, DescriptorTableEntryType::ShaderResource);
+						device->GetDescriptorAllocator().AddTableEntry(roughnessSRV, DescriptorTableEntryType::ShaderResource);
+						device->GetDescriptorAllocator().AddTableEntry(metallicSRV, DescriptorTableEntryType::ShaderResource);
 
-						Device->GetDescriptorAllocator().BuildTable(*Device, List, 3);
+						device->GetDescriptorAllocator().BuildTable(*device, list, 3);
 					}
 
-					List.Native()->DrawIndexedInstanced(static_cast<uint32_t>(Subset.Indices), 1, static_cast<uint32_t>(Subset.IndexOffset), 0, 0);
+					list.Native()->DrawIndexedInstanced(static_cast<uint32_t>(subset.indices), 1, static_cast<uint32_t>(subset.indexOffset), 0, 0);
 				}
 
-				++EntityIndex;
+				++entityIndex;
 			});
 	}
 	);
 
-	auto& UIPass = Graph.AddPass("UI Pass");
-	UIPass.WriteResource(BackBufferTag, RGUsage::BackBuffer);
+	auto& uiPass = graph.AddPass("UI Pass");
+	uiPass.WriteResource(backBufferTag, RGUsage::BackBuffer);
 
-	UIPass.Bind(
-		[this, BackBufferTag, &Registry](RGResolver& Resolver, CommandList& List)
+	uiPass.Bind(
+		[this, backBufferTag, &registry](RGResolver& resolver, CommandList& list)
 		{
-			auto& BackBuffer = Resolver.Get<Texture>(BackBufferTag);
+			auto& backBuffer = resolver.Get<Texture>(backBufferTag);
 
-			UserInterface->NewFrame();
+			userInterface->NewFrame();
 
 #if ENABLE_EDITOR
-			EditorRenderer::Render(Registry);
+			EditorRenderer::Render(registry);
 #endif
 
-			List.Native()->OMSetRenderTargets(1, &static_cast<D3D12_CPU_DESCRIPTOR_HANDLE>(*BackBuffer.RTV), false, nullptr);
-			UserInterface->Render(List);
+			list.Native()->OMSetRenderTargets(1, &static_cast<D3D12_CPU_DESCRIPTOR_HANDLE>(*backBuffer.RTV), false, nullptr);
+			userInterface->Render(list);
 		});
 
-	Graph.Build();
+	graph.Build();
 
-	Graph.Execute();
+	graph.Execute();
 
 	{
 		VGScopedCPUStat("Present");
 
-		Device->GetSwapChain()->Present(Device->VSync, 0);
+		device->GetSwapChain()->Present(device->vSync, 0);
 	}
 
-	Device->AdvanceGPU();
+	device->AdvanceGPU();
 }

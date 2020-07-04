@@ -2,7 +2,7 @@
 
 #pragma once
 
-constexpr auto AlignedSize(size_t Base, size_t Alignment)
+constexpr auto AlignedSize(size_t base, size_t alignment)
 {
-	return (Base + Alignment - 1) & ~(Alignment - 1);
+	return (base + alignment - 1) & ~(alignment - 1);
 }

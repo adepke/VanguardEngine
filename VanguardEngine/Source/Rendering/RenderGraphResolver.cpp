@@ -3,76 +3,76 @@
 #include <Rendering/RenderGraphResolver.h>
 #include <Rendering/Device.h>
 
-void RGResolver::BuildTransients(RenderDevice* Device, std::unordered_map<size_t, ResourceDependencyData>& Dependencies, std::unordered_map<size_t, ResourceUsageData>& Usages)
+void RGResolver::BuildTransients(RenderDevice* device, std::unordered_map<size_t, ResourceDependencyData>& dependencies, std::unordered_map<size_t, ResourceUsageData>& usages)
 {
 	VGScopedCPUStat("Render Graph Build Transients");
 
-	for (const auto& [Tag, Description] : TransientBufferResources)
+	for (const auto& [tag, description] : transientBufferResources)
 	{
-		bool Written = Dependencies[Tag].WritingPasses.size();  // Is the resource ever written to.
+		bool written = dependencies[tag].writingPasses.size();  // Is the resource ever written to.
 
-		BufferDescription FullDescription{};
-		FullDescription.UpdateRate = Description.first.UpdateRate;
-		FullDescription.BindFlags = BindFlag::ShaderResource;
-		FullDescription.AccessFlags = Written ? AccessFlag::GPUWrite : 0;
-		FullDescription.Size = Description.first.Size;
-		FullDescription.Stride = Description.first.Stride;
-		FullDescription.Format = Description.first.Format;
+		BufferDescription fullDescription{};
+		fullDescription.updateRate = description.first.updateRate;
+		fullDescription.bindFlags = BindFlag::ShaderResource;
+		fullDescription.accessFlags = written ? AccessFlag::GPUWrite : 0;
+		fullDescription.size = description.first.size;
+		fullDescription.stride = description.first.stride;
+		fullDescription.format = description.first.format;
 
-		if (Description.first.BufferTypeFlags & RGBufferTypeFlag::ConstantBuf) FullDescription.BindFlags |= BindFlag::ConstantBuffer;
-		if (Description.first.BufferTypeFlags & RGBufferTypeFlag::VertexBuf) FullDescription.BindFlags |= BindFlag::VertexBuffer;
-		if (Description.first.BufferTypeFlags & RGBufferTypeFlag::IndexBuf) FullDescription.BindFlags |= BindFlag::IndexBuffer;
+		if (description.first.bufferTypeFlags & RGBufferTypeFlag::ConstantBuf) fullDescription.bindFlags |= BindFlag::ConstantBuffer;
+		if (description.first.bufferTypeFlags & RGBufferTypeFlag::VertexBuf) fullDescription.bindFlags |= BindFlag::VertexBuffer;
+		if (description.first.bufferTypeFlags & RGBufferTypeFlag::IndexBuf) fullDescription.bindFlags |= BindFlag::IndexBuffer;
 
-		BufferResources[Tag] = std::move(Device->CreateResource(FullDescription, Description.second));
+		bufferResources[tag] = std::move(device->CreateResource(fullDescription, description.second));
 	}
 
-	for (const auto& [Tag, Description] : TransientTextureResources)
+	for (const auto& [tag, description] : transientTextureResources)
 	{
-		bool RenderTarget = false;  // Is the resource ever used as a render target.
-		bool DepthStencil = false;  // Is the resource ever used as a depth stencil.
-		bool DefaultUsage = false;  // Is the resource ever used in default usage.
-		bool Written = Dependencies[Tag].WritingPasses.size();  // Is the resource ever written to.
+		bool renderTarget = false;  // Is the resource ever used as a render target.
+		bool depthStencil = false;  // Is the resource ever used as a depth stencil.
+		bool defaultUsage = false;  // Is the resource ever used in default usage.
+		bool written = dependencies[tag].writingPasses.size();  // Is the resource ever written to.
 
-		for (const auto& [PassIndex, Usage] : Usages[Tag].PassUsage)
+		for (const auto& [passIndex, usage] : usages[tag].passUsage)
 		{
-			if (Usage == RGUsage::RenderTarget || Usage == RGUsage::BackBuffer) RenderTarget = true;
-			else if (Usage == RGUsage::DepthStencil) DepthStencil = true;
-			else if (Usage == RGUsage::Default) DefaultUsage = true;
+			if (usage == RGUsage::RenderTarget || usage == RGUsage::BackBuffer) renderTarget = true;
+			else if (usage == RGUsage::DepthStencil) depthStencil = true;
+			else if (usage == RGUsage::Default) defaultUsage = true;
 		}
 
-		VGAssert(!(RenderTarget && DepthStencil), "Texture cannot have render target and depth stencil usage!");
+		VGAssert(!(renderTarget && depthStencil), "Texture cannot have render target and depth stencil usage!");
 
-		TextureDescription FullDescription{};
-		FullDescription.UpdateRate = ResourceFrequency::Static;
-		FullDescription.BindFlags = DefaultUsage ? BindFlag::ShaderResource : 0;  // If we have default usage, we're going to need SRV binding.
-		FullDescription.AccessFlags = Written ? AccessFlag::GPUWrite : 0;
-		FullDescription.Width = Description.first.Width;
-		FullDescription.Height = Description.first.Height;
-		FullDescription.Depth = Description.first.Depth;
-		FullDescription.Format = Description.first.Format;
+		TextureDescription fullDescription{};
+		fullDescription.updateRate = ResourceFrequency::Static;
+		fullDescription.bindFlags = defaultUsage ? BindFlag::ShaderResource : 0;  // If we have default usage, we're going to need SRV binding.
+		fullDescription.accessFlags = written ? AccessFlag::GPUWrite : 0;
+		fullDescription.width = description.first.width;
+		fullDescription.height = description.first.height;
+		fullDescription.depth = description.first.depth;
+		fullDescription.format = description.first.format;
 
-		if (RenderTarget)
+		if (renderTarget)
 		{
-			FullDescription.BindFlags |= BindFlag::RenderTarget;
-			if (Written && DefaultUsage) FullDescription.BindFlags |= BindFlag::UnorderedAccess;  // Normal render target writes use a special render target state, not UAV.
+			fullDescription.bindFlags |= BindFlag::RenderTarget;
+			if (written && defaultUsage) fullDescription.bindFlags |= BindFlag::UnorderedAccess;  // Normal render target writes use a special render target state, not UAV.
 		}
-		else if (DepthStencil) FullDescription.BindFlags |= BindFlag::DepthStencil;
-		else if (Written) FullDescription.BindFlags |= BindFlag::UnorderedAccess;
+		else if (depthStencil) fullDescription.bindFlags |= BindFlag::DepthStencil;
+		else if (written) fullDescription.bindFlags |= BindFlag::UnorderedAccess;
 
-		TextureResources[Tag] = std::move(Device->CreateResource(FullDescription, Description.second));
+		textureResources[tag] = std::move(device->CreateResource(fullDescription, description.second));
 	}
 }
 
-D3D12_RESOURCE_STATES RGResolver::DetermineInitialState(size_t ResourceTag)
+D3D12_RESOURCE_STATES RGResolver::DetermineInitialState(size_t resourceTag)
 {
-	if (BufferResources.count(ResourceTag))
+	if (bufferResources.count(resourceTag))
 	{
-		return BufferResources[ResourceTag]->State;
+		return bufferResources[resourceTag]->state;
 	}
 
-	else if (TextureResources.count(ResourceTag))
+	else if (textureResources.count(resourceTag))
 	{
-		return TextureResources[ResourceTag]->State;
+		return textureResources[resourceTag]->state;
 	}
 
 	VGEnsure(false, "Failed to determine initial resource state.");

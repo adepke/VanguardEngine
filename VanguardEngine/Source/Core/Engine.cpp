@@ -20,22 +20,22 @@
 #include <Asset/AssetLoader.h>
 //
 
-void OnFocusChanged(bool Focus)
+void OnFocusChanged(bool focus)
 {
 	VGScopedCPUStat("Focus Changed");
 
-	VGLog(Window) << (Focus ? "Acquired focus." : "Released focus.");
+	VGLog(Window) << (focus ? "Acquired focus." : "Released focus.");
 
 	// #TODO: Limit render FPS, disable audio.
 }
 
-void OnSizeChanged(uint32_t Width, uint32_t Height, bool Fullscreen)
+void OnSizeChanged(uint32_t width, uint32_t height, bool fullscreen)
 {
 	VGScopedCPUStat("Size Changed");
 
-	VGLog(Window) << "Window size changed (" << Width << ", " << Height << ").";
+	VGLog(Window) << "Window size changed (" << width << ", " << height << ").";
 
-	Renderer::Get().Device->SetResolution(Width, Height, Fullscreen);
+	Renderer::Get().device->SetResolution(width, height, fullscreen);
 }
 
 void EngineBoot()
@@ -50,73 +50,73 @@ void EngineBoot()
 
 	Input::EnableDPIAwareness();
 
-	constexpr uint32_t DefaultWindowSizeX = 1200;
-	constexpr uint32_t DefaultWindowSizeY = 900;
+	constexpr uint32_t defaultWindowSizeX = 1200;
+	constexpr uint32_t defaultWindowSizeY = 900;
 
-	auto Window = std::make_unique<WindowFrame>(VGText("Vanguard Engine"), DefaultWindowSizeX, DefaultWindowSizeY);
-	Window->OnFocusChanged = &OnFocusChanged;
-	Window->OnSizeChanged = &OnSizeChanged;
+	auto window = std::make_unique<WindowFrame>(VGText("Vanguard Engine"), defaultWindowSizeX, defaultWindowSizeY);
+	window->onFocusChanged = &OnFocusChanged;
+	window->onSizeChanged = &OnSizeChanged;
 
 #if BUILD_DEBUG
-	constexpr auto EnableDebugging = true;
+	constexpr auto enableDebugging = true;
 #else
-	constexpr auto EnableDebugging = false;
+	constexpr auto enableDebugging = false;
 #endif
 
-	auto Device = std::make_unique<RenderDevice>(static_cast<HWND>(Window->GetHandle()), false, EnableDebugging);
-	Device->SetResolution(DefaultWindowSizeX, DefaultWindowSizeY, false);
+	auto device = std::make_unique<RenderDevice>(static_cast<HWND>(window->GetHandle()), false, enableDebugging);
+	device->SetResolution(defaultWindowSizeX, defaultWindowSizeY, false);
 
-	Renderer::Get().Initialize(std::move(Window), std::move(Device));
+	Renderer::Get().Initialize(std::move(window), std::move(device));
 
 	// The input requires the user interface to be created first.
-	Input::Initialize(Renderer::Get().Window->GetHandle());
+	Input::Initialize(Renderer::Get().window->GetHandle());
 }
 
 void EngineLoop()
 {
-	entt::registry TempReg;
+	entt::registry tempReg;
 
-	TransformComponent SpectatorTransform{};
-	SpectatorTransform.Translation.x = -10.f;
-	SpectatorTransform.Translation.y = 0.f;
-	SpectatorTransform.Translation.z = 1.f;
+	TransformComponent spectatorTransform{};
+	spectatorTransform.translation.x = -10.f;
+	spectatorTransform.translation.y = 0.f;
+	spectatorTransform.translation.z = 1.f;
 
-	const auto Spectator = TempReg.create();
-	TempReg.emplace<NameComponent>(Spectator, "Spectator");
-	TempReg.emplace<TransformComponent>(Spectator, std::move(SpectatorTransform));
-	TempReg.emplace<CameraComponent>(Spectator);
-	TempReg.emplace<ControlComponent>(Spectator);  // #TEMP
+	const auto spectator = tempReg.create();
+	tempReg.emplace<NameComponent>(spectator, "Spectator");
+	tempReg.emplace<TransformComponent>(spectator, std::move(spectatorTransform));
+	tempReg.emplace<CameraComponent>(spectator);
+	tempReg.emplace<ControlComponent>(spectator);  // #TEMP
 
-	const auto Sponza = TempReg.create();
-	TempReg.emplace<NameComponent>(Sponza, "Sponza");
-	TempReg.emplace<TransformComponent>(Sponza);
-	TempReg.emplace<MeshComponent>(Sponza, AssetLoader::LoadMesh(*Renderer::Get().Device, Config::ShadersPath / "../Models/Sponza.obj"));  // #TEMP
+	const auto sponza = tempReg.create();
+	tempReg.emplace<NameComponent>(sponza, "Sponza");
+	tempReg.emplace<TransformComponent>(sponza);
+	tempReg.emplace<MeshComponent>(sponza, AssetLoader::LoadMesh(*Renderer::Get().device, Config::shadersPath / "../Models/Sponza.obj"));  // #TEMP
 
 	while (true)
 	{
 		{
 			VGScopedCPUStat("Window Message Processing");
 
-			MSG Message{};
-			if (::PeekMessage(&Message, nullptr, 0, 0, PM_REMOVE))
+			MSG message{};
+			if (::PeekMessage(&message, nullptr, 0, 0, PM_REMOVE))
 			{
-				::TranslateMessage(&Message);
-				::DispatchMessage(&Message);
+				::TranslateMessage(&message);
+				::DispatchMessage(&message);
 			}
 
-			if (Message.message == WM_QUIT)
+			if (message.message == WM_QUIT)
 			{
 				return;
 			}
 		}
 
-		ControlSystem::Update(TempReg);
+		ControlSystem::Update(tempReg);
 
-		CameraSystem::Update(TempReg);
+		CameraSystem::Update(tempReg);
 
-		Renderer::Get().Render(TempReg);
+		Renderer::Get().Render(tempReg);
 
-		Renderer::Get().Device->AdvanceCPU();
+		Renderer::Get().device->AdvanceCPU();
 	}
 }
 

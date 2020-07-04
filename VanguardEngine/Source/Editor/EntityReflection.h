@@ -13,7 +13,7 @@ namespace EntityReflection
 {
 	// #TODO: Look into std::reflect for automated component discovery and reflection.
 
-	inline const std::map<entt::id_type, std::function<void(entt::registry&, entt::entity)>> ComponentMap = {
+	inline const std::map<entt::id_type, std::function<void(entt::registry&, entt::entity)>> componentMap = {
 		{ entt::type_info<NameComponent>::id(), &ComponentProperties::RenderNameComponent },
 		{ entt::type_info<TransformComponent>::id(), &ComponentProperties::RenderTransformComponent },
 		{ entt::type_info<ControlComponent>::id(), &ComponentProperties::RenderControlComponent },

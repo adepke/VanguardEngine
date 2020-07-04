@@ -7,8 +7,8 @@ struct Singleton
 {
 	static inline T& Get() noexcept
 	{
-		static T Instance;
-		return Instance;
+		static T instance;
+		return instance;
 	}
 
 protected:

@@ -11,542 +11,542 @@
 
 #include <cstring>
 
-void ResourceManager::CreateResourceViews(std::shared_ptr<Buffer>& Target)
+void ResourceManager::CreateResourceViews(std::shared_ptr<Buffer>& target)
 {
 	VGScopedCPUStat("Create Buffer Views");
 
-	if (Target->Description.BindFlags & BindFlag::ConstantBuffer)
+	if (target->description.bindFlags & BindFlag::ConstantBuffer)
 	{
-		Target->CBV = Device->AllocateDescriptor(DescriptorType::Default);
+		target->CBV = device->AllocateDescriptor(DescriptorType::Default);
 
-		D3D12_CONSTANT_BUFFER_VIEW_DESC ViewDesc{};
-		ViewDesc.BufferLocation = Target->Native()->GetGPUVirtualAddress();
-		ViewDesc.SizeInBytes = static_cast<UINT>(AlignedSize(Target->Description.Size * Target->Description.Stride, 256));  // CBV's must be a multiple of 256 bytes.
+		D3D12_CONSTANT_BUFFER_VIEW_DESC viewDesc{};
+		viewDesc.BufferLocation = target->Native()->GetGPUVirtualAddress();
+		viewDesc.SizeInBytes = static_cast<UINT>(AlignedSize(target->description.size * target->description.stride, 256));  // CBV's must be a multiple of 256 bytes.
 
-		Device->Native()->CreateConstantBufferView(&ViewDesc, *Target->CBV);
+		device->Native()->CreateConstantBufferView(&viewDesc, *target->CBV);
 	}
 
-	if (Target->Description.BindFlags & BindFlag::ShaderResource)
+	if (target->description.bindFlags & BindFlag::ShaderResource)
 	{
-		Target->SRV = Device->AllocateDescriptor(DescriptorType::Default);
+		target->SRV = device->AllocateDescriptor(DescriptorType::Default);
 
-		D3D12_SHADER_RESOURCE_VIEW_DESC ViewDesc{};
-		ViewDesc.Format = Target->Description.Format ? *Target->Description.Format : DXGI_FORMAT_UNKNOWN;  // Structured buffers don't have a format.
-		ViewDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
-		ViewDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-		ViewDesc.Buffer.FirstElement = 0;
-		ViewDesc.Buffer.NumElements = static_cast<UINT>(Target->Description.Size);
-		ViewDesc.Buffer.StructureByteStride = !Target->Description.Format || *Target->Description.Format == DXGI_FORMAT_UNKNOWN ? static_cast<UINT>(Target->Description.Stride) : 0;  // Structured buffers must have a stride.
-		ViewDesc.Buffer.Flags = Target->Description.Format == DXGI_FORMAT_R32_TYPELESS ? D3D12_BUFFER_SRV_FLAG_RAW : D3D12_BUFFER_SRV_FLAG_NONE;  // Byte address buffers (32 bit typeless) need the raw flag.
+		D3D12_SHADER_RESOURCE_VIEW_DESC viewDesc{};
+		viewDesc.Format = target->description.format ? *target->description.format : DXGI_FORMAT_UNKNOWN;  // Structured buffers don't have a format.
+		viewDesc.ViewDimension = D3D12_SRV_DIMENSION_BUFFER;
+		viewDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		viewDesc.Buffer.FirstElement = 0;
+		viewDesc.Buffer.NumElements = static_cast<UINT>(target->description.size);
+		viewDesc.Buffer.StructureByteStride = !target->description.format || *target->description.format == DXGI_FORMAT_UNKNOWN ? static_cast<UINT>(target->description.stride) : 0;  // Structured buffers must have a stride.
+		viewDesc.Buffer.Flags = target->description.format == DXGI_FORMAT_R32_TYPELESS ? D3D12_BUFFER_SRV_FLAG_RAW : D3D12_BUFFER_SRV_FLAG_NONE;  // Byte address buffers (32 bit typeless) need the raw flag.
 
-		Device->Native()->CreateShaderResourceView(Target->Native(), &ViewDesc, *Target->SRV);
+		device->Native()->CreateShaderResourceView(target->Native(), &viewDesc, *target->SRV);
 	}
 
-	if (Target->Description.BindFlags & BindFlag::UnorderedAccess)
+	if (target->description.bindFlags & BindFlag::UnorderedAccess)
 	{
-		Target->UAV = Device->AllocateDescriptor(DescriptorType::Default);
+		target->UAV = device->AllocateDescriptor(DescriptorType::Default);
 
-		D3D12_UNORDERED_ACCESS_VIEW_DESC ViewDesc{};
-		ViewDesc.Format = Target->Description.Format ? *Target->Description.Format : DXGI_FORMAT_UNKNOWN;  // Structured buffers don't have a format.
-		ViewDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
-		ViewDesc.Buffer.FirstElement = 0;
-		ViewDesc.Buffer.NumElements = static_cast<UINT>(Target->Description.Size);
-		ViewDesc.Buffer.StructureByteStride = !Target->Description.Format || *Target->Description.Format == DXGI_FORMAT_UNKNOWN ? static_cast<UINT>(Target->Description.Stride) : 0;  // Structured buffers must have a stride.
-		ViewDesc.Buffer.CounterOffsetInBytes = 0;  // #TODO: Counter offset.
-		ViewDesc.Buffer.Flags = Target->Description.Format == DXGI_FORMAT_R32_TYPELESS ? D3D12_BUFFER_UAV_FLAG_RAW : D3D12_BUFFER_UAV_FLAG_NONE;  // Byte address buffers (32 bit typeless) need the raw flag.
+		D3D12_UNORDERED_ACCESS_VIEW_DESC viewDesc{};
+		viewDesc.Format = target->description.format ? *target->description.format : DXGI_FORMAT_UNKNOWN;  // Structured buffers don't have a format.
+		viewDesc.ViewDimension = D3D12_UAV_DIMENSION_BUFFER;
+		viewDesc.Buffer.FirstElement = 0;
+		viewDesc.Buffer.NumElements = static_cast<UINT>(target->description.size);
+		viewDesc.Buffer.StructureByteStride = !target->description.format || *target->description.format == DXGI_FORMAT_UNKNOWN ? static_cast<UINT>(target->description.stride) : 0;  // Structured buffers must have a stride.
+		viewDesc.Buffer.CounterOffsetInBytes = 0;  // #TODO: Counter offset.
+		viewDesc.Buffer.Flags = target->description.format == DXGI_FORMAT_R32_TYPELESS ? D3D12_BUFFER_UAV_FLAG_RAW : D3D12_BUFFER_UAV_FLAG_NONE;  // Byte address buffers (32 bit typeless) need the raw flag.
 
-		if (Target->CounterBuffer && Target->Description.Format && Target->Description.Format != DXGI_FORMAT_UNKNOWN)
+		if (target->counterBuffer && target->description.format && target->description.format != DXGI_FORMAT_UNKNOWN)
 		{
 			VGLogWarning(Rendering) << "Buffer format must be unknown if using a counter buffer.";
-			ViewDesc.Format = DXGI_FORMAT_UNKNOWN;
+			viewDesc.Format = DXGI_FORMAT_UNKNOWN;
 		}
 
-		ID3D12Resource* CounterBuffer = nullptr;
-		if (Target->CounterBuffer)
+		ID3D12Resource* counterBuffer = nullptr;
+		if (target->counterBuffer)
 		{
-			CounterBuffer = (*Target->CounterBuffer)->GetResource();
+			counterBuffer = (*target->counterBuffer)->GetResource();
 		}
 
-		Device->Native()->CreateUnorderedAccessView(Target->Native(), CounterBuffer, &ViewDesc, *Target->UAV);
+		device->Native()->CreateUnorderedAccessView(target->Native(), counterBuffer, &viewDesc, *target->UAV);
 	}
 }
 
-void ResourceManager::CreateResourceViews(std::shared_ptr<Texture>& Target)
+void ResourceManager::CreateResourceViews(std::shared_ptr<Texture>& target)
 {
 	VGScopedCPUStat("Create Texture Views");
 
-	if (Target->Description.BindFlags & BindFlag::RenderTarget)
+	if (target->description.bindFlags & BindFlag::RenderTarget)
 	{
-		Target->RTV = Device->AllocateDescriptor(DescriptorType::RenderTarget);
+		target->RTV = device->AllocateDescriptor(DescriptorType::RenderTarget);
 
-		D3D12_RENDER_TARGET_VIEW_DESC ViewDesc{};
-		ViewDesc.Format = Target->Description.Format;
-		switch (Target->Native()->GetDesc().Dimension)  // #TODO: Support texture arrays and multi-sample textures.
+		D3D12_RENDER_TARGET_VIEW_DESC viewDesc{};
+		viewDesc.Format = target->description.format;
+		switch (target->Native()->GetDesc().Dimension)  // #TODO: Support texture arrays and multi-sample textures.
 		{
 		case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
-			ViewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE1D;
-			ViewDesc.Texture1D.MipSlice = 0;  // #TODO: Support texture mips.
+			viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE1D;
+			viewDesc.Texture1D.MipSlice = 0;  // #TODO: Support texture mips.
 			break;
 		case D3D12_RESOURCE_DIMENSION_TEXTURE2D:
-			ViewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
-			ViewDesc.Texture2D.MipSlice = 0;
-			ViewDesc.Texture2D.PlaneSlice = 0;
+			viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
+			viewDesc.Texture2D.MipSlice = 0;
+			viewDesc.Texture2D.PlaneSlice = 0;
 			break;
 		case D3D12_RESOURCE_DIMENSION_TEXTURE3D:
-			ViewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE3D;
-			ViewDesc.Texture3D.MipSlice = 0;
-			ViewDesc.Texture3D.FirstWSlice = 0;
-			ViewDesc.Texture3D.WSize = -1;
+			viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE3D;
+			viewDesc.Texture3D.MipSlice = 0;
+			viewDesc.Texture3D.FirstWSlice = 0;
+			viewDesc.Texture3D.WSize = -1;
 			break;
 		default:
-			VGLogError(Rendering) << "Render target views for textures in " << Target->Native()->GetDesc().Dimension << " dimension is unsupported.";
+			VGLogError(Rendering) << "Render target views for textures in " << target->Native()->GetDesc().Dimension << " dimension is unsupported.";
 		}
 
-		Device->Native()->CreateRenderTargetView(Target->Native(), &ViewDesc, *Target->RTV);
+		device->Native()->CreateRenderTargetView(target->Native(), &viewDesc, *target->RTV);
 	}
 
-	if (Target->Description.BindFlags & BindFlag::DepthStencil)
+	if (target->description.bindFlags & BindFlag::DepthStencil)
 	{
-		Target->DSV = Device->AllocateDescriptor(DescriptorType::DepthStencil);
+		target->DSV = device->AllocateDescriptor(DescriptorType::DepthStencil);
 
-		D3D12_DEPTH_STENCIL_VIEW_DESC ViewDesc{};
-		ViewDesc.Format = Target->Description.Format;
-		switch (Target->Native()->GetDesc().Dimension)  // #TODO: Support texture arrays and multi-sample textures.
+		D3D12_DEPTH_STENCIL_VIEW_DESC viewDesc{};
+		viewDesc.Format = target->description.format;
+		switch (target->Native()->GetDesc().Dimension)  // #TODO: Support texture arrays and multi-sample textures.
 		{
 		case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
-			ViewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE1D;
-			ViewDesc.Texture1D.MipSlice = 0;  // #TODO: Support texture mips.
+			viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE1D;
+			viewDesc.Texture1D.MipSlice = 0;  // #TODO: Support texture mips.
 			break;
 		case D3D12_RESOURCE_DIMENSION_TEXTURE2D:
-			ViewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-			ViewDesc.Texture2D.MipSlice = 0;
+			viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+			viewDesc.Texture2D.MipSlice = 0;
 			break;
 		default:
-			VGLogError(Rendering) << "Depth stencil views for textures in " << Target->Native()->GetDesc().Dimension << " dimension is unsupported.";
+			VGLogError(Rendering) << "Depth stencil views for textures in " << target->Native()->GetDesc().Dimension << " dimension is unsupported.";
 		}
-		ViewDesc.Flags = D3D12_DSV_FLAG_NONE;  // #TODO: Depth stencil flags.
+		viewDesc.Flags = D3D12_DSV_FLAG_NONE;  // #TODO: Depth stencil flags.
 
-		Device->Native()->CreateDepthStencilView(Target->Native(), &ViewDesc, *Target->DSV);
+		device->Native()->CreateDepthStencilView(target->Native(), &viewDesc, *target->DSV);
 	}
 
-	if (Target->Description.BindFlags & BindFlag::ShaderResource)
+	if (target->description.bindFlags & BindFlag::ShaderResource)
 	{
-		Target->SRV = Device->AllocateDescriptor(DescriptorType::Default);
+		target->SRV = device->AllocateDescriptor(DescriptorType::Default);
 
-		D3D12_SHADER_RESOURCE_VIEW_DESC ViewDesc{};
-		ViewDesc.Format = Target->Description.Format;
-		switch (Target->Native()->GetDesc().Dimension)  // #TODO: Support texture arrays and multi-sample textures.
+		D3D12_SHADER_RESOURCE_VIEW_DESC viewDesc{};
+		viewDesc.Format = target->description.format;
+		switch (target->Native()->GetDesc().Dimension)  // #TODO: Support texture arrays and multi-sample textures.
 		{
 		case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
-			ViewDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1D;
-			ViewDesc.Texture1D.MostDetailedMip = 0;
-			ViewDesc.Texture1D.MipLevels = -1;  // #TODO: Support texture mips.
-			ViewDesc.Texture1D.ResourceMinLODClamp = 0.f;
+			viewDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1D;
+			viewDesc.Texture1D.MostDetailedMip = 0;
+			viewDesc.Texture1D.MipLevels = -1;  // #TODO: Support texture mips.
+			viewDesc.Texture1D.ResourceMinLODClamp = 0.f;
 			break;
 		case D3D12_RESOURCE_DIMENSION_TEXTURE2D:
-			ViewDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-			ViewDesc.Texture2D.MostDetailedMip = 0;
-			ViewDesc.Texture2D.MipLevels = -1;
-			ViewDesc.Texture2D.PlaneSlice = 0;
-			ViewDesc.Texture2D.ResourceMinLODClamp = 0.f;
+			viewDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+			viewDesc.Texture2D.MostDetailedMip = 0;
+			viewDesc.Texture2D.MipLevels = -1;
+			viewDesc.Texture2D.PlaneSlice = 0;
+			viewDesc.Texture2D.ResourceMinLODClamp = 0.f;
 			break;
 		case D3D12_RESOURCE_DIMENSION_TEXTURE3D:
-			ViewDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
-			ViewDesc.Texture3D.MostDetailedMip = 0;
-			ViewDesc.Texture3D.MipLevels = -1;
-			ViewDesc.Texture3D.ResourceMinLODClamp = 0.f;
+			viewDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
+			viewDesc.Texture3D.MostDetailedMip = 0;
+			viewDesc.Texture3D.MipLevels = -1;
+			viewDesc.Texture3D.ResourceMinLODClamp = 0.f;
 			break;
 		default:
-			VGLogError(Rendering) << "Shader resource views for textures in " << Target->Native()->GetDesc().Dimension << " dimension is unsupported.";
+			VGLogError(Rendering) << "Shader resource views for textures in " << target->Native()->GetDesc().Dimension << " dimension is unsupported.";
 		}
-		ViewDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		viewDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 
-		Device->Native()->CreateShaderResourceView(Target->Native(), &ViewDesc, *Target->SRV);
+		device->Native()->CreateShaderResourceView(target->Native(), &viewDesc, *target->SRV);
 	}
 
-	if (Target->Description.BindFlags & BindFlag::UnorderedAccess)
+	if (target->description.bindFlags & BindFlag::UnorderedAccess)
 	{
 		// #TODO: Texture UAVs.
 	}
 }
 
-void ResourceManager::NameResource(ResourcePtr<D3D12MA::Allocation>& Target, const std::wstring_view Name)
+void ResourceManager::NameResource(ResourcePtr<D3D12MA::Allocation>& target, const std::wstring_view name)
 {
 #if !BUILD_RELEASE
-	Target->SetName(Name.data());  // Set the name in the allocator.
-	const auto Result = Target->GetResource()->SetName(Name.data());  // Set the name in the API.
-	if (FAILED(Result))
+	target->SetName(name.data());  // Set the name in the allocator.
+	const auto result = target->GetResource()->SetName(name.data());  // Set the name in the API.
+	if (FAILED(result))
 	{
-		VGLogWarning(Rendering) << "Failed to set resource name to: '" << Name << "': " << Result;
+		VGLogWarning(Rendering) << "Failed to set resource name to: '" << name << "': " << result;
 	}
 #endif
 }
 
-void ResourceManager::Initialize(RenderDevice* InDevice, size_t BufferedFrames)
+void ResourceManager::Initialize(RenderDevice* inDevice, size_t bufferedFrames)
 {
 	VGScopedCPUStat("Resource Manager Initialize");
 
-	Device = InDevice;
-	FrameCount = BufferedFrames;
+	device = inDevice;
+	frameCount = bufferedFrames;
 
-	UploadResources.resize(FrameCount);
-	UploadOffsets.resize(FrameCount);
-	UploadPtrs.resize(FrameCount);
+	uploadResources.resize(frameCount);
+	uploadOffsets.resize(frameCount);
+	uploadPtrs.resize(frameCount);
 
-	constexpr auto UploadResourceSize = 1024 * 1024 * 512;
+	constexpr auto uploadResourceSize = 1024 * 1024 * 512;
 
-	for (uint32_t Index = 0; Index < FrameCount; ++Index)
+	for (uint32_t i = 0; i < frameCount; ++i)
 	{
-		D3D12_RESOURCE_DESC ResourceDesc{};
-		ResourceDesc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
-		ResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-		ResourceDesc.Width = UploadResourceSize;
-		ResourceDesc.Height = 1;
-		ResourceDesc.DepthOrArraySize = 1;
-		ResourceDesc.Format = DXGI_FORMAT_UNKNOWN;
-		ResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;  // Buffers are always row major.
-		ResourceDesc.MipLevels = 1;
-		ResourceDesc.SampleDesc.Count = 1;
-		ResourceDesc.SampleDesc.Quality = 0;
-		ResourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+		D3D12_RESOURCE_DESC resourceDesc{};
+		resourceDesc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+		resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+		resourceDesc.Width = uploadResourceSize;
+		resourceDesc.Height = 1;
+		resourceDesc.DepthOrArraySize = 1;
+		resourceDesc.Format = DXGI_FORMAT_UNKNOWN;
+		resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;  // Buffers are always row major.
+		resourceDesc.MipLevels = 1;
+		resourceDesc.SampleDesc.Count = 1;
+		resourceDesc.SampleDesc.Quality = 0;
+		resourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-		D3D12MA::ALLOCATION_DESC AllocationDesc{};
-		AllocationDesc.HeapType = D3D12_HEAP_TYPE_UPLOAD;
-		AllocationDesc.Flags = D3D12MA::ALLOCATION_FLAG_NONE;
+		D3D12MA::ALLOCATION_DESC allocationDesc{};
+		allocationDesc.HeapType = D3D12_HEAP_TYPE_UPLOAD;
+		allocationDesc.Flags = D3D12MA::ALLOCATION_FLAG_NONE;
 
-		ID3D12Resource* RawResource = nullptr;
-		D3D12MA::Allocation* AllocationHandle = nullptr;
+		ID3D12Resource* rawResource = nullptr;
+		D3D12MA::Allocation* allocationHandle = nullptr;
 
 		// Upload heap resources must always be in generic read state.
-		auto Result = Device->Allocator->CreateResource(&AllocationDesc, &ResourceDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, &AllocationHandle, IID_PPV_ARGS(&RawResource));
-		if (FAILED(Result))
+		auto result = device->allocator->CreateResource(&allocationDesc, &resourceDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, &allocationHandle, IID_PPV_ARGS(&rawResource));
+		if (FAILED(result))
 		{
-			VGLogError(Rendering) << "Failed to allocate write upload resource: " << Result;
+			VGLogError(Rendering) << "Failed to allocate write upload resource: " << result;
 
 			continue;
 		}
 
-		D3D12_RANGE Range{ 0, 0 };
+		D3D12_RANGE range{ 0, 0 };
 
-		Result = AllocationHandle->GetResource()->Map(0, &Range, &UploadPtrs[Index]);
-		if (FAILED(Result))
+		result = allocationHandle->GetResource()->Map(0, &range, &uploadPtrs[i]);
+		if (FAILED(result))
 		{
-			VGLogError(Rendering) << "Failed to map upload resource: " << Result;
+			VGLogError(Rendering) << "Failed to map upload resource: " << result;
 
 			continue;
 		}
 
-		UploadResources[Index] = std::move(ResourcePtr<D3D12MA::Allocation>{ AllocationHandle });
+		uploadResources[i] = std::move(ResourcePtr<D3D12MA::Allocation>{ allocationHandle });
 
-		NameResource(UploadResources[Index], VGText("Upload Heap"));
+		NameResource(uploadResources[i], VGText("Upload Heap"));
 	}
 }
 
-std::shared_ptr<Buffer> ResourceManager::AllocateBuffer(const BufferDescription& Description, const std::wstring_view Name)
+std::shared_ptr<Buffer> ResourceManager::AllocateBuffer(const BufferDescription& description, const std::wstring_view name)
 {
 	VGScopedCPUStat("Allocate Buffer");
 
-	D3D12_RESOURCE_DESC ResourceDesc{};
-	ResourceDesc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
-	ResourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-	ResourceDesc.Width = Description.Size * Description.Stride;
-	ResourceDesc.Height = 1;
-	ResourceDesc.DepthOrArraySize = 1;
-	ResourceDesc.Format = Description.Format ? *Description.Format : DXGI_FORMAT_UNKNOWN;
-	ResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-	ResourceDesc.MipLevels = 1;
-	ResourceDesc.SampleDesc.Count = 1;
-	ResourceDesc.SampleDesc.Quality = 0;
-	ResourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+	D3D12_RESOURCE_DESC resourceDesc{};
+	resourceDesc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+	resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
+	resourceDesc.Width = description.size * description.stride;
+	resourceDesc.Height = 1;
+	resourceDesc.DepthOrArraySize = 1;
+	resourceDesc.Format = description.format ? *description.format : DXGI_FORMAT_UNKNOWN;
+	resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
+	resourceDesc.MipLevels = 1;
+	resourceDesc.SampleDesc.Count = 1;
+	resourceDesc.SampleDesc.Quality = 0;
+	resourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-	if (Description.BindFlags & BindFlag::UnorderedAccess)
+	if (description.bindFlags & BindFlag::UnorderedAccess)
 	{
-		ResourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	}
 
-	D3D12MA::ALLOCATION_DESC AllocationDesc{};
-	AllocationDesc.HeapType = Description.UpdateRate == ResourceFrequency::Static ? D3D12_HEAP_TYPE_DEFAULT : D3D12_HEAP_TYPE_UPLOAD;
-	AllocationDesc.Flags = D3D12MA::ALLOCATION_FLAG_NONE;
+	D3D12MA::ALLOCATION_DESC allocationDesc{};
+	allocationDesc.HeapType = description.updateRate == ResourceFrequency::Static ? D3D12_HEAP_TYPE_DEFAULT : D3D12_HEAP_TYPE_UPLOAD;
+	allocationDesc.Flags = D3D12MA::ALLOCATION_FLAG_NONE;
 
 	// #TODO: Do we need these flags if we specify vertex/constant buffer or index buffer?
-	auto ResourceState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+	auto resourceState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 
-	if (Description.UpdateRate == ResourceFrequency::Dynamic)
+	if (description.updateRate == ResourceFrequency::Dynamic)
 	{
-		ResourceState = D3D12_RESOURCE_STATE_GENERIC_READ;
+		resourceState = D3D12_RESOURCE_STATE_GENERIC_READ;
 	}
 
 	else
 	{
-		if (Description.BindFlags & BindFlag::ConstantBuffer) ResourceState |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
-		else if (Description.BindFlags & BindFlag::VertexBuffer) ResourceState |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
-		if (Description.BindFlags & BindFlag::IndexBuffer) ResourceState |= D3D12_RESOURCE_STATE_INDEX_BUFFER;
+		if (description.bindFlags & BindFlag::ConstantBuffer) resourceState |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+		else if (description.bindFlags & BindFlag::VertexBuffer) resourceState |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+		if (description.bindFlags & BindFlag::IndexBuffer) resourceState |= D3D12_RESOURCE_STATE_INDEX_BUFFER;
 	}
 
-	ID3D12Resource* RawResource = nullptr;
-	D3D12MA::Allocation* AllocationHandle = nullptr;
+	ID3D12Resource* rawResource = nullptr;
+	D3D12MA::Allocation* allocationHandle = nullptr;
 
-	auto Result = Device->Allocator->CreateResource(&AllocationDesc, &ResourceDesc, ResourceState, nullptr, &AllocationHandle, IID_PPV_ARGS(&RawResource));
-	if (FAILED(Result))
+	auto result = device->allocator->CreateResource(&allocationDesc, &resourceDesc, resourceState, nullptr, &allocationHandle, IID_PPV_ARGS(&rawResource));
+	if (FAILED(result))
 	{
-		VGLogError(Rendering) << "Failed to allocate buffer: " << Result;
+		VGLogError(Rendering) << "Failed to allocate buffer: " << result;
 
 		return nullptr;
 	}
 
-	auto Allocation = std::make_shared<Buffer>();
-	Allocation->Description = Description;
-	Allocation->Allocation = std::move(ResourcePtr<D3D12MA::Allocation>{ AllocationHandle });
-	Allocation->State = ResourceState;
+	auto allocation = std::make_shared<Buffer>();
+	allocation->description = description;
+	allocation->allocation = std::move(ResourcePtr<D3D12MA::Allocation>{ allocationHandle });
+	allocation->state = resourceState;
 
-	CreateResourceViews(Allocation);
-	NameResource(Allocation->Allocation, Name);
+	CreateResourceViews(allocation);
+	NameResource(allocation->allocation, name);
 
-	return std::move(Allocation);
+	return std::move(allocation);
 }
 
-std::shared_ptr<Texture> ResourceManager::AllocateTexture(const TextureDescription& Description, const std::wstring_view Name)
+std::shared_ptr<Texture> ResourceManager::AllocateTexture(const TextureDescription& description, const std::wstring_view name)
 {
 	VGScopedCPUStat("Allocate Texture");
 
 	// Early validation.
-	VGAssert(Description.UpdateRate != ResourceFrequency::Dynamic, "Failed to create texture, cannot have dynamic update rate.");
+	VGAssert(description.updateRate != ResourceFrequency::Dynamic, "Failed to create texture, cannot have dynamic update rate.");
 
-	D3D12_RESOURCE_DESC ResourceDesc{};
-	ResourceDesc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
-	ResourceDesc.Dimension = Description.Height > 1 ? (Description.Depth > 1 ? D3D12_RESOURCE_DIMENSION_TEXTURE3D : D3D12_RESOURCE_DIMENSION_TEXTURE2D) : D3D12_RESOURCE_DIMENSION_TEXTURE1D;
-	ResourceDesc.Width = Description.Width;
-	ResourceDesc.Height = Description.Height;
-	ResourceDesc.DepthOrArraySize = Description.Depth;
-	ResourceDesc.Format = Description.Format;
-	ResourceDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;  // Prefer to let the adapter choose the most efficient layout. See: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ne-d3d12-d3d12_texture_layout
-	ResourceDesc.MipLevels = 1;
-	ResourceDesc.SampleDesc.Count = 1;
-	ResourceDesc.SampleDesc.Quality = 0;
-	ResourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+	D3D12_RESOURCE_DESC resourceDesc{};
+	resourceDesc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+	resourceDesc.Dimension = description.height > 1 ? (description.depth > 1 ? D3D12_RESOURCE_DIMENSION_TEXTURE3D : D3D12_RESOURCE_DIMENSION_TEXTURE2D) : D3D12_RESOURCE_DIMENSION_TEXTURE1D;
+	resourceDesc.Width = description.width;
+	resourceDesc.Height = description.height;
+	resourceDesc.DepthOrArraySize = description.depth;
+	resourceDesc.Format = description.format;
+	resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;  // Prefer to let the adapter choose the most efficient layout. See: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ne-d3d12-d3d12_texture_layout
+	resourceDesc.MipLevels = 1;
+	resourceDesc.SampleDesc.Count = 1;
+	resourceDesc.SampleDesc.Quality = 0;
+	resourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
 
-	if (Description.BindFlags & BindFlag::RenderTarget)
+	if (description.bindFlags & BindFlag::RenderTarget)
 	{
-		ResourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
+		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET;
 	}
 
-	if (Description.BindFlags & BindFlag::DepthStencil)
+	if (description.bindFlags & BindFlag::DepthStencil)
 	{
-		if (Description.Depth > 1)
+		if (description.depth > 1)
 		{
 			VGLogWarning(Rendering) << "3D textures cannot have depth stencil binding.";
 		}
 
 		else
 		{
-			ResourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
+			resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL;
 
-			if ((Description.BindFlags & BindFlag::ShaderResource) == 0)
+			if ((description.bindFlags & BindFlag::ShaderResource) == 0)
 			{
-				ResourceDesc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
+				resourceDesc.Flags |= D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE;
 			}
 		}
 	}
 
-	if (Description.BindFlags & BindFlag::UnorderedAccess)
+	if (description.bindFlags & BindFlag::UnorderedAccess)
 	{
-		ResourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	}
 
-	D3D12MA::ALLOCATION_DESC AllocationDesc{};
-	AllocationDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
-	AllocationDesc.Flags = D3D12MA::ALLOCATION_FLAG_NONE;
+	D3D12MA::ALLOCATION_DESC allocationDesc{};
+	allocationDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT;
+	allocationDesc.Flags = D3D12MA::ALLOCATION_FLAG_NONE;
 
-	if (Description.BindFlags & BindFlag::RenderTarget)
+	if (description.bindFlags & BindFlag::RenderTarget)
 	{
 		// Render targets deserve their own partition. #TODO: Only apply this flag if the render target resolution is >=50% of the full screen resolution?
-		AllocationDesc.Flags |= D3D12MA::ALLOCATION_FLAG_COMMITTED;
+		allocationDesc.Flags |= D3D12MA::ALLOCATION_FLAG_COMMITTED;
 	}
 
-	auto ResourceState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+	auto resourceState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 
-	if (Description.BindFlags & BindFlag::DepthStencil)
+	if (description.bindFlags & BindFlag::DepthStencil)
 	{
 		// Depth stencil textures cannot be in standard shader resource format if we don't have an SRV binding. Guess the initial state to try and avoid an immediate transition.
-		ResourceState = (Description.AccessFlags & AccessFlag::GPUWrite) ? D3D12_RESOURCE_STATE_DEPTH_WRITE : D3D12_RESOURCE_STATE_DEPTH_READ;
+		resourceState = (description.accessFlags & AccessFlag::GPUWrite) ? D3D12_RESOURCE_STATE_DEPTH_WRITE : D3D12_RESOURCE_STATE_DEPTH_READ;
 	}
 
-	ID3D12Resource* RawResource = nullptr;
-	D3D12MA::Allocation* AllocationHandle = nullptr;
+	ID3D12Resource* rawResource = nullptr;
+	D3D12MA::Allocation* allocationHandle = nullptr;
 
-	D3D12_CLEAR_VALUE ClearValue{};
-	bool UseClearValue = false;
+	D3D12_CLEAR_VALUE clearValue{};
+	bool useClearValue = false;
 
-	if (Description.BindFlags & BindFlag::RenderTarget)
+	if (description.bindFlags & BindFlag::RenderTarget)
 	{
-		UseClearValue = true;
+		useClearValue = true;
 
-		ClearValue.Format = Description.Format;
-		ClearValue.Color[0] = 0.f;
-		ClearValue.Color[1] = 0.f;
-		ClearValue.Color[2] = 0.f;
-		ClearValue.Color[3] = 1.f;
+		clearValue.Format = description.format;
+		clearValue.Color[0] = 0.f;
+		clearValue.Color[1] = 0.f;
+		clearValue.Color[2] = 0.f;
+		clearValue.Color[3] = 1.f;
 	}
 
-	else if (Description.BindFlags & BindFlag::DepthStencil)
+	else if (description.bindFlags & BindFlag::DepthStencil)
 	{
-		UseClearValue = true;
+		useClearValue = true;
 
-		ClearValue.Format = Description.Format;
-		ClearValue.DepthStencil.Depth = 1.f;
-		ClearValue.DepthStencil.Stencil = 0;
+		clearValue.Format = description.format;
+		clearValue.DepthStencil.Depth = 1.f;
+		clearValue.DepthStencil.Stencil = 0;
 	}
 
-	auto Result = Device->Allocator->CreateResource(&AllocationDesc, &ResourceDesc, ResourceState, UseClearValue ? &ClearValue : nullptr, &AllocationHandle, IID_PPV_ARGS(&RawResource));
-	if (FAILED(Result))
+	auto result = device->allocator->CreateResource(&allocationDesc, &resourceDesc, resourceState, useClearValue ? &clearValue : nullptr, &allocationHandle, IID_PPV_ARGS(&rawResource));
+	if (FAILED(result))
 	{
-		VGLogError(Rendering) << "Failed to allocate texture: " << Result;
+		VGLogError(Rendering) << "Failed to allocate texture: " << result;
 
 		return nullptr;
 	}
 
-	auto Allocation = std::make_shared<Texture>();
-	Allocation->Description = Description;
-	Allocation->Allocation = std::move(ResourcePtr<D3D12MA::Allocation>{ AllocationHandle });
-	Allocation->State = ResourceState;
+	auto allocation = std::make_shared<Texture>();
+	allocation->description = description;
+	allocation->allocation = std::move(ResourcePtr<D3D12MA::Allocation>{ allocationHandle });
+	allocation->state = resourceState;
 
-	CreateResourceViews(Allocation);
-	NameResource(Allocation->Allocation, Name);
+	CreateResourceViews(allocation);
+	NameResource(allocation->allocation, name);
 
-	return std::move(Allocation);
+	return std::move(allocation);
 }
 
-std::shared_ptr<Texture> ResourceManager::TextureFromSwapChain(void* Surface, const std::wstring_view Name)
+std::shared_ptr<Texture> ResourceManager::TextureFromSwapChain(void* surface, const std::wstring_view name)
 {
 	VGScopedCPUStat("Texture From Swap Chain");
 
-	TextureDescription Description{};
-	Description.UpdateRate = ResourceFrequency::Static;
-	Description.BindFlags = BindFlag::RenderTarget;
-	Description.AccessFlags = AccessFlag::GPUWrite;
-	Description.Width = Device->RenderWidth;
-	Description.Height = Device->RenderHeight;
-	Description.Depth = 1;
-	Description.Format = /*DXGI_FORMAT_R10G10B10A2_UNORM*/ DXGI_FORMAT_B8G8R8A8_UNORM;
+	TextureDescription description{};
+	description.updateRate = ResourceFrequency::Static;
+	description.bindFlags = BindFlag::RenderTarget;
+	description.accessFlags = AccessFlag::GPUWrite;
+	description.width = device->renderWidth;
+	description.height = device->renderHeight;
+	description.depth = 1;
+	description.format = /*DXGI_FORMAT_R10G10B10A2_UNORM*/ DXGI_FORMAT_B8G8R8A8_UNORM;
 
-	auto Allocation = std::make_shared<Texture>();
-	Allocation->Description = Description;
-	Allocation->Allocation = std::move(ResourcePtr<D3D12MA::Allocation>{ new D3D12MA::Allocation });
-	Allocation->Allocation->CreateManual(static_cast<ID3D12Resource*>(Surface));
-	Allocation->State = D3D12_RESOURCE_STATE_COMMON;  // Swap chain back buffers always start out in the common state.
+	auto allocation = std::make_shared<Texture>();
+	allocation->description = description;
+	allocation->allocation = std::move(ResourcePtr<D3D12MA::Allocation>{ new D3D12MA::Allocation });
+	allocation->allocation->CreateManual(static_cast<ID3D12Resource*>(surface));
+	allocation->state = D3D12_RESOURCE_STATE_COMMON;  // Swap chain back buffers always start out in the common state.
 
-	CreateResourceViews(Allocation);
-	NameResource(Allocation->Allocation, Name);
+	CreateResourceViews(allocation);
+	NameResource(allocation->allocation, name);
 
-	return std::move(Allocation);
+	return std::move(allocation);
 }
 
-void ResourceManager::WriteBuffer(std::shared_ptr<Buffer>& Target, const std::vector<uint8_t>& Source, size_t TargetOffset)
+void ResourceManager::WriteBuffer(std::shared_ptr<Buffer>& target, const std::vector<uint8_t>& source, size_t targetOffset)
 {
-	if (Target->Description.UpdateRate == ResourceFrequency::Static)
+	if (target->description.updateRate == ResourceFrequency::Static)
 	{
 		VGScopedCPUStat("Buffer Write Static");
 
-		VGAssert(Target->Description.AccessFlags & AccessFlag::CPUWrite, "Failed to write to static buffer, no CPU write access.");
-		VGAssert((Target->Description.Size * Target->Description.Stride) - TargetOffset >= Source.size(), "Failed to write to static buffer, source buffer is larger than target.");
+		VGAssert(target->description.accessFlags & AccessFlag::CPUWrite, "Failed to write to static buffer, no CPU write access.");
+		VGAssert((target->description.size * target->description.stride) - targetOffset >= source.size(), "Failed to write to static buffer, source buffer is larger than target.");
 
-		const auto FrameIndex = Device->GetFrameIndex();
+		const auto frameIndex = device->GetFrameIndex();
 
-		VGAssert(UploadOffsets[FrameIndex] + Source.size() <= UploadResources[FrameIndex]->GetResource()->GetDesc().Width, "Failed to write to static buffer, exhausted frame upload heap.");
+		VGAssert(uploadOffsets[frameIndex] + source.size() <= uploadResources[frameIndex]->GetResource()->GetDesc().Width, "Failed to write to static buffer, exhausted frame upload heap.");
 
-		std::memcpy(static_cast<uint8_t*>(UploadPtrs[FrameIndex]) + UploadOffsets[FrameIndex], Source.data(), Source.size());
+		std::memcpy(static_cast<uint8_t*>(uploadPtrs[frameIndex]) + uploadOffsets[frameIndex], source.data(), source.size());
 
 		// Ensure we're in the proper state.
-		if (Target->State != D3D12_RESOURCE_STATE_COPY_DEST)
+		if (target->state != D3D12_RESOURCE_STATE_COPY_DEST)
 		{
-			Device->GetDirectList().TransitionBarrier(Target, D3D12_RESOURCE_STATE_COPY_DEST);
-			Device->GetDirectList().FlushBarriers();
+			device->GetDirectList().TransitionBarrier(target, D3D12_RESOURCE_STATE_COPY_DEST);
+			device->GetDirectList().FlushBarriers();
 		}
 		
-		auto* TargetCommandList = Device->GetDirectList().Native();  // Small writes are more efficiently performed on the direct/compute queue.
-		TargetCommandList->CopyBufferRegion(Target->Native(), TargetOffset, UploadResources[FrameIndex]->GetResource(), UploadOffsets[FrameIndex], Source.size());
+		auto* targetCommandList = device->GetDirectList().Native();  // Small writes are more efficiently performed on the direct/compute queue.
+		targetCommandList->CopyBufferRegion(target->Native(), targetOffset, uploadResources[frameIndex]->GetResource(), uploadOffsets[frameIndex], source.size());
 
-		UploadOffsets[FrameIndex] += Source.size();
+		uploadOffsets[frameIndex] += source.size();
 	}
 
 	else
 	{
 		VGScopedCPUStat("Buffer Write Dynamic");
 
-		VGAssert(Target->State == D3D12_RESOURCE_STATE_GENERIC_READ, "Dynamic buffers must always be in the generic read state.");
-		VGAssert(Target->Description.AccessFlags & AccessFlag::CPUWrite, "Failed to write to dynamic buffer, no CPU write access.");
-		VGAssert((Target->Description.Size * Target->Description.Stride) - TargetOffset >= Source.size(), "Failed to write to dynamic buffer, source is larger than target.");
+		VGAssert(target->state == D3D12_RESOURCE_STATE_GENERIC_READ, "Dynamic buffers must always be in the generic read state.");
+		VGAssert(target->description.accessFlags & AccessFlag::CPUWrite, "Failed to write to dynamic buffer, no CPU write access.");
+		VGAssert((target->description.size * target->description.stride) - targetOffset >= source.size(), "Failed to write to dynamic buffer, source is larger than target.");
 
-		void* MappedPtr = nullptr;
+		void* mappedPtr = nullptr;
 
-		D3D12_RANGE MapRange{ TargetOffset, TargetOffset + Source.size() };
+		D3D12_RANGE mapRange{ targetOffset, targetOffset + source.size() };
 
-		auto Result = Target->Native()->Map(0, &MapRange, &MappedPtr);
-		if (FAILED(Result))
+		auto result = target->Native()->Map(0, &mapRange, &mappedPtr);
+		if (FAILED(result))
 		{
-			VGLogError(Rendering) << "Failed to map buffer resource during resource write: " << Result;
+			VGLogError(Rendering) << "Failed to map buffer resource during resource write: " << result;
 
 			return;
 		}
 
-		std::memcpy(MappedPtr, Source.data(), Source.size());
+		std::memcpy(mappedPtr, source.data(), source.size());
 
-		Target->Native()->Unmap(0, nullptr);
+		target->Native()->Unmap(0, nullptr);
 	}
 }
 
-void ResourceManager::WriteTexture(std::shared_ptr<Texture>& Target, const std::vector<uint8_t>& Source)
+void ResourceManager::WriteTexture(std::shared_ptr<Texture>& target, const std::vector<uint8_t>& source)
 {
 	VGScopedCPUStat("Texture Write");
 
-	VGAssert(Target->Description.AccessFlags & AccessFlag::CPUWrite, "Failed to write to texture, no CPU write access.");
-	VGAssert(Target->Description.Width * Target->Description.Height * Target->Description.Depth <= Source.size(), "Failed to write to texture, source is larger than target.");
+	VGAssert(target->description.accessFlags & AccessFlag::CPUWrite, "Failed to write to texture, no CPU write access.");
+	VGAssert(target->description.width * target->description.height * target->description.depth <= source.size(), "Failed to write to texture, source is larger than target.");
 
-	const auto FrameIndex = Device->GetFrameIndex();
+	const auto frameIndex = device->GetFrameIndex();
 
-	VGAssert(UploadOffsets[FrameIndex] + Source.size() <= UploadResources[FrameIndex]->GetResource()->GetDesc().Width, "Failed to write to texture, exhausted frame upload heap.");
+	VGAssert(uploadOffsets[frameIndex] + source.size() <= uploadResources[frameIndex]->GetResource()->GetDesc().Width, "Failed to write to texture, exhausted frame upload heap.");
 
-	std::memcpy(static_cast<uint8_t*>(UploadPtrs[FrameIndex]) + UploadOffsets[FrameIndex], Source.data(), Source.size());
+	std::memcpy(static_cast<uint8_t*>(uploadPtrs[frameIndex]) + uploadOffsets[frameIndex], source.data(), source.size());
 
-	D3D12_TEXTURE_COPY_LOCATION SourceCopyDesc{};
-	SourceCopyDesc.pResource = UploadResources[FrameIndex]->GetResource();
-	SourceCopyDesc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+	D3D12_TEXTURE_COPY_LOCATION sourceCopyDesc{};
+	sourceCopyDesc.pResource = uploadResources[frameIndex]->GetResource();
+	sourceCopyDesc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
 
-	D3D12_RESOURCE_DESC TargetDescriptionCopy = Target->Allocation->GetResource()->GetDesc();
+	D3D12_RESOURCE_DESC targetDescriptionCopy = target->allocation->GetResource()->GetDesc();
 
-	uint64_t RequiredCopySize;
-	Device->Native()->GetCopyableFootprints(&TargetDescriptionCopy, 0, 1, UploadOffsets[FrameIndex], &SourceCopyDesc.PlacedFootprint, nullptr, nullptr, &RequiredCopySize);
+	uint64_t requiredCopySize;
+	device->Native()->GetCopyableFootprints(&targetDescriptionCopy, 0, 1, uploadOffsets[frameIndex], &sourceCopyDesc.PlacedFootprint, nullptr, nullptr, &requiredCopySize);
 
-	D3D12_TEXTURE_COPY_LOCATION TargetCopyDesc{};
-	TargetCopyDesc.pResource = Target->Native();
-	TargetCopyDesc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-	TargetCopyDesc.SubresourceIndex = 0;
+	D3D12_TEXTURE_COPY_LOCATION targetCopyDesc{};
+	targetCopyDesc.pResource = target->Native();
+	targetCopyDesc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+	targetCopyDesc.SubresourceIndex = 0;
 
 	// #TODO: Support custom copy sizes.
-	D3D12_BOX SourceBox{};
-	SourceBox.left = 0;
-	SourceBox.top = 0;
-	SourceBox.front = 0;
-	SourceBox.right = Target->Description.Width;
-	SourceBox.bottom = Target->Description.Height;
-	SourceBox.back = Target->Description.Depth;
+	D3D12_BOX sourceBox{};
+	sourceBox.left = 0;
+	sourceBox.top = 0;
+	sourceBox.front = 0;
+	sourceBox.right = target->description.width;
+	sourceBox.bottom = target->description.height;
+	sourceBox.back = target->description.depth;
 
 	// Ensure we're in the proper state.
-	if (Target->State != D3D12_RESOURCE_STATE_COPY_DEST)
+	if (target->state != D3D12_RESOURCE_STATE_COPY_DEST)
 	{
-		Device->GetDirectList().TransitionBarrier(Target, D3D12_RESOURCE_STATE_COPY_DEST);
-		Device->GetDirectList().FlushBarriers();
+		device->GetDirectList().TransitionBarrier(target, D3D12_RESOURCE_STATE_COPY_DEST);
+		device->GetDirectList().FlushBarriers();
 	}
 
-	auto* TargetCommandList = Device->GetDirectList().Native();  // Small writes are more efficiently performed on the direct/compute queue.
-	TargetCommandList->CopyTextureRegion(&TargetCopyDesc, 0, 0, 0, &SourceCopyDesc, &SourceBox);
+	auto* targetCommandList = device->GetDirectList().Native();  // Small writes are more efficiently performed on the direct/compute queue.
+	targetCommandList->CopyTextureRegion(&targetCopyDesc, 0, 0, 0, &sourceCopyDesc, &sourceBox);
 
-	UploadOffsets[FrameIndex] += RequiredCopySize;
+	uploadOffsets[frameIndex] += requiredCopySize;
 }
 
-void ResourceManager::CleanupFrameResources(size_t Frame)
+void ResourceManager::CleanupFrameResources(size_t frame)
 {
 	VGScopedCPUStat("Cleanup Frame Resources");
 
-	UploadOffsets[Frame % FrameCount] = 0;
+	uploadOffsets[frame % frameCount] = 0;
 }

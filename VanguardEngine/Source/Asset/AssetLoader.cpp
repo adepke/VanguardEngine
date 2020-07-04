@@ -15,35 +15,35 @@
 
 namespace AssetLoader
 {
-	MeshComponent LoadMesh(RenderDevice& Device, std::filesystem::path Path)
+	MeshComponent LoadMesh(RenderDevice& device, std::filesystem::path path)
 	{
 		VGScopedCPUStat("Load Mesh");
 
-		Assimp::Importer Importer{};
+		Assimp::Importer importer{};
 
-		const aiScene* Scene = nullptr;
+		const aiScene* scene = nullptr;
 
 		{
 			VGScopedCPUStat("Importer Read");
 
-			Scene = Importer.ReadFile(Path.generic_string(), 0);
+			scene = importer.ReadFile(path.generic_string(), 0);
 		}
 
-		if (!Scene || !Scene->mNumMeshes)
+		if (!scene || !scene->mNumMeshes)
 		{
-			VGLogError(Asset) << "Failed to load asset at '" << Path.generic_wstring() << "'.";
+			VGLogError(Asset) << "Failed to load asset at '" << path.generic_wstring() << "'.";
 			return {};
 		}
 
-		if (!Scene->mNumMaterials)
+		if (!scene->mNumMaterials)
 		{
-			VGLogError(Asset) << "Asset at '" << Path.generic_wstring() << "' doesn't contain any materials.";
+			VGLogError(Asset) << "Asset at '" << path.generic_wstring() << "' doesn't contain any materials.";
 			return {};
 		}
 
 		// #TODO: Load lights.
 
-		constexpr auto PostProcessFlags =
+		constexpr auto postProcessFlags =
 			aiProcess_CalcTangentSpace |  // We need tangents and bitangents for normal mapping.
 			aiProcess_Triangulate |  // We can only accept triangle faces.
 			aiProcess_JoinIdenticalVertices |
@@ -54,28 +54,28 @@ namespace AssetLoader
 		{
 			VGScopedCPUStat("Post Process");
 
-			Scene = Importer.ApplyPostProcessing(PostProcessFlags);
+			scene = importer.ApplyPostProcessing(postProcessFlags);
 		}
 
-		auto TrimmedPath = Path;
-		TrimmedPath.remove_filename();
+		auto trimmedPath = path;
+		trimmedPath.remove_filename();
 
-		std::vector<std::shared_ptr<Material>> Materials{};
-		Materials.reserve(Scene->mNumMaterials);
+		std::vector<std::shared_ptr<Material>> materials{};
+		materials.reserve(scene->mNumMaterials);
 
-		for (uint32_t Iter = 0; Iter < Scene->mNumMaterials; ++Iter)
+		for (uint32_t i = 0; i < scene->mNumMaterials; ++i)
 		{
-			const auto& Mat = *Scene->mMaterials[Iter];
+			const auto& mat = *scene->mMaterials[i];
 
-			Materials.emplace_back(std::make_shared<Material>());
+			materials.emplace_back(std::make_shared<Material>());
 
-			aiString TexturePath;
+			aiString texturePath;
 
-			const auto SearchTextureType = [&Mat, TexturePathPtr = &TexturePath](auto& TextureTypeList)
+			const auto SearchTextureType = [&mat, texturePathPtr = &texturePath](auto& textureTypeList)
 			{
-				for (size_t Iter = 0; Iter < std::size(TextureTypeList); ++Iter)
+				for (size_t i = 0; i < std::size(textureTypeList); ++i)
 				{
-					if (Mat.GetTexture(TextureTypeList[Iter], 0, TexturePathPtr) == aiReturn_SUCCESS)
+					if (mat.GetTexture(textureTypeList[i], 0, texturePathPtr) == aiReturn_SUCCESS)
 						return true;
 				}
 
@@ -88,138 +88,138 @@ namespace AssetLoader
 
 			if (SearchTextureType(std::array{ aiTextureType_BASE_COLOR, aiTextureType_DIFFUSE }))
 			{
-				Materials[Iter]->Albedo = LoadTexture(Device, TrimmedPath / TexturePath.C_Str());
+				materials[i]->albedo = LoadTexture(device, trimmedPath / texturePath.C_Str());
 			}
 			
 			if (SearchTextureType(std::array{ aiTextureType_NORMAL_CAMERA, aiTextureType_NORMALS, aiTextureType_HEIGHT }))
 			{
-				Materials[Iter]->Normal = LoadTexture(Device, TrimmedPath / TexturePath.C_Str());
+				materials[i]->normal = LoadTexture(device, trimmedPath / texturePath.C_Str());
 			}
 
 			if (SearchTextureType(std::array{ aiTextureType_EMISSION_COLOR, aiTextureType_EMISSIVE }))
 			{
-				//Materials[Iter]->Emissive = LoadTexture(Device, TrimmedPath / TexturePath.C_Str());
+				//Materials[Iter]->emissive = LoadTexture(Device, TrimmedPath / TexturePath.C_Str());
 			}
 
 			if (SearchTextureType(std::array{ aiTextureType_DIFFUSE_ROUGHNESS }))
 			{
-				Materials[Iter]->Roughness = LoadTexture(Device, TrimmedPath / TexturePath.C_Str());
+				materials[i]->roughness = LoadTexture(device, trimmedPath / texturePath.C_Str());
 			}
 
 			if (SearchTextureType(std::array{ aiTextureType_METALNESS }))
 			{
-				Materials[Iter]->Metallic = LoadTexture(Device, TrimmedPath / TexturePath.C_Str());
+				materials[i]->metallic = LoadTexture(device, trimmedPath / texturePath.C_Str());
 			}
 
 			if (SearchTextureType(std::array{ aiTextureType_AMBIENT_OCCLUSION }))
 			{
-				//Materials[Iter]->AmbientOcclusion = LoadTexture(Device, TrimmedPath / TexturePath.C_Str());
+				//Materials[Iter]->ambientOcclusion = LoadTexture(Device, TrimmedPath / TexturePath.C_Str());
 			}
 		}
 
 		// Sum vertices/indices from all the submeshes.
-		size_t VertexCount = 0;
-		size_t IndexCount = 0;
+		size_t vertexCount = 0;
+		size_t indexCount = 0;
 
-		for (uint32_t Iter = 0; Iter < Scene->mNumMeshes; ++Iter)
+		for (uint32_t i = 0; i < scene->mNumMeshes; ++i)
 		{
-			const auto* Mesh = Scene->mMeshes[Iter];
+			const auto* mesh = scene->mMeshes[i];
 
 			// Basic mesh validation.
 
-			if (!Mesh->HasPositions())
+			if (!mesh->HasPositions())
 			{
-				VGLogError(Asset) << "Asset at '" << Path.generic_wstring() << "' doesn't contain vertex positions.";
+				VGLogError(Asset) << "Asset at '" << path.generic_wstring() << "' doesn't contain vertex positions.";
 				return {};
 			}
 
-			if (!Mesh->HasNormals())
+			if (!mesh->HasNormals())
 			{
-				VGLogError(Asset) << "Asset at '" << Path.generic_wstring() << "' doesn't contain vertex normals.";
+				VGLogError(Asset) << "Asset at '" << path.generic_wstring() << "' doesn't contain vertex normals.";
 				return {};
 			}
 
-			if (!Mesh->HasTextureCoords(0))
+			if (!mesh->HasTextureCoords(0))
 			{
-				VGLogError(Asset) << "Asset at '" << Path.generic_wstring() << "' doesn't contain vertex UVs.";
+				VGLogError(Asset) << "Asset at '" << path.generic_wstring() << "' doesn't contain vertex UVs.";
 				return {};
 			}
 
-			if (!Mesh->HasTangentsAndBitangents())
+			if (!mesh->HasTangentsAndBitangents())
 			{
-				VGLogError(Asset) << "Asset at '" << Path.generic_wstring() << "' doesn't contain vertex tangents.";
+				VGLogError(Asset) << "Asset at '" << path.generic_wstring() << "' doesn't contain vertex tangents.";
 				return {};
 			}
 
-			VertexCount += Mesh->mNumVertices;
-			IndexCount += Mesh->mNumFaces * 3;
+			vertexCount += mesh->mNumVertices;
+			indexCount += mesh->mNumFaces * 3;
 		}
 
-		std::vector<MeshComponent::Subset> Subsets;
-		std::vector<Vertex> Vertices;
-		std::vector<uint32_t> Indices;
+		std::vector<MeshComponent::Subset> subsets;
+		std::vector<Vertex> vertices;
+		std::vector<uint32_t> indices;
 
-		Vertices.reserve(VertexCount);
-		Indices.reserve(IndexCount);
+		vertices.reserve(vertexCount);
+		indices.reserve(indexCount);
 
-		size_t VertexOffset = 0;
-		size_t IndexOffset = 0;
+		size_t vertexOffset = 0;
+		size_t indexOffset = 0;
 
 		{
 			VGScopedCPUStat("Mesh Building");
 
-			for (uint32_t MeshIter = 0; MeshIter < Scene->mNumMeshes; ++MeshIter)
+			for (uint32_t i = 0; i < scene->mNumMeshes; ++i)
 			{
-				const auto* Mesh = Scene->mMeshes[MeshIter];
+				const auto* mesh = scene->mMeshes[i];
 
-				MeshComponent::Subset Subset{};
-				Subset.VertexOffset = VertexOffset;
-				Subset.IndexOffset = IndexOffset;
-				Subset.Indices = Mesh->mNumFaces * 3;
+				MeshComponent::Subset subset{};
+				subset.vertexOffset = vertexOffset;
+				subset.indexOffset = indexOffset;
+				subset.indices = mesh->mNumFaces * 3;
 
-				VertexOffset += Mesh->mNumVertices;
-				IndexOffset += Subset.Indices;
+				vertexOffset += mesh->mNumVertices;
+				indexOffset += subset.indices;
 
-				for (uint32_t Iter = 0; Iter < Mesh->mNumVertices; ++Iter)
+				for (uint32_t j = 0; j < mesh->mNumVertices; ++j)
 				{
-					const auto& Position = Mesh->mVertices[Iter];
-					const auto& Normal = Mesh->mVertices[Iter];
-					const auto& TexCoord = Mesh->mTextureCoords[0][Iter];
-					const auto& Tangent = Mesh->mTangents[Iter];
-					const auto& Bitangent = Mesh->mBitangents[Iter];
+					const auto& position = mesh->mVertices[j];
+					const auto& normal = mesh->mVertices[j];
+					const auto& texCoord = mesh->mTextureCoords[0][j];
+					const auto& tangent = mesh->mTangents[j];
+					const auto& bitangent = mesh->mBitangents[j];
 
-					Vertex Result{
-						{ Position.x, Position.y, Position.z },
-						{ Normal.x, Normal.y, Normal.z },
-						{ TexCoord.x, TexCoord.y },
-						{ Tangent.x, Tangent.y, Tangent.z },
-						{ Bitangent.x, Bitangent.y, Bitangent.z }
+					Vertex result{
+						{ position.x, position.y, position.z },
+						{ normal.x, normal.y, normal.z },
+						{ texCoord.x, texCoord.y },
+						{ tangent.x, tangent.y, tangent.z },
+						{ bitangent.x, bitangent.y, bitangent.z }
 					};
 
-					Vertices.emplace_back(Result);
+					vertices.emplace_back(result);
 				}
 
-				for (uint32_t Iter = 0; Iter < Mesh->mNumFaces; ++Iter)
+				for (uint32_t j = 0; j < mesh->mNumFaces; ++j)
 				{
-					const auto& Face = Mesh->mFaces[Iter];
+					const auto& face = mesh->mFaces[j];
 
-					Indices.emplace_back(Face.mIndices[0]);
-					Indices.emplace_back(Face.mIndices[1]);
-					Indices.emplace_back(Face.mIndices[2]);
+					indices.emplace_back(face.mIndices[0]);
+					indices.emplace_back(face.mIndices[1]);
+					indices.emplace_back(face.mIndices[2]);
 				}
 
 				// Copy the submesh material, don't move since multiple submeshes can share a material.
-				Subset.Mat = Materials[Mesh->mMaterialIndex];
+				subset.material = materials[mesh->mMaterialIndex];
 
 				// #TODO: Get the mesh AABB.
 
-				Subsets.emplace_back(std::move(Subset));
+				subsets.emplace_back(std::move(subset));
 			}
 		}
 
-		auto MeshComp = std::move(CreateMeshComponent(Device, Vertices, Indices));
-		MeshComp.Subsets = Subsets;
+		auto meshComp = std::move(CreateMeshComponent(device, vertices, indices));
+		meshComp.subsets = subsets;
 
-		return std::move(MeshComp);
+		return std::move(meshComp);
 	}
 }

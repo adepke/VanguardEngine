@@ -20,15 +20,15 @@ class CommandList;
 class Renderer : public Singleton<Renderer>
 {
 public:
-	std::unique_ptr<WindowFrame> Window;
-	std::unique_ptr<RenderDevice> Device;  // Destruct the device after all other resources.
+	std::unique_ptr<WindowFrame> window;
+	std::unique_ptr<RenderDevice> device;  // Destruct the device after all other resources.
 
 private:
 	std::shared_ptr<Buffer> cameraBuffer;
-	std::vector<Material> Materials;
-	std::unique_ptr<UserInterfaceManager> UserInterface;
+	std::vector<Material> materials;
+	std::unique_ptr<UserInterfaceManager> userInterface;
 
-	DescriptorHandle NullDescriptor;
+	DescriptorHandle nullDescriptor;
 
 private:
 	void UpdateCameraBuffer();
@@ -36,8 +36,8 @@ private:
 public:
 	~Renderer();
 
-	void Initialize(std::unique_ptr<WindowFrame>&& InWindow, std::unique_ptr<RenderDevice>&& InDevice);
+	void Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_ptr<RenderDevice>&& inDevice);
 
 	// Entity data is safe to write to immediately after this function returns. Do not attempt to write before Render() returns.
-	void Render(entt::registry& Registry);
+	void Render(entt::registry& registry);
 };

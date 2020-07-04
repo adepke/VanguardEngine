@@ -36,48 +36,48 @@ class RenderDevice
 	friend class ResourceManager;
 
 public:
-	bool Debugging = false;
-	bool VSync = false;
-	uint32_t RenderWidth = 10;
-	uint32_t RenderHeight = 10;
-	bool Fullscreen = false;
+	bool debugging = false;
+	bool vSync = false;
+	uint32_t renderWidth = 10;
+	uint32_t renderHeight = 10;
+	bool fullscreen = false;
 
-	static constexpr uint32_t FrameCount = 3;  // #TODO: Determine at runtime.
+	static constexpr uint32_t frameCount = 3;  // #TODO: Determine at runtime.
 
 private:
-	const D3D_FEATURE_LEVEL TargetFeatureLevel = D3D_FEATURE_LEVEL_12_1;
-	const D3D_SHADER_MODEL TargetShaderModel = D3D_SHADER_MODEL_6_3;
+	const D3D_FEATURE_LEVEL targetFeatureLevel = D3D_FEATURE_LEVEL_12_1;
+	const D3D_SHADER_MODEL targetShaderModel = D3D_SHADER_MODEL_6_3;
 
 	// #NOTE: Ordering of these variables is significant for proper destruction!
-	ResourcePtr<ID3D12Device3> Device;
-	Adapter RenderAdapter;
+	ResourcePtr<ID3D12Device3> device;
+	Adapter renderAdapter;
 
-	ResourcePtr<ID3D12CommandQueue> DirectCommandQueue;
-	CommandList DirectCommandList[FrameCount];  // #TODO: One per worker thread.
+	ResourcePtr<ID3D12CommandQueue> directCommandQueue;
+	CommandList directCommandList[frameCount];  // #TODO: One per worker thread.
 
-	ResourcePtr<ID3D12CommandQueue> ComputeCommandQueue;
-	CommandList ComputeCommandList[FrameCount];  // #TODO: One per worker thread.
+	ResourcePtr<ID3D12CommandQueue> computeCommandQueue;
+	CommandList computeCommandList[frameCount];  // #TODO: One per worker thread.
 
-	ResourcePtr<IDXGISwapChain3> SwapChain;
-	size_t Frame = 0;  // Stores the actual frame number. Refers to the current CPU frame being run, stepped after finishing CPU pass.
+	ResourcePtr<IDXGISwapChain3> swapChain;
+	size_t frame = 0;  // Stores the actual frame number. Refers to the current CPU frame being run, stepped after finishing CPU pass.
 
-	size_t IntraSyncValue = 0;  // Value to ensure that we signal a unique value every time we intra sync.
-	ResourcePtr<ID3D12Fence> InterSyncFence;
-	ResourcePtr<ID3D12Fence> IntraSyncFence;
-	HANDLE SyncEvent;  // Shared event for inter and intra syncing.
+	size_t intraSyncValue = 0;  // Value to ensure that we signal a unique value every time we intra sync.
+	ResourcePtr<ID3D12Fence> interSyncFence;
+	ResourcePtr<ID3D12Fence> intraSyncFence;
+	HANDLE syncEvent;  // Shared event for inter and intra syncing.
 
-	ResourcePtr<D3D12MA::Allocator> Allocator;
-	ResourceManager AllocatorManager;
+	ResourcePtr<D3D12MA::Allocator> allocator;
+	ResourceManager allocatorManager;
 
-	DescriptorAllocator DescriptorManager;
+	DescriptorAllocator descriptorManager;
 
-	std::array<std::shared_ptr<Texture>, FrameCount> BackBufferTextures;  // Render targets bound to the swap chain.
+	std::array<std::shared_ptr<Texture>, frameCount> backBufferTextures;  // Render targets bound to the swap chain.
 
-	std::array<std::shared_ptr<Buffer>, FrameCount> FrameBuffers;  // Per-frame shared dynamic heap.
-	std::array<size_t, FrameCount> FrameBufferOffsets = {};
+	std::array<std::shared_ptr<Buffer>, frameCount> frameBuffers;  // Per-frame shared dynamic heap.
+	std::array<size_t, frameCount> frameBufferOffsets = {};
 
 	// #TODO: Don't use shared_ptr's here.
-	std::array<std::vector<std::shared_ptr<CommandList>>, FrameCount> FrameCommandLists;  // Per-frame dynamic command lists.
+	std::array<std::vector<std::shared_ptr<CommandList>>, frameCount> frameCommandLists;  // Per-frame dynamic command lists.
 
 	// Name the D3D objects.
 	void SetNames();
@@ -85,46 +85,46 @@ private:
 	void SetupRenderTargets();
 
 	// Resets command lists and allocators.
-	void ResetFrame(size_t FrameID);
+	void ResetFrame(size_t frameID);
 
 public:
-	RenderDevice(void* InWindow, bool Software, bool EnableDebugging);
+	RenderDevice(void* window, bool software, bool enableDebugging);
 	~RenderDevice();
 
-	auto* Native() const noexcept { return Device.Get(); }
+	auto* Native() const noexcept { return device.Get(); }
 
 	// Logs various data about the device's feature support. Not needed in optimized builds.
 	void CheckFeatureSupport();
 
-	std::shared_ptr<Buffer> CreateResource(const BufferDescription& Description, const std::wstring_view Name);
-	std::shared_ptr<Texture> CreateResource(const TextureDescription& Description, const std::wstring_view Name);
-	void WriteResource(std::shared_ptr<Buffer>& Target, const std::vector<uint8_t>& Source, size_t TargetOffset = 0);
-	void WriteResource(std::shared_ptr<Texture>& Target, const std::vector<uint8_t>& Source);
+	std::shared_ptr<Buffer> CreateResource(const BufferDescription& description, const std::wstring_view name);
+	std::shared_ptr<Texture> CreateResource(const TextureDescription& description, const std::wstring_view name);
+	void WriteResource(std::shared_ptr<Buffer>& target, const std::vector<uint8_t>& source, size_t targetOffset = 0);
+	void WriteResource(std::shared_ptr<Texture>& target, const std::vector<uint8_t>& source);
 
 	// Allocate a block of CPU write-only, GPU read-only memory from the per-frame dynamic heap.
-	std::pair<std::shared_ptr<Buffer>, size_t> FrameAllocate(size_t Size);
+	std::pair<std::shared_ptr<Buffer>, size_t> FrameAllocate(size_t size);
 
 	// Allocate a per-frame command list, disposed of automatically.
-	std::shared_ptr<CommandList> AllocateFrameCommandList(D3D12_COMMAND_LIST_TYPE Type);
+	std::shared_ptr<CommandList> AllocateFrameCommandList(D3D12_COMMAND_LIST_TYPE type);
 
-	DescriptorHandle AllocateDescriptor(DescriptorType Type);
+	DescriptorHandle AllocateDescriptor(DescriptorType type);
 
 	// Sync the GPU until it is either fully caught up or within the max buffered frames limit, determined by FullSync. Blocking.
-	void SyncInterframe(bool FullSync);
+	void SyncInterframe(bool fullSync);
 	// Sync the specified GPU engine within the active frame on the GPU. Blocking.
-	void SyncIntraframe(SyncType Type);
+	void SyncIntraframe(SyncType type);
 
 	void AdvanceCPU();  // Steps the CPU frame counter, blocking sync with GPU.
 	void AdvanceGPU();  // Steps the GPU frame counter.
-	size_t GetFrameIndex() const noexcept { return Frame % RenderDevice::FrameCount; }
+	size_t GetFrameIndex() const noexcept { return frame % RenderDevice::frameCount; }
 
-	auto* GetDirectQueue() const noexcept { return DirectCommandQueue.Get(); }
-	auto& GetDirectList() noexcept { return DirectCommandList[GetFrameIndex()]; }
-	auto* GetComputeQueue() const noexcept { return ComputeCommandQueue.Get(); }
-	auto& GetComputeList() noexcept { return ComputeCommandList[GetFrameIndex()]; }
-	auto* GetSwapChain() const noexcept { return SwapChain.Get(); }
-	auto GetBackBuffer() const noexcept { return BackBufferTextures[SwapChain->GetCurrentBackBufferIndex()]; }  // Resizing affects the buffer index, so use the swap chain's index.
-	auto& GetDescriptorAllocator() noexcept { return DescriptorManager; }
+	auto* GetDirectQueue() const noexcept { return directCommandQueue.Get(); }
+	auto& GetDirectList() noexcept { return directCommandList[GetFrameIndex()]; }
+	auto* GetComputeQueue() const noexcept { return computeCommandQueue.Get(); }
+	auto& GetComputeList() noexcept { return computeCommandList[GetFrameIndex()]; }
+	auto* GetSwapChain() const noexcept { return swapChain.Get(); }
+	auto GetBackBuffer() const noexcept { return backBufferTextures[swapChain->GetCurrentBackBufferIndex()]; }  // Resizing affects the buffer index, so use the swap chain's index.
+	auto& GetDescriptorAllocator() noexcept { return descriptorManager; }
 
-	void SetResolution(uint32_t Width, uint32_t Height, bool InFullscreen);
+	void SetResolution(uint32_t width, uint32_t height, bool inFullscreen);
 };

@@ -4,7 +4,7 @@
 #include <Rendering/Device.h>
 #include <Rendering/PipelineState.h>
 
-void CommandList::TransitionBarrierInternal(ID3D12Resource* Resource, D3D12_RESOURCE_STATES OldState, D3D12_RESOURCE_STATES NewState)
+void CommandList::TransitionBarrierInternal(ID3D12Resource* resource, D3D12_RESOURCE_STATES oldState, D3D12_RESOURCE_STATES newState)
 {
 	VGScopedCPUStat("Transition Barrier");
 
@@ -12,97 +12,97 @@ void CommandList::TransitionBarrierInternal(ID3D12Resource* Resource, D3D12_RESO
 	// or combine these read states before a flush.
 
 	// Make sure we don't discard transitions to common. Special case since it's 0.
-	if (NewState == D3D12_RESOURCE_STATE_COMMON && OldState == D3D12_RESOURCE_STATE_COMMON)
+	if (newState == D3D12_RESOURCE_STATE_COMMON && oldState == D3D12_RESOURCE_STATE_COMMON)
 		return;
 
 	// No need to transition if we're in a state that covers the new state.
-	else if ((NewState & OldState) != 0)
+	else if ((newState & oldState) != 0)
 		return;
 
-	D3D12_RESOURCE_BARRIER Barrier;
-	Barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-	Barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-	Barrier.Transition.pResource = Resource;
-	Barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-	Barrier.Transition.StateBefore = OldState;
-	Barrier.Transition.StateAfter = NewState;
+	D3D12_RESOURCE_BARRIER barrier;
+	barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
+	barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+	barrier.Transition.pResource = resource;
+	barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
+	barrier.Transition.StateBefore = oldState;
+	barrier.Transition.StateAfter = newState;
 
-	PendingBarriers.emplace_back(std::move(Barrier));
+	pendingBarriers.emplace_back(std::move(barrier));
 }
 
-void CommandList::Create(RenderDevice* InDevice, D3D12_COMMAND_LIST_TYPE Type)
+void CommandList::Create(RenderDevice* inDevice, D3D12_COMMAND_LIST_TYPE type)
 {
 	VGScopedCPUStat("Command List Create");
 
-	Device = InDevice;
+	device = inDevice;
 
-	auto Result = Device->Native()->CreateCommandAllocator(Type, IID_PPV_ARGS(Allocator.Indirect()));
-	if (FAILED(Result))
+	auto result = device->Native()->CreateCommandAllocator(type, IID_PPV_ARGS(allocator.Indirect()));
+	if (FAILED(result))
 	{
-		VGLogFatal(Rendering) << "Failed to create command allocator: " << Result;
+		VGLogFatal(Rendering) << "Failed to create command allocator: " << result;
 	}
 
-	Result = Device->Native()->CreateCommandList(0, Type, Allocator.Get(), nullptr, IID_PPV_ARGS(List.Indirect()));
-	if (FAILED(Result))
+	result = device->Native()->CreateCommandList(0, type, allocator.Get(), nullptr, IID_PPV_ARGS(list.Indirect()));
+	if (FAILED(result))
 	{
-		VGLogFatal(Rendering) << "Failed to create command list: " << Result;
+		VGLogFatal(Rendering) << "Failed to create command list: " << result;
 	}
 }
 
-void CommandList::SetName(std::wstring_view Name)
+void CommandList::SetName(std::wstring_view name)
 {
-	Allocator->SetName(Name.data());
-	List->SetName(Name.data());
+	allocator->SetName(name.data());
+	list->SetName(name.data());
 }
 
 void CommandList::FlushBarriers()
 {
 	VGScopedCPUStat("Command List Barrier Flush");
 
-	if (!PendingBarriers.size())
+	if (!pendingBarriers.size())
 		return;
 
-	List->ResourceBarrier(static_cast<UINT>(PendingBarriers.size()), PendingBarriers.data());
+	list->ResourceBarrier(static_cast<UINT>(pendingBarriers.size()), pendingBarriers.data());
 
-	PendingBarriers.clear();
+	pendingBarriers.clear();
 }
 
-void CommandList::BindPipelineState(PipelineState& State)
+void CommandList::BindPipelineState(PipelineState& state)
 {
 	VGScopedCPUStat("Bind Pipeline");
 
-	List->IASetPrimitiveTopology(State.Description.Topology);
-	List->SetGraphicsRootSignature(State.RootSignature.Get());
-	List->SetPipelineState(State.Native());
+	list->IASetPrimitiveTopology(state.description.topology);
+	list->SetGraphicsRootSignature(state.rootSignature.Get());
+	list->SetPipelineState(state.Native());
 }
 
-void CommandList::BindDescriptorAllocator(DescriptorAllocator& Allocator)
+void CommandList::BindDescriptorAllocator(DescriptorAllocator& allocator)
 {
 	VGScopedCPUStat("Bind Descriptor Allocator");
 
-	std::vector<ID3D12DescriptorHeap*> Heaps;
-	Heaps.reserve(Allocator.OnlineHeaps.size());
+	std::vector<ID3D12DescriptorHeap*> heaps;
+	heaps.reserve(allocator.onlineHeaps.size());
 	
-	for (auto& Heap : Allocator.OnlineHeaps)
+	for (auto& heap : allocator.onlineHeaps)
 	{
-		Heaps.push_back(Heap[Device->GetFrameIndex()].Native());
+		heaps.push_back(heap[device->GetFrameIndex()].Native());
 	}
 
-	List->SetDescriptorHeaps(static_cast<UINT>(Heaps.size()), Heaps.data());
+	list->SetDescriptorHeaps(static_cast<UINT>(heaps.size()), heaps.data());
 }
 
 HRESULT CommandList::Close()
 {
-	return List->Close();
+	return list->Close();
 }
 
 HRESULT CommandList::Reset()
 {
-	auto Result = Allocator->Reset();
-	if (FAILED(Result))
+	auto result = allocator->Reset();
+	if (FAILED(result))
 	{
-		return Result;
+		return result;
 	}
 
-	return List->Reset(Allocator.Get(), nullptr);
+	return list->Reset(allocator.Get(), nullptr);
 }

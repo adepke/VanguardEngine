@@ -6,5 +6,5 @@
 
 struct ControlSystem
 {
-	static void Update(entt::registry& Registry);
+	static void Update(entt::registry& registry);
 };

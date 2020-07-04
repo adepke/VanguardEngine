@@ -21,29 +21,29 @@ class WindowFrame
 	friend int64_t WndProc(void*, uint32_t, uint64_t, int64_t);
 
 private:
-	void* Handle = nullptr;
-	bool CursorShown = true;
-	CursorRestraint ActiveCursorRestraint = CursorRestraint::None;
-	std::pair<int, int> CursorLockPosition;
+	void* handle = nullptr;
+	bool cursorShown = true;
+	CursorRestraint activeCursorRestraint = CursorRestraint::None;
+	std::pair<int, int> cursorLockPosition;
 
 public:
 	// #TODO: Use delegates instead of std::function.
-	std::function<void(bool)> OnFocusChanged;
-	std::function<void(uint32_t, uint32_t, bool)> OnSizeChanged;
+	std::function<void(bool)> onFocusChanged;
+	std::function<void(uint32_t, uint32_t, bool)> onSizeChanged;
 
 public:
-	WindowFrame(const std::wstring& Title, uint32_t Width, uint32_t Height);
+	WindowFrame(const std::wstring& title, uint32_t width, uint32_t height);
 	~WindowFrame();
 
-	void SetTitle(std::wstring Title);
-	void SetSize(uint32_t Width, uint32_t Height);
-	void ShowCursor(bool Visible);
-	void RestrainCursor(CursorRestraint Restraint);
+	void SetTitle(std::wstring title);
+	void SetSize(uint32_t width, uint32_t height);
+	void ShowCursor(bool visible);
+	void RestrainCursor(CursorRestraint restraint);
 
 	void UpdateCursor();
 
 	void* GetHandle() noexcept
 	{
-		return Handle;
+		return handle;
 	}
 };

@@ -17,27 +17,27 @@ class PipelineState;
 class UserInterfaceManager
 {
 private:
-	RenderDevice* Device;
+	RenderDevice* device;
 
-	ResourcePtr<ID3D10Blob> g_pVertexShaderBlob;
-	ResourcePtr<ID3D10Blob> g_pPixelShaderBlob;
-	std::unique_ptr<PipelineState> Pipeline;
+	ResourcePtr<ID3D10Blob> vertexShaderBlob;
+	ResourcePtr<ID3D10Blob> pixelShaderBlob;
+	std::unique_ptr<PipelineState> pipeline;
 
-	ResourcePtr<ID3D12Resource> g_pFontTextureResource;
-	ResourcePtr<ID3D12DescriptorHeap> FontHeap;
+	ResourcePtr<ID3D12Resource> fontTextureResource;
+	ResourcePtr<ID3D12DescriptorHeap> fontHeap;
 
-	const DXGI_FORMAT g_RTVFormat = DXGI_FORMAT_B8G8R8A8_UNORM;  // #TODO: Centralize RTV format.
+	const DXGI_FORMAT rtvFormat = DXGI_FORMAT_B8G8R8A8_UNORM;  // #TODO: Centralize RTV format.
 
 private:
-	void SetupRenderState(ImDrawData* DrawData, CommandList& List, FrameResources* Resources);
+	void SetupRenderState(ImDrawData* drawData, CommandList& list, FrameResources* resources);
 	void CreateFontTexture();
 	void CreateDeviceObjects();
 	void InvalidateDeviceObjects();
 
 public:
-	UserInterfaceManager(RenderDevice* InDevice);
+	UserInterfaceManager(RenderDevice* inDevice);
 	~UserInterfaceManager();
 
 	void NewFrame();
-	void Render(CommandList& List);
+	void Render(CommandList& list);
 };

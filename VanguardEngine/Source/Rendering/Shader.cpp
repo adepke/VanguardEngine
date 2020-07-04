@@ -9,209 +9,209 @@
 #include <d3d12shader.h>
 
 // Interface objects exist for the duration of the application. Can be destroyed after initial compilation during release builds if necessary.
-static ResourcePtr<IDxcUtils> ShaderUtils;
-static ResourcePtr<IDxcCompiler3> ShaderCompiler;
-static ResourcePtr<IDxcIncludeHandler> ShaderIncludeHandler;
+static ResourcePtr<IDxcUtils> shaderUtils;
+static ResourcePtr<IDxcCompiler3> shaderCompiler;
+static ResourcePtr<IDxcIncludeHandler> shaderIncludeHandler;
 
-void ReflectShader(std::unique_ptr<Shader>& InShader, ID3D12ShaderReflection* Reflection, const std::wstring& Name)
+void ReflectShader(std::unique_ptr<Shader>& inShader, ID3D12ShaderReflection* reflection, const std::wstring& name)
 {
 	VGScopedCPUStat("Reflect Shader");
 
-	D3D12_SHADER_DESC ShaderDesc;
-	auto Result = Reflection->GetDesc(&ShaderDesc);
-	if (FAILED(Result))
+	D3D12_SHADER_DESC shaderDesc;
+	auto result = reflection->GetDesc(&shaderDesc);
+	if (FAILED(result))
 	{
-		VGLogError(Rendering) << "Shader reflection for '" << Name << "' failed internally: " << Result;
+		VGLogError(Rendering) << "Shader reflection for '" << name << "' failed internally: " << result;
 		return;
 	}
 
-	InShader->Reflection.InputElements.reserve(ShaderDesc.InputParameters);
-	for (uint32_t Index = 0; Index < ShaderDesc.InputParameters; ++Index)
+	inShader->reflection.inputElements.reserve(shaderDesc.InputParameters);
+	for (uint32_t i = 0; i < shaderDesc.InputParameters; ++i)
 	{
-		D3D12_SIGNATURE_PARAMETER_DESC ParameterDesc;
+		D3D12_SIGNATURE_PARAMETER_DESC parameterDesc;
 
-		Result = Reflection->GetInputParameterDesc(Index, &ParameterDesc);
-		if (FAILED(Result))
+		result = reflection->GetInputParameterDesc(i, &parameterDesc);
+		if (FAILED(result))
 		{
-			VGLogError(Rendering) << "Shader reflection for '" << Name << "' failed internally: " << Result;
+			VGLogError(Rendering) << "Shader reflection for '" << name << "' failed internally: " << result;
 			return;
 		}
 
-		InShader->Reflection.InputElements.push_back({ ParameterDesc.SemanticName, ParameterDesc.SemanticIndex });
+		inShader->reflection.inputElements.push_back({ parameterDesc.SemanticName, parameterDesc.SemanticIndex });
 	}
 
-	InShader->Reflection.ConstantBuffers.reserve(ShaderDesc.ConstantBuffers);
-	for (uint32_t Index = 0; Index < ShaderDesc.ConstantBuffers; ++Index)
+	inShader->reflection.constantBuffers.reserve(shaderDesc.ConstantBuffers);
+	for (uint32_t i = 0; i < shaderDesc.ConstantBuffers; ++i)
 	{
-		auto* ConstantBufferReflection = Reflection->GetConstantBufferByIndex(Index);
-		D3D12_SHADER_BUFFER_DESC BufferDesc;
-		Result = ConstantBufferReflection->GetDesc(&BufferDesc);
-		if (FAILED(Result))
+		auto* constantBufferReflection = reflection->GetConstantBufferByIndex(i);
+		D3D12_SHADER_BUFFER_DESC bufferDesc;
+		result = constantBufferReflection->GetDesc(&bufferDesc);
+		if (FAILED(result))
 		{
-			VGLogError(Rendering) << "Shader reflection for '" << Name << "' failed internally: " << Result;
+			VGLogError(Rendering) << "Shader reflection for '" << name << "' failed internally: " << result;
 			return;
 		}
 
-		InShader->Reflection.ConstantBuffers.push_back({ BufferDesc.Name });
+		inShader->reflection.constantBuffers.push_back({ bufferDesc.Name });
 	}
 
-	InShader->Reflection.ResourceBindings.reserve(ShaderDesc.BoundResources);
-	for (uint32_t Index = 0; Index < ShaderDesc.BoundResources; ++Index)
+	inShader->reflection.resourceBindings.reserve(shaderDesc.BoundResources);
+	for (uint32_t i = 0; i < shaderDesc.BoundResources; ++i)
 	{
-		D3D12_SHADER_INPUT_BIND_DESC BindDesc;
-		Result = Reflection->GetResourceBindingDesc(Index, &BindDesc);
-		if (FAILED(Result))
+		D3D12_SHADER_INPUT_BIND_DESC bindDesc;
+		result = reflection->GetResourceBindingDesc(i, &bindDesc);
+		if (FAILED(result))
 		{
-			VGLogError(Rendering) << "Shader reflection for '" << Name << "' failed internally: " << Result;
+			VGLogError(Rendering) << "Shader reflection for '" << name << "' failed internally: " << result;
 			return;
 		}
 
-		InShader->Reflection.ResourceBindings.push_back({ BindDesc.Name, BindDesc.BindPoint, BindDesc.BindCount });
+		inShader->reflection.resourceBindings.push_back({ bindDesc.Name, bindDesc.BindPoint, bindDesc.BindCount });
 	}
 
-	InShader->Reflection.InstructionCount = ShaderDesc.InstructionCount;
+	inShader->reflection.instructionCount = shaderDesc.InstructionCount;
 }
 
-std::unique_ptr<Shader> CompileShader(const std::filesystem::path& Path, ShaderType Type)
+std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderType type)
 {
 	VGScopedCPUStat("Compile Shader");
 
-	VGLog(Rendering) << "Compiling shader: " << Path.generic_wstring();
+	VGLog(Rendering) << "Compiling shader: " << path.generic_wstring();
 
-	if (!ShaderUtils)
+	if (!shaderUtils)
 	{
-		auto Result = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(ShaderUtils.Indirect()));
-		if (FAILED(Result))
+		auto result = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(shaderUtils.Indirect()));
+		if (FAILED(result))
 		{
-			VGLogFatal(Rendering) << "Failed to create DXC utilities: " << Result;
+			VGLogFatal(Rendering) << "Failed to create DXC utilities: " << result;
 		}
 	}
 
-	if (!ShaderCompiler)
+	if (!shaderCompiler)
 	{
-		auto Result = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(ShaderCompiler.Indirect()));
-		if (FAILED(Result))
+		auto result = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(shaderCompiler.Indirect()));
+		if (FAILED(result))
 		{
-			VGLogFatal(Rendering) << "Failed to create DXC compiler: " << Result;
+			VGLogFatal(Rendering) << "Failed to create DXC compiler: " << result;
 		}
 	}
 
-	if (!ShaderIncludeHandler)
+	if (!shaderIncludeHandler)
 	{
-		auto Result = ShaderUtils->CreateDefaultIncludeHandler(ShaderIncludeHandler.Indirect());
-		if (FAILED(Result))
+		auto result = shaderUtils->CreateDefaultIncludeHandler(shaderIncludeHandler.Indirect());
+		if (FAILED(result))
 		{
-			VGLogFatal(Rendering) << "Failed to create DXC include handler: " << Result;
+			VGLogFatal(Rendering) << "Failed to create DXC include handler: " << result;
 		}
 	}
 
-	auto* CompileTarget = VGText("");
+	auto* compileTarget = VGText("");
 
-	switch (Type)
+	switch (type)
 	{
-	case ShaderType::Vertex: CompileTarget = VGText("vs_6_0"); break;
-	case ShaderType::Pixel: CompileTarget = VGText("ps_6_0"); break;
-	case ShaderType::Hull: CompileTarget = VGText("hs_6_0"); break;
-	case ShaderType::Domain: CompileTarget = VGText("ds_6_0"); break;
-	case ShaderType::Geometry: CompileTarget = VGText("gs_6_0"); break;
-	case ShaderType::Compute: CompileTarget = VGText("cs_6_0"); break;
+	case ShaderType::Vertex: compileTarget = VGText("vs_6_0"); break;
+	case ShaderType::Pixel: compileTarget = VGText("ps_6_0"); break;
+	case ShaderType::Hull: compileTarget = VGText("hs_6_0"); break;
+	case ShaderType::Domain: compileTarget = VGText("ds_6_0"); break;
+	case ShaderType::Geometry: compileTarget = VGText("gs_6_0"); break;
+	case ShaderType::Compute: compileTarget = VGText("cs_6_0"); break;
 	}
 
-	ResourcePtr<IDxcBlobEncoding> SourceBlob;
-	auto Result = ShaderUtils->LoadFile(Path.c_str(), nullptr, SourceBlob.Indirect());
-	if (FAILED(Result))
+	ResourcePtr<IDxcBlobEncoding> sourceBlob;
+	auto result = shaderUtils->LoadFile(path.c_str(), nullptr, sourceBlob.Indirect());
+	if (FAILED(result))
 	{
-		VGLogError(Rendering) << "Failed to create shader blob at '" << Path.generic_wstring() << "': " << Result;
+		VGLogError(Rendering) << "Failed to create shader blob at '" << path.generic_wstring() << "': " << result;
 
 		return {};
 	}
 	
-	DxcBuffer SourceBuffer;
-	SourceBuffer.Ptr = SourceBlob->GetBufferPointer();
-	SourceBuffer.Size = SourceBlob->GetBufferSize();
-	SourceBuffer.Encoding = DXC_CP_ACP;
+	DxcBuffer sourceBuffer;
+	sourceBuffer.Ptr = sourceBlob->GetBufferPointer();
+	sourceBuffer.Size = sourceBlob->GetBufferSize();
+	sourceBuffer.Encoding = DXC_CP_ACP;
 
-	auto IncludeSearchDirectory = Path;
-	IncludeSearchDirectory.remove_filename();
+	auto includeSearchDirectory = path;
+	includeSearchDirectory.remove_filename();
 
 	// Stable names so we don't have to worry about c_str() being overwritten.
-	const auto StableShaderName = Path.filename().generic_wstring();
-	const auto StableShaderIncludePath = IncludeSearchDirectory.generic_wstring();
+	const auto stableShaderName = path.filename().generic_wstring();
+	const auto stableShaderIncludePath = includeSearchDirectory.generic_wstring();
 
-	std::vector<const wchar_t*> CompileArguments;
-	CompileArguments.emplace_back(StableShaderName.data());
-	CompileArguments.emplace_back(VGText("-E"));
-	CompileArguments.emplace_back(VGText("main"));
-	CompileArguments.emplace_back(VGText("-T"));
-	CompileArguments.emplace_back(CompileTarget);
-	CompileArguments.emplace_back(VGText("-I"));
-	CompileArguments.emplace_back(StableShaderIncludePath.data());
+	std::vector<const wchar_t*> compileArguments;
+	compileArguments.emplace_back(stableShaderName.data());
+	compileArguments.emplace_back(VGText("-E"));
+	compileArguments.emplace_back(VGText("main"));
+	compileArguments.emplace_back(VGText("-T"));
+	compileArguments.emplace_back(compileTarget);
+	compileArguments.emplace_back(VGText("-I"));
+	compileArguments.emplace_back(stableShaderIncludePath.data());
 #if BUILD_DEBUG || BUILD_DEVELOPMENT
-	CompileArguments.emplace_back(DXC_ARG_DEBUG);  // Enable debug information.
+	compileArguments.emplace_back(DXC_ARG_DEBUG);  // Enable debug information.
 #endif
 #if BUILD_DEBUG
-	CompileArguments.emplace_back(DXC_ARG_SKIP_OPTIMIZATIONS);  // Disable optimization.
+	compileArguments.emplace_back(DXC_ARG_SKIP_OPTIMIZATIONS);  // Disable optimization.
 #endif
 #if BUILD_DEVELOPMENT
-	CompileArguments.emplace_back(DXC_ARG_OPTIMIZATION_LEVEL1);  // Basic optimization.
+	compileArguments.emplace_back(DXC_ARG_OPTIMIZATION_LEVEL1);  // Basic optimization.
 #endif
 #if BUILD_RELEASE
-	CompileArguments.emplace_back(DXC_ARG_OPTIMIZATION_LEVEL3);  // Maximum optimization.
+	compileArguments.emplace_back(DXC_ARG_OPTIMIZATION_LEVEL3);  // Maximum optimization.
 #endif
 
-	ResourcePtr<IDxcResult> CompileResult;
-	ShaderCompiler->Compile(
-		&SourceBuffer,
-		CompileArguments.size() ? CompileArguments.data() : nullptr,
-		static_cast<uint32_t>(CompileArguments.size()),
-		ShaderIncludeHandler.Get(),
-		IID_PPV_ARGS(CompileResult.Indirect())
+	ResourcePtr<IDxcResult> compileResult;
+	shaderCompiler->Compile(
+		&sourceBuffer,
+		compileArguments.size() ? compileArguments.data() : nullptr,
+		static_cast<uint32_t>(compileArguments.size()),
+		shaderIncludeHandler.Get(),
+		IID_PPV_ARGS(compileResult.Indirect())
 	);
 	
-	ResourcePtr<IDxcBlobUtf8> ErrorBlob;
-	CompileResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(ErrorBlob.Indirect()), nullptr);
+	ResourcePtr<IDxcBlobUtf8> errorBlob;
+	compileResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(errorBlob.Indirect()), nullptr);
 
-	CompileResult->GetStatus(&Result);
-	if (FAILED(Result))
+	compileResult->GetStatus(&result);
+	if (FAILED(result))
 	{
-		VGLogError(Rendering) << "Failed to compile shader at '" << Path.generic_wstring() << "': " << Result
-			<< " | Error: " << ((ErrorBlob && ErrorBlob->GetStringLength()) ? ErrorBlob->GetStringPointer() : "Unknown.");
+		VGLogError(Rendering) << "Failed to compile shader at '" << path.generic_wstring() << "': " << result
+			<< " | Error: " << ((errorBlob && errorBlob->GetStringLength()) ? errorBlob->GetStringPointer() : "Unknown.");
 
 		return {};
 	}
 
-	else if (ErrorBlob && ErrorBlob->GetStringLength())
+	else if (errorBlob && errorBlob->GetStringLength())
 	{
-		VGLogWarning(Rendering) << "Compiling shader at '" << Path.generic_wstring() << "' had warnings and/or errors: " << ErrorBlob->GetStringPointer();
+		VGLogWarning(Rendering) << "Compiling shader at '" << path.generic_wstring() << "' had warnings and/or errors: " << errorBlob->GetStringPointer();
 	}
 
-	ResourcePtr<IDxcBlob> CompiledShader;
-	CompileResult->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(CompiledShader.Indirect()), nullptr);
-	if (!CompiledShader)
+	ResourcePtr<IDxcBlob> compiledShader;
+	compileResult->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(compiledShader.Indirect()), nullptr);
+	if (!compiledShader)
 	{
 		VGLogError(Rendering) << "Failed to get compiled shader object.";
 
 		return {};
 	}
 
-	auto ResultShader{ std::make_unique<Shader>() };
-	ResultShader->Bytecode.resize(CompiledShader->GetBufferSize());
+	auto resultShader{ std::make_unique<Shader>() };
+	resultShader->bytecode.resize(compiledShader->GetBufferSize());
 
-	std::memcpy(ResultShader->Bytecode.data(), CompiledShader->GetBufferPointer(), CompiledShader->GetBufferSize());
+	std::memcpy(resultShader->bytecode.data(), compiledShader->GetBufferPointer(), compiledShader->GetBufferSize());
 
-	ResourcePtr<IDxcBlob> ShaderReflectionBlob;
-	CompileResult->GetOutput(DXC_OUT_REFLECTION, IID_PPV_ARGS(ShaderReflectionBlob.Indirect()), nullptr);
-	if (ShaderReflectionBlob)
+	ResourcePtr<IDxcBlob> shaderReflectionBlob;
+	compileResult->GetOutput(DXC_OUT_REFLECTION, IID_PPV_ARGS(shaderReflectionBlob.Indirect()), nullptr);
+	if (shaderReflectionBlob)
 	{
-		DxcBuffer ReflectionBuffer;
-		ReflectionBuffer.Ptr = ShaderReflectionBlob->GetBufferPointer();
-		ReflectionBuffer.Size = ShaderReflectionBlob->GetBufferSize();
-		ReflectionBuffer.Encoding = DXC_CP_ACP;
+		DxcBuffer reflectionBuffer;
+		reflectionBuffer.Ptr = shaderReflectionBlob->GetBufferPointer();
+		reflectionBuffer.Size = shaderReflectionBlob->GetBufferSize();
+		reflectionBuffer.Encoding = DXC_CP_ACP;
 
-		ResourcePtr<ID3D12ShaderReflection> Reflection;
-		ShaderUtils->CreateReflection(&ReflectionBuffer, IID_PPV_ARGS(Reflection.Indirect()));
+		ResourcePtr<ID3D12ShaderReflection> reflection;
+		shaderUtils->CreateReflection(&reflectionBuffer, IID_PPV_ARGS(reflection.Indirect()));
 
-		ReflectShader(ResultShader, Reflection.Get(), Path.filename().generic_wstring());
+		ReflectShader(resultShader, reflection.Get(), path.filename().generic_wstring());
 	}
 
 	else
@@ -219,5 +219,5 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& Path, ShaderT
 		VGLogWarning(Rendering) << "Failed to retrieve shader reflection data.";
 	}
 
-	return std::move(ResultShader);
+	return std::move(resultShader);
 }

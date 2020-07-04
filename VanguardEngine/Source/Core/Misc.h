@@ -6,7 +6,7 @@
 #include <signal.h>
 #endif
 
-#define VGText(Literal) L##Literal
+#define VGText(literal) L##literal
 
 #if __has_cpp_attribute(likely)
 #define VGLikely [[likely]]

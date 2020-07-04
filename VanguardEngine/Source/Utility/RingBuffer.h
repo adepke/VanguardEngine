@@ -5,13 +5,13 @@
 #include <cstdlib>
 #include <utility>
 
-template <typename T, size_t Size>
+template <typename T, size_t size>
 struct RingBuffer
 {
 private:
-	T Data[Size];
-	size_t Head{ 0 };
-	size_t Tail{ 0 };
+	T data[size];
+	size_t head{ 0 };
+	size_t tail{ 0 };
 
 public:
 	RingBuffer() = default;
@@ -22,13 +22,13 @@ public:
 	RingBuffer& operator=(RingBuffer&&) noexcept = default;
 
 	template <typename U>
-	bool push_back(U&& Element)
+	bool push_back(U&& element)
 	{
-		auto Next = (Head + 1) % Size;
-		if (Next != Tail)
+		auto next = (head + 1) % size;
+		if (next != tail)
 		{
-			Data[Head] = std::move(Element);
-			Head = Next;
+			data[head] = std::move(element);
+			head = next;
 
 			return true;
 		}
@@ -36,12 +36,12 @@ public:
 		return false;
 	}
 
-	bool pop_front(T& Element)
+	bool pop_front(T& element)
 	{
-		if (Tail != Head)
+		if (tail != head)
 		{
-			Element = std::move(Data[Tail]);
-			Tail = (Tail + 1) % Size;
+			element = std::move(data[tail]);
+			tail = (tail + 1) % size;
 			
 			return true;
 		}

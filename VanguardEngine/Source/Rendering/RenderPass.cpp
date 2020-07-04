@@ -4,22 +4,22 @@
 #include <Rendering/RenderGraph.h>
 #include <Rendering/RenderGraphResource.h>
 
-size_t RenderPass::CreateResource(const RGBufferDescription& Description, const std::wstring& Name)
+size_t RenderPass::CreateResource(const RGBufferDescription& description, const std::wstring& name)
 {
-	return Graph.AddTransientResource(Description, Name);
+	return graph.AddTransientResource(description, name);
 }
 
-size_t RenderPass::CreateResource(const RGTextureDescription& Description, const std::wstring& Name)
+size_t RenderPass::CreateResource(const RGTextureDescription& description, const std::wstring& name)
 {
-	return Graph.AddTransientResource(Description, Name);
+	return graph.AddTransientResource(description, name);
 }
 
-void RenderPass::ReadResource(size_t ResourceTag, RGUsage Usage)
+void RenderPass::ReadResource(size_t resourceTag, RGUsage usage)
 {
-	Graph.AddResourceRead(Index, ResourceTag, Usage);
+	graph.AddResourceRead(index, resourceTag, usage);
 }
 
-void RenderPass::WriteResource(size_t ResourceTag, RGUsage Usage)
+void RenderPass::WriteResource(size_t resourceTag, RGUsage usage)
 {
-	Graph.AddResourceWrite(Index, ResourceTag, Usage);
+	graph.AddResourceWrite(index, resourceTag, usage);
 }

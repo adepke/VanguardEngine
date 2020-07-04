@@ -13,11 +13,11 @@ class RenderDevice;
 
 struct PipelineStateDescription
 {
-	std::filesystem::path ShaderPath;
-	D3D12_BLEND_DESC BlendDescription;
-	D3D12_RASTERIZER_DESC RasterizerDescription;
-	D3D12_DEPTH_STENCIL_DESC DepthStencilDescription;
-	D3D12_PRIMITIVE_TOPOLOGY Topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+	std::filesystem::path shaderPath;
+	D3D12_BLEND_DESC blendDescription;
+	D3D12_RASTERIZER_DESC rasterizerDescription;
+	D3D12_DEPTH_STENCIL_DESC depthStencilDescription;
+	D3D12_PRIMITIVE_TOPOLOGY topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
 };
 
 class PipelineState
@@ -25,22 +25,22 @@ class PipelineState
 	friend class CommandList;
 
 private:
-	ResourcePtr<ID3D12PipelineState> Pipeline;
-	PipelineStateDescription Description;
+	ResourcePtr<ID3D12PipelineState> pipeline;
+	PipelineStateDescription description;
 
-	void CreateShaders(RenderDevice& Device, const std::filesystem::path& ShaderPath);
-	void CreateRootSignature(RenderDevice& Device);
-	void CreateDescriptorTables(RenderDevice& Device);
+	void CreateShaders(RenderDevice& device, const std::filesystem::path& shaderPath);
+	void CreateRootSignature(RenderDevice& device);
+	void CreateDescriptorTables(RenderDevice& device);
 
 public:
-	ResourcePtr<ID3D12RootSignature> RootSignature;
-	std::unique_ptr<Shader> VertexShader;
-	std::unique_ptr<Shader> PixelShader;
-	std::unique_ptr<Shader> HullShader;
-	std::unique_ptr<Shader> DomainShader;
-	std::unique_ptr<Shader> GeometryShader;
+	ResourcePtr<ID3D12RootSignature> rootSignature;
+	std::unique_ptr<Shader> vertexShader;
+	std::unique_ptr<Shader> pixelShader;
+	std::unique_ptr<Shader> hullShader;
+	std::unique_ptr<Shader> domainShader;
+	std::unique_ptr<Shader> geometryShader;
 
-	auto* Native() const noexcept { return Pipeline.Get(); }
+	auto* Native() const noexcept { return pipeline.Get(); }
 
-	void Build(RenderDevice& Device, const PipelineStateDescription& InDescription);
+	void Build(RenderDevice& device, const PipelineStateDescription& inDescription);
 };

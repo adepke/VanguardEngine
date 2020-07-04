@@ -6,10 +6,10 @@
 
 struct Viewport
 {
-	float PositionX;
-	float PositionY;
-	float Width;
-	float Height;
+	float positionX;
+	float positionY;
+	float width;
+	float height;
 
-	operator D3D12_VIEWPORT() const { return D3D12_VIEWPORT{ PositionX, PositionY, Width, Height, 0.f, 1.f }; }
+	operator D3D12_VIEWPORT() const { return D3D12_VIEWPORT{ positionX, positionY, width, height, 0.f, 1.f }; }
 };

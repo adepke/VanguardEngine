@@ -3,52 +3,52 @@
 #include <Rendering/DescriptorHeap.h>
 #include <Rendering/Device.h>
 
-void DescriptorHeapBase::Create(RenderDevice* Device, DescriptorType Type, size_t Descriptors, bool Visible)
+void DescriptorHeapBase::Create(RenderDevice* device, DescriptorType type, size_t descriptors, bool visible)
 {
 	VGScopedCPUStat("Descriptor Heap Create");
 
-	D3D12_DESCRIPTOR_HEAP_TYPE HeapType{};
+	D3D12_DESCRIPTOR_HEAP_TYPE heapType{};
 
-	switch (Type)
+	switch (type)
 	{
-	case DescriptorType::Default: HeapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; break;
-	case DescriptorType::Sampler: HeapType = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER; break;
-	case DescriptorType::RenderTarget: HeapType = D3D12_DESCRIPTOR_HEAP_TYPE_RTV; break;
-	case DescriptorType::DepthStencil: HeapType = D3D12_DESCRIPTOR_HEAP_TYPE_DSV; break;
+	case DescriptorType::Default: heapType = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV; break;
+	case DescriptorType::Sampler: heapType = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER; break;
+	case DescriptorType::RenderTarget: heapType = D3D12_DESCRIPTOR_HEAP_TYPE_RTV; break;
+	case DescriptorType::DepthStencil: heapType = D3D12_DESCRIPTOR_HEAP_TYPE_DSV; break;
 	}
 
-	D3D12_DESCRIPTOR_HEAP_DESC HeapDesc{};
-	HeapDesc.Type = HeapType;
-	HeapDesc.NumDescriptors = static_cast<UINT>(Descriptors);
-	HeapDesc.Flags = Visible ? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE : D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-	HeapDesc.NodeMask = 0;
+	D3D12_DESCRIPTOR_HEAP_DESC heapDesc{};
+	heapDesc.Type = heapType;
+	heapDesc.NumDescriptors = static_cast<UINT>(descriptors);
+	heapDesc.Flags = visible ? D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE : D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+	heapDesc.NodeMask = 0;
 
-	auto Result = Device->Native()->CreateDescriptorHeap(&HeapDesc, IID_PPV_ARGS(Heap.Indirect()));
-	if (FAILED(Result))
+	auto result = device->Native()->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(heap.Indirect()));
+	if (FAILED(result))
 	{
-		VGLogFatal(Rendering) << "Failed to create descriptor heap for type '" << static_cast<int>(Type) << "' with " << Descriptors << " descriptors: " << Result;
+		VGLogFatal(Rendering) << "Failed to create descriptor heap for type '" << static_cast<int>(type) << "' with " << descriptors << " descriptors: " << result;
 	}
 
-	CPUHeapStart = Heap->GetCPUDescriptorHandleForHeapStart().ptr;
-	GPUHeapStart = Heap->GetGPUDescriptorHandleForHeapStart().ptr;
-	DescriptorSize = Device->Native()->GetDescriptorHandleIncrementSize(HeapType);
-	TotalDescriptors = Descriptors;
+	cpuHeapStart = heap->GetCPUDescriptorHandleForHeapStart().ptr;
+	gpuHeapStart = heap->GetGPUDescriptorHandleForHeapStart().ptr;
+	descriptorSize = device->Native()->GetDescriptorHandleIncrementSize(heapType);
+	totalDescriptors = descriptors;
 }
 
 DescriptorHandle LinearDescriptorHeap::Allocate()
 {
 	VGScopedCPUStat("Descriptor Heap Allocate");
 
-	VGEnsure(AllocatedDescriptors < TotalDescriptors, "Ran out of linear descriptor heap memory.");
-	AllocatedDescriptors++;
+	VGEnsure(allocatedDescriptors < totalDescriptors, "Ran out of linear descriptor heap memory.");
+	allocatedDescriptors++;
 
-	const auto Offset = (AllocatedDescriptors - 1) * DescriptorSize;
+	const auto offset = (allocatedDescriptors - 1) * descriptorSize;
 
-	DescriptorHandle Handle{};
-	Handle.CPUPointer = CPUHeapStart + Offset;
-	Handle.GPUPointer = GPUHeapStart + Offset;
+	DescriptorHandle handle{};
+	handle.cpuPointer = cpuHeapStart + offset;
+	handle.gpuPointer = gpuHeapStart + offset;
 
-	return Handle;
+	return handle;
 }
 
 DescriptorHandle FreeQueueDescriptorHeap::Allocate()
@@ -56,44 +56,44 @@ DescriptorHandle FreeQueueDescriptorHeap::Allocate()
 	VGScopedCPUStat("Descriptor Heap Allocate");
 
 	// If we have readily available space in the heap, use that first.
-	if (AllocatedDescriptors < TotalDescriptors)
+	if (allocatedDescriptors < totalDescriptors)
 	{
-		AllocatedDescriptors++;
+		allocatedDescriptors++;
 
-		const auto Offset = (AllocatedDescriptors - 1) * DescriptorSize;
+		const auto offset = (allocatedDescriptors - 1) * descriptorSize;
 
-		DescriptorHandle Handle{};
-		Handle.ParentHeap = this;
-		Handle.CPUPointer = CPUHeapStart + Offset;
-		Handle.GPUPointer = GPUHeapStart + Offset;
+		DescriptorHandle handle{};
+		handle.parentHeap = this;
+		handle.cpuPointer = cpuHeapStart + offset;
+		handle.gpuPointer = gpuHeapStart + offset;
 
-		return Handle;
+		return handle;
 	}
 
 	else
 	{
-		VGEnsure(!FreeQueue.empty(), "Ran out of free queue descriptor heap memory.");
+		VGEnsure(!freeQueue.empty(), "Ran out of free queue descriptor heap memory.");
 
-		auto Handle = std::move(FreeQueue.front());
-		FreeQueue.pop();
+		auto handle = std::move(freeQueue.front());
+		freeQueue.pop();
 
-		return Handle;
+		return handle;
 	}
 }
 
-void FreeQueueDescriptorHeap::Free(DescriptorHandle&& Handle)
+void FreeQueueDescriptorHeap::Free(DescriptorHandle&& handle)
 {
 	VGScopedCPUStat("Descriptor Heap Free");
 
-	FreeQueue.push(std::move(Handle));
+	freeQueue.push(std::move(handle));
 }
 
 FreeQueueDescriptorHeap::~FreeQueueDescriptorHeap()
 {
 	// Discard any remaining descriptors in the free queue.
-	while (FreeQueue.size())
+	while (freeQueue.size())
 	{
-		FreeQueue.front().ParentHeap = nullptr;
-		FreeQueue.pop();
+		freeQueue.front().parentHeap = nullptr;
+		freeQueue.pop();
 	}
 }

@@ -7,15 +7,15 @@ namespace EditorRenderer
 {
 	Viewport GetSceneViewport()
 	{
-		return EditorUI::Get().SceneViewport;
+		return EditorUI::Get().sceneViewport;
 	}
 
-	void Render(entt::registry& Registry)
+	void Render(entt::registry& registry)
 	{
 		EditorUI::Get().DrawScene();
 		EditorUI::Get().DrawToolbar();
-		EditorUI::Get().DrawEntityHierarchy(Registry);
-		EditorUI::Get().DrawEntityPropertyViewer(Registry);
+		EditorUI::Get().DrawEntityHierarchy(registry);
+		EditorUI::Get().DrawEntityPropertyViewer(registry);
 		EditorUI::Get().DrawAssetBrowser();
 	}
 }

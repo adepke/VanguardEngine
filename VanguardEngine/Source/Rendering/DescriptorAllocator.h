@@ -20,8 +20,8 @@ enum class DescriptorTableEntryType
 
 struct PendingDescriptorTableEntry
 {
-	D3D12_CPU_DESCRIPTOR_HANDLE Handle;
-	DescriptorTableEntryType Type;
+	D3D12_CPU_DESCRIPTOR_HANDLE handle;
+	DescriptorTableEntryType type;
 };
 
 class RenderDevice;
@@ -31,25 +31,25 @@ class DescriptorAllocator
 	friend class CommandList;
 
 private:
-	RenderDevice* Device;
+	RenderDevice* device;
 
-	std::array<FreeQueueDescriptorHeap, 2> OfflineHeaps;  // Offline heaps for default and sampler descriptors.
-	std::array<std::vector<LinearDescriptorHeap>, 2> OnlineHeaps;  // Online ring buffer heap for default and sampler descriptors.
+	std::array<FreeQueueDescriptorHeap, 2> offlineHeaps;  // Offline heaps for default and sampler descriptors.
+	std::array<std::vector<LinearDescriptorHeap>, 2> onlineHeaps;  // Online ring buffer heap for default and sampler descriptors.
 
-	FreeQueueDescriptorHeap RenderTargetHeap;
-	FreeQueueDescriptorHeap DepthStencilHeap;
+	FreeQueueDescriptorHeap renderTargetHeap;
+	FreeQueueDescriptorHeap depthStencilHeap;
 
-	std::vector<PendingDescriptorTableEntry> PendingTableEntries;
+	std::vector<PendingDescriptorTableEntry> pendingTableEntries;
 
 public:
-	void Initialize(RenderDevice* InDevice, size_t OfflineDescriptors, size_t OnlineDescriptors);
+	void Initialize(RenderDevice* inDevice, size_t offlineDescriptors, size_t onlineDescriptors);
 
-	DescriptorHandle Allocate(DescriptorType Type);
+	DescriptorHandle Allocate(DescriptorType type);
 
-	void AddTableEntry(DescriptorHandle& Handle, DescriptorTableEntryType Type);
+	void AddTableEntry(DescriptorHandle& handle, DescriptorTableEntryType type);
 
 	// Constructs the pending descriptor table and copies descriptors to an online heap.
-	void BuildTable(RenderDevice& Device, CommandList& List, uint32_t RootParameter);
+	void BuildTable(RenderDevice& device, CommandList& list, uint32_t rootParameter);
 	
-	void FrameStep(size_t FrameIndex);
+	void FrameStep(size_t frameIndex);
 };

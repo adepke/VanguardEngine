@@ -6,53 +6,53 @@
 
 #include <cstring>
 
-void ComponentProperties::RenderNameComponent(entt::registry& Registry, entt::entity Entity)
+void ComponentProperties::RenderNameComponent(entt::registry& registry, entt::entity entity)
 {
-	auto& Component = Registry.get<NameComponent>(Entity);
+	auto& component = registry.get<NameComponent>(entity);
 
-	Component.Name.resize(256, 0);
+	component.name.resize(256, 0);
 
 	ImGui::Text("Name");
 	ImGui::SameLine();
-	ImGui::InputText("", Component.Name.data(), Component.Name.size(), ImGuiInputTextFlags_AutoSelectAll);
+	ImGui::InputText("", component.name.data(), component.name.size(), ImGuiInputTextFlags_AutoSelectAll);
 
-	Component.Name.resize(std::strlen(Component.Name.data()));
+	component.name.resize(std::strlen(component.name.data()));
 }
 
-void ComponentProperties::RenderTransformComponent(entt::registry& Registry, entt::entity Entity)
+void ComponentProperties::RenderTransformComponent(entt::registry& registry, entt::entity entity)
 {
-	auto& Component = Registry.get<TransformComponent>(Entity);
+	auto& component = registry.get<TransformComponent>(entity);
 
-	float Translation[] = { Component.Translation.x, Component.Translation.y, Component.Translation.z };
-	float Rotation[] = { Component.Rotation.x, Component.Rotation.y, Component.Rotation.z };
-	float Scale[] = { Component.Scale.x, Component.Scale.y, Component.Scale.z };
+	float translation[] = { component.translation.x, component.translation.y, component.translation.z };
+	float rotation[] = { component.rotation.x, component.rotation.y, component.rotation.z };
+	float scale[] = { component.scale.x, component.scale.y, component.scale.z };
 
 	ImGui::Text("Transform");
 
-	ImGui::DragFloat3("Translation", Translation, 1.0, -100000.0, 100000.0, "%.4f");
-	ImGui::DragFloat3("Rotation", Rotation, 1.0, -100.0, 100.0, "%.4f");
-	ImGui::DragFloat3("Scale", Scale, 0.2, -10000.0, 10000.0, "%.4f");
+	ImGui::DragFloat3("Translation", translation, 1.0, -100000.0, 100000.0, "%.4f");
+	ImGui::DragFloat3("Rotation", rotation, 1.0, -100.0, 100.0, "%.4f");
+	ImGui::DragFloat3("Scale", scale, 0.2, -10000.0, 10000.0, "%.4f");
 
-	Component.Translation = XMFLOAT3{ Translation };
-	Component.Rotation = XMFLOAT3{ Rotation };
-	Component.Scale = XMFLOAT3{ Scale };
+	component.translation = XMFLOAT3{ translation };
+	component.rotation = XMFLOAT3{ rotation };
+	component.scale = XMFLOAT3{ scale };
 }
 
-void ComponentProperties::RenderControlComponent(entt::registry& Registry, entt::entity Entity)
+void ComponentProperties::RenderControlComponent(entt::registry& registry, entt::entity entity)
 {
 	ImGui::Text("This entity has control.");
 }
 
-void ComponentProperties::RenderMeshComponent(entt::registry& Registry, entt::entity Entity)
+void ComponentProperties::RenderMeshComponent(entt::registry& registry, entt::entity entity)
 {
-	auto& Component = Registry.get<MeshComponent>(Entity);
+	auto& component = registry.get<MeshComponent>(entity);
 
 	ImGui::Text("Mesh");
 }
 
-void ComponentProperties::RenderCameraComponent(entt::registry& Registry, entt::entity Entity)
+void ComponentProperties::RenderCameraComponent(entt::registry& registry, entt::entity entity)
 {
-	auto& Component = Registry.get<CameraComponent>(Entity);
+	auto& component = registry.get<CameraComponent>(entity);
 
 	ImGui::Text("Camera");
 }

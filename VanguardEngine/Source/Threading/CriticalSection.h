@@ -3,15 +3,15 @@
 #pragma once
 
 #if PLATFORM_WINDOWS
-constexpr auto SizeOfHandle = 40;
+constexpr auto sizeOfHandle = 40;
 #else
-constexpr auto SizeOfHandle = 40;
+constexpr auto sizeOfHandle = 40;
 #endif
 
 struct CriticalSection
 {
 private:
-	unsigned char Handle[SizeOfHandle];
+	unsigned char handle[sizeOfHandle];
 
 public:
 	CriticalSection();

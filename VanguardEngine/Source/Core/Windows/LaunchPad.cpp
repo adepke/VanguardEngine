@@ -11,15 +11,15 @@ void ParseCommandLine()
 {
 	VGScopedCPUStat("Parse Command Line");
 
-	int Count = 0;
-	auto** ArgV = ::CommandLineToArgvW(::GetCommandLine(), &Count);
+	int count = 0;
+	auto** argV = ::CommandLineToArgvW(::GetCommandLine(), &count);
 
-	for (int Index = 0; Index < Count; ++Index)
+	for (int i = 0; i < count; ++i)
 	{
-		GCommandLineArgs.push_back(ArgV[Index]);
+		GCommandLineArgs.push_back(argV[i]);
 	}
 
-	::LocalFree(ArgV);
+	::LocalFree(argV);
 }
 
 VGWarningPush

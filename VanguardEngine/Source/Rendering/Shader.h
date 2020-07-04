@@ -12,26 +12,26 @@ struct ShaderReflection
 {
 	struct InputElement
 	{
-		std::string SemanticName;
-		size_t SemanticIndex;
+		std::string semanticName;
+		size_t semanticIndex;
 	};
 
 	struct ConstantBuffer
 	{
-		std::string Name;
+		std::string name;
 	};
 
 	struct Resource
 	{
-		std::string Name;
-		size_t BindPoint;
-		size_t BindCount;
+		std::string name;
+		size_t bindPoint;
+		size_t bindCount;
 	};
 
-	std::vector<InputElement> InputElements;
-	std::vector<ConstantBuffer> ConstantBuffers;
-	std::vector<Resource> ResourceBindings;
-	size_t InstructionCount = 0;
+	std::vector<InputElement> inputElements;
+	std::vector<ConstantBuffer> constantBuffers;
+	std::vector<Resource> resourceBindings;
+	size_t instructionCount = 0;
 };
 
 enum class ShaderType
@@ -46,8 +46,8 @@ enum class ShaderType
 
 struct Shader
 {
-	std::vector<uint8_t> Bytecode;
-	ShaderReflection Reflection;
+	std::vector<uint8_t> bytecode;
+	ShaderReflection reflection;
 };
 
-std::unique_ptr<Shader> CompileShader(const std::filesystem::path& Path, ShaderType Type);
+std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderType type);

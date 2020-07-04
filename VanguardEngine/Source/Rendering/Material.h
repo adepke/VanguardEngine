@@ -9,12 +9,12 @@ struct Texture;
 
 struct Material
 {
-	std::unique_ptr<PipelineState> Pipeline;
+	std::unique_ptr<PipelineState> pipeline;
 
-	std::shared_ptr<Texture> Albedo;
-	std::shared_ptr<Texture> Normal;
-	std::shared_ptr<Texture> Roughness;
-	std::shared_ptr<Texture> Metallic;
+	std::shared_ptr<Texture> albedo;
+	std::shared_ptr<Texture> normal;
+	std::shared_ptr<Texture> roughness;
+	std::shared_ptr<Texture> metallic;
 
-	bool BackFaceCulling;
+	bool backFaceCulling;
 };

@@ -20,21 +20,21 @@
 
 struct LogFileOutput : LogOutputBase
 {
-	CriticalSection Lock;
-	std::wofstream FileStream;
+	CriticalSection lock;
+	std::wofstream fileStream;
 
 	// #TODO: Fetch log file from config.
-	LogFileOutput() : FileStream("Log.txt") {}
+	LogFileOutput() : fileStream("Log.txt") {}
 	virtual ~LogFileOutput() = default;
 
-	virtual void Write(const Detail::LogRecord& Out) override
+	virtual void Write(const Detail::LogRecord& out) override
 	{
-		std::wstringstream Stream{};
-		Stream << "[" << Out.Subsystem << "." << Detail::SeverityToString(Out.Severity) << "] " << Out.MessageStream.str() << std::endl;
+		std::wstringstream stream{};
+		stream << "[" << out.subsystem << "." << Detail::SeverityToString(out.severity) << "] " << out.messageStream.str() << std::endl;
 
-		std::lock_guard Guard{ Lock };
+		std::scoped_lock lockScope{ lock };
 
-		FileStream << Stream.str();
+		fileStream << stream.str();
 	}
 };
 
@@ -42,18 +42,18 @@ struct LogFileOutput : LogOutputBase
 
 struct LogWindowsOutput : LogOutputBase
 {
-	CriticalSection Lock;
+	CriticalSection lock;
 
 	virtual ~LogWindowsOutput() = default;
 
-	virtual void Write(const Detail::LogRecord& Out) override
+	virtual void Write(const Detail::LogRecord& out) override
 	{
-		std::wstringstream Stream{};
-		Stream << "[" << Out.Subsystem << "." << Detail::SeverityToString(Out.Severity) << "] " << Out.MessageStream.str() << std::endl;
+		std::wstringstream stream{};
+		stream << "[" << out.subsystem << "." << Detail::SeverityToString(out.severity) << "] " << out.messageStream.str() << std::endl;
 
-		std::lock_guard Guard{ Lock };
+		std::scoped_lock lockScope{ lock };
 
-		OutputDebugString(Stream.str().c_str());
+		OutputDebugString(stream.str().c_str());
 	}
 };
 
@@ -63,24 +63,24 @@ struct LogWindowsOutput : LogOutputBase
 
 struct LogProfilerOutput : LogOutputBase
 {
-	CriticalSection Lock;
+	CriticalSection lock;
 
 	virtual ~LogProfilerOutput() = default;
 
-	virtual void Write(const Detail::LogRecord& Out) override
+	virtual void Write(const Detail::LogRecord& out) override
 	{
-		std::wstringstream Stream{};
-		Stream << "[" << Out.Subsystem << "." << Detail::SeverityToString(Out.Severity) << "] " << Out.MessageStream.str() << std::endl;
+		std::wstringstream stream{};
+		stream << "[" << out.subsystem << "." << Detail::SeverityToString(out.severity) << "] " << out.messageStream.str() << std::endl;
 
-		const auto WideMessageString{ Stream.str() };
-		const std::string MessageString{ WideMessageString.cbegin(), WideMessageString.cend() };  // Unsafe conversion, should probably put a safer system in place.
+		const auto wideMessageString{ stream.str() };
+		const std::string messageString{ wideMessageString.cbegin(), wideMessageString.cend() };  // Unsafe conversion, should probably put a safer system in place.
 
-		switch (Out.Severity)
+		switch (out.severity)
 		{
-		case Detail::LogSeverity::Warning: TracyMessageC(MessageString.c_str(), MessageString.size(), tracy::Color::Yellow); break;
-		case Detail::LogSeverity::Error: TracyMessageC(MessageString.c_str(), MessageString.size(), tracy::Color::Red); break;
-		case Detail::LogSeverity::Fatal: TracyMessageC(MessageString.c_str(), MessageString.size(), tracy::Color::Red); break;
-		default: TracyMessage(MessageString.c_str(), MessageString.size()); break;
+		case Detail::LogSeverity::Warning: TracyMessageC(messageString.c_str(), messageString.size(), tracy::Color::Yellow); break;
+		case Detail::LogSeverity::Error: TracyMessageC(messageString.c_str(), messageString.size(), tracy::Color::Red); break;
+		case Detail::LogSeverity::Fatal: TracyMessageC(messageString.c_str(), messageString.size(), tracy::Color::Red); break;
+		default: TracyMessage(messageString.c_str(), messageString.size()); break;
 		}
 	}
 };

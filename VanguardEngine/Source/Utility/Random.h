@@ -6,20 +6,20 @@
 
 namespace Detail
 {
-	auto thread_local Generator = std::mt19937_64{};
+	auto thread_local generator = std::mt19937_64{};
 }
 
-void Seed(std::seed_seq InSeed)
+void Seed(std::seed_seq seed)
 {
-	Detail::Generator.seed(InSeed);
+	Detail::generator.seed(seed);
 }
 
-int Rand(int Min, int Max)
+int Rand(int min, int max)
 {
-	return std::uniform_int_distribution{ Min, Max }(Detail::Generator);
+	return std::uniform_int_distribution{ min, max }(Detail::generator);
 }
 
-double Rand(double Min, double Max)
+double Rand(double min, double max)
 {
-	return std::uniform_real_distribution{ Min, Max }(Detail::Generator);
+	return std::uniform_real_distribution{ min, max }(Detail::generator);
 }

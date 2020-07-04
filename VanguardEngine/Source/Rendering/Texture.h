@@ -10,15 +10,15 @@
 
 struct TextureDescription : ResourceDescription
 {
-	uint32_t Width = 1;
-	uint32_t Height = 1;
-	uint32_t Depth = 1;
-	DXGI_FORMAT Format;
+	uint32_t width = 1;
+	uint32_t height = 1;
+	uint32_t depth = 1;
+	DXGI_FORMAT format;
 };
 
 struct Texture : Resource
 {
-	TextureDescription Description;
+	TextureDescription description;
 
 	std::optional<DescriptorHandle> RTV;
 	std::optional<DescriptorHandle> DSV;

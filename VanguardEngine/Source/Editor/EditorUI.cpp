@@ -18,20 +18,20 @@ void EditorUI::DrawScene()
 
 	ImGui::Begin("Scene", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse);
 
-	const auto WindowPos = ImGui::GetWindowPos();
+	const auto windowPos = ImGui::GetWindowPos();
 
-	auto ContentMin = ImGui::GetWindowContentRegionMin();
-	auto ContentMax = ImGui::GetWindowContentRegionMax();
+	auto contentMin = ImGui::GetWindowContentRegionMin();
+	auto contentMax = ImGui::GetWindowContentRegionMax();
 
-	ContentMin.x += WindowPos.x;
-	ContentMin.y += WindowPos.y;
-	ContentMax.x += WindowPos.x;
-	ContentMax.y += WindowPos.y;
+	contentMin.x += windowPos.x;
+	contentMin.y += windowPos.y;
+	contentMax.x += windowPos.x;
+	contentMax.y += windowPos.y;
 
-	SceneViewport.PositionX = ContentMin.x;
-	SceneViewport.PositionY = ContentMin.y;
-	SceneViewport.Width = ContentMax.x - ContentMin.x;
-	SceneViewport.Height = ContentMax.y - ContentMin.y;
+	sceneViewport.positionX = contentMin.x;
+	sceneViewport.positionY = contentMin.y;
+	sceneViewport.width = contentMax.x - contentMin.x;
+	sceneViewport.height = contentMax.y - contentMin.y;
 
 	ImGui::End();
 
@@ -45,42 +45,42 @@ void EditorUI::DrawToolbar()
 	ImGui::End();
 }
 
-void EditorUI::DrawEntityHierarchy(entt::registry& Registry)
+void EditorUI::DrawEntityHierarchy(entt::registry& registry)
 {
-	entt::entity SelectedEntity = entt::null;
+	entt::entity selectedEntity = entt::null;
 
 	ImGui::Begin("Entity Hierarchy", nullptr, ImGuiWindowFlags_None);
-	ImGui::Text("%i Entities", Registry.size());
+	ImGui::Text("%i Entities", registry.size());
 	ImGui::Separator();
 	
-	Registry.each([this, &Registry, &SelectedEntity](auto Entity)
+	registry.each([this, &registry, &selectedEntity](auto entity)
 		{
-			ImGuiTreeNodeFlags NodeFlags = ImGuiTreeNodeFlags_None;
+			ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_None;
 
-			if (Entity == HierarchySelectedEntity)
-				NodeFlags |= ImGuiTreeNodeFlags_Selected;
+			if (entity == hierarchySelectedEntity)
+				nodeFlags |= ImGuiTreeNodeFlags_Selected;
 
-			bool NodeOpen = false;
+			bool nodeOpen = false;
 
-			ImGui::PushID(static_cast<int32_t>(Entity));  // Use the entity as the ID.
+			ImGui::PushID(static_cast<int32_t>(entity));  // Use the entity as the ID.
 
-			if (Registry.has<NameComponent>(Entity))
+			if (registry.has<NameComponent>(entity))
 			{
-				NodeOpen = ImGui::TreeNodeEx("EntityTreeNode", NodeFlags, Registry.get<NameComponent>(Entity).Name.c_str());
+				nodeOpen = ImGui::TreeNodeEx("EntityTreeNode", nodeFlags, registry.get<NameComponent>(entity).name.c_str());
 			}
 
 			else
 			{
 				// Strip the version info from the entity, we only care about the actual ID.
-				NodeOpen = ImGui::TreeNodeEx("EntityTreeNode", NodeFlags, "Entity_%i", Registry.entity(Entity));
+				nodeOpen = ImGui::TreeNodeEx("EntityTreeNode", nodeFlags, "Entity_%i", registry.entity(entity));
 			}
 
 			if (ImGui::IsItemClicked())
 			{
-				SelectedEntity = Entity;
+				selectedEntity = entity;
 			}
 
-			if (NodeOpen)
+			if (nodeOpen)
 			{
 				// #TODO: Draw entity children.
 
@@ -93,35 +93,35 @@ void EditorUI::DrawEntityHierarchy(entt::registry& Registry)
 	ImGui::End();
 
 	// Check if it's valid first, otherwise deselecting will remove the property viewer.
-	if (Registry.valid(SelectedEntity))
+	if (registry.valid(selectedEntity))
 	{
-		HierarchySelectedEntity = SelectedEntity;
+		hierarchySelectedEntity = selectedEntity;
 	}
 }
 
-void EditorUI::DrawEntityPropertyViewer(entt::registry& Registry)
+void EditorUI::DrawEntityPropertyViewer(entt::registry& registry)
 {
 	ImGui::Begin("Property Viewer", nullptr, ImGuiWindowFlags_None);
 
-	if (Registry.valid(HierarchySelectedEntity))
+	if (registry.valid(hierarchySelectedEntity))
 	{
-		uint32_t ComponentCount = 0;
+		uint32_t componentCount = 0;
 
-		for (auto& [MetaID, RenderFunction] : EntityReflection::ComponentMap)
+		for (auto& [metaID, renderFunction] : EntityReflection::componentMap)
 		{
-			entt::id_type MetaList[] = { MetaID };
+			entt::id_type metaList[] = { metaID };
 
-			if (Registry.runtime_view(std::cbegin(MetaList), std::cend(MetaList)).contains(HierarchySelectedEntity))
+			if (registry.runtime_view(std::cbegin(metaList), std::cend(metaList)).contains(hierarchySelectedEntity))
 			{
-				++ComponentCount;
+				++componentCount;
 
-				RenderFunction(Registry, HierarchySelectedEntity);
+				renderFunction(registry, hierarchySelectedEntity);
 
 				ImGui::Separator();
 			}
 		}
 
-		if (ComponentCount == 0)
+		if (componentCount == 0)
 		{
 			ImGui::Text("No components.");
 		}

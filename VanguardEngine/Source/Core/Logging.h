@@ -41,9 +41,9 @@ namespace Detail
 		Fatal
 	};
 
-	constexpr auto* SeverityToString(LogSeverity In)
+	constexpr auto* SeverityToString(LogSeverity severity)
 	{
-		switch (In)
+		switch (severity)
 		{
 		case LogSeverity::Log:
 			return "Log";
@@ -62,26 +62,26 @@ namespace Detail
 	{
 		using LogClock = std::chrono::system_clock;
 
-		const char* Subsystem;
-		const LogSeverity Severity;
-		std::chrono::time_point<LogClock> Time = LogClock::now();
-		std::wstringstream MessageStream;
+		const char* subsystem;
+		const LogSeverity severity;
+		std::chrono::time_point<LogClock> time = LogClock::now();
+		std::wstringstream messageStream;
 
-		LogRecord(const char* InSubsystem, LogSeverity InSeverity) : Subsystem(InSubsystem), Severity(InSeverity) {}
+		LogRecord(const char* inSubsystem, LogSeverity inSeverity) : subsystem(inSubsystem), severity(inSeverity) {}
 
 #if PLATFORM_WINDOWS
-		LogRecord& operator<<(HRESULT In)
+		LogRecord& operator<<(HRESULT hResult)
 		{
-			const auto NarrowMessage{ std::system_category().message(In) };
-			MessageStream << std::wstring{ NarrowMessage.begin(), NarrowMessage.end() };
+			const auto narrowMessage{ std::system_category().message(hResult) };
+			messageStream << std::wstring{ narrowMessage.begin(), narrowMessage.end() };
 			return *this;
 		}
 #endif
 
 		template <typename T>
-		LogRecord& operator<<(const T& In)
+		LogRecord& operator<<(const T& data)
 		{
-			MessageStream << In;
+			messageStream << data;
 			return *this;
 		}
 	};
@@ -97,7 +97,7 @@ class Logger : public Singleton<Logger>
 {
 #if ENABLE_LOGGING
 private:
-	std::vector<std::unique_ptr<LogOutputBase>> Outputs;
+	std::vector<std::unique_ptr<LogOutputBase>> outputs;
 #endif
 
 public:
@@ -105,23 +105,23 @@ public:
 	void AddOutput()
 	{
 #if ENABLE_LOGGING
-		Outputs.push_back(std::make_unique<T>());
+		outputs.push_back(std::make_unique<T>());
 #endif
 	}
 
 VGWarningPush
 VGWarningDisable(4100, unused-parameter)
 	// Can't use a stream operator here, causes precedence issues.
-	void operator+=(const Detail::LogRecord& Record)
+	void operator+=(const Detail::LogRecord& record)
 VGWarningPop
 	{
 #if ENABLE_LOGGING
-		for (auto& Output : Outputs)
+		for (auto& output : outputs)
 		{
-			Output->Write(Record);
+			output->Write(record);
 		}
 
-		if (Record.Severity == Detail::LogSeverity::Fatal) VGUnlikely
+		if (record.severity == Detail::LogSeverity::Fatal) VGUnlikely
 		{
 			VGBreak();
 		}
@@ -137,28 +137,28 @@ VGWarningPop
 #define _Detail_VGLogBranchFatal
 #endif
 
-#define _Detail_VGLogBase(Subsystem, Severity) Logger::Get() += Detail::LogRecord{ Detail::SubsysToString(Subsystem), Severity }
-#define _Detail_VGLogIntermediate(Subsystem, Severity) _Detail_VGLogBranch _Detail_VGLogBase(Subsystem, Severity)
-#define _Detail_VGLogIntermediateFatal(Subsystem, Severity) _Detail_VGLogBranchFatal _Detail_VGLogBase(Subsystem, Severity)
+#define _Detail_VGLogBase(subsystem, severity) Logger::Get() += Detail::LogRecord{ Detail::SubsysToString(subsystem), severity }
+#define _Detail_VGLogIntermediate(subsystem, severity) _Detail_VGLogBranch _Detail_VGLogBase(subsystem, severity)
+#define _Detail_VGLogIntermediateFatal(subsystem, severity) _Detail_VGLogBranchFatal _Detail_VGLogBase(subsystem, severity)
 
-#define VGLog(Subsystem) _Detail_VGLogIntermediate(Subsystem, Detail::LogSeverity::Log)
-#define VGLogWarning(Subsystem) _Detail_VGLogIntermediate(Subsystem, Detail::LogSeverity::Warning)
-#define VGLogError(Subsystem) _Detail_VGLogIntermediate(Subsystem, Detail::LogSeverity::Error)
-#define VGLogFatal(Subsystem) _Detail_VGLogIntermediateFatal(Subsystem, Detail::LogSeverity::Fatal)
+#define VGLog(subsystem) _Detail_VGLogIntermediate(subsystem, Detail::LogSeverity::Log)
+#define VGLogWarning(subsystem) _Detail_VGLogIntermediate(subsystem, Detail::LogSeverity::Warning)
+#define VGLogError(subsystem) _Detail_VGLogIntermediate(subsystem, Detail::LogSeverity::Error)
+#define VGLogFatal(subsystem) _Detail_VGLogIntermediateFatal(subsystem, Detail::LogSeverity::Fatal)
 
 #if ENABLE_PROFILING
-#define VGScopedCPUStat(Name) ZoneScopedN(Name)
-#define VGScopedGPUStat(Name) do {} while (0)  // #TODO: GPU Profiling through PIX. Do we need the command list, command queue, and/or device context?
+#define VGScopedCPUStat(name) ZoneScopedN(name)
+#define VGScopedGPUStat(name) do {} while (0)  // #TODO: GPU Profiling through PIX. Do we need the command list, command queue, and/or device context?
 #define VGStatFrame FrameMark
 #else
-#define VGScopedCPUStat(Name) do {} while (0)
-#define VGScopedGPUStat(Name) do {} while (0)
+#define VGScopedCPUStat(name) do {} while (0)
+#define VGScopedGPUStat(name) do {} while (0)
 #define VGStatFrame do {} while (0)
 #endif
 
 // Global Subsystems
 
-#define VGDeclareLogSubsystem(Name) struct ___##Name {}; static ___##Name Name; namespace Detail { constexpr const char* SubsysToString(___##Name) { return #Name; } }
+#define VGDeclareLogSubsystem(name) struct ___##name {}; static ___##name name; namespace Detail { constexpr const char* SubsysToString(___##name) { return #name; } }
 
 VGDeclareLogSubsystem(Asset);
 VGDeclareLogSubsystem(Core);

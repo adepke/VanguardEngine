@@ -11,9 +11,9 @@
 
 struct BufferDescription : ResourceDescription
 {
-	size_t Size;  // Element count. Size * Stride = Byte count.
-	size_t Stride;
-	std::optional<DXGI_FORMAT> Format;
+	size_t size;  // Element count. Size * Stride = Byte count.
+	size_t stride;
+	std::optional<DXGI_FORMAT> format;
 };
 
 struct Buffer : Resource
@@ -21,10 +21,10 @@ struct Buffer : Resource
 	friend class ResourceManager;
 
 private:
-	std::optional<ResourcePtr<D3D12MA::Allocation>> CounterBuffer;
+	std::optional<ResourcePtr<D3D12MA::Allocation>> counterBuffer;
 
 public:
-	BufferDescription Description;
+	BufferDescription description;
 
 	std::optional<DescriptorHandle> CBV;
 	std::optional<DescriptorHandle> SRV;

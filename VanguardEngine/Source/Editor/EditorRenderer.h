@@ -12,5 +12,5 @@ namespace EditorRenderer
 {
 	Viewport GetSceneViewport();
 
-	void Render(entt::registry& Registry);
+	void Render(entt::registry& registry);
 };

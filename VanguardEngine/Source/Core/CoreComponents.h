@@ -10,14 +10,14 @@ using namespace DirectX;
 
 struct NameComponent
 {
-	std::string Name;
+	std::string name;
 };
 
 struct TransformComponent
 {
-	XMFLOAT3 Scale{ 1.f, 1.f, 1.f };
-	XMFLOAT3 Rotation{ 0.f, 0.f, 0.f };
-	XMFLOAT3 Translation{ 0.f, 0.f, 0.f };
+	XMFLOAT3 scale{ 1.f, 1.f, 1.f };
+	XMFLOAT3 rotation{ 0.f, 0.f, 0.f };
+	XMFLOAT3 translation{ 0.f, 0.f, 0.f };
 };
 
 // Empty for now, used to tag entities that are being controlled.

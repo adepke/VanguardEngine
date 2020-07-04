@@ -7,29 +7,29 @@
 
 #include <Core/Windows/WindowsMinimal.h>
 
-constexpr auto WindowStyle = WS_OVERLAPPED | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_SIZEBOX | WS_VISIBLE | CS_HREDRAW | CS_VREDRAW;
-constexpr auto WindowStyleEx = 0;
-constexpr auto WindowClassStyle = CS_CLASSDC;
-constexpr auto WindowClassName = VGText("VanguardEngine");
+constexpr auto windowStyle = WS_OVERLAPPED | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_SIZEBOX | WS_VISIBLE | CS_HREDRAW | CS_VREDRAW;
+constexpr auto windowStyleEx = 0;
+constexpr auto windowClassStyle = CS_CLASSDC;
+constexpr auto windowClassName = VGText("VanguardEngine");
 
-RECT CreateCenteredRect(uint32_t Width, uint32_t Height)
+RECT CreateCenteredRect(uint32_t width, uint32_t height)
 {
-	RECT Result{};
-	Result.left = (::GetSystemMetrics(SM_CXSCREEN) / 2) - (static_cast<int>(Width) / 2);
-	Result.top = (::GetSystemMetrics(SM_CYSCREEN) / 2) - (static_cast<int>(Height) / 2);
-	Result.right = Result.left + static_cast<int>(Width);
-	Result.bottom = Result.top + static_cast<int>(Height);
-	::AdjustWindowRect(&Result, WindowStyle, false);
+	RECT result{};
+	result.left = (::GetSystemMetrics(SM_CXSCREEN) / 2) - (static_cast<int>(width) / 2);
+	result.top = (::GetSystemMetrics(SM_CYSCREEN) / 2) - (static_cast<int>(height) / 2);
+	result.right = result.left + static_cast<int>(width);
+	result.bottom = result.top + static_cast<int>(height);
+	::AdjustWindowRect(&result, windowStyle, false);
 
-	return Result;
+	return result;
 }
 
 int64_t __stdcall WndProc(void* hWnd, uint32_t msg, uint64_t wParam, int64_t lParam)
 {
 	VGScopedCPUStat("Window Message Pump");
 
-	auto* OwningFrame = (WindowFrame*)::GetWindowLongPtr(static_cast<HWND>(hWnd), 0);  // Compiler won't allow a static cast here.
-	if (!OwningFrame)
+	auto* owningFrame = (WindowFrame*)::GetWindowLongPtr(static_cast<HWND>(hWnd), 0);  // Compiler won't allow a static cast here.
+	if (!owningFrame)
 	{
 		return ::DefWindowProc(static_cast<HWND>(hWnd), msg, wParam, lParam);
 	}
@@ -42,36 +42,36 @@ int64_t __stdcall WndProc(void* hWnd, uint32_t msg, uint64_t wParam, int64_t lPa
 
 	case WM_MOVE:
 		// #TODO: Not working.
-		OwningFrame->RestrainCursor(OwningFrame->ActiveCursorRestraint);
+		owningFrame->RestrainCursor(owningFrame->activeCursorRestraint);
 
 		return ::DefWindowProc(static_cast<HWND>(hWnd), msg, wParam, lParam);
 
 	case WM_SIZE:
-		if (wParam != SIZE_MINIMIZED && OwningFrame->OnSizeChanged)
+		if (wParam != SIZE_MINIMIZED && owningFrame->onSizeChanged)
 		{
 			// #TODO: Handle fullscreen.
-			OwningFrame->OnSizeChanged(static_cast<uint32_t>(LOWORD(lParam)), static_cast<uint32_t>(HIWORD(lParam)), false);
+			owningFrame->onSizeChanged(static_cast<uint32_t>(LOWORD(lParam)), static_cast<uint32_t>(HIWORD(lParam)), false);
 		}
 
 		return 0;
 
 	case WM_ACTIVATE:
-		const auto Active = LOWORD(wParam);
-		if (Active == WA_ACTIVE || Active == WA_CLICKACTIVE)
+		const auto active = LOWORD(wParam);
+		if (active == WA_ACTIVE || active == WA_CLICKACTIVE)
 		{
-			if (OwningFrame->OnFocusChanged)
+			if (owningFrame->onFocusChanged)
 			{
-				OwningFrame->OnFocusChanged(true);
+				owningFrame->onFocusChanged(true);
 			}
 
-			OwningFrame->RestrainCursor(OwningFrame->ActiveCursorRestraint);
+			owningFrame->RestrainCursor(owningFrame->activeCursorRestraint);
 		}
 
 		else
 		{
-			if (OwningFrame->OnFocusChanged)
+			if (owningFrame->onFocusChanged)
 			{
-				OwningFrame->OnFocusChanged(false);
+				owningFrame->onFocusChanged(false);
 			}
 		}
 
@@ -81,130 +81,130 @@ int64_t __stdcall WndProc(void* hWnd, uint32_t msg, uint64_t wParam, int64_t lPa
 	return Input::ProcessWindowMessage(hWnd, msg, wParam, lParam) ? 0 : ::DefWindowProc(static_cast<HWND>(hWnd), msg, wParam, lParam);
 }
 
-WindowFrame::WindowFrame(const std::wstring& Title, uint32_t Width, uint32_t Height)
+WindowFrame::WindowFrame(const std::wstring& title, uint32_t width, uint32_t height)
 {
 	VGScopedCPUStat("Create Window");
 
-	const auto ModuleHandle = ::GetModuleHandle(nullptr);
+	const auto moduleHandle = ::GetModuleHandle(nullptr);
 
-	auto WindowRect{ CreateCenteredRect(Width, Height) };
+	auto windowRect{ CreateCenteredRect(width, height) };
 
-	WNDCLASSEX WindowDesc{};
-	WindowDesc.cbSize = sizeof(WindowDesc);
-	WindowDesc.style = WindowClassStyle;
-	WindowDesc.lpfnWndProc = (WNDPROC)&WndProc;
-	WindowDesc.cbClsExtra = 0;
-	WindowDesc.cbWndExtra = sizeof(this);  // Each instance stores the owning class pointer.
-	WindowDesc.hInstance = ModuleHandle;
-	WindowDesc.hIcon = nullptr;
-	WindowDesc.hCursor = nullptr;
-	WindowDesc.hbrBackground = nullptr;
-	WindowDesc.lpszMenuName = 0;
-	WindowDesc.lpszClassName = WindowClassName;
-	WindowDesc.hIconSm = nullptr;
+	WNDCLASSEX windowDesc{};
+	windowDesc.cbSize = sizeof(windowDesc);
+	windowDesc.style = windowClassStyle;
+	windowDesc.lpfnWndProc = (WNDPROC)&WndProc;
+	windowDesc.cbClsExtra = 0;
+	windowDesc.cbWndExtra = sizeof(this);  // Each instance stores the owning class pointer.
+	windowDesc.hInstance = moduleHandle;
+	windowDesc.hIcon = nullptr;
+	windowDesc.hCursor = nullptr;
+	windowDesc.hbrBackground = nullptr;
+	windowDesc.lpszMenuName = 0;
+	windowDesc.lpszClassName = windowClassName;
+	windowDesc.hIconSm = nullptr;
 
-	::RegisterClassEx(&WindowDesc);
+	::RegisterClassEx(&windowDesc);
 
-	Handle = ::CreateWindowEx(
-		WindowStyleEx,
-		WindowDesc.lpszClassName,
-		Title.c_str(),
-		WindowStyle,
-		WindowRect.left,
-		WindowRect.top,
-		WindowRect.right - WindowRect.left,
-		WindowRect.bottom - WindowRect.top,
+	handle = ::CreateWindowEx(
+		windowStyleEx,
+		windowDesc.lpszClassName,
+		title.c_str(),
+		windowStyle,
+		windowRect.left,
+		windowRect.top,
+		windowRect.right - windowRect.left,
+		windowRect.bottom - windowRect.top,
 		nullptr,
 		nullptr,
-		WindowDesc.hInstance,
+		windowDesc.hInstance,
 		nullptr
 	);
 
-	if (!Handle)
+	if (!handle)
 	{
 		VGLogFatal(Window) << "Failed to create window: " << GetPlatformError();
 	}
 
 	// Save this class instance in the per-window memory.
-	::SetWindowLongPtr(static_cast<HWND>(Handle), 0, (LONG_PTR)this);  // Compiler won't allow a static cast here.
+	::SetWindowLongPtr(static_cast<HWND>(handle), 0, (LONG_PTR)this);  // Compiler won't allow a static cast here.
 
 	// We need to resend the initial WM_SIZE message since the first one arrives before our per-instance memory is set (thus getting ignored).
 	// Without this, the UI scaling is off until the next WM_SIZE message.
 
-	RECT ClientRect;
-	::GetClientRect(static_cast<HWND>(Handle), &ClientRect);
-	const auto ClientWidth = ClientRect.right - ClientRect.left;
-	const auto ClientHeight = ClientRect.bottom - ClientRect.top;
+	RECT clientRect;
+	::GetClientRect(static_cast<HWND>(handle), &clientRect);
+	const auto clientWidth = clientRect.right - clientRect.left;
+	const auto clientHeight = clientRect.bottom - clientRect.top;
 
-	::PostMessage(static_cast<HWND>(Handle), WM_SIZE, SIZE_RESTORED, (ClientWidth & 0xFFFF) | ((ClientHeight & 0xFFFF) << 16));
+	::PostMessage(static_cast<HWND>(handle), WM_SIZE, SIZE_RESTORED, (clientWidth & 0xFFFF) | ((clientHeight & 0xFFFF) << 16));
 }
 
 WindowFrame::~WindowFrame()
 {
 	VGScopedCPUStat("Destroy Window");
 
-	::UnregisterClass(WindowClassName, ::GetModuleHandle(nullptr));
+	::UnregisterClass(windowClassName, ::GetModuleHandle(nullptr));
 }
 
-void WindowFrame::SetTitle(std::wstring Title)
+void WindowFrame::SetTitle(std::wstring title)
 {
 	VGScopedCPUStat("Set Window Title");
 
-	const auto Result = ::SetWindowText(static_cast<HWND>(Handle), Title.c_str());
-	if (!Result)
+	const auto result = ::SetWindowText(static_cast<HWND>(handle), title.c_str());
+	if (!result)
 	{
-		VGLogError(Window) << "Failed to set title to: '" << Title << "': " << GetPlatformError();
+		VGLogError(Window) << "Failed to set title to: '" << title << "': " << GetPlatformError();
 	}
 }
 
-void WindowFrame::SetSize(uint32_t Width, uint32_t Height)
+void WindowFrame::SetSize(uint32_t width, uint32_t height)
 {
 	VGScopedCPUStat("Set Window Size");
 
-	const auto Rect{ CreateCenteredRect(Width, Height) };
+	const auto rect{ CreateCenteredRect(width, height) };
 
-	const auto Result = ::SetWindowPos(
-		static_cast<HWND>(Handle),
+	const auto result = ::SetWindowPos(
+		static_cast<HWND>(handle),
 		HWND_NOTOPMOST,
-		Rect.left,
-		Rect.top,
-		Rect.right - Rect.left,
-		Rect.bottom - Rect.top,
+		rect.left,
+		rect.top,
+		rect.right - rect.left,
+		rect.bottom - rect.top,
 		0);  // Possibly SWP_NOREPOSITION
 
-	if (!Result)
+	if (!result)
 	{
-		VGLogError(Window) << "Failed to set size to: (" << Width << ", " << Height << "): " << GetPlatformError();
+		VGLogError(Window) << "Failed to set size to: (" << width << ", " << height << "): " << GetPlatformError();
 	}
 
 	// Window size updated, we need to update the clipping bounds.
-	RestrainCursor(ActiveCursorRestraint);
+	RestrainCursor(activeCursorRestraint);
 }
 
-void WindowFrame::ShowCursor(bool Visible)
+void WindowFrame::ShowCursor(bool visible)
 {
 	VGScopedCPUStat("Show Window Cursor");
 
 	// ShowCursor acts like a stack, but we don't want this kind of behavior.
-	if ((Visible && !CursorShown) || (!Visible && CursorShown))
+	if ((visible && !cursorShown) || (!visible && cursorShown))
 	{
-		CursorShown = Visible;
-		::ShowCursor(Visible);
+		cursorShown = visible;
+		::ShowCursor(visible);
 	}
 }
 
-void WindowFrame::RestrainCursor(CursorRestraint Restraint)
+void WindowFrame::RestrainCursor(CursorRestraint restraint)
 {
 	VGScopedCPUStat("Restrain Window Cursor");
 
-	ActiveCursorRestraint = Restraint;
+	activeCursorRestraint = restraint;
 
-	switch (Restraint)
+	switch (restraint)
 	{
 	case CursorRestraint::None:
 	{
-		const auto Result = ::ClipCursor(nullptr);
-		if (!Result)
+		const auto result = ::ClipCursor(nullptr);
+		if (!result)
 		{
 			VGLogError(Window) << "Failed to unrestrain cursor: " << GetPlatformError();
 		}
@@ -215,46 +215,46 @@ void WindowFrame::RestrainCursor(CursorRestraint Restraint)
 	case CursorRestraint::ToCenter:
 	{
 		// Disable any clipping first.
-		const auto Result = ::ClipCursor(nullptr);
-		if (!Result)
+		const auto result = ::ClipCursor(nullptr);
+		if (!result)
 		{
 			VGLogError(Window) << "Failed to unrestrain cursor: " << GetPlatformError();
 		}
 
-		RECT ClientRect;
-		::GetClientRect(static_cast<HWND>(Handle), &ClientRect);
+		RECT clientRect;
+		::GetClientRect(static_cast<HWND>(handle), &clientRect);
 
-		POINT TopLeft = { ClientRect.left, ClientRect.top };
-		POINT BottomRight = { ClientRect.right, ClientRect.bottom };
+		POINT topLeft = { clientRect.left, clientRect.top };
+		POINT bottomRight = { clientRect.right, clientRect.bottom };
 
 		// Convert the local space coordinates to screen space.
-		::ClientToScreen(static_cast<HWND>(Handle), &TopLeft);
-		::ClientToScreen(static_cast<HWND>(Handle), &BottomRight);
+		::ClientToScreen(static_cast<HWND>(handle), &topLeft);
+		::ClientToScreen(static_cast<HWND>(handle), &bottomRight);
 
-		CursorLockPosition = std::make_pair(static_cast<int>(TopLeft.x + (BottomRight.x - TopLeft.x) * 0.5f), static_cast<int>(TopLeft.y + (BottomRight.y - TopLeft.y) * 0.5f));
+		cursorLockPosition = std::make_pair(static_cast<int>(topLeft.x + (bottomRight.x - topLeft.x) * 0.5f), static_cast<int>(topLeft.y + (bottomRight.y - topLeft.y) * 0.5f));
 
 		break;
 	}
 
 	case CursorRestraint::ToWindow:
 	{
-		RECT ClientRect;
-		::GetClientRect(static_cast<HWND>(Handle), &ClientRect);
+		RECT clientRect;
+		::GetClientRect(static_cast<HWND>(handle), &clientRect);
 
-		POINT TopLeft = { ClientRect.left, ClientRect.top };
-		POINT BottomRight = { ClientRect.right, ClientRect.bottom };
+		POINT topLeft = { clientRect.left, clientRect.top };
+		POINT bottomRight = { clientRect.right, clientRect.bottom };
 
 		// Convert the local space coordinates to screen space.
-		::ClientToScreen(static_cast<HWND>(Handle), &TopLeft);
-		::ClientToScreen(static_cast<HWND>(Handle), &BottomRight);
+		::ClientToScreen(static_cast<HWND>(handle), &topLeft);
+		::ClientToScreen(static_cast<HWND>(handle), &bottomRight);
 
-		ClientRect.left = TopLeft.x;
-		ClientRect.top = TopLeft.y;
-		ClientRect.right = BottomRight.x;
-		ClientRect.bottom = BottomRight.y;
+		clientRect.left = topLeft.x;
+		clientRect.top = topLeft.y;
+		clientRect.right = bottomRight.x;
+		clientRect.bottom = bottomRight.y;
 
-		const auto Result = ::ClipCursor(&ClientRect);
-		if (!Result)
+		const auto result = ::ClipCursor(&clientRect);
+		if (!result)
 		{
 			VGLogError(Window) << "Failed to restrain cursor: " << GetPlatformError();
 		}
@@ -267,19 +267,19 @@ void WindowFrame::RestrainCursor(CursorRestraint Restraint)
 void WindowFrame::UpdateCursor()
 {
 	// Apply centering restraint if that's active.
-	if (ActiveCursorRestraint == CursorRestraint::ToCenter && ::GetFocus() == static_cast<HWND>(GetHandle()))
+	if (activeCursorRestraint == CursorRestraint::ToCenter && ::GetFocus() == static_cast<HWND>(GetHandle()))
 	{
-		if (!::SetCursorPos(CursorLockPosition.first, CursorLockPosition.second))
+		if (!::SetCursorPos(cursorLockPosition.first, cursorLockPosition.second))
 		{
 			VGLogWarning(Window) << "Failed to set cursor position to window center: " << GetPlatformError();
 		}
 
 		else
 		{
-			POINT ClientMousePos{ CursorLockPosition.first, CursorLockPosition.second };
+			POINT clientMousePos{ cursorLockPosition.first, cursorLockPosition.second };
 
 			// ImGui stores cursor positions in client space.
-			if (!::ScreenToClient(static_cast<HWND>(GetHandle()), &ClientMousePos))
+			if (!::ScreenToClient(static_cast<HWND>(GetHandle()), &clientMousePos))
 			{
 				VGLogWarning(Window) << "Failed to convert mouse position from screen space to window space: " << GetPlatformError();
 			}
@@ -287,7 +287,7 @@ void WindowFrame::UpdateCursor()
 			else
 			{
 				// Set the previous position to the center so that next frame's delta doesn't treat this cursor update as a normal mouse move.
-				ImGui::GetIO().MousePosPrev = { static_cast<float>(ClientMousePos.x), static_cast<float>(ClientMousePos.y) };
+				ImGui::GetIO().MousePosPrev = { static_cast<float>(clientMousePos.x), static_cast<float>(clientMousePos.y) };
 			}
 		}
 	}

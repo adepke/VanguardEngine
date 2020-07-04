@@ -9,53 +9,53 @@
 
 namespace AssetLoader
 {
-	std::shared_ptr<Texture> LoadTexture(RenderDevice& Device, std::filesystem::path Path)
+	std::shared_ptr<Texture> LoadTexture(RenderDevice& device, std::filesystem::path path)
 	{
 		VGScopedCPUStat("Load Texture");
 
-		int PixelsX;
-		int PixelsY;
-		int ComponentsPerPixel;
+		int pixelsX;
+		int pixelsY;
+		int componentsPerPixel;
 
-		unsigned char* Data = nullptr;
+		unsigned char* data = nullptr;
 
 		{
 			VGScopedCPUStat("STB Load");
 
-			Data = stbi_load(Path.generic_string().c_str(), &PixelsX, &PixelsY, &ComponentsPerPixel, STBI_rgb_alpha);
+			data = stbi_load(path.generic_string().c_str(), &pixelsX, &pixelsY, &componentsPerPixel, STBI_rgb_alpha);
 		}
 
-		if (!Data)
+		if (!data)
 		{
-			VGLogError(Asset) << "Failed to load texture at '" << Path.generic_wstring() << "'.";
+			VGLogError(Asset) << "Failed to load texture at '" << path.generic_wstring() << "'.";
 			return {};
 		}
 
-		std::vector<uint8_t> DataResource;
+		std::vector<uint8_t> dataResource;
 
 		{
 			VGScopedCPUStat("Copy");
 
-			DataResource.resize(static_cast<size_t>(PixelsX)* static_cast<size_t>(PixelsY)* static_cast<size_t>(STBI_rgb_alpha));
+			dataResource.resize(static_cast<size_t>(pixelsX)* static_cast<size_t>(pixelsY)* static_cast<size_t>(STBI_rgb_alpha));
 
-			std::memcpy(DataResource.data(), Data, DataResource.size());
+			std::memcpy(dataResource.data(), data, dataResource.size());
 
-			STBI_FREE(Data);
+			STBI_FREE(data);
 		}
 
-		TextureDescription Description{};
-		Description.Width = PixelsX;
-		Description.Height = PixelsY;
-		Description.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-		Description.UpdateRate = ResourceFrequency::Static;
-		Description.BindFlags = BindFlag::ShaderResource;
-		Description.AccessFlags = AccessFlag::CPUWrite;
+		TextureDescription description{};
+		description.width = pixelsX;
+		description.height = pixelsY;
+		description.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		description.updateRate = ResourceFrequency::Static;
+		description.bindFlags = BindFlag::ShaderResource;
+		description.accessFlags = AccessFlag::CPUWrite;
 
 		// #TODO: Derive name from asset name + texture type.
-		auto TextureResource = Device.CreateResource(Description, VGText("Asset Texture"));
+		auto textureResource = device.CreateResource(description, VGText("Asset Texture"));
 
-		Device.WriteResource(TextureResource, DataResource);
+		device.WriteResource(textureResource, dataResource);
 
-		return std::move(TextureResource);
+		return std::move(textureResource);
 	}
 }

@@ -6,85 +6,85 @@
 // #TEMP
 #include <Rendering/Renderer.h>
 
-void DescriptorAllocator::Initialize(RenderDevice* InDevice, size_t OfflineDescriptors, size_t OnlineDescriptors)
+void DescriptorAllocator::Initialize(RenderDevice* inDevice, size_t offlineDescriptors, size_t onlineDescriptors)
 {
 	VGScopedCPUStat("Descriptor Allocator Initialize");
 
-	OfflineHeaps[0].Create(InDevice, DescriptorType::Default, OfflineDescriptors, false);
-	OfflineHeaps[1].Create(InDevice, DescriptorType::Sampler, OfflineDescriptors, false);
+	offlineHeaps[0].Create(inDevice, DescriptorType::Default, offlineDescriptors, false);
+	offlineHeaps[1].Create(inDevice, DescriptorType::Sampler, offlineDescriptors, false);
 
-	OnlineHeaps[0].resize(InDevice->FrameCount);
-	OnlineHeaps[1].resize(InDevice->FrameCount);
+	onlineHeaps[0].resize(inDevice->frameCount);
+	onlineHeaps[1].resize(inDevice->frameCount);
 
-	for (auto& Heap : OnlineHeaps[0])
+	for (auto& heap : onlineHeaps[0])
 	{
-		Heap.Create(InDevice, DescriptorType::Default, OnlineDescriptors, true);
+		heap.Create(inDevice, DescriptorType::Default, onlineDescriptors, true);
 	}
 
-	for (auto& Heap : OnlineHeaps[1])
+	for (auto& heap : onlineHeaps[1])
 	{
-		Heap.Create(InDevice, DescriptorType::Sampler, OnlineDescriptors, true);
+		heap.Create(inDevice, DescriptorType::Sampler, onlineDescriptors, true);
 	}
 
-	RenderTargetHeap.Create(InDevice, DescriptorType::RenderTarget, OnlineDescriptors, false);
-	DepthStencilHeap.Create(InDevice, DescriptorType::DepthStencil, OnlineDescriptors, false);
+	renderTargetHeap.Create(inDevice, DescriptorType::RenderTarget, onlineDescriptors, false);
+	depthStencilHeap.Create(inDevice, DescriptorType::DepthStencil, onlineDescriptors, false);
 }
 
-DescriptorHandle DescriptorAllocator::Allocate(DescriptorType Type)
+DescriptorHandle DescriptorAllocator::Allocate(DescriptorType type)
 {
-	switch (Type)
+	switch (type)
 	{
 	case DescriptorType::Default:
 	case DescriptorType::Sampler:
-		return OfflineHeaps[static_cast<size_t>(Type)].Allocate();
+		return offlineHeaps[static_cast<size_t>(type)].Allocate();
 	case DescriptorType::RenderTarget:
-		return RenderTargetHeap.Allocate();
+		return renderTargetHeap.Allocate();
 	case DescriptorType::DepthStencil:
-		return DepthStencilHeap.Allocate();
+		return depthStencilHeap.Allocate();
 	}
 
 	return {};
 }
 
-void DescriptorAllocator::AddTableEntry(DescriptorHandle& Handle, DescriptorTableEntryType Type)
+void DescriptorAllocator::AddTableEntry(DescriptorHandle& handle, DescriptorTableEntryType type)
 {
-	PendingTableEntries.push_back(PendingDescriptorTableEntry{ Handle, Type });
+	pendingTableEntries.push_back(PendingDescriptorTableEntry{ handle, type });
 }
 
-void DescriptorAllocator::BuildTable(RenderDevice& Device, CommandList& List, uint32_t RootParameter)
+void DescriptorAllocator::BuildTable(RenderDevice& device, CommandList& list, uint32_t rootParameter)
 {
 	VGScopedCPUStat("Build Descriptor Table");
 
-	D3D12_GPU_DESCRIPTOR_HANDLE TableStart{};
+	D3D12_GPU_DESCRIPTOR_HANDLE tableStart{};
 
-	bool First = true;
-	for (auto& Entry : PendingTableEntries)
+	bool first = true;
+	for (auto& entry : pendingTableEntries)
 	{
-		const auto TargetHeapIndex = Entry.Type == DescriptorTableEntryType::Sampler ? 1 : 0;
-		auto& TargetHeap = OnlineHeaps[TargetHeapIndex][Device.GetFrameIndex()];
+		const auto targetHeapIndex = entry.type == DescriptorTableEntryType::Sampler ? 1 : 0;
+		auto& targetHeap = onlineHeaps[targetHeapIndex][device.GetFrameIndex()];
 
-		auto Destination = TargetHeap.Allocate();
+		auto destination = targetHeap.Allocate();
 
-		if (First)
+		if (first)
 		{
-			TableStart = Destination;
-			First = false;
+			tableStart = destination;
+			first = false;
 		}
 
-		Device.Native()->CopyDescriptorsSimple(1, Destination, Entry.Handle, TargetHeapIndex == 0 ? D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV : D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+		device.Native()->CopyDescriptorsSimple(1, destination, entry.handle, targetHeapIndex == 0 ? D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV : D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
 	}
 
-	PendingTableEntries.clear();
+	pendingTableEntries.clear();
 
-	List.Native()->SetGraphicsRootDescriptorTable(RootParameter, TableStart);
+	list.Native()->SetGraphicsRootDescriptorTable(rootParameter, tableStart);
 }
 
-void DescriptorAllocator::FrameStep(size_t FrameIndex)
+void DescriptorAllocator::FrameStep(size_t frameIndex)
 {
 	VGScopedCPUStat("Descriptor Allocator Frame Step");
 
-	for (auto& OnlineHeap : OnlineHeaps)
+	for (auto& onlineHeap : onlineHeaps)
 	{
-		OnlineHeap[FrameIndex].Reset();
+		onlineHeap[frameIndex].Reset();
 	}
 }

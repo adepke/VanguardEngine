@@ -23,16 +23,16 @@ class ResourceManager
 {
 private:
 	// #TODO: Weak pointer instead of raw pointer?
-	RenderDevice* Device = nullptr;
-	size_t FrameCount = 0;
+	RenderDevice* device = nullptr;
+	size_t frameCount = 0;
 	
-	std::vector<ResourcePtr<D3D12MA::Allocation>> UploadResources;
-	std::vector<size_t> UploadOffsets;
-	std::vector<void*> UploadPtrs;
+	std::vector<ResourcePtr<D3D12MA::Allocation>> uploadResources;
+	std::vector<size_t> uploadOffsets;
+	std::vector<void*> uploadPtrs;
 
-	void CreateResourceViews(std::shared_ptr<Buffer>& Target);
-	void CreateResourceViews(std::shared_ptr<Texture>& Target);
-	void NameResource(ResourcePtr<D3D12MA::Allocation>& Target, const std::wstring_view Name);
+	void CreateResourceViews(std::shared_ptr<Buffer>& target);
+	void CreateResourceViews(std::shared_ptr<Texture>& target);
+	void NameResource(ResourcePtr<D3D12MA::Allocation>& target, const std::wstring_view name);
 
 public:
 	ResourceManager() = default;
@@ -42,17 +42,17 @@ public:
 	ResourceManager& operator=(const ResourceManager&) = delete;
 	ResourceManager& operator=(ResourceManager&&) noexcept = delete;
 
-	void Initialize(RenderDevice* InDevice, size_t BufferedFrames);
+	void Initialize(RenderDevice* inDevice, size_t bufferedFrames);
 
-	std::shared_ptr<Buffer> AllocateBuffer(const BufferDescription& Description, const std::wstring_view Name);
-	std::shared_ptr<Texture> AllocateTexture(const TextureDescription& Description, const std::wstring_view Name);
+	std::shared_ptr<Buffer> AllocateBuffer(const BufferDescription& description, const std::wstring_view name);
+	std::shared_ptr<Texture> AllocateTexture(const TextureDescription& description, const std::wstring_view name);
 	
 	// Creates a texture from the swap chain surface.
-	std::shared_ptr<Texture> TextureFromSwapChain(void* Surface, const std::wstring_view Name);
+	std::shared_ptr<Texture> TextureFromSwapChain(void* surface, const std::wstring_view name);
 
 	// Source data can be discarded immediately. Offsets are in bytes.
-	void WriteBuffer(std::shared_ptr<Buffer>& Target, const std::vector<uint8_t>& Source, size_t TargetOffset = 0);
-	void WriteTexture(std::shared_ptr<Texture>& Target, const std::vector<uint8_t>& Source);
+	void WriteBuffer(std::shared_ptr<Buffer>& target, const std::vector<uint8_t>& source, size_t targetOffset = 0);
+	void WriteTexture(std::shared_ptr<Texture>& target, const std::vector<uint8_t>& source);
 
-	void CleanupFrameResources(size_t Frame);
+	void CleanupFrameResources(size_t frame);
 };

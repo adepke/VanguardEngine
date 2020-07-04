@@ -15,30 +15,30 @@ class DescriptorAllocator;
 class CommandList
 {
 protected:
-	ResourcePtr<ID3D12CommandAllocator> Allocator;  // #TODO: Potentially share allocators? Something to look into in the future.
-	ResourcePtr<ID3D12GraphicsCommandList5> List;
-	RenderDevice* Device;
+	ResourcePtr<ID3D12CommandAllocator> allocator;  // #TODO: Potentially share allocators? Something to look into in the future.
+	ResourcePtr<ID3D12GraphicsCommandList5> list;
+	RenderDevice* device;
 
-	std::vector<D3D12_RESOURCE_BARRIER> PendingBarriers;
+	std::vector<D3D12_RESOURCE_BARRIER> pendingBarriers;
 
 private:
-	void TransitionBarrierInternal(ID3D12Resource* Resource, D3D12_RESOURCE_STATES OldState, D3D12_RESOURCE_STATES NewState);
+	void TransitionBarrierInternal(ID3D12Resource* resource, D3D12_RESOURCE_STATES oldState, D3D12_RESOURCE_STATES newState);
 
 public:
-	auto* Native() const noexcept { return List.Get(); }
+	auto* Native() const noexcept { return list.Get(); }
 
-	void Create(RenderDevice* InDevice, D3D12_COMMAND_LIST_TYPE Type);
-	void SetName(std::wstring_view Name);
+	void Create(RenderDevice* inDevice, D3D12_COMMAND_LIST_TYPE type);
+	void SetName(std::wstring_view name);
 
 	// #TODO: Support split barriers.
-	void TransitionBarrier(std::shared_ptr<Buffer>& Resource, D3D12_RESOURCE_STATES State) { TransitionBarrierInternal(Resource->Native(), Resource->State, State); Resource->State = State; }
-	void TransitionBarrier(std::shared_ptr<Texture>& Resource, D3D12_RESOURCE_STATES State) { TransitionBarrierInternal(Resource->Native(), Resource->State, State); Resource->State = State; }
+	void TransitionBarrier(std::shared_ptr<Buffer>& resource, D3D12_RESOURCE_STATES state) { TransitionBarrierInternal(resource->Native(), resource->state, state); resource->state = state; }
+	void TransitionBarrier(std::shared_ptr<Texture>& resource, D3D12_RESOURCE_STATES state) { TransitionBarrierInternal(resource->Native(), resource->state, state); resource->state = state; }
 
 	// Batch submits all pending barriers to the driver.
 	void FlushBarriers();
 
-	void BindPipelineState(PipelineState& State);
-	void BindDescriptorAllocator(DescriptorAllocator& Allocator);
+	void BindPipelineState(PipelineState& state);
+	void BindDescriptorAllocator(DescriptorAllocator& allocator);
 
 	HRESULT Close();
 	HRESULT Reset();

@@ -4,55 +4,55 @@
 
 struct PerObject
 {
-	matrix WorldMatrix;
+	matrix worldMatrix;
 };
 
 ConstantBuffer<PerObject> perObject : register(b0);
 
 struct CameraBuffer
 {
-	matrix ViewMatrix;
-	matrix ProjectionMatrix;
+	matrix viewMatrix;
+	matrix projectionMatrix;
 };
 
 ConstantBuffer<CameraBuffer> cameraBuffer : register(b1);
 
 struct Vertex
 {
-	float3 Position : POSITION;  // Object space.
-	float3 Normal : NORMAL;  // Object space.
-	float2 UV : UV;
-	float3 Tangent : TANGENT;  // Object space.
-	float3 Bitangent : BITANGENT;  // Object space.
+	float3 position : POSITION;  // Object space.
+	float3 normal : NORMAL;  // Object space.
+	float2 uv : UV;
+	float3 tangent : TANGENT;  // Object space.
+	float3 bitangent : BITANGENT;  // Object space.
 };
 
 StructuredBuffer<Vertex> vertexBuffer : register(t0);
 
 struct Output
 {
-	float4 PositionCS : SV_POSITION;  // Clip space.
-	float3 Position : POSITION;  // World space.
-	float3 Normal : NORMAL;  // World space.
-	float2 UV : UV;
-	float3 Tangent : TANGENT;  // World space.
-	float3 Bitangent : BITANGENT;  // World space.
+	float4 positionCS : SV_POSITION;  // Clip space.
+	float3 position : POSITION;  // World space.
+	float3 normal : NORMAL;  // World space.
+	float2 uv : UV;
+	float3 tangent : TANGENT;  // World space.
+	float3 bitangent : BITANGENT;  // World space.
 };
 
 [RootSignature(RS)]
-Output main(uint VertexID : SV_VertexID)
+Output main(uint vertexID : SV_VertexID)
 {
-	Vertex vertex = vertexBuffer[VertexID];
+	Vertex vertex = vertexBuffer[vertexID];
 
-	Output Out;
-	Out.PositionCS = float4(vertex.Position, 1.f);
-	Out.PositionCS = mul(Out.PositionCS, perObject.WorldMatrix);
-	Out.PositionCS = mul(Out.PositionCS, cameraBuffer.ViewMatrix);
-	Out.PositionCS = mul(Out.PositionCS, cameraBuffer.ProjectionMatrix);
-	Out.Position = mul(float4(vertex.Position, 1.f), perObject.WorldMatrix).xyz;
-	Out.Normal = normalize(mul(float4(vertex.Normal, 0.f), perObject.WorldMatrix)).xyz;
-	Out.UV = vertex.UV;
-	Out.Tangent = normalize(mul(float4(vertex.Tangent, 0.f), perObject.WorldMatrix)).xyz;
-	Out.Bitangent = normalize(mul(float4(vertex.Bitangent, 0.f), perObject.WorldMatrix)).xyz;
+	Output output;
+	output.positionCS = float4(vertex.position, 1.f);
+	output.positionCS = mul(output.positionCS, perObject.worldMatrix);
+	output.positionCS = mul(output.positionCS, cameraBuffer.viewMatrix);
+	output.positionCS = mul(output.positionCS, cameraBuffer.projectionMatrix);
+	output.position = mul(float4(vertex.position, 1.f), perObject.worldMatrix).xyz;
+	output.normal = normalize(mul(float4(vertex.normal, 0.f), perObject.worldMatrix)).xyz;
+	output.uv = vertex.uv;
+	output.tangent = normalize(mul(float4(vertex.tangent, 0.f), perObject.worldMatrix)).xyz;
+	output.bitangent = normalize(mul(float4(vertex.bitangent, 0.f), perObject.worldMatrix)).xyz;
 
-	return Out;
+	return output;
 }

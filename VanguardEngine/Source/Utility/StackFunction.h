@@ -12,10 +12,10 @@ struct StackFunction;
 template <typename Result, typename... ArgTypes>
 struct StackFunction<Result(ArgTypes...)>
 {
-	static constexpr size_t Size = 32;
+	static constexpr size_t size = 32;
 
 private:
-	char Buffer[Size];
+	char buffer[size];
 
 	struct Concept
 	{
@@ -26,42 +26,42 @@ private:
 	template <typename Functor>
 	struct Model final : public Concept
 	{
-		Functor Internal;
+		Functor internal;
 
-		Model(Functor&& InFunctor) : Internal(InFunctor) {}
+		Model(Functor&& functor) : internal(functor) {}
 
-		virtual Result operator()(ArgTypes&&... In) const override
+		virtual Result operator()(ArgTypes&&... args) const override
 		{
-			return Internal(std::forward<ArgTypes>(In)...);
+			return internal(std::forward<ArgTypes>(args)...);
 		}
 	};
 
 public:
 	template <typename Functor>
-	StackFunction(Functor&& InFunctor)
+	StackFunction(Functor&& functor)
 	{
-		static_assert(sizeof(InFunctor) <= Size, "Kernel functor cannot exceed set size");
+		static_assert(sizeof(functor) <= size, "Kernel functor cannot exceed set size");
 
-		new(Buffer) Model<Functor>{ std::forward<Functor>(InFunctor) };
+		new(buffer) Model<Functor>{ std::forward<Functor>(functor) };
 	}
 
 	StackFunction(const StackFunction&) = delete;
-	StackFunction(StackFunction&& Other) noexcept
+	StackFunction(StackFunction&& other) noexcept
 	{
-		std::swap(Buffer, Other.Buffer);
+		std::swap(buffer, other.buffer);
 	}
 
 	StackFunction& operator=(const StackFunction&) = delete;
 	StackFunction& operator=(StackFunction&&) noexcept = delete;
 
 	template <typename... Ts>
-	Result operator()(Ts&&... Args) const
+	Result operator()(Ts&&... args) const
 	{
-		return (reinterpret_cast<const Concept*>(Buffer))->operator()(std::forward<Ts>(Args)...);
+		return (reinterpret_cast<const Concept*>(buffer))->operator()(std::forward<Ts>(args)...);
 	}
 
 	~StackFunction()
 	{
-		(reinterpret_cast<Concept*>(Buffer))->~Concept();
+		(reinterpret_cast<Concept*>(buffer))->~Concept();
 	}
 };

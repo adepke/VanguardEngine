@@ -11,12 +11,12 @@ namespace ComponentProperties
 {
 	// Core components.
 
-	void RenderNameComponent(entt::registry& Registry, entt::entity Entity);
-	void RenderTransformComponent(entt::registry& Registry, entt::entity Entity);
-	void RenderControlComponent(entt::registry& Registry, entt::entity Entity);
+	void RenderNameComponent(entt::registry& registry, entt::entity entity);
+	void RenderTransformComponent(entt::registry& registry, entt::entity entity);
+	void RenderControlComponent(entt::registry& registry, entt::entity entity);
 
 	// Rendering components.
 
-	void RenderMeshComponent(entt::registry& Registry, entt::entity Entity);
-	void RenderCameraComponent(entt::registry& Registry, entt::entity Entity);
+	void RenderMeshComponent(entt::registry& registry, entt::entity entity);
+	void RenderCameraComponent(entt::registry& registry, entt::entity entity);
 }

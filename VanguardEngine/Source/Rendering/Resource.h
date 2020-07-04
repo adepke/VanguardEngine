@@ -32,9 +32,9 @@ enum AccessFlag
 
 struct ResourceDescription
 {
-	ResourceFrequency UpdateRate;
-	uint32_t BindFlags = 0;  // Determines the view type(s) created.
-	uint32_t AccessFlags = 0;
+	ResourceFrequency updateRate;
+	uint32_t bindFlags = 0;  // Determines the view type(s) created.
+	uint32_t accessFlags = 0;
 };
 
 class ResourceManager;
@@ -44,10 +44,10 @@ struct Resource
 	friend class ResourceManager;
 
 protected:
-	ResourcePtr<D3D12MA::Allocation> Allocation;
+	ResourcePtr<D3D12MA::Allocation> allocation;
 
 public:
-	D3D12_RESOURCE_STATES State;
+	D3D12_RESOURCE_STATES state;
 
 	Resource() = default;  // #TODO: Prevent creation outside of the resource manager.
 	Resource(const Resource&) = delete;
@@ -56,5 +56,5 @@ public:
 	Resource& operator=(const Resource&) = delete;
 	Resource& operator=(Resource&&) noexcept = default;
 
-	auto* Native() const noexcept { return Allocation->GetResource(); }
+	auto* Native() const noexcept { return allocation->GetResource(); }
 };

@@ -27,28 +27,28 @@ enum RGBufferTypeFlag
 
 struct RGBufferDescription
 {
-	uint32_t BufferTypeFlags;
-	ResourceFrequency UpdateRate = ResourceFrequency::Dynamic;
-	size_t Size;  // Element count. Size * Stride = Byte count.
-	size_t Stride = 0;
-	std::optional<DXGI_FORMAT> Format;
+	uint32_t bufferTypeFlags;
+	ResourceFrequency updateRate = ResourceFrequency::Dynamic;
+	size_t size;  // Element count. Size * Stride = Byte count.
+	size_t stride = 0;
+	std::optional<DXGI_FORMAT> format;
 };
 
 struct RGTextureDescription
 {
-	uint32_t Width = 1;
-	uint32_t Height = 1;
-	uint32_t Depth = 1;
-	DXGI_FORMAT Format;
+	uint32_t width = 1;
+	uint32_t height = 1;
+	uint32_t depth = 1;
+	DXGI_FORMAT format;
 };
 
 struct ResourceDependencyData
 {
-	std::unordered_set<size_t> ReadingPasses;  // List of passes that read from this resource.
-	std::unordered_set<size_t> WritingPasses;  // List of passes that write to this resource.
+	std::unordered_set<size_t> readingPasses;  // List of passes that read from this resource.
+	std::unordered_set<size_t> writingPasses;  // List of passes that write to this resource.
 };
 
 struct ResourceUsageData
 {
-	std::unordered_map<size_t, RGUsage> PassUsage;  // Map of pass index to usage.
+	std::unordered_map<size_t, RGUsage> passUsage;  // Map of pass index to usage.
 };

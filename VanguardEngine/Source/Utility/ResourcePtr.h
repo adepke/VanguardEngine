@@ -9,15 +9,15 @@ namespace Detail
 	template <typename T>
 	struct Releasable
 	{
-		typedef char(&Yes)[1];
-		typedef char(&No)[2];
+		typedef char(&yes)[1];
+		typedef char(&no)[2];
 
 		template <typename U>
-		static constexpr Yes Check(decltype(&U::Release));
+		static constexpr yes Check(decltype(&U::Release));
 		template <typename>
-		static constexpr No Check(...);
+		static constexpr no Check(...);
 
-		static constexpr bool Value = sizeof(Check<T>(0)) == sizeof(Yes);
+		static constexpr bool value = sizeof(Check<T>(0)) == sizeof(yes);
 	};
 
 	// We have to use this instead of std::unique_ptr because we are unable to access the underlying pointer type
@@ -30,78 +30,78 @@ namespace Detail
 		using deleter_type = Deleter;
 
 	private:
-		pointer Internal = nullptr;
-		deleter_type Delete;
+		pointer internalPtr = nullptr;
+		deleter_type deleter;
 
 	public:
 		constexpr ResourcePtrBase() noexcept = default;
 		constexpr ResourcePtrBase(nullptr_t) noexcept {}
-		explicit ResourcePtrBase(pointer Ptr) noexcept : Internal(Ptr) {}
-		ResourcePtrBase(pointer Ptr, Deleter& Del) noexcept : Internal(Ptr), Delete(Del) {}
+		explicit ResourcePtrBase(pointer ptr) noexcept : internalPtr(ptr) {}
+		ResourcePtrBase(pointer ptr, Deleter& deleteFunc) noexcept : internalPtr(ptr), deleter(deleteFunc) {}
 		ResourcePtrBase(const ResourcePtrBase&) = delete;
-		ResourcePtrBase(ResourcePtrBase&& Other) noexcept
+		ResourcePtrBase(ResourcePtrBase&& other) noexcept
 		{
-			std::swap(Internal, Other.Internal);
-			std::swap(Delete, Other.Delete);
+			std::swap(internalPtr, other.internalPtr);
+			std::swap(deleter, other.deleter);
 		}
 
 		~ResourcePtrBase()
 		{
-			if (Internal)
+			if (internalPtr)
 			{
-				Delete(Internal);
+				deleter(internalPtr);
 			}
 		}
 
 		ResourcePtrBase& operator=(const ResourcePtrBase&) = delete;
-		ResourcePtrBase& operator=(ResourcePtrBase&& Other) noexcept
+		ResourcePtrBase& operator=(ResourcePtrBase&& other) noexcept
 		{
-			if (this != std::addressof(Other))
+			if (this != std::addressof(other))
 			{
-				Reset(Other.Release());
+				Reset(other.Release());
 			}
 
 			return *this;
 		}
-		ResourcePtrBase& operator=(nullptr_t) noexcept { Internal = nullptr; return *this; }
+		ResourcePtrBase& operator=(nullptr_t) noexcept { internalPtr = nullptr; return *this; }
 
 		pointer Release() noexcept
 		{
-			return std::exchange(Internal, nullptr);
+			return std::exchange(internalPtr, nullptr);
 		}
 
-		void Reset(pointer Ptr = pointer{}) noexcept
+		void Reset(pointer ptr = pointer{}) noexcept
 		{
-			auto* const OldPtr = std::exchange(Internal, Ptr);
-			if (OldPtr)
+			auto* const oldPtr = std::exchange(internalPtr, ptr);
+			if (oldPtr)
 			{
-				Delete(OldPtr);
+				deleter(oldPtr);
 			}
 		}
 
 		pointer Get() const noexcept
 		{
-			return Internal;
+			return internalPtr;
 		}
 
 		explicit operator bool() const noexcept
 		{
-			return static_cast<bool>(Internal);
+			return static_cast<bool>(internalPtr);
 		}
 
 		typename std::add_lvalue_reference_t<T> operator*() const
 		{
-			return *Internal;
+			return *internalPtr;
 		}
 
 		pointer operator->() const noexcept
 		{
-			return Internal;
+			return internalPtr;
 		}
 
 		std::add_pointer_t<pointer> Indirect() noexcept
 		{
-			return &Internal;
+			return &internalPtr;
 		}
 	};
 
@@ -110,12 +110,12 @@ namespace Detail
 	{
 		constexpr ReleasableDelete() noexcept = default;
 
-		void operator()(T* Ptr) const
+		void operator()(T* ptr) const
 		{
-			Ptr->Release();
+			ptr->Release();
 		}
 	};
 }
 
 template <typename T>
-using ResourcePtr = Detail::ResourcePtrBase<T, std::conditional_t<Detail::Releasable<T>::Value, Detail::ReleasableDelete<T>, std::default_delete<T>>>;
+using ResourcePtr = Detail::ResourcePtrBase<T, std::conditional_t<Detail::Releasable<T>::value, Detail::ReleasableDelete<T>, std::default_delete<T>>>;

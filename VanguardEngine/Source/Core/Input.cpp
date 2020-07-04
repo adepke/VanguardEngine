@@ -13,58 +13,58 @@
 
 namespace Input
 {
-	static bool PendingMonitorUpdate = true;
+	static bool pendingMonitorUpdate = true;
 
-	float GetDPIScale(void* Monitor)
+	float GetDPIScale(void* monitor)
 	{
-		uint32_t DPIX = 96;
-		uint32_t DPIY = 96;
+		uint32_t dpiX = 96;
+		uint32_t dpiY = 96;
 
-		if (FAILED(::GetDpiForMonitor(static_cast<HMONITOR>(Monitor), MDT_EFFECTIVE_DPI, &DPIX, &DPIY)))
+		if (FAILED(::GetDpiForMonitor(static_cast<HMONITOR>(monitor), MDT_EFFECTIVE_DPI, &dpiX, &dpiY)))
 		{
 			VGLogError(Core) << "Failed to get monitor DPI.";
 
 			return 1.f;
 		}
 
-		return DPIX / 96.f;
+		return dpiX / 96.f;
 	}
 
 	void UpdateMonitors()
 	{
 		VGScopedCPUStat("Update Monitors");
 
-		PendingMonitorUpdate = false;
+		pendingMonitorUpdate = false;
 
 		ImGui::GetPlatformIO().Monitors.resize(0);
 
-		::EnumDisplayMonitors(nullptr, nullptr, MONITORENUMPROC(+[](HMONITOR Monitor, HDC, LPRECT, LPARAM)
+		::EnumDisplayMonitors(nullptr, nullptr, MONITORENUMPROC(+[](HMONITOR monitor, HDC, LPRECT, LPARAM)
 			{
-				MONITORINFO MonitorInfo{};
-				MonitorInfo.cbSize = sizeof(MonitorInfo);
+				MONITORINFO monitorInfo{};
+				monitorInfo.cbSize = sizeof(monitorInfo);
 
-				if (!::GetMonitorInfo(Monitor, &MonitorInfo))
+				if (!::GetMonitorInfo(monitor, &monitorInfo))
 				{
 					return true;
 				}
 
-				ImGuiPlatformMonitor PlatformMonitor;
-				PlatformMonitor.MainPos = { static_cast<float>(MonitorInfo.rcMonitor.left), static_cast<float>(MonitorInfo.rcMonitor.top) };
-				PlatformMonitor.MainSize = { static_cast<float>(MonitorInfo.rcMonitor.right - MonitorInfo.rcMonitor.left), static_cast<float>(MonitorInfo.rcMonitor.bottom - MonitorInfo.rcMonitor.top) };
-				PlatformMonitor.WorkPos = { static_cast<float>(MonitorInfo.rcWork.left), static_cast<float>(MonitorInfo.rcWork.top) };
-				PlatformMonitor.WorkSize = { static_cast<float>(MonitorInfo.rcWork.right - MonitorInfo.rcWork.left), static_cast<float>(MonitorInfo.rcWork.bottom - MonitorInfo.rcWork.top) };
-				PlatformMonitor.DpiScale = GetDPIScale(Monitor);
+				ImGuiPlatformMonitor platformMonitor;
+				platformMonitor.MainPos = { static_cast<float>(monitorInfo.rcMonitor.left), static_cast<float>(monitorInfo.rcMonitor.top) };
+				platformMonitor.MainSize = { static_cast<float>(monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left), static_cast<float>(monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top) };
+				platformMonitor.WorkPos = { static_cast<float>(monitorInfo.rcWork.left), static_cast<float>(monitorInfo.rcWork.top) };
+				platformMonitor.WorkSize = { static_cast<float>(monitorInfo.rcWork.right - monitorInfo.rcWork.left), static_cast<float>(monitorInfo.rcWork.bottom - monitorInfo.rcWork.top) };
+				platformMonitor.DpiScale = GetDPIScale(monitor);
 
-				auto& PlatformIO = ImGui::GetPlatformIO();
+				auto& platformIO = ImGui::GetPlatformIO();
 
-				if (MonitorInfo.dwFlags & MONITORINFOF_PRIMARY)
+				if (monitorInfo.dwFlags & MONITORINFOF_PRIMARY)
 				{
-					PlatformIO.Monitors.push_front(PlatformMonitor);
+					platformIO.Monitors.push_front(platformMonitor);
 				}
 
 				else
 				{
-					PlatformIO.Monitors.push_back(PlatformMonitor);
+					platformIO.Monitors.push_back(platformMonitor);
 				}
 
 				return true;
@@ -77,81 +77,81 @@ namespace Input
 	{
 		VGScopedCPUStat("Update Keyboard");
 
-		auto& IO = ImGui::GetIO();
+		auto& io = ImGui::GetIO();
 
 		// Update key modifiers that aren't handled by the input processing.
-		IO.KeyCtrl = (::GetKeyState(VK_CONTROL) & 0x8000) != 0;
-		IO.KeyShift = (::GetKeyState(VK_SHIFT) & 0x8000) != 0;
-		IO.KeyAlt = (::GetKeyState(VK_MENU) & 0x8000) != 0;
-		IO.KeySuper = false;
+		io.KeyCtrl = (::GetKeyState(VK_CONTROL) & 0x8000) != 0;
+		io.KeyShift = (::GetKeyState(VK_SHIFT) & 0x8000) != 0;
+		io.KeyAlt = (::GetKeyState(VK_MENU) & 0x8000) != 0;
+		io.KeySuper = false;
 	}
 
-	void UpdateMouse(void* Window)
+	void UpdateMouse(void* window)
 	{
 		VGScopedCPUStat("Update Mouse");
 
-		auto& IO = ImGui::GetIO();
+		auto& io = ImGui::GetIO();
 
-		if (IO.WantSetMousePos)
+		if (io.WantSetMousePos)
 		{
-			POINT TargetPoint = { static_cast<int>(IO.MousePos.x), static_cast<int>(IO.MousePos.y) };
+			POINT targetPoint = { static_cast<int>(io.MousePos.x), static_cast<int>(io.MousePos.y) };
 
-			::SetCursorPos(TargetPoint.x, TargetPoint.y);
+			::SetCursorPos(targetPoint.x, targetPoint.y);
 		}
 
-		IO.MousePos.x = std::numeric_limits<float>::min();
-		IO.MousePos.y = std::numeric_limits<float>::min();
-		IO.MouseHoveredViewport = 0;
+		io.MousePos.x = std::numeric_limits<float>::min();
+		io.MousePos.y = std::numeric_limits<float>::min();
+		io.MouseHoveredViewport = 0;
 
-		POINT MousePosition;
-		if (!::GetCursorPos(&MousePosition))
+		POINT mousePosition;
+		if (!::GetCursorPos(&mousePosition))
 		{
 			VGLogWarning(Core) << "Failed to get mouse cursor position: " << GetPlatformError();
 
 			return;
 		}
 
-		if (auto* ForegroundWindow = ::GetForegroundWindow(); ForegroundWindow)
+		if (auto* foregroundWindow = ::GetForegroundWindow(); foregroundWindow)
 		{
-			if (::IsChild(ForegroundWindow, static_cast<HWND>(Window)))
+			if (::IsChild(foregroundWindow, static_cast<HWND>(window)))
 			{
-				ForegroundWindow = static_cast<HWND>(Window);
+				foregroundWindow = static_cast<HWND>(window);
 			}
 
-			if (IO.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+			if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
 			{
-				if (ImGui::FindViewportByPlatformHandle(ForegroundWindow))
+				if (ImGui::FindViewportByPlatformHandle(foregroundWindow))
 				{
-					IO.MousePos = { static_cast<float>(MousePosition.x), static_cast<float>(MousePosition.y) };
+					io.MousePos = { static_cast<float>(mousePosition.x), static_cast<float>(mousePosition.y) };
 				}
 			}
 
 			else
 			{
-				if (ForegroundWindow == Window)
+				if (foregroundWindow == window)
 				{
-					if (!::ScreenToClient(static_cast<HWND>(Window), &MousePosition))
+					if (!::ScreenToClient(static_cast<HWND>(window), &mousePosition))
 						VGLogWarning(Core) << "Failed to convert mouse position from screen space to window space: " << GetPlatformError();
 					else
-						IO.MousePos = { static_cast<float>(MousePosition.x), static_cast<float>(MousePosition.y) };
+						io.MousePos = { static_cast<float>(mousePosition.x), static_cast<float>(mousePosition.y) };
 				}
 			}
 		}
 
-		if (auto HoveredWindow = ::WindowFromPoint(MousePosition); HoveredWindow)
+		if (auto hoveredWindow = ::WindowFromPoint(mousePosition); hoveredWindow)
 		{
-			if (auto* ImViewport = ImGui::FindViewportByPlatformHandle(HoveredWindow); ImViewport)
+			if (auto* viewport = ImGui::FindViewportByPlatformHandle(hoveredWindow); viewport)
 			{
-				if (!(ImViewport->Flags & ImGuiViewportFlags_NoInputs))
+				if (!(viewport->Flags & ImGuiViewportFlags_NoInputs))
 				{
-					IO.MouseHoveredViewport = ImViewport->ID;
+					io.MouseHoveredViewport = viewport->ID;
 				}
 			}
 		}
 
-		auto Cursor = ImGui::GetMouseCursor();
+		auto cursor = ImGui::GetMouseCursor();
 
-		if (Cursor == ImGuiMouseCursor_None || IO.MouseDrawCursor)
+		if (cursor == ImGuiMouseCursor_None || io.MouseDrawCursor)
 		{
 			::SetCursor(nullptr);  // Hide the cursor.
 		}
@@ -159,22 +159,22 @@ namespace Input
 		else
 		{
 			// Default to arrow.
-			LPTSTR PlatformCursor = IDC_ARROW;
+			LPTSTR platformCursor = IDC_ARROW;
 
-			switch (Cursor)
+			switch (cursor)
 			{
-			case ImGuiMouseCursor_Arrow: PlatformCursor = IDC_ARROW; break;
-			case ImGuiMouseCursor_TextInput: PlatformCursor = IDC_IBEAM; break;
-			case ImGuiMouseCursor_ResizeAll: PlatformCursor = IDC_SIZEALL; break;
-			case ImGuiMouseCursor_ResizeEW: PlatformCursor = IDC_SIZEWE; break;
-			case ImGuiMouseCursor_ResizeNS: PlatformCursor = IDC_SIZENS; break;
-			case ImGuiMouseCursor_ResizeNESW: PlatformCursor = IDC_SIZENESW; break;
-			case ImGuiMouseCursor_ResizeNWSE: PlatformCursor = IDC_SIZENWSE; break;
-			case ImGuiMouseCursor_Hand: PlatformCursor = IDC_HAND; break;
-			case ImGuiMouseCursor_NotAllowed: PlatformCursor = IDC_NO; break;
+			case ImGuiMouseCursor_Arrow: platformCursor = IDC_ARROW; break;
+			case ImGuiMouseCursor_TextInput: platformCursor = IDC_IBEAM; break;
+			case ImGuiMouseCursor_ResizeAll: platformCursor = IDC_SIZEALL; break;
+			case ImGuiMouseCursor_ResizeEW: platformCursor = IDC_SIZEWE; break;
+			case ImGuiMouseCursor_ResizeNS: platformCursor = IDC_SIZENS; break;
+			case ImGuiMouseCursor_ResizeNESW: platformCursor = IDC_SIZENESW; break;
+			case ImGuiMouseCursor_ResizeNWSE: platformCursor = IDC_SIZENWSE; break;
+			case ImGuiMouseCursor_Hand: platformCursor = IDC_HAND; break;
+			case ImGuiMouseCursor_NotAllowed: platformCursor = IDC_NO; break;
 			}
 
-			if (!::SetCursor(::LoadCursor(nullptr, PlatformCursor)))
+			if (!::SetCursor(::LoadCursor(nullptr, platformCursor)))
 			{
 				VGLogWarning(Core) << "Failed to set cursor: " << GetPlatformError();
 			}
@@ -188,7 +188,7 @@ namespace Input
 		// #TODO: Implement support for gamepads.
 	}
 
-	void Initialize(void* Window)
+	void Initialize(void* window)
 	{
 		VGScopedCPUStat("Input Initialize");
 
@@ -198,38 +198,38 @@ namespace Input
 			VGLogFatal(Core) << "Missing ImGui context!";
 		}
 
-		auto& IO = ImGui::GetIO();
+		auto& io = ImGui::GetIO();
 
-		IO.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
-		IO.BackendFlags |= ImGuiBackendFlags_HasSetMousePos;
-		IO.BackendFlags |= ImGuiBackendFlags_PlatformHasViewports;
-		IO.BackendFlags |= ImGuiBackendFlags_HasMouseHoveredViewport;
-		IO.BackendPlatformName = "ImGui Win64";
+		io.BackendFlags |= ImGuiBackendFlags_HasMouseCursors;
+		io.BackendFlags |= ImGuiBackendFlags_HasSetMousePos;
+		io.BackendFlags |= ImGuiBackendFlags_PlatformHasViewports;
+		io.BackendFlags |= ImGuiBackendFlags_HasMouseHoveredViewport;
+		io.BackendPlatformName = "ImGui Win64";
 
-		ImGui::GetMainViewport()->PlatformHandleRaw = Window;
+		ImGui::GetMainViewport()->PlatformHandleRaw = window;
 
-		IO.KeyMap[ImGuiKey_Tab] = VK_TAB;
-		IO.KeyMap[ImGuiKey_LeftArrow] = VK_LEFT;
-		IO.KeyMap[ImGuiKey_RightArrow] = VK_RIGHT;
-		IO.KeyMap[ImGuiKey_UpArrow] = VK_UP;
-		IO.KeyMap[ImGuiKey_DownArrow] = VK_DOWN;
-		IO.KeyMap[ImGuiKey_PageUp] = VK_PRIOR;
-		IO.KeyMap[ImGuiKey_PageDown] = VK_NEXT;
-		IO.KeyMap[ImGuiKey_Home] = VK_HOME;
-		IO.KeyMap[ImGuiKey_End] = VK_END;
-		IO.KeyMap[ImGuiKey_Insert] = VK_INSERT;
-		IO.KeyMap[ImGuiKey_Delete] = VK_DELETE;
-		IO.KeyMap[ImGuiKey_Backspace] = VK_BACK;
-		IO.KeyMap[ImGuiKey_Space] = VK_SPACE;
-		IO.KeyMap[ImGuiKey_Enter] = VK_RETURN;
-		IO.KeyMap[ImGuiKey_Escape] = VK_ESCAPE;
-		IO.KeyMap[ImGuiKey_KeyPadEnter] = VK_RETURN;
-		IO.KeyMap[ImGuiKey_A] = 'A';
-		IO.KeyMap[ImGuiKey_C] = 'C';
-		IO.KeyMap[ImGuiKey_V] = 'V';
-		IO.KeyMap[ImGuiKey_X] = 'X';
-		IO.KeyMap[ImGuiKey_Y] = 'Y';
-		IO.KeyMap[ImGuiKey_Z] = 'Z';
+		io.KeyMap[ImGuiKey_Tab] = VK_TAB;
+		io.KeyMap[ImGuiKey_LeftArrow] = VK_LEFT;
+		io.KeyMap[ImGuiKey_RightArrow] = VK_RIGHT;
+		io.KeyMap[ImGuiKey_UpArrow] = VK_UP;
+		io.KeyMap[ImGuiKey_DownArrow] = VK_DOWN;
+		io.KeyMap[ImGuiKey_PageUp] = VK_PRIOR;
+		io.KeyMap[ImGuiKey_PageDown] = VK_NEXT;
+		io.KeyMap[ImGuiKey_Home] = VK_HOME;
+		io.KeyMap[ImGuiKey_End] = VK_END;
+		io.KeyMap[ImGuiKey_Insert] = VK_INSERT;
+		io.KeyMap[ImGuiKey_Delete] = VK_DELETE;
+		io.KeyMap[ImGuiKey_Backspace] = VK_BACK;
+		io.KeyMap[ImGuiKey_Space] = VK_SPACE;
+		io.KeyMap[ImGuiKey_Enter] = VK_RETURN;
+		io.KeyMap[ImGuiKey_Escape] = VK_ESCAPE;
+		io.KeyMap[ImGuiKey_KeyPadEnter] = VK_RETURN;
+		io.KeyMap[ImGuiKey_A] = 'A';
+		io.KeyMap[ImGuiKey_C] = 'C';
+		io.KeyMap[ImGuiKey_V] = 'V';
+		io.KeyMap[ImGuiKey_X] = 'X';
+		io.KeyMap[ImGuiKey_Y] = 'Y';
+		io.KeyMap[ImGuiKey_Z] = 'Z';
 	}
 
 	void EnableDPIAwareness()
@@ -237,7 +237,7 @@ namespace Input
 		SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 	}
 
-	bool ProcessWindowMessage(void* Window, uint32_t Message, int64_t wParam, uint64_t lParam)
+	bool ProcessWindowMessage(void* window, uint32_t message, int64_t wParam, uint64_t lParam)
 	{
 		VGScopedCPUStat("Process Input Messages");
 
@@ -245,9 +245,9 @@ namespace Input
 		if (!ImGui::GetCurrentContext())
 			return false;
 
-		auto& IO = ImGui::GetIO();
+		auto& io = ImGui::GetIO();
 
-		switch (Message)
+		switch (message)
 		{
 		// Mouse click events.
 
@@ -260,18 +260,18 @@ namespace Input
 		case WM_MBUTTONDBLCLK:
 		case WM_XBUTTONDBLCLK:
 		{
-			size_t MouseButton = 0;  // Default to left click.
+			size_t mouseButton = 0;  // Default to left click.
 
-			if (Message == WM_RBUTTONDOWN || Message == WM_RBUTTONDBLCLK) MouseButton = 1;
-			if (Message == WM_MBUTTONDOWN || Message == WM_MBUTTONDBLCLK) MouseButton = 2;
-			if (Message == WM_XBUTTONDOWN || Message == WM_XBUTTONDBLCLK) MouseButton = (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) ? 3 : 4;
+			if (message == WM_RBUTTONDOWN || message == WM_RBUTTONDBLCLK) mouseButton = 1;
+			if (message == WM_MBUTTONDOWN || message == WM_MBUTTONDBLCLK) mouseButton = 2;
+			if (message == WM_XBUTTONDOWN || message == WM_XBUTTONDBLCLK) mouseButton = (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) ? 3 : 4;
 
 			if (!ImGui::IsAnyMouseDown() && !::GetCapture())
 			{
-				::SetCapture(static_cast<HWND>(Window));
+				::SetCapture(static_cast<HWND>(window));
 			}
 
-			IO.MouseDown[MouseButton] = true;
+			io.MouseDown[mouseButton] = true;
 
 			return true;
 		}
@@ -281,15 +281,15 @@ namespace Input
 		case WM_MBUTTONUP:
 		case WM_XBUTTONUP:
 		{
-			size_t MouseButton = 0;  // Default to left click.
+			size_t mouseButton = 0;  // Default to left click.
 
-			if (Message == WM_RBUTTONDOWN || Message == WM_RBUTTONDBLCLK) MouseButton = 1;
-			if (Message == WM_MBUTTONDOWN || Message == WM_MBUTTONDBLCLK) MouseButton = 2;
-			if (Message == WM_XBUTTONDOWN || Message == WM_XBUTTONDBLCLK) MouseButton = (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) ? 3 : 4;
+			if (message == WM_RBUTTONDOWN || message == WM_RBUTTONDBLCLK) mouseButton = 1;
+			if (message == WM_MBUTTONDOWN || message == WM_MBUTTONDBLCLK) mouseButton = 2;
+			if (message == WM_XBUTTONDOWN || message == WM_XBUTTONDBLCLK) mouseButton = (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) ? 3 : 4;
 
-			IO.MouseDown[MouseButton] = false;
+			io.MouseDown[mouseButton] = false;
 
-			if (!ImGui::IsAnyMouseDown() && ::GetCapture() == Window)
+			if (!ImGui::IsAnyMouseDown() && ::GetCapture() == window)
 			{
 				::ReleaseCapture();
 			}
@@ -301,14 +301,14 @@ namespace Input
 
 		case WM_MOUSEWHEEL:
 		{
-			IO.MouseWheel += static_cast<float>(GET_WHEEL_DELTA_WPARAM(wParam)) / static_cast<float>(WHEEL_DELTA);
+			io.MouseWheel += static_cast<float>(GET_WHEEL_DELTA_WPARAM(wParam)) / static_cast<float>(WHEEL_DELTA);
 
 			return true;
 		}
 
 		case WM_MOUSEHWHEEL:
 		{
-			IO.MouseWheelH += static_cast<float>(GET_WHEEL_DELTA_WPARAM(wParam)) / static_cast<float>(WHEEL_DELTA);
+			io.MouseWheelH += static_cast<float>(GET_WHEEL_DELTA_WPARAM(wParam)) / static_cast<float>(WHEEL_DELTA);
 
 			return true;
 		}
@@ -320,7 +320,7 @@ namespace Input
 		{
 			if (wParam < 256)
 			{
-				IO.KeysDown[wParam] = true;
+				io.KeysDown[wParam] = true;
 
 				return true;
 			}
@@ -333,7 +333,7 @@ namespace Input
 		{
 			if (wParam < 256)
 			{
-				IO.KeysDown[wParam] = false;
+				io.KeysDown[wParam] = false;
 
 				return true;
 			}
@@ -345,7 +345,7 @@ namespace Input
 		{
 			if (wParam > 0 && wParam < 0x10000)
 			{
-				IO.AddInputCharacterUTF16(static_cast<unsigned short>(wParam));
+				io.AddInputCharacterUTF16(static_cast<unsigned short>(wParam));
 
 				return true;
 			}
@@ -357,7 +357,7 @@ namespace Input
 
 		case WM_DISPLAYCHANGE:
 		{
-			PendingMonitorUpdate = true;
+			pendingMonitorUpdate = true;
 
 			return true;
 		}
@@ -366,18 +366,18 @@ namespace Input
 		return false;
 	}
 
-	void UpdateInputDevices(void* Window)
+	void UpdateInputDevices(void* window)
 	{
 		VGScopedCPUStat("Update Input Devices");
 
 		// If we have a monitor update, run it before any mouse-related tasks.
-		if (PendingMonitorUpdate)
+		if (pendingMonitorUpdate)
 		{
 			UpdateMonitors();
 		}
 
 		UpdateKeyboard();
-		UpdateMouse(Window);
+		UpdateMouse(window);
 		UpdateGamepad();
 	}
 }

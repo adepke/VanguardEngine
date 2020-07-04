@@ -17,64 +17,64 @@ struct MeshComponent
 {
 	struct Subset
 	{
-		size_t VertexOffset = 0;  // Offset into the vertex buffer.
-		size_t IndexOffset = 0;  // Offset into the index buffer.
-		size_t Indices = 0;
+		size_t vertexOffset = 0;  // Offset into the vertex buffer.
+		size_t indexOffset = 0;  // Offset into the index buffer.
+		size_t indices = 0;
 
-		std::shared_ptr<Material> Mat;
+		std::shared_ptr<Material> material;
 	};
 
-	std::vector<Subset> Subsets;
+	std::vector<Subset> subsets;
 
-	std::shared_ptr<Buffer> VertexBuffer;
-	std::shared_ptr<Buffer> IndexBuffer;
+	std::shared_ptr<Buffer> vertexBuffer;
+	std::shared_ptr<Buffer> indexBuffer;
 };
 
 struct CameraComponent
 {
-	float NearPlane = 0.01f;
-	float FarPlane = 10000.f;
-	float FieldOfView = 1.57079633f;  // 90 Degrees.
+	float nearPlane = 0.01f;
+	float farPlane = 10000.f;
+	float fieldOfView = 1.57079633f;  // 90 Degrees.
 };
 
-inline MeshComponent CreateMeshComponent(RenderDevice& Device, const std::vector<Vertex>& Vertices, const std::vector<uint32_t>& Indices)
+inline MeshComponent CreateMeshComponent(RenderDevice& device, const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices)
 {
 	VGScopedCPUStat("Create Mesh Component");
 
-	MeshComponent Result;
+	MeshComponent result;
 
-	BufferDescription VertexDescription{};
-	VertexDescription.Size = Vertices.size();
-	VertexDescription.Stride = sizeof(Vertex);
-	VertexDescription.UpdateRate = ResourceFrequency::Static;
-	VertexDescription.BindFlags = BindFlag::ShaderResource;  // Don't bind as vertex buffer, we aren't using the fixed pipeline vertex processing.
-	VertexDescription.AccessFlags = AccessFlag::CPUWrite;
+	BufferDescription vertexDescription{};
+	vertexDescription.size = vertices.size();
+	vertexDescription.stride = sizeof(Vertex);
+	vertexDescription.updateRate = ResourceFrequency::Static;
+	vertexDescription.bindFlags = BindFlag::ShaderResource;  // Don't bind as vertex buffer, we aren't using the fixed pipeline vertex processing.
+	vertexDescription.accessFlags = AccessFlag::CPUWrite;
 
-	Result.VertexBuffer = std::move(Device.CreateResource(VertexDescription, VGText("Vertex Buffer")));
+	result.vertexBuffer = std::move(device.CreateResource(vertexDescription, VGText("Vertex Buffer")));
 
-	std::vector<uint8_t> VertexResource{};
-	VertexResource.resize(sizeof(Vertex) * Vertices.size());
-	std::memcpy(VertexResource.data(), Vertices.data(), VertexResource.size());
-	Device.WriteResource(Result.VertexBuffer, VertexResource);
+	std::vector<uint8_t> vertexResource{};
+	vertexResource.resize(sizeof(Vertex) * vertices.size());
+	std::memcpy(vertexResource.data(), vertices.data(), vertexResource.size());
+	device.WriteResource(result.vertexBuffer, vertexResource);
 
-	Device.GetDirectList().TransitionBarrier(Result.VertexBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+	device.GetDirectList().TransitionBarrier(result.vertexBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
-	BufferDescription IndexDescription{};
-	IndexDescription.Size = Indices.size();
-	IndexDescription.Stride = sizeof(uint32_t);
-	IndexDescription.UpdateRate = ResourceFrequency::Static;
-	IndexDescription.BindFlags = BindFlag::IndexBuffer;
-	IndexDescription.AccessFlags = AccessFlag::CPUWrite;
+	BufferDescription indexDescription{};
+	indexDescription.size = indices.size();
+	indexDescription.stride = sizeof(uint32_t);
+	indexDescription.updateRate = ResourceFrequency::Static;
+	indexDescription.bindFlags = BindFlag::IndexBuffer;
+	indexDescription.accessFlags = AccessFlag::CPUWrite;
 
-	Result.IndexBuffer = std::move(Device.CreateResource(IndexDescription, VGText("Index Buffer")));
+	result.indexBuffer = std::move(device.CreateResource(indexDescription, VGText("Index Buffer")));
 
-	std::vector<uint8_t> IndexResource{};
-	IndexResource.resize(sizeof(uint32_t) * Indices.size());
-	std::memcpy(IndexResource.data(), Indices.data(), IndexResource.size());
-	Device.WriteResource(Result.IndexBuffer, IndexResource);
+	std::vector<uint8_t> indexResource{};
+	indexResource.resize(sizeof(uint32_t) * indices.size());
+	std::memcpy(indexResource.data(), indices.data(), indexResource.size());
+	device.WriteResource(result.indexBuffer, indexResource);
 
-	Device.GetDirectList().TransitionBarrier(Result.IndexBuffer, D3D12_RESOURCE_STATE_INDEX_BUFFER);
-	Device.GetDirectList().FlushBarriers();
+	device.GetDirectList().TransitionBarrier(result.indexBuffer, D3D12_RESOURCE_STATE_INDEX_BUFFER);
+	device.GetDirectList().FlushBarriers();
 
-	return std::move(Result);
+	return std::move(result);
 }

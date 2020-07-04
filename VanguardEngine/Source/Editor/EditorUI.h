@@ -10,15 +10,15 @@
 class EditorUI : public Singleton<EditorUI>
 {
 private:
-	entt::entity HierarchySelectedEntity = entt::null;
+	entt::entity hierarchySelectedEntity = entt::null;
 
 public:
-	Viewport SceneViewport;
+	Viewport sceneViewport;
 
 public:
 	void DrawScene();
 	void DrawToolbar();
-	void DrawEntityHierarchy(entt::registry& Registry);
-	void DrawEntityPropertyViewer(entt::registry& Registry);
+	void DrawEntityHierarchy(entt::registry& registry);
+	void DrawEntityPropertyViewer(entt::registry& registry);
 	void DrawAssetBrowser();
 };

@@ -9,10 +9,10 @@
 class Adapter
 {
 private:
-	ResourcePtr<IDXGIAdapter1> AdapterResource;
+	ResourcePtr<IDXGIAdapter1> adapterResource;
 
 public:
-	auto* Native() const noexcept { return AdapterResource.Get(); }
+	auto* Native() const noexcept { return adapterResource.Get(); }
 
-	void Initialize(ResourcePtr<IDXGIFactory7>& Factory, D3D_FEATURE_LEVEL FeatureLevel, bool Software);
+	void Initialize(ResourcePtr<IDXGIFactory7>& factory, D3D_FEATURE_LEVEL featureLevel, bool software);
 };

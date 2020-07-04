@@ -7,35 +7,35 @@
 
 #include <imgui.h>
 
-void ControlSystem::Update(entt::registry& Registry)
+void ControlSystem::Update(entt::registry& registry)
 {
 	VGScopedCPUStat("Control System");
 
 	// If any entities have control.
-	if (Registry.view<const ControlComponent>().size())
+	if (registry.view<const ControlComponent>().size())
 	{
-		Renderer::Get().Window->RestrainCursor(CursorRestraint::ToCenter);
-		Renderer::Get().Window->ShowCursor(false);
+		Renderer::Get().window->RestrainCursor(CursorRestraint::ToCenter);
+		Renderer::Get().window->ShowCursor(false);
 
 		// #TODO: Conditionally compile this out if we're not compiling with the editor.
 		if (ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_Escape)))
 		{
-			Registry.clear<ControlComponent>();  // Rescind all control, returning it to the editor.
+			registry.clear<ControlComponent>();  // Rescind all control, returning it to the editor.
 		}
 	}
 
 	else
 	{
-		Renderer::Get().Window->RestrainCursor(CursorRestraint::None);
-		Renderer::Get().Window->ShowCursor(true);
+		Renderer::Get().window->RestrainCursor(CursorRestraint::None);
+		Renderer::Get().window->ShowCursor(true);
 
 		if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsMouseClicked(ImGuiMouseButton_Right))  // Left or right click gives control.
 		{
 			// GetHoveredViewport()
 			{
 				// #TEMP
-				//entt::registry::entity_type SomeEntity;
-				//Registry.emplace<ControlComponent>(SomeEntity);
+				//entt::registry::entity_type someEntity;
+				//registry.emplace<ControlComponent>(someEntity);
 			}
 		}
 	}

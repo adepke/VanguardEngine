@@ -26,9 +26,9 @@ struct DescriptorHandle
 	friend class FreeQueueDescriptorHeap;
 
 private:
-	FreeQueueDescriptorHeap* ParentHeap = nullptr;  // Optional heap, if we were allocated from a free queue heap.
-	uint64_t CPUPointer;
-	uint64_t GPUPointer;
+	FreeQueueDescriptorHeap* parentHeap = nullptr;  // Optional heap, if we were allocated from a free queue heap.
+	uint64_t cpuPointer;
+	uint64_t gpuPointer;
 
 public:
 	inline ~DescriptorHandle();
@@ -40,49 +40,49 @@ public:
 	DescriptorHandle& operator=(const DescriptorHandle&) = delete;
 	DescriptorHandle& operator=(DescriptorHandle&&) noexcept = default;
 
-	operator D3D12_CPU_DESCRIPTOR_HANDLE() noexcept { return { CPUPointer }; }
-	operator D3D12_GPU_DESCRIPTOR_HANDLE() noexcept { return { GPUPointer }; }
+	operator D3D12_CPU_DESCRIPTOR_HANDLE() noexcept { return { cpuPointer }; }
+	operator D3D12_GPU_DESCRIPTOR_HANDLE() noexcept { return { gpuPointer }; }
 };
 
 class DescriptorHeapBase
 {
 protected:
-	ResourcePtr<ID3D12DescriptorHeap> Heap;
-	size_t CPUHeapStart = 0;
-	size_t GPUHeapStart = 0;
-	size_t DescriptorSize = 0;  // Increment size.
-	size_t AllocatedDescriptors = 0;
-	size_t TotalDescriptors = 0;
+	ResourcePtr<ID3D12DescriptorHeap> heap;
+	size_t cpuHeapStart = 0;
+	size_t gpuHeapStart = 0;
+	size_t descriptorSize = 0;  // Increment size.
+	size_t allocatedDescriptors = 0;
+	size_t totalDescriptors = 0;
 
 public:
-	void Create(RenderDevice* Device, DescriptorType Type, size_t Descriptors, bool Visible);
+	void Create(RenderDevice* device, DescriptorType type, size_t descriptors, bool visible);
 
-	auto* Native() noexcept { return Heap.Get(); }
+	auto* Native() noexcept { return heap.Get(); }
 };
 
 class LinearDescriptorHeap : public DescriptorHeapBase
 {
 public:
 	DescriptorHandle Allocate();
-	void Reset() { AllocatedDescriptors = 0; }
+	void Reset() { allocatedDescriptors = 0; }
 };
 
 class FreeQueueDescriptorHeap : public DescriptorHeapBase
 {
 private:
-	std::queue<DescriptorHandle> FreeQueue;
+	std::queue<DescriptorHandle> freeQueue;
 
 public:
 	DescriptorHandle Allocate();
-	void Free(DescriptorHandle&& Handle);
+	void Free(DescriptorHandle&& handle);
 
 	~FreeQueueDescriptorHeap();
 };
 
 inline DescriptorHandle::~DescriptorHandle()
 {
-	if (ParentHeap)
+	if (parentHeap)
 	{
-		ParentHeap->Free(std::move(*this));
+		parentHeap->Free(std::move(*this));
 	}
 }
