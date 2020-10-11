@@ -16,15 +16,17 @@ class RenderDevice;
 // Helper type to resolve resource tags into actual resource handles.
 class RGResolver
 {
+	friend class RenderGraph;
+
 private:
 	size_t counter = 0;
 	std::unordered_map<size_t, std::shared_ptr<Buffer>> bufferResources;
 	std::unordered_map<size_t, std::shared_ptr<Texture>> textureResources;
 
-	std::unordered_map<size_t, std::pair<RGBufferDescription, std::wstring>> transientBufferResources;
-	std::unordered_map<size_t, std::pair<RGTextureDescription, std::wstring>> transientTextureResources;
+	std::unordered_map<size_t, std::pair<TransientBufferDescription, std::wstring>> transientBufferResources;
+	std::unordered_map<size_t, std::pair<TransientTextureDescription, std::wstring>> transientTextureResources;
 
-public:  // Utilities for the render graph.
+private:  // Utilities for the render graph.
 	size_t AddResource(const std::shared_ptr<Buffer>& resource) { const auto tag = counter++; bufferResources[tag] = resource; return tag; }
 	size_t AddResource(const std::shared_ptr<Texture>& resource) { const auto tag = counter++; textureResources[tag] = resource; return tag; }
 
