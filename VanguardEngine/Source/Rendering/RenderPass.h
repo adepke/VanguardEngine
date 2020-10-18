@@ -10,6 +10,12 @@ enum class OutputBind
 
 class RenderPass
 {
-	void SetView(const RenderView& view);
-	void Output(size_t resourceTag, OutputBind bind);
+	friend class RenderGraph;
+
+private:
+	RenderView view;  // #TODO: Can we have multiple views...?
+
+public:
+	void SetView(const RenderView& inView);
+	void Output(const size_t resourceTag, OutputBind bind);
 };

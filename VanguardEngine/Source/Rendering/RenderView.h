@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <set>
+
 enum class ResourceBind
 {
 	CBV,
@@ -11,8 +13,13 @@ enum class ResourceBind
 
 class RenderView
 {
-	size_t Create(TransientBufferDescription description, ResourceBind bind);
-	size_t Create(TransientTextureDescription description, ResourceBind bind);
-	void Read(size_t resourceTag, ResourceBind bind);
-	void Write(size_t resourceTag, ResourceBind bind);
+private:
+	std::set<size_t> reads;
+	std::set<size_t> writes;
+
+public:
+	const size_t Create(TransientBufferDescription description, ResourceBind bind);
+	const size_t Create(TransientTextureDescription description, ResourceBind bind);
+	void Read(const size_t resourceTag, ResourceBind bind);
+	void Write(const size_t resourceTag, ResourceBind bind);
 };

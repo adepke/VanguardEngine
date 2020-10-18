@@ -9,7 +9,7 @@
 struct TransientBufferDescription
 {
 	ResourceFrequency updateRate = ResourceFrequency::Dynamic;
-	size_t size;  // Element count. Size * Stride = Byte count.
+	size_t size;  // Element count. size * stride = bytes.
 	size_t stride = 0;
 	std::optional<DXGI_FORMAT> format;
 };
