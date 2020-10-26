@@ -162,6 +162,7 @@ project "Engine"
 		files { "VanguardEngine/Source/Debug/*.h", "VanguardEngine/Source/Debug/*.cpp" }
 		files { "VanguardEngine/Source/Editor/*.h", "VanguardEngine/Source/Editor/*.cpp" }
 		files { "VanguardEngine/Source/Rendering/*.h", "VanguardEngine/Source/Rendering/*.cpp" }
+		files { "VanguardEngine/Source/Rendering/Passes/*.h", "VanguardEngine/Source/Rendering/Passes/*.cpp" }
 		files { "VanguardEngine/Source/Threading/*.h", "VanguardEngine/Source/Threading/*.cpp" }
 		files { "VanguardEngine/Source/Utility/*.h", "VanguardEngine/Source/Utility/*.cpp" }
 		files { "VanguardEngine/Source/Window/*.h", "VanguardEngine/Source/Window/*.cpp" }
@@ -169,14 +170,14 @@ project "Engine"
 	-- Specific Files
 		
 	filter { "platforms:Win64" }
-		files { "VanguardEngine/Source/Asset/Windows/*.h", "VanguardEngine/Source/Asset/Windows/*.cpp" }
-		files { "VanguardEngine/Source/Core/Windows/*.h", "VanguardEngine/Source/Core/Windows/*.cpp" }
-		files { "VanguardEngine/Source/Debug/Windows/*.h", "VanguardEngine/Source/Debug/Windows/*.cpp" }
-		files { "VanguardEngine/Source/Editor/Windows/*.h", "VanguardEngine/Source/Editor/Windows/*.cpp" }
-		files { "VanguardEngine/Source/Rendering/Windows/*.h", "VanguardEngine/Source/Rendering/Windows/*.cpp" }
-		files { "VanguardEngine/Source/Threading/Windows/*.h", "VanguardEngine/Source/Threading/Windows/*.cpp" }
-		files { "VanguardEngine/Source/Utility/Windows/*.h", "VanguardEngine/Source/Utility/Windows/*.cpp" }
-		files { "VanguardEngine/Source/Window/Windows/*.h", "VanguardEngine/Source/Window/Windows/*.cpp" }
+		files { "VanguardEngine/Source/Asset/Windows/**.h", "VanguardEngine/Source/Asset/Windows/**.cpp" }
+		files { "VanguardEngine/Source/Core/Windows/**.h", "VanguardEngine/Source/Core/Windows/**.cpp" }
+		files { "VanguardEngine/Source/Debug/Windows/**.h", "VanguardEngine/Source/Debug/Windows/**.cpp" }
+		files { "VanguardEngine/Source/Editor/Windows/**.h", "VanguardEngine/Source/Editor/Windows/**.cpp" }
+		files { "VanguardEngine/Source/Rendering/Windows/**.h", "VanguardEngine/Source/Rendering/Windows/**.cpp" }
+		files { "VanguardEngine/Source/Threading/Windows/**.h", "VanguardEngine/Source/Threading/Windows/**.cpp" }
+		files { "VanguardEngine/Source/Utility/Windows/**.h", "VanguardEngine/Source/Utility/Windows/**.cpp" }
+		files { "VanguardEngine/Source/Window/Windows/**.h", "VanguardEngine/Source/Window/Windows/**.cpp" }
 
 	filter {}
 	
