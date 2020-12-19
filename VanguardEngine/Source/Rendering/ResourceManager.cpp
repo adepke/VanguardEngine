@@ -246,6 +246,9 @@ std::shared_ptr<Buffer> ResourceManager::AllocateBuffer(const BufferDescription&
 {
 	VGScopedCPUStat("Allocate Buffer");
 
+	// Early validation.
+	VGAssert(description.size > 0, "Failed to create buffer, must have non-zero size.");
+
 	D3D12_RESOURCE_DESC resourceDesc{};
 	resourceDesc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
 	resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
@@ -311,6 +314,7 @@ std::shared_ptr<Texture> ResourceManager::AllocateTexture(const TextureDescripti
 
 	// Early validation.
 	VGAssert(description.updateRate != ResourceFrequency::Dynamic, "Failed to create texture, cannot have dynamic update rate.");
+	VGAssert(description.width > 0 && description.height > 0 && description.depth > 0, "Failed to create texture, must have non-zero dimensions.");
 
 	D3D12_RESOURCE_DESC resourceDesc{};
 	resourceDesc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
