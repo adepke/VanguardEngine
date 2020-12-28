@@ -162,7 +162,6 @@ project "Engine"
 		files { "VanguardEngine/Source/Debug/*.h", "VanguardEngine/Source/Debug/*.cpp" }
 		files { "VanguardEngine/Source/Editor/*.h", "VanguardEngine/Source/Editor/*.cpp" }
 		files { "VanguardEngine/Source/Rendering/*.h", "VanguardEngine/Source/Rendering/*.cpp" }
-		files { "VanguardEngine/Source/Rendering/Passes/*.h", "VanguardEngine/Source/Rendering/Passes/*.cpp" }
 		files { "VanguardEngine/Source/Threading/*.h", "VanguardEngine/Source/Threading/*.cpp" }
 		files { "VanguardEngine/Source/Utility/*.h", "VanguardEngine/Source/Utility/*.cpp" }
 		files { "VanguardEngine/Source/Window/*.h", "VanguardEngine/Source/Window/*.cpp" }
@@ -198,6 +197,9 @@ project "Engine"
 		
 	filter { "platforms:not Win64" }
 		links { "pthread" }
+		
+	filter { "platforms:Win64", "configurations:not Release" }
+		links { "dxguid" }
 		
 	filter {}
 	
