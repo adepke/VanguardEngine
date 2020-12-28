@@ -50,7 +50,7 @@ inline MeshComponent CreateMeshComponent(RenderDevice& device, const std::vector
 	vertexDescription.bindFlags = BindFlag::ShaderResource;  // Don't bind as vertex buffer, we aren't using the fixed pipeline vertex processing.
 	vertexDescription.accessFlags = AccessFlag::CPUWrite;
 
-	result.vertexBuffer = std::move(device.CreateResource(vertexDescription, VGText("Vertex Buffer")));
+	result.vertexBuffer = std::move(device.CreateResource(vertexDescription, VGText("Vertex buffer")));
 
 	std::vector<uint8_t> vertexResource{};
 	vertexResource.resize(sizeof(Vertex) * vertices.size());
@@ -66,7 +66,7 @@ inline MeshComponent CreateMeshComponent(RenderDevice& device, const std::vector
 	indexDescription.bindFlags = BindFlag::IndexBuffer;
 	indexDescription.accessFlags = AccessFlag::CPUWrite;
 
-	result.indexBuffer = std::move(device.CreateResource(indexDescription, VGText("Index Buffer")));
+	result.indexBuffer = std::move(device.CreateResource(indexDescription, VGText("Index buffer")));
 
 	std::vector<uint8_t> indexResource{};
 	indexResource.resize(sizeof(uint32_t) * indices.size());
@@ -74,7 +74,6 @@ inline MeshComponent CreateMeshComponent(RenderDevice& device, const std::vector
 	device.WriteResource(result.indexBuffer, indexResource);
 
 	device.GetDirectList().TransitionBarrier(result.indexBuffer, D3D12_RESOURCE_STATE_INDEX_BUFFER);
-	device.GetDirectList().FlushBarriers();
 
 	return std::move(result);
 }
