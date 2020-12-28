@@ -6,7 +6,7 @@
 #include <Utility/Singleton.h>
 #include <Window/WindowFrame.h>
 #include <Rendering/Device.h>
-#include <Rendering/PipelineState.h>
+#include <Rendering/PipelineBuilder.h>
 #include <Rendering/Material.h>
 #include <Rendering/Buffer.h>
 #include <Rendering/Texture.h>
@@ -24,14 +24,17 @@ public:
 	std::unique_ptr<RenderDevice> device;  // Destruct the device after all other resources.
 
 private:
+	PipelineBuilder pipelines;  // Manages all the pipelines.
+
 	std::shared_ptr<Buffer> cameraBuffer;
-	std::vector<Material> materials;
 	std::unique_ptr<UserInterfaceManager> userInterface;
 
 	DescriptorHandle nullDescriptor;
 
 private:
 	void UpdateCameraBuffer();
+	void CreatePipelines();
+	std::pair<std::shared_ptr<Buffer>, size_t> CreateInstanceBuffer(const entt::registry& registry);
 
 public:
 	~Renderer();

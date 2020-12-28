@@ -4,7 +4,37 @@
 
 #include <Rendering/Resource.h>
 
+#include <functional>
+#include <type_traits>
 #include <optional>
+
+// Typed resource for compile time validation.
+struct RenderResource
+{
+	size_t id;
+
+	bool operator==(const RenderResource other) const
+	{
+		return id == other.id;
+	}
+
+	bool operator<(const RenderResource other) const
+	{
+		return id < other.id;
+	}
+};
+
+namespace std
+{
+	template <>
+	struct hash<RenderResource>
+	{
+		size_t operator()(const RenderResource resource) const
+		{
+			return hash<remove_cv_t<decltype(resource.id)>>{}(resource.id);
+		}
+	};
+}
 
 struct TransientBufferDescription
 {
@@ -16,8 +46,8 @@ struct TransientBufferDescription
 
 struct TransientTextureDescription
 {
-	uint32_t width = 0;  // Will match output resolution if left at 0.
-	uint32_t height = 0;
+	uint32_t width = 0;  // Will match back buffer resolution if left at 0.
+	uint32_t height = 0;  // Will match back buffer resolution if left at 0.
 	uint32_t depth = 1;
 	DXGI_FORMAT format;
 };

@@ -1,26 +1,33 @@
 // Copyright (c) 2019-2020 Andrew Depke
 
 #include <Rendering/RenderGraph.h>
+#include <Rendering/RenderPass.h>
+#include <Rendering/Device.h>
+#include <Rendering/Texture.h>
 
 #include <algorithm>
 
 void RenderGraph::BuildAdjacencyList()
 {
-	for (const auto& outer : passes)
+	for (int i = 0; i < passes.size(); ++i)
 	{
-		for (const auto& inner : passes)
+		const auto& outer = passes[i];
+
+		for (int j = 0; j < passes.size(); ++j)
 		{
-			if (outer == inner)
+			if (i == j)
 				continue;
 
-			std::vector<size_t> intersection;
+			const auto& inner = passes[j];
+
+			std::vector<RenderResource> intersection;
 			// #TODO: We can stop as soon as there's a single intersection, std::set_intersection will find all intersections.
-			std::set_intersection(outer->view.writes.begin(), outer->view.writes.end(), inner->view.reads.begin(), inner->view.reads.end(), intersection.begin());
+			std::set_intersection(outer->writes.cbegin(), outer->writes.cend(), inner->reads.cbegin(), inner->reads.cend(), std::back_inserter(intersection));
 			
 			// If there's a write-to-read dependency, create an edge.
 			if (intersection.size() > 0)
 			{
-				adjacencyList[outer].emplace_back(inner);
+				adjacencyList[i].emplace_back(j);
 			}
 		}
 	}
@@ -45,14 +52,14 @@ void RenderGraph::TopologicalSort()
 {
 	sorted.reserve(passes.size());  // Most passes are unlikely to be trimmed.
 
-	std::vector<bool> visited(passes.size(), 0);
+	std::vector<bool> visited(passes.size(), false);
 	std::stack<bool> stack;
 
-	for (const auto& pass : passes)
+	for (int i = 0; i < passes.size(); ++i)
 	{
-		if (!visited[pass])
+		if (!visited[i])
 		{
-			DepthFirstSearch(pass, visited, stack);
+			DepthFirstSearch(i, visited, stack);
 		}
 	}
 
@@ -75,4 +82,245 @@ void RenderGraph::BuildDepthMap()
 			}
 		}
 	}
+}
+
+void RenderGraph::InjectStateBarriers()
+{
+	for (int i = 0; i < passes.size(); ++i)
+	{
+		auto& pass = passes[i];
+		auto& list = passLists[i];
+
+		for (const auto resource : pass->reads)
+		{
+			auto& buffer = resourceManager.FetchAsBuffer(resource);
+			auto& texture = resourceManager.FetchAsTexture(resource);
+
+			const auto CheckState = [&](D3D12_RESOURCE_STATES state)
+			{
+				if (buffer)
+				{
+					if ((buffer->state & state) != state)
+						list->TransitionBarrier(buffer, state);
+				}
+
+				else if (texture)
+				{
+					if ((texture->state & state) != state)
+						list->TransitionBarrier(texture, state);
+				}
+			};
+
+			switch (pass->bindInfo[resource])
+			{
+			case ResourceBind::CBV: CheckState(D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER); break;
+			case ResourceBind::SRV: CheckState(D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE); break;
+			case ResourceBind::UAV: CheckState(D3D12_RESOURCE_STATE_UNORDERED_ACCESS); break;
+			case ResourceBind::DSV: CheckState(D3D12_RESOURCE_STATE_DEPTH_READ); break;
+			}
+		}
+
+		for (const auto resource : pass->writes)
+		{
+			auto& buffer = resourceManager.FetchAsBuffer(resource);
+			auto& texture = resourceManager.FetchAsTexture(resource);
+
+			const auto CheckState = [&](D3D12_RESOURCE_STATES state)
+			{
+				if (buffer)
+				{
+					if ((buffer->state & state) != state)
+						list->TransitionBarrier(buffer, state);
+				}
+
+				else if (texture)
+				{
+					if ((texture->state & state) != state)
+						list->TransitionBarrier(texture, state);
+				}
+			};
+
+			if (pass->outputBindInfo.contains(resource))
+			{
+				switch (pass->outputBindInfo[resource].first)
+				{
+				case OutputBind::RTV: CheckState(D3D12_RESOURCE_STATE_RENDER_TARGET); break;
+				case OutputBind::DSV: CheckState(D3D12_RESOURCE_STATE_DEPTH_WRITE); break;
+				}
+			}
+
+			else
+			{
+				switch (pass->bindInfo[resource])
+				{
+				case ResourceBind::UAV: CheckState(D3D12_RESOURCE_STATE_UNORDERED_ACCESS); break;
+				}
+			}
+		}
+	}
+
+	for (auto& list : passLists)
+	{
+		list->FlushBarriers();
+	}
+}
+
+std::pair<uint32_t, uint32_t> RenderGraph::GetBackBufferResolution()
+{
+	VGAssert(taggedResources.contains(ResourceTag::BackBuffer), "Render graph doesn't have tagged back buffer resource.");
+
+	const auto& backBuffer = resourceManager.Get<Texture>(taggedResources[ResourceTag::BackBuffer]);
+	return std::make_pair(backBuffer.description.width, backBuffer.description.height);
+}
+
+RenderPass& RenderGraph::AddPass(std::string_view stableName, ExecutionQueue execution)
+{
+	return *passes.emplace_back(std::make_unique<RenderPass>(&resourceManager, stableName));
+}
+
+void RenderGraph::Build()
+{
+	for (const auto& pass : passes)
+	{
+		pass->Validate();
+	}
+
+	BuildAdjacencyList();
+	TopologicalSort();
+}
+
+void RenderGraph::Execute(RenderDevice* device)
+{
+	resourceManager.BuildTransients(device, this);
+
+	passLists.reserve(passes.size());
+
+	for (int i = 0; i < passes.size(); ++i)
+	{
+		passLists.emplace_back(std::move(device->AllocateFrameCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT)));
+	}
+
+	InjectStateBarriers();
+
+	for (int i = 0; i < passLists.size(); ++i)
+	{
+		auto& pass = passes[i];
+		auto& list = passLists[i];
+
+		// #TODO: Inject scoped GPU zone.
+
+		// If graphics pass...
+
+		list->BindDescriptorAllocator(device->GetDescriptorAllocator());
+
+		D3D12_VIEWPORT viewport{
+			.TopLeftX = 0.f,
+			.TopLeftY = 0.f,
+			.Width = static_cast<float>(device->renderWidth),
+			.Height = static_cast<float>(device->renderHeight),
+			.MinDepth = 0.f,
+			.MaxDepth = 1.f
+		};
+
+		list->Native()->RSSetViewports(1, &viewport);
+
+		D3D12_RECT scissor{
+			.left = 0,
+			.top = 0,
+			.right = static_cast<LONG>(device->renderWidth),
+			.bottom = static_cast<LONG>(device->renderHeight)
+		};
+
+		list->Native()->RSSetScissorRects(1, &scissor);
+
+		std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> renderTargets;
+		renderTargets.reserve(pass->outputBindInfo.size());
+		D3D12_CPU_DESCRIPTOR_HANDLE depthStencil;
+		bool hasDepthStencil = false;
+
+		for (const auto& [resource, info] : pass->outputBindInfo)
+		{
+			auto& texture = resourceManager.Get<Texture>(resource);
+
+			if (info.first == OutputBind::RTV)
+			{
+				renderTargets.emplace_back(*texture.RTV);
+			}
+
+			else if (info.first == OutputBind::DSV)
+			{
+				hasDepthStencil = true;
+				depthStencil = *texture.DSV;
+			}
+		}
+
+		// If we don't have a depth stencil output, we might still have one as an input.
+		if (!hasDepthStencil)
+		{
+			for (const auto& [resource, bind] : pass->bindInfo)
+			{
+				if (bind == ResourceBind::DSV)
+				{
+					auto& texture = resourceManager.Get<Texture>(resource);
+
+					hasDepthStencil = true;
+					depthStencil = *texture.DSV;
+
+					break;
+				}
+			}
+		}
+
+		// #TODO: Replace with render passes.
+		list->Native()->OMSetRenderTargets(renderTargets.size(), renderTargets.size() > 0 ? renderTargets.data() : nullptr, false, hasDepthStencil ? &depthStencil : nullptr);
+
+		const float ClearColor[] = { 0.2f, 0.2f, 0.2f, 1.f };
+
+		for (const auto& [resource, info] : pass->outputBindInfo)
+		{
+			if (info.second)
+			{
+				auto& texture = resourceManager.Get<Texture>(resource);
+
+				if (info.first == OutputBind::RTV)
+				{
+					list->Native()->ClearRenderTargetView(*texture.RTV, ClearColor, 0, nullptr);
+				}
+
+				else if (info.first == OutputBind::DSV)
+				{
+					// #TODO: Stencil clearing.
+					list->Native()->ClearDepthStencilView(*texture.DSV, D3D12_CLEAR_FLAG_DEPTH/* | D3D12_CLEAR_FLAG_STENCIL*/, 1.f, 0, 0, nullptr);
+				}
+			}
+		}
+
+		list->Native()->OMSetStencilRef(0);
+
+		pass->Execute(*list, resourceManager);
+
+		// #TODO: End render pass.
+	}
+
+	// Present the back buffer. #TODO: Implement as a present pass.
+	auto& backBuffer = resourceManager.FetchAsTexture(taggedResources[ResourceTag::BackBuffer]);
+	passLists[passLists.size() - 1]->TransitionBarrier(backBuffer, D3D12_RESOURCE_STATE_PRESENT);
+
+	// Close and submit the command lists.
+
+	std::vector<ID3D12CommandList*> commandLists;
+	commandLists.reserve(passLists.size() + 1);
+
+	device->GetDirectList().FlushBarriers();
+	device->GetDirectList().Close();
+	commandLists.emplace_back(device->GetDirectList().Native());
+
+	for (auto& list : passLists)
+	{
+		list->FlushBarriers();
+		list->Close();
+		commandLists.emplace_back(list->Native());
+	}
+
+	device->GetDirectQueue()->ExecuteCommandLists(commandLists.size(), commandLists.data());
 }
