@@ -11,23 +11,27 @@
 
 #include <wrl/client.h>
 
+#if !BUILD_RELEASE
+#include <dxgidebug.h>
+#endif
+
 void RenderDevice::SetNames()
 {
 #if !BUILD_RELEASE
 	VGScopedCPUStat("Device Set Names");
 
-	device->SetName(VGText("Primary Render Device"));
+	device->SetName(VGText("Primary render device"));
 
-	directCommandQueue->SetName(VGText("Direct Command Queue"));
+	directCommandQueue->SetName(VGText("Direct command queue"));
 	for (uint32_t i = 0; i < frameCount; ++i)
 	{
-		directCommandList[i].SetName(VGText("Direct Command List"));
+		directCommandList[i].SetName(VGText("Direct command list"));
 	}
 
-	computeCommandQueue->SetName(VGText("Compute Command Queue"));
+	computeCommandQueue->SetName(VGText("Compute command queue"));
 	for (uint32_t i = 0; i < frameCount; ++i)
 	{
-		computeCommandList[i].SetName(VGText("Compute Command List"));
+		computeCommandList[i].SetName(VGText("Compute command list"));
 	}
 #endif
 }
@@ -48,7 +52,7 @@ void RenderDevice::SetupRenderTargets()
 			VGLogFatal(Rendering) << "Failed to get swap chain buffer for frame " << i << ": " << result;
 		}
 
-		backBufferTextures[i] = std::move(allocatorManager.TextureFromSwapChain(static_cast<void*>(intermediateResource), VGText("Back Buffer")));
+		backBufferTextures[i] = std::move(allocatorManager.TextureFromSwapChain(static_cast<void*>(intermediateResource), VGText("Back buffer")));
 	}
 }
 
@@ -257,7 +261,7 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 		VGLogFatal(Rendering) << "Failed to create intra sync fence: " << result;
 	}
 
-	if (syncEvent = ::CreateEvent(nullptr, false, false, VGText("Intra Sync Fence Event")); !syncEvent)
+	if (syncEvent = ::CreateEvent(nullptr, false, false, VGText("Intra sync fence event")); !syncEvent)
 	{
 		VGLogFatal(Rendering) << "Failed to create sync event: " << GetPlatformError();
 	}
@@ -274,7 +278,7 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 		description.bindFlags = 0;
 		description.accessFlags = AccessFlag::CPUWrite;
 
-		frameBuffers[i] = std::move(allocatorManager.AllocateBuffer(description, VGText("Frame Buffer")));
+		frameBuffers[i] = std::move(allocatorManager.AllocateBuffer(description, VGText("Frame buffer")));
 	}
 
 	SetupRenderTargets();
@@ -289,6 +293,24 @@ RenderDevice::~RenderDevice()
 	SyncInterframe(true);
 
 	::CloseHandle(syncEvent);
+
+#if !BUILD_RELEASE
+	if (debugging)
+	{
+		ResourcePtr<IDXGIDebug1> dxgiDebug;
+
+		auto result = DXGIGetDebugInterface1(0, IID_PPV_ARGS(dxgiDebug.Indirect()));
+		if (FAILED(result))
+		{
+			VGLogError(Rendering) << "Failed to get DXGI debug interface: " << result;
+		}
+
+		else
+		{
+			dxgiDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_FLAGS(DXGI_DEBUG_RLO_ALL | DXGI_DEBUG_RLO_IGNORE_INTERNAL));
+		}
+	}
+#endif
 }
 
 void RenderDevice::CheckFeatureSupport()
@@ -422,7 +444,7 @@ std::shared_ptr<CommandList> RenderDevice::AllocateFrameCommandList(D3D12_COMMAN
 
 	frameCommandLists[frameIndex].emplace_back(std::make_shared<CommandList>());
 	frameCommandLists[frameIndex][size]->Create(this, type);
-	frameCommandLists[frameIndex][size]->SetName(VGText("Frame Command List"));
+	frameCommandLists[frameIndex][size]->SetName(VGText("Frame command list"));
 
 	return frameCommandLists[frameIndex][size];
 }
