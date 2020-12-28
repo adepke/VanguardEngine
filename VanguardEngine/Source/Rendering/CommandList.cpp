@@ -67,7 +67,7 @@ void CommandList::FlushBarriers()
 	pendingBarriers.clear();
 }
 
-void CommandList::BindPipelineState(PipelineState& state)
+void CommandList::BindPipelineState(const PipelineState& state)
 {
 	VGScopedCPUStat("Bind Pipeline");
 

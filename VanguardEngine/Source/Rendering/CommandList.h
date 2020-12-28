@@ -37,7 +37,7 @@ public:
 	// Batch submits all pending barriers to the driver.
 	void FlushBarriers();
 
-	void BindPipelineState(PipelineState& state);
+	void BindPipelineState(const PipelineState& state);
 	void BindDescriptorAllocator(DescriptorAllocator& allocator);
 
 	HRESULT Close();
