@@ -52,9 +52,11 @@ namespace AssetLoader
 		description.accessFlags = AccessFlag::CPUWrite;
 
 		// #TODO: Derive name from asset name + texture type.
-		auto textureResource = device.CreateResource(description, VGText("Asset Texture"));
+		auto textureResource = device.CreateResource(description, VGText("Asset texture"));
 
 		device.WriteResource(textureResource, dataResource);
+
+		device.GetDirectList().TransitionBarrier(textureResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 		return std::move(textureResource);
 	}
