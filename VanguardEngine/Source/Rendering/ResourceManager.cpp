@@ -111,6 +111,14 @@ void ResourceManager::CreateResourceViews(std::shared_ptr<Texture>& target)
 
 		D3D12_DEPTH_STENCIL_VIEW_DESC viewDesc{};
 		viewDesc.Format = target->description.format;
+
+		// If the given format isn't a depth format, we need to convert.
+		switch (viewDesc.Format)
+		{
+		case DXGI_FORMAT_R32_TYPELESS: viewDesc.Format = DXGI_FORMAT_D32_FLOAT; break;
+		case DXGI_FORMAT_R24G8_TYPELESS: viewDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT; break;
+		}
+
 		switch (target->Native()->GetDesc().Dimension)  // #TODO: Support texture arrays and multi-sample textures.
 		{
 		case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
@@ -124,7 +132,7 @@ void ResourceManager::CreateResourceViews(std::shared_ptr<Texture>& target)
 		default:
 			VGLogError(Rendering) << "Depth stencil views for textures in " << target->Native()->GetDesc().Dimension << " dimension is unsupported.";
 		}
-		viewDesc.Flags = D3D12_DSV_FLAG_NONE;  // #TODO: Depth stencil flags.
+		viewDesc.Flags = (target->description.accessFlags & AccessFlag::GPUWrite) ? D3D12_DSV_FLAG_NONE : (D3D12_DSV_FLAG_READ_ONLY_DEPTH | D3D12_DSV_FLAG_READ_ONLY_STENCIL);
 
 		device->Native()->CreateDepthStencilView(target->Native(), &viewDesc, *target->DSV);
 	}
@@ -135,6 +143,17 @@ void ResourceManager::CreateResourceViews(std::shared_ptr<Texture>& target)
 
 		D3D12_SHADER_RESOURCE_VIEW_DESC viewDesc{};
 		viewDesc.Format = target->description.format;
+
+		// Using a depth stencil via SRV requires special formatting.
+		if (target->description.bindFlags & BindFlag::DepthStencil)
+		{
+			switch (viewDesc.Format)
+			{
+			case DXGI_FORMAT_R32_TYPELESS: viewDesc.Format = DXGI_FORMAT_R32_FLOAT; break;
+			case DXGI_FORMAT_R24G8_TYPELESS: viewDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS; break;
+			}
+		}
+
 		switch (target->Native()->GetDesc().Dimension)  // #TODO: Support texture arrays and multi-sample textures.
 		{
 		case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
@@ -238,7 +257,7 @@ void ResourceManager::Initialize(RenderDevice* inDevice, size_t bufferedFrames)
 
 		uploadResources[i] = std::move(ResourcePtr<D3D12MA::Allocation>{ allocationHandle });
 
-		NameResource(uploadResources[i], VGText("Upload Heap"));
+		NameResource(uploadResources[i], VGText("Upload heap"));
 	}
 }
 
@@ -397,6 +416,14 @@ std::shared_ptr<Texture> ResourceManager::AllocateTexture(const TextureDescripti
 		useClearValue = true;
 
 		clearValue.Format = description.format;
+
+		// We can't have a typeless clear value, so convert the format if needed.
+		switch (clearValue.Format)
+		{
+		case DXGI_FORMAT_R32_TYPELESS: clearValue.Format = DXGI_FORMAT_D32_FLOAT; break;
+		case DXGI_FORMAT_R24G8_TYPELESS: clearValue.Format = DXGI_FORMAT_D24_UNORM_S8_UINT; break;
+		}
+
 		clearValue.DepthStencil.Depth = 1.f;
 		clearValue.DepthStencil.Stencil = 0;
 	}
@@ -466,7 +493,7 @@ void ResourceManager::WriteBuffer(std::shared_ptr<Buffer>& target, const std::ve
 			device->GetDirectList().TransitionBarrier(target, D3D12_RESOURCE_STATE_COPY_DEST);
 			device->GetDirectList().FlushBarriers();
 		}
-		
+
 		auto* targetCommandList = device->GetDirectList().Native();  // Small writes are more efficiently performed on the direct/compute queue.
 		targetCommandList->CopyBufferRegion(target->Native(), targetOffset, uploadResources[frameIndex]->GetResource(), uploadOffsets[frameIndex], source.size());
 
