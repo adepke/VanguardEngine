@@ -3,8 +3,7 @@
 #pragma once
 
 #include <Rendering/Base.h>
-#include <Rendering/Buffer.h>
-#include <Rendering/Texture.h>
+#include <Rendering/Resource.h>
 
 #include <Core/Windows/DirectX12Minimal.h>
 
@@ -31,8 +30,8 @@ public:
 	void SetName(std::wstring_view name);
 
 	// #TODO: Support split barriers.
-	void TransitionBarrier(std::shared_ptr<Buffer>& resource, D3D12_RESOURCE_STATES state) { TransitionBarrierInternal(resource->Native(), resource->state, state); resource->state = state; }
-	void TransitionBarrier(std::shared_ptr<Texture>& resource, D3D12_RESOURCE_STATES state) { TransitionBarrierInternal(resource->Native(), resource->state, state); resource->state = state; }
+	void TransitionBarrier(BufferHandle resource, D3D12_RESOURCE_STATES state);
+	void TransitionBarrier(TextureHandle resource, D3D12_RESOURCE_STATES state);
 
 	// Batch submits all pending barriers to the driver.
 	void FlushBarriers();

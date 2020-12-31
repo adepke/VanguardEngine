@@ -2,9 +2,6 @@
 
 SamplerState defaultSampler : register(s0);
 Texture2D albedoMap : register(t1);
-Texture2D normalMap : register(t2);
-Texture2D roughnessMap : register(t3);
-Texture2D metallicMap : register(t4);
 
 struct Input
 {

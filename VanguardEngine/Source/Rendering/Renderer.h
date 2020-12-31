@@ -8,12 +8,13 @@
 #include <Rendering/Device.h>
 #include <Rendering/PipelineBuilder.h>
 #include <Rendering/Material.h>
-#include <Rendering/Buffer.h>
-#include <Rendering/Texture.h>
 #include <Rendering/UserInterface.h>
 #include <Rendering/DescriptorAllocator.h>
 
 #include <entt/entt.hpp>
+
+// #TODO: Fix Windows.h leaking.
+#include <Rendering/Resource.h>
 
 class CommandList;
 
@@ -26,7 +27,7 @@ public:
 private:
 	PipelineBuilder pipelines;  // Manages all the pipelines.
 
-	std::shared_ptr<Buffer> cameraBuffer;
+	BufferHandle cameraBuffer;
 	std::unique_ptr<UserInterfaceManager> userInterface;
 
 	DescriptorHandle nullDescriptor;
@@ -34,7 +35,7 @@ private:
 private:
 	void UpdateCameraBuffer();
 	void CreatePipelines();
-	std::pair<std::shared_ptr<Buffer>, size_t> CreateInstanceBuffer(const entt::registry& registry);
+	std::pair<BufferHandle, size_t> CreateInstanceBuffer(const entt::registry& registry);
 
 public:
 	~Renderer();

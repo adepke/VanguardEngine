@@ -2,14 +2,10 @@
 
 #include <Rendering/Device.h>
 #include <Rendering/ResourceManager.h>
-#include <Rendering/Buffer.h>
-#include <Rendering/Texture.h>
 #include <Rendering/Material.h>
 #include <Core/Config.h>
 
 #include <algorithm>
-
-#include <wrl/client.h>
 
 #if !BUILD_RELEASE
 #include <dxgidebug.h>
@@ -52,28 +48,8 @@ void RenderDevice::SetupRenderTargets()
 			VGLogFatal(Rendering) << "Failed to get swap chain buffer for frame " << i << ": " << result;
 		}
 
-		backBufferTextures[i] = std::move(allocatorManager.TextureFromSwapChain(static_cast<void*>(intermediateResource), VGText("Back buffer")));
+		backBufferTextures[i] = resourceManager.CreateFromSwapChain(static_cast<void*>(intermediateResource), VGText("Back buffer"));
 	}
-}
-
-std::shared_ptr<Buffer> RenderDevice::CreateResource(const BufferDescription& description, const std::wstring_view name)
-{
-	return std::move(allocatorManager.AllocateBuffer(description, name));
-}
-
-std::shared_ptr<Texture> RenderDevice::CreateResource(const TextureDescription& description, const std::wstring_view name)
-{
-	return std::move(allocatorManager.AllocateTexture(description, name));
-}
-
-void RenderDevice::WriteResource(std::shared_ptr<Buffer>& target, const std::vector<uint8_t>& source, size_t targetOffset)
-{
-	allocatorManager.WriteBuffer(target, source, targetOffset);
-}
-
-void RenderDevice::WriteResource(std::shared_ptr<Texture>& target, const std::vector<uint8_t>& source)
-{
-	allocatorManager.WriteTexture(target, source);
 }
 
 void RenderDevice::ResetFrame(size_t frameID)
@@ -156,7 +132,7 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 		VGLogFatal(Rendering) << "Failed to create device allocator: " << result;
 	}
 
-	allocatorManager.Initialize(this, frameCount);
+	resourceManager.Initialize(this, frameCount);
 
 	descriptorManager.Initialize(this, 1024, 128);
 
@@ -278,7 +254,7 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 		description.bindFlags = 0;
 		description.accessFlags = AccessFlag::CPUWrite;
 
-		frameBuffers[i] = std::move(allocatorManager.AllocateBuffer(description, VGText("Frame buffer")));
+		frameBuffers[i] = resourceManager.Create(description, VGText("Frame buffer"));
 	}
 
 	SetupRenderTargets();
@@ -428,7 +404,7 @@ void RenderDevice::CheckFeatureSupport()
 	}
 }
 
-std::pair<std::shared_ptr<Buffer>, size_t> RenderDevice::FrameAllocate(size_t size)
+std::pair<BufferHandle, size_t> RenderDevice::FrameAllocate(size_t size)
 {
 	const auto frameIndex = frame % frameCount;
 
@@ -517,7 +493,7 @@ void RenderDevice::AdvanceCPU()
 	frameBufferOffsets[(frame + 1) % frameCount] = 0;  // GPU has fully consumed the frame resources, we can now reuse the buffer.
 
 	// The frame has finished, cleanup its resources. #TODO: Will leave additional GPU gaps if we're bottlenecking on the CPU, consider deferred cleanup?
-	allocatorManager.CleanupFrameResources(frame + 1);
+	resourceManager.CleanupFrameResources(frame + 1);
 
 	ResetFrame(frame + 1);
 
@@ -550,7 +526,14 @@ void RenderDevice::SetResolution(uint32_t width, uint32_t height, bool inFullscr
 
 	// #TODO: Fullscreen.
 
-	backBufferTextures = {};  // Release the render targets.
+	// #TEMP:
+	std::this_thread::sleep_for(150ms);
+
+	// Release the swap chain frame surfaces.
+	for (const auto texture : backBufferTextures)
+	{
+		resourceManager.Destroy(texture);
+	}
 
 	auto result = swapChain->ResizeBuffers(static_cast<UINT>(frameCount), static_cast<UINT>(width), static_cast<UINT>(height), DXGI_FORMAT_UNKNOWN, 0);
 	if (FAILED(result))

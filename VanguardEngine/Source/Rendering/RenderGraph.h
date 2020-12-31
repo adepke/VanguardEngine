@@ -49,11 +49,11 @@ private:
 	void InjectStateBarriers();
 
 public:
-	std::pair<uint32_t, uint32_t> GetBackBufferResolution();
+	std::pair<uint32_t, uint32_t> GetBackBufferResolution(RenderDevice* device);
 
 public:
-	const RenderResource Import(const std::shared_ptr<Buffer>& resource);
-	const RenderResource Import(const std::shared_ptr<Texture>& resource);
+	const RenderResource Import(const BufferHandle resource);
+	const RenderResource Import(const TextureHandle resource);
 
 	void Tag(const RenderResource resource, ResourceTag tag);
 
@@ -63,12 +63,12 @@ public:
 	void Execute(RenderDevice* device);
 };
 
-inline const RenderResource RenderGraph::Import(const std::shared_ptr<Buffer>& resource)
+inline const RenderResource RenderGraph::Import(const BufferHandle resource)
 {
 	return resourceManager.AddResource(resource);
 }
 
-inline const RenderResource RenderGraph::Import(const std::shared_ptr<Texture>& resource)
+inline const RenderResource RenderGraph::Import(const TextureHandle resource)
 {
 	return resourceManager.AddResource(resource);
 }

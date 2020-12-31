@@ -3,7 +3,6 @@
 #include <Rendering/RenderGraph.h>
 #include <Rendering/RenderPass.h>
 #include <Rendering/Device.h>
-#include <Rendering/Texture.h>
 
 #include <algorithm>
 
@@ -93,50 +92,46 @@ void RenderGraph::InjectStateBarriers()
 
 		for (const auto resource : pass->reads)
 		{
-			auto& buffer = resourceManager.FetchAsBuffer(resource);
-			auto& texture = resourceManager.FetchAsTexture(resource);
+			auto buffer = resourceManager.GetOptionalBuffer(resource);
+			auto texture = resourceManager.GetOptionalTexture(resource);
 
-			const auto CheckState = [&](D3D12_RESOURCE_STATES state)
+			const auto Transition = [&](D3D12_RESOURCE_STATES state)
 			{
 				if (buffer)
 				{
-					if ((buffer->state & state) != state)
-						list->TransitionBarrier(buffer, state);
+					list->TransitionBarrier(*buffer, state);
 				}
 
 				else if (texture)
 				{
-					if ((texture->state & state) != state)
-						list->TransitionBarrier(texture, state);
+					list->TransitionBarrier(*texture, state);
 				}
 			};
 
 			switch (pass->bindInfo[resource])
 			{
-			case ResourceBind::CBV: CheckState(D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER); break;
-			case ResourceBind::SRV: CheckState(D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE); break;
-			case ResourceBind::UAV: CheckState(D3D12_RESOURCE_STATE_UNORDERED_ACCESS); break;
-			case ResourceBind::DSV: CheckState(D3D12_RESOURCE_STATE_DEPTH_READ); break;
+			case ResourceBind::CBV: Transition(D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER); break;
+			case ResourceBind::SRV: Transition(D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE); break;
+			case ResourceBind::UAV: Transition(D3D12_RESOURCE_STATE_UNORDERED_ACCESS); break;
+			case ResourceBind::DSV: Transition(D3D12_RESOURCE_STATE_DEPTH_READ); break;
 			}
 		}
 
 		for (const auto resource : pass->writes)
 		{
-			auto& buffer = resourceManager.FetchAsBuffer(resource);
-			auto& texture = resourceManager.FetchAsTexture(resource);
+			auto buffer = resourceManager.GetOptionalBuffer(resource);
+			auto texture = resourceManager.GetOptionalTexture(resource);
 
-			const auto CheckState = [&](D3D12_RESOURCE_STATES state)
+			const auto Transition = [&](D3D12_RESOURCE_STATES state)
 			{
 				if (buffer)
 				{
-					if ((buffer->state & state) != state)
-						list->TransitionBarrier(buffer, state);
+					list->TransitionBarrier(*buffer, state);
 				}
 
 				else if (texture)
 				{
-					if ((texture->state & state) != state)
-						list->TransitionBarrier(texture, state);
+					list->TransitionBarrier(*texture, state);
 				}
 			};
 
@@ -144,8 +139,8 @@ void RenderGraph::InjectStateBarriers()
 			{
 				switch (pass->outputBindInfo[resource].first)
 				{
-				case OutputBind::RTV: CheckState(D3D12_RESOURCE_STATE_RENDER_TARGET); break;
-				case OutputBind::DSV: CheckState(D3D12_RESOURCE_STATE_DEPTH_WRITE); break;
+				case OutputBind::RTV: Transition(D3D12_RESOURCE_STATE_RENDER_TARGET); break;
+				case OutputBind::DSV: Transition(D3D12_RESOURCE_STATE_DEPTH_WRITE); break;
 				}
 			}
 
@@ -153,7 +148,7 @@ void RenderGraph::InjectStateBarriers()
 			{
 				switch (pass->bindInfo[resource])
 				{
-				case ResourceBind::UAV: CheckState(D3D12_RESOURCE_STATE_UNORDERED_ACCESS); break;
+				case ResourceBind::UAV: Transition(D3D12_RESOURCE_STATE_UNORDERED_ACCESS); break;
 				}
 			}
 		}
@@ -165,12 +160,13 @@ void RenderGraph::InjectStateBarriers()
 	}
 }
 
-std::pair<uint32_t, uint32_t> RenderGraph::GetBackBufferResolution()
+std::pair<uint32_t, uint32_t> RenderGraph::GetBackBufferResolution(RenderDevice* device)
 {
 	VGAssert(taggedResources.contains(ResourceTag::BackBuffer), "Render graph doesn't have tagged back buffer resource.");
 
-	const auto& backBuffer = resourceManager.Get<Texture>(taggedResources[ResourceTag::BackBuffer]);
-	return std::make_pair(backBuffer.description.width, backBuffer.description.height);
+	const auto backBuffer = resourceManager.GetTexture(taggedResources[ResourceTag::BackBuffer]);
+	const auto& buffer = device->GetResourceManager().Get(backBuffer);
+	return std::make_pair(buffer.description.width, buffer.description.height);
 }
 
 RenderPass& RenderGraph::AddPass(std::string_view stableName, ExecutionQueue execution)
@@ -240,17 +236,18 @@ void RenderGraph::Execute(RenderDevice* device)
 
 		for (const auto& [resource, info] : pass->outputBindInfo)
 		{
-			auto& texture = resourceManager.Get<Texture>(resource);
+			const auto texture = resourceManager.GetTexture(resource);
+			auto& component = device->GetResourceManager().Get(texture);
 
 			if (info.first == OutputBind::RTV)
 			{
-				renderTargets.emplace_back(*texture.RTV);
+				renderTargets.emplace_back(*component.RTV);
 			}
 
 			else if (info.first == OutputBind::DSV)
 			{
 				hasDepthStencil = true;
-				depthStencil = *texture.DSV;
+				depthStencil = *component.DSV;
 			}
 		}
 
@@ -261,10 +258,11 @@ void RenderGraph::Execute(RenderDevice* device)
 			{
 				if (bind == ResourceBind::DSV)
 				{
-					auto& texture = resourceManager.Get<Texture>(resource);
+					const auto texture = resourceManager.GetTexture(resource);
+					auto& component = device->GetResourceManager().Get(texture);
 
 					hasDepthStencil = true;
-					depthStencil = *texture.DSV;
+					depthStencil = *component.DSV;
 
 					break;
 				}
@@ -280,17 +278,18 @@ void RenderGraph::Execute(RenderDevice* device)
 		{
 			if (info.second)
 			{
-				auto& texture = resourceManager.Get<Texture>(resource);
+				const auto texture = resourceManager.GetTexture(resource);
+				auto& component = device->GetResourceManager().Get(texture);
 
 				if (info.first == OutputBind::RTV)
 				{
-					list->Native()->ClearRenderTargetView(*texture.RTV, ClearColor, 0, nullptr);
+					list->Native()->ClearRenderTargetView(*component.RTV, ClearColor, 0, nullptr);
 				}
 
 				else if (info.first == OutputBind::DSV)
 				{
 					// #TODO: Stencil clearing.
-					list->Native()->ClearDepthStencilView(*texture.DSV, D3D12_CLEAR_FLAG_DEPTH/* | D3D12_CLEAR_FLAG_STENCIL*/, 1.f, 0, 0, nullptr);
+					list->Native()->ClearDepthStencilView(*component.DSV, D3D12_CLEAR_FLAG_DEPTH/* | D3D12_CLEAR_FLAG_STENCIL*/, 1.f, 0, 0, nullptr);
 				}
 			}
 		}
@@ -303,7 +302,7 @@ void RenderGraph::Execute(RenderDevice* device)
 	}
 
 	// Present the back buffer. #TODO: Implement as a present pass.
-	auto& backBuffer = resourceManager.FetchAsTexture(taggedResources[ResourceTag::BackBuffer]);
+	const auto backBuffer = resourceManager.GetTexture(taggedResources[ResourceTag::BackBuffer]);
 	passLists[passLists.size() - 1]->TransitionBarrier(backBuffer, D3D12_RESOURCE_STATE_PRESENT);
 
 	// Close and submit the command lists.

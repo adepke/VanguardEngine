@@ -1,8 +1,7 @@
 // Copyright (c) 2019-2020 Andrew Depke
 
 #include <Rendering/Renderer.h>
-#include <Rendering/Buffer.h>
-#include <Rendering/Texture.h>
+#include <Rendering/Resource.h>
 #include <Core/CoreComponents.h>
 #include <Rendering/RenderComponents.h>
 #include <Rendering/RenderSystems.h>
@@ -47,7 +46,7 @@ void Renderer::UpdateCameraBuffer()
 	byteData.resize(sizeof(CameraBuffer));
 	std::memcpy(byteData.data(), &bufferData, sizeof(bufferData));
 
-	device->WriteResource(cameraBuffer, byteData);
+	device->GetResourceManager().Write(cameraBuffer, byteData);
 }
 
 void Renderer::CreatePipelines()
@@ -138,15 +137,15 @@ void Renderer::CreatePipelines()
 	pipelines.AddGraphicsState(device.get(), "ForwardOpaque", forwardStateDesc);
 }
 
-std::pair<std::shared_ptr<Buffer>, size_t> Renderer::CreateInstanceBuffer(const entt::registry& registry)
+std::pair<BufferHandle, size_t> Renderer::CreateInstanceBuffer(const entt::registry& registry)
 {
 	VGScopedCPUStat("Create Instance Buffer");
 
 	const auto instanceView = registry.view<const TransformComponent, const MeshComponent>();
-	auto result = std::move(device->FrameAllocate(sizeof(EntityInstance) * instanceView.size()));
+	const auto [bufferHandle, bufferOffset] = device->FrameAllocate(sizeof(EntityInstance) * instanceView.size());
 
 	size_t index = 0;
-	instanceView.each([this, &result, &index](auto entity, const auto& transform, const auto&)
+	instanceView.each([&](auto entity, const auto& transform, const auto&)
 	{
 		const auto scaling = XMVectorSet(transform.scale.x, transform.scale.y, transform.scale.z, 0.f);
 		const auto rotation = XMVectorSet(transform.rotation.x, transform.rotation.y, transform.rotation.z, 0.f);
@@ -159,12 +158,12 @@ std::pair<std::shared_ptr<Buffer>, size_t> Renderer::CreateInstanceBuffer(const 
 		instanceData.resize(sizeof(EntityInstance));
 		std::memcpy(instanceData.data(), &instance, instanceData.size());
 
-		device->WriteResource(result.first, instanceData, result.second + (index * sizeof(EntityInstance)));
+		device->GetResourceManager().Write(bufferHandle, instanceData, bufferOffset + (index * sizeof(EntityInstance)));
 
 		++index;
 	});
 
-	return std::move(result);
+	return std::make_pair(bufferHandle, bufferOffset);
 }
 
 Renderer::~Renderer()
@@ -189,7 +188,7 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 	cameraBufferDesc.size = 1;  // #TODO: Support multiple cameras.
 	cameraBufferDesc.stride = sizeof(CameraBuffer);
 
-	cameraBuffer = device->CreateResource(cameraBufferDesc, VGText("Camera buffer"));
+	cameraBuffer = device->GetResourceManager().Create(cameraBufferDesc, VGText("Camera buffer"));
 
 	userInterface = std::make_unique<UserInterfaceManager>(device.get());
 
@@ -229,24 +228,28 @@ void Renderer::Render(entt::registry& registry)
 	prePass.Output(depthStencilTag, OutputBind::DSV, true);
 	prePass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
 	{
-		const auto& cameraBuffer = resources.Get<Buffer>(cameraBufferTag);
+		auto cameraBuffer = resources.GetBuffer(cameraBufferTag);
+		auto& cameraBufferComponent = device->GetResourceManager().Get(cameraBuffer);
 
 		list.BindPipelineState(pipelines["Prepass"]);
 
 		// Bind the camera data.
-		list.Native()->SetGraphicsRootConstantBufferView(2, cameraBuffer.Native()->GetGPUVirtualAddress());
+		list.Native()->SetGraphicsRootConstantBufferView(2, cameraBufferComponent.Native()->GetGPUVirtualAddress());
 
 		size_t entityIndex = 0;
 		registry.view<const TransformComponent, const MeshComponent>().each([&](auto entity, const auto&, const auto& mesh)
 		{
 			// Set the per object buffer.
+			auto& instanceBufferComponent = device->GetResourceManager().Get(instanceBuffer);
 			const auto finalInstanceBufferOffset = instanceOffset + (entityIndex * sizeof(EntityInstance));
-			list.Native()->SetGraphicsRootConstantBufferView(0, instanceBuffer->Native()->GetGPUVirtualAddress() + finalInstanceBufferOffset);
+			list.Native()->SetGraphicsRootConstantBufferView(0, instanceBufferComponent.Native()->GetGPUVirtualAddress() + finalInstanceBufferOffset);
 
 			// Set the index buffer.
+			auto& indexBuffer = device->GetResourceManager().Get(mesh.indexBuffer);
+
 			D3D12_INDEX_BUFFER_VIEW indexView{};
-			indexView.BufferLocation = mesh.indexBuffer->Native()->GetGPUVirtualAddress();
-			indexView.SizeInBytes = static_cast<UINT>(mesh.indexBuffer->description.size * mesh.indexBuffer->description.stride);
+			indexView.BufferLocation = indexBuffer.Native()->GetGPUVirtualAddress();
+			indexView.SizeInBytes = static_cast<UINT>(indexBuffer.description.size * indexBuffer.description.stride);
 			indexView.Format = DXGI_FORMAT_R32_UINT;
 
 			list.Native()->IASetIndexBuffer(&indexView);
@@ -256,7 +259,8 @@ void Renderer::Render(entt::registry& registry)
 				// #TODO: Only bind once per mesh, and pass subset.vertexOffset into the draw call. This isn't yet supported with DXC, see: https://github.com/microsoft/DirectXShaderCompiler/issues/2907
 
 				// Set the vertex buffer.
-				list.Native()->SetGraphicsRootShaderResourceView(1, mesh.vertexBuffer->Native()->GetGPUVirtualAddress() + (subset.vertexOffset * sizeof(Vertex)));
+				auto& vertexBuffer = device->GetResourceManager().Get(mesh.vertexBuffer);
+				list.Native()->SetGraphicsRootShaderResourceView(1, vertexBuffer.Native()->GetGPUVirtualAddress() + (subset.vertexOffset * sizeof(Vertex)));
 
 				list.Native()->DrawIndexedInstanced(static_cast<uint32_t>(subset.indices), 1, static_cast<uint32_t>(subset.indexOffset), 0, 0);
 			}
@@ -271,24 +275,28 @@ void Renderer::Render(entt::registry& registry)
 	forwardPass.Output(backBufferTag, OutputBind::RTV, true);
 	forwardPass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
 	{
-		const auto& cameraBuffer = resources.Get<Buffer>(cameraBufferTag);
+		auto cameraBuffer = resources.GetBuffer(cameraBufferTag);
+		auto& cameraBufferComponent = device->GetResourceManager().Get(cameraBuffer);
 
 		list.BindPipelineState(pipelines["ForwardOpaque"]);
 
 		// Bind the camera data.
-		list.Native()->SetGraphicsRootConstantBufferView(2, cameraBuffer.Native()->GetGPUVirtualAddress());
+		list.Native()->SetGraphicsRootConstantBufferView(2, cameraBufferComponent.Native()->GetGPUVirtualAddress());
 
 		size_t entityIndex = 0;
 		registry.view<const TransformComponent, const MeshComponent>().each([&](auto entity, const auto&, const auto& mesh)
 		{
 			// Set the per object buffer.
+			auto& instanceBufferComponent = device->GetResourceManager().Get(instanceBuffer);
 			const auto finalInstanceBufferOffset = instanceOffset + (entityIndex * sizeof(EntityInstance));
-			list.Native()->SetGraphicsRootConstantBufferView(0, instanceBuffer->Native()->GetGPUVirtualAddress() + finalInstanceBufferOffset);
+			list.Native()->SetGraphicsRootConstantBufferView(0, instanceBufferComponent.Native()->GetGPUVirtualAddress() + finalInstanceBufferOffset);
 
 			// Set the index buffer.
+			auto& indexBuffer = device->GetResourceManager().Get(mesh.indexBuffer);
+
 			D3D12_INDEX_BUFFER_VIEW indexView{};
-			indexView.BufferLocation = mesh.indexBuffer->Native()->GetGPUVirtualAddress();
-			indexView.SizeInBytes = static_cast<UINT>(mesh.indexBuffer->description.size * mesh.indexBuffer->description.stride);
+			indexView.BufferLocation = indexBuffer.Native()->GetGPUVirtualAddress();
+			indexView.SizeInBytes = static_cast<UINT>(indexBuffer.description.size * indexBuffer.description.stride);
 			indexView.Format = DXGI_FORMAT_R32_UINT;
 
 			list.Native()->IASetIndexBuffer(&indexView);
@@ -298,18 +306,21 @@ void Renderer::Render(entt::registry& registry)
 				// #TODO: Only bind once per mesh, and pass subset.vertexOffset into the draw call. This isn't yet supported with DXC, see: https://github.com/microsoft/DirectXShaderCompiler/issues/2907
 
 				// Set the vertex buffer.
-				list.Native()->SetGraphicsRootShaderResourceView(1, mesh.vertexBuffer->Native()->GetGPUVirtualAddress() + (subset.vertexOffset * sizeof(Vertex)));
+				auto& vertexBuffer = device->GetResourceManager().Get(mesh.vertexBuffer);
+				list.Native()->SetGraphicsRootShaderResourceView(1, vertexBuffer.Native()->GetGPUVirtualAddress() + (subset.vertexOffset * sizeof(Vertex)));
 
-				auto& albedo = subset.material->albedo ? *subset.material->albedo->SRV : nullDescriptor;
-				auto& normal = subset.material->normal ? *subset.material->normal->SRV : nullDescriptor;
-				auto& roughness = subset.material->roughness ? *subset.material->roughness->SRV : nullDescriptor;
-				auto& metallic = subset.material->metallic ? *subset.material->metallic->SRV : nullDescriptor;
+				// Bind the albedo texture.
+				if (device->GetResourceManager().Valid(subset.material->albedo))
+				{
+					auto& albedoComponent = device->GetResourceManager().Get(subset.material->albedo);
+					device->GetDescriptorAllocator().AddTableEntry(*albedoComponent.SRV, DescriptorTableEntryType::ShaderResource);
+				}
 
-				device->GetDescriptorAllocator().AddTableEntry(albedo, DescriptorTableEntryType::ShaderResource);
-				device->GetDescriptorAllocator().AddTableEntry(normal, DescriptorTableEntryType::ShaderResource);
-				device->GetDescriptorAllocator().AddTableEntry(roughness, DescriptorTableEntryType::ShaderResource);
-				device->GetDescriptorAllocator().AddTableEntry(metallic, DescriptorTableEntryType::ShaderResource);
-
+				else
+				{
+					device->GetDescriptorAllocator().AddTableEntry(nullDescriptor, DescriptorTableEntryType::ShaderResource);
+				}
+				
 				device->GetDescriptorAllocator().BuildTable(*device, list, 3);
 
 				list.Native()->DrawIndexedInstanced(static_cast<uint32_t>(subset.indices), 1, static_cast<uint32_t>(subset.indexOffset), 0, 0);

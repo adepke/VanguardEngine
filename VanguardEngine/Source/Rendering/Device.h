@@ -3,15 +3,15 @@
 #pragma once
 
 #include <Rendering/Base.h>
-#include <Rendering/Resource.h>
-#include <Rendering/Adapter.h>  // #TODO: Including this before D3D12MemAlloc.h causes an array of errors, this needs to be fixed.
 #include <Rendering/ResourceManager.h>
 #include <Rendering/PipelineState.h>
 #include <Rendering/DescriptorAllocator.h>
 #include <Rendering/CommandList.h>
 #include <Rendering/Material.h>
 
-#include <D3D12MemAlloc.h>
+// #TODO: Fix Windows.h leaking.
+#include <Rendering/Resource.h>
+#include <Rendering/Adapter.h>  // #TODO: Including this before D3D12MemAlloc.h causes an array of errors, this needs to be fixed.
 
 #include <memory>
 #include <string_view>
@@ -19,11 +19,6 @@
 #include <utility>
 #include <vector>
 #include <limits>
-
-struct Buffer;
-struct Texture;
-struct BufferDescription;
-struct TextureDescription;
 
 enum class SyncType
 {
@@ -67,13 +62,13 @@ private:
 	HANDLE syncEvent;  // Shared event for inter and intra syncing.
 
 	ResourcePtr<D3D12MA::Allocator> allocator;
-	ResourceManager allocatorManager;
+	ResourceManager resourceManager;
 
 	DescriptorAllocator descriptorManager;
 
-	std::array<std::shared_ptr<Texture>, frameCount> backBufferTextures;  // Render targets bound to the swap chain.
+	std::array<TextureHandle, frameCount> backBufferTextures;  // Render targets bound to the swap chain.
 
-	std::array<std::shared_ptr<Buffer>, frameCount> frameBuffers;  // Per-frame shared dynamic heap.
+	std::array<BufferHandle, frameCount> frameBuffers;  // Per-frame shared dynamic heap.
 	std::array<size_t, frameCount> frameBufferOffsets = {};
 
 	// #TODO: Don't use shared_ptr's here.
@@ -96,13 +91,8 @@ public:
 	// Logs various data about the device's feature support. Not needed in optimized builds.
 	void CheckFeatureSupport();
 
-	std::shared_ptr<Buffer> CreateResource(const BufferDescription& description, const std::wstring_view name);
-	std::shared_ptr<Texture> CreateResource(const TextureDescription& description, const std::wstring_view name);
-	void WriteResource(std::shared_ptr<Buffer>& target, const std::vector<uint8_t>& source, size_t targetOffset = 0);
-	void WriteResource(std::shared_ptr<Texture>& target, const std::vector<uint8_t>& source);
-
 	// Allocate a block of CPU write-only, GPU read-only memory from the per-frame dynamic heap.
-	std::pair<std::shared_ptr<Buffer>, size_t> FrameAllocate(size_t size);
+	std::pair<BufferHandle, size_t> FrameAllocate(size_t size);
 
 	// Allocate a per-frame command list, disposed of automatically.
 	std::shared_ptr<CommandList> AllocateFrameCommandList(D3D12_COMMAND_LIST_TYPE type);
@@ -125,6 +115,7 @@ public:
 	auto* GetSwapChain() const noexcept { return swapChain.Get(); }
 	auto GetBackBuffer() const noexcept { return backBufferTextures[swapChain->GetCurrentBackBufferIndex()]; }  // Resizing affects the buffer index, so use the swap chain's index.
 	auto& GetDescriptorAllocator() noexcept { return descriptorManager; }
+	auto& GetResourceManager() noexcept { return resourceManager; }
 
 	void SetResolution(uint32_t width, uint32_t height, bool inFullscreen);
 };

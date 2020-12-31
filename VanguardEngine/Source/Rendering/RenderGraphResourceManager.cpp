@@ -21,10 +21,12 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 		fullDescription.stride = info.first.stride;
 		fullDescription.format = info.first.format;
 
-		bufferResources[resource] = std::move(device->CreateResource(fullDescription, info.second));
+		const auto buffer = device->GetResourceManager().Create(fullDescription, info.second);
+		bufferResources[resource] = buffer;
+		device->GetResourceManager().AddFrameResource(device->GetFrameIndex(), buffer);
 	}
 
-	const auto [outputWidth, outputHeight] = graph->GetBackBufferResolution();
+	const auto [outputWidth, outputHeight] = graph->GetBackBufferResolution(device);
 
 	for (const auto& [resource, info] : transientTextureResources)
 	{
@@ -55,7 +57,6 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 		VGAssert(!(hasRenderTarget && hasDepthStencil), "Texture cannot have render target and depth stencil bindings!");
 
 		TextureDescription fullDescription{};
-		fullDescription.updateRate = ResourceFrequency::Static;
 		fullDescription.bindFlags = 0;  // Can't always assume SRV, depth stencils must be in a special state for that.
 		fullDescription.accessFlags = AccessFlag::CPURead | AccessFlag::CPUWrite | AccessFlag::GPUWrite;
 		fullDescription.width = info.first.width;
@@ -73,6 +74,8 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 			fullDescription.height = outputHeight;
 		}
 
-		textureResources[resource] = std::move(device->CreateResource(fullDescription, info.second));
+		const auto texture = device->GetResourceManager().Create(fullDescription, info.second);
+		textureResources[resource] = texture;
+		device->GetResourceManager().AddFrameResource(device->GetFrameIndex(), texture);
 	}
 }
