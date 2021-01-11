@@ -292,7 +292,6 @@ const BufferHandle ResourceManager::Create(const BufferDescription& description,
 	else
 	{
 		if (description.bindFlags & BindFlag::ConstantBuffer) resourceState |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
-		else if (description.bindFlags & BindFlag::VertexBuffer) resourceState |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
 		if (description.bindFlags & BindFlag::IndexBuffer) resourceState |= D3D12_RESOURCE_STATE_INDEX_BUFFER;
 	}
 

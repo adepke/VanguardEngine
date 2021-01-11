@@ -22,13 +22,12 @@ enum class ResourceFrequency
 
 enum BindFlag
 {
-	VertexBuffer = 1 << 0,
-	IndexBuffer = 1 << 1,
-	ConstantBuffer = 1 << 2,
-	RenderTarget = 1 << 3,
-	DepthStencil = 1 << 4,
-	ShaderResource = 1 << 5,
-	UnorderedAccess = 1 << 6,
+	IndexBuffer = 1 << 0,
+	ConstantBuffer = 1 << 1,
+	RenderTarget = 1 << 2,
+	DepthStencil = 1 << 3,
+	ShaderResource = 1 << 4,
+	UnorderedAccess = 1 << 5,
 };
 
 enum AccessFlag
