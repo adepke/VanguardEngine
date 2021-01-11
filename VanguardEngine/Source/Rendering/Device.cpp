@@ -23,12 +23,6 @@ void RenderDevice::SetNames()
 	{
 		directCommandList[i].SetName(VGText("Direct command list"));
 	}
-
-	computeCommandQueue->SetName(VGText("Compute command queue"));
-	for (uint32_t i = 0; i < frameCount; ++i)
-	{
-		computeCommandList[i].SetName(VGText("Compute command list"));
-	}
 #endif
 }
 
@@ -166,31 +160,6 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 		if (i > 0)
 		{
 			directCommandList[i].Close();
-		}
-	}
-
-	// Compute
-
-	D3D12_COMMAND_QUEUE_DESC computeCommandQueueDesc{};
-	computeCommandQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
-	computeCommandQueueDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
-	computeCommandQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-	computeCommandQueueDesc.NodeMask = 0;
-
-	result = device->CreateCommandQueue(&computeCommandQueueDesc, IID_PPV_ARGS(computeCommandQueue.Indirect()));
-	if (FAILED(result))
-	{
-		VGLogFatal(Rendering) << "Failed to create compute command queue: " << result;
-	}
-
-	for (int i = 0; i < frameCount; ++i)
-	{
-		computeCommandList[i].Create(this, D3D12_COMMAND_LIST_TYPE_COMPUTE);
-
-		// Close all lists except the current frame's list.
-		if (i > 0)
-		{
-			computeCommandList[i].Close();
 		}
 	}
 
@@ -465,9 +434,6 @@ void RenderDevice::SyncIntraframe(SyncType type)
 	{
 	case SyncType::Direct:
 		syncQueue = directCommandQueue.Get();
-		break;
-	case SyncType::Compute:
-		syncQueue = computeCommandQueue.Get();
 		break;
 	}
 

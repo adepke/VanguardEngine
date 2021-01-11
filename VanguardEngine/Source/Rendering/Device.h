@@ -23,7 +23,6 @@
 enum class SyncType
 {
 	Direct,
-	Compute,
 };
 
 class RenderDevice
@@ -49,9 +48,6 @@ private:
 
 	ResourcePtr<ID3D12CommandQueue> directCommandQueue;
 	CommandList directCommandList[frameCount];  // #TODO: One per worker thread.
-
-	ResourcePtr<ID3D12CommandQueue> computeCommandQueue;
-	CommandList computeCommandList[frameCount];  // #TODO: One per worker thread.
 
 	ResourcePtr<IDXGISwapChain3> swapChain;
 	size_t frame = 0;  // Stores the actual frame number. Refers to the current CPU frame being run, stepped after finishing CPU pass.
@@ -110,8 +106,6 @@ public:
 
 	auto* GetDirectQueue() const noexcept { return directCommandQueue.Get(); }
 	auto& GetDirectList() noexcept { return directCommandList[GetFrameIndex()]; }
-	auto* GetComputeQueue() const noexcept { return computeCommandQueue.Get(); }
-	auto& GetComputeList() noexcept { return computeCommandList[GetFrameIndex()]; }
 	auto* GetSwapChain() const noexcept { return swapChain.Get(); }
 	auto GetBackBuffer() const noexcept { return backBufferTextures[swapChain->GetCurrentBackBufferIndex()]; }  // Resizing affects the buffer index, so use the swap chain's index.
 	auto& GetDescriptorAllocator() noexcept { return descriptorManager; }
