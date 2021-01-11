@@ -1,306 +1,325 @@
 // Copyright (c) 2019-2020 Andrew Depke
 
 #include <Rendering/RenderGraph.h>
+#include <Rendering/RenderPass.h>
 #include <Rendering/Device.h>
-#include <Rendering/CommandList.h>
-#include <Rendering/Buffer.h>
-#include <Rendering/Texture.h>
 
-#include <utility>
-#include <limits>
-#include <cstring>
+#include <algorithm>
 
-D3D12_RESOURCE_STATES UsageToState(const std::shared_ptr<Buffer>& resource, RGUsage usage, bool write)
+void RenderGraph::BuildAdjacencyList()
 {
-	D3D12_RESOURCE_STATES readState{};
-	if (!write)
+	for (int i = 0; i < passes.size(); ++i)
 	{
-		if (resource->description.bindFlags & BindFlag::ConstantBuffer) readState |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
-		else if (resource->description.bindFlags & BindFlag::VertexBuffer) readState |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
-		if (resource->description.bindFlags & BindFlag::IndexBuffer) readState |= D3D12_RESOURCE_STATE_INDEX_BUFFER;
-		if (resource->description.bindFlags & BindFlag::ShaderResource) readState |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-	}
+		const auto& outer = passes[i];
 
-	switch (usage)
-	{
-	case RGUsage::Default: return write ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS : readState;
-	}
-
-	VGEnsure(false, "Buffer resource cannot have specified usage.");
-	return {};
-}
-
-D3D12_RESOURCE_STATES UsageToState(const std::shared_ptr<Texture>& resource, RGUsage usage, bool write)
-{
-	D3D12_RESOURCE_STATES readAdditiveState{};
-	if (!write)
-	{
-		if (resource->description.bindFlags & BindFlag::ShaderResource) readAdditiveState |= D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
-	}
-
-	switch (usage)
-	{
-	case RGUsage::Default: return write ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS : readAdditiveState;
-	case RGUsage::RenderTarget: return write ? D3D12_RESOURCE_STATE_RENDER_TARGET : readAdditiveState;
-	case RGUsage::DepthStencil: return write ? D3D12_RESOURCE_STATE_DEPTH_WRITE : D3D12_RESOURCE_STATE_DEPTH_READ | readAdditiveState;
-	case RGUsage::BackBuffer: return write ? D3D12_RESOURCE_STATE_RENDER_TARGET : readAdditiveState;
-	}
-
-	VGEnsure(false, "Texture resource cannot have specified usage.");
-	return {};
-}
-
-std::optional<size_t> RenderGraph::FindUsage(RGUsage usage)
-{
-	VGScopedCPUStat("Render Graph Find Usage");
-
-	 const auto iter = std::find_if(resourceUsages.begin(), resourceUsages.end(), [usage](const auto& Pair)
+		for (int j = 0; j < passes.size(); ++j)
 		{
-			const auto& usageMap = Pair.second.passUsage;  // Mapping of pass indexes to usages.
+			if (i == j)
+				continue;
 
-			return std::find_if(usageMap.begin(), usageMap.end(), [usage](const auto& Pair)
-				{
-					return Pair.second == usage;
-				}) != usageMap.end();
-		});
+			const auto& inner = passes[j];
 
-	 if (iter != resourceUsages.end())
-	 {
-		 return iter->first;
-	 }
-
-	 return std::nullopt;
-}
-
-bool RenderGraph::Validate()
-{
-	VGScopedCPUStat("Render Graph Validate");
-
-	if (!FindUsage(RGUsage::BackBuffer))
-	{
-		return false;  // We need to have at least one pass that writes to the back buffer.
-	}
-
-	return true;
-}
-
-std::unordered_set<size_t> RenderGraph::FindReadResources(size_t passIndex)
-{
-	std::unordered_set<size_t> result;
-
-	for (const auto& [resourceTag, dependency] : resourceDependencies)
-	{
-		if (dependency.readingPasses.count(passIndex))
-			result.insert(resourceTag);
-	}
-
-	return std::move(result);
-}
-
-std::unordered_set<size_t> RenderGraph::FindWrittenResources(size_t passIndex)
-{
-	std::unordered_set<size_t> result;
-
-	for (const auto& [resourceTag, dependency] : resourceDependencies)
-	{
-		if (dependency.writingPasses.count(passIndex))
-			result.insert(resourceTag);
-	}
-
-	return std::move(result);
-}
-
-void RenderGraph::Traverse(std::unordered_set<size_t>& trackedPasses, size_t resourceTag)
-{
-	for (const size_t passIndex : resourceDependencies[resourceTag].writingPasses)
-	{
-		// If this pass has been added to the pipeline by a previous dependency, skip it.
-		if (trackedPasses.count(passIndex))
-			continue;
-
-		trackedPasses.insert(passIndex);
-
-		for (const size_t tag : FindWrittenResources(passIndex))
-		{
-			// We don't want an infinite loop.
-			if (tag != resourceTag)
-				Traverse(trackedPasses, tag);
-		}
-
-		passPipeline.push_back(passIndex);
-	}
-}
-
-void RenderGraph::Serialize()
-{
-	VGScopedCPUStat("Render Graph Serialize");
-
-	passPipeline.reserve(passes.size());  // Unlikely that a significant number of passes are going to be trimmed.
-
-	const size_t swapChainTag = *FindUsage(RGUsage::BackBuffer);  // #TODO: This will only work if we have 1 pass write to the swap chain.
-	std::unordered_set<size_t> trackedPasses;
-	Traverse(trackedPasses, swapChainTag);
-
-	// #TODO: Optimize the pipeline.
-}
-
-void RenderGraph::InjectStateBarriers(std::vector<std::shared_ptr<CommandList>>& lists)
-{
-	VGScopedCPUStat("Render Graph Barriers");
-
-	std::unordered_map<size_t, std::pair<D3D12_RESOURCE_STATES, size_t>> stateMap;  // Maps resource tag to the state and which pass last modified it.
-	constexpr auto invalidPassIndex = std::numeric_limits<size_t>::max();
-
-	for (const auto& [resourceTag, usage] : resourceUsages)
-	{
-		stateMap.emplace(resourceTag, std::make_pair(resolver.DetermineInitialState(resourceTag), invalidPassIndex));
-	}
-
-	const auto checkState = [this, &stateMap, &lists](size_t passIndex, const auto& resources, bool write)
-	{
-		for (size_t resource : resources)
-		{
-			auto resourceBuffer = resolver.FetchAsBuffer(resource);
-			auto resourceTexture = resolver.FetchAsTexture(resource);
-
-			VGAssert(resourceBuffer || resourceTexture, "Failed to fetch the resource.");
-
-			// Dynamic resources don't ever transition states, so we can skip them.
-			if (resourceBuffer && resourceBuffer->description.updateRate == ResourceFrequency::Dynamic) continue;
-			if (resourceTexture && resourceTexture->description.updateRate == ResourceFrequency::Dynamic) continue;
-
-			// #TEMP: We can't use PassIndex directly, since it might be a size_t::max.
-			D3D12_RESOURCE_STATES newState;
-
-			if (resourceBuffer)
-				newState = UsageToState(resourceBuffer, resourceUsages[resource].passUsage[passIndex], write);
-			else
-				newState = UsageToState(resourceTexture, resourceUsages[resource].passUsage[passIndex], write);
-
-			if (newState != stateMap[resource].first)
+			std::vector<RenderResource> intersection;
+			// #TODO: We can stop as soon as there's a single intersection, std::set_intersection will find all intersections.
+			std::set_intersection(outer->writes.cbegin(), outer->writes.cend(), inner->reads.cbegin(), inner->reads.cend(), std::back_inserter(intersection));
+			
+			// If there's a write-to-read dependency, create an edge.
+			if (intersection.size() > 0)
 			{
-				// The state changed, which means we need to inject a barrier at the end of the last list to use the resource.
-				// #TODO: Potentially use split barriers.
-
-				if (resourceBuffer)
-					lists[passIndex]->TransitionBarrier(resourceBuffer, newState);  // #TEMP: After reordering we can't access lists like this, need a map.
-				else
-					lists[passIndex]->TransitionBarrier(resourceTexture, newState);
-
-				stateMap[resource] = { newState, passIndex };
+				adjacencyList[i].emplace_back(j);
 			}
 		}
-	};
+	}
+}
 
-	for (size_t i = 0; i < passPipeline.size(); ++i)
+void RenderGraph::DepthFirstSearch(size_t node, std::vector<bool>& visited, std::stack<bool>& stack)
+{
+	if (visited[node])
+		return;
+
+	visited[node] = true;
+
+	for (const auto adjacentNode : adjacencyList[node])
 	{
-		auto reads = FindReadResources(passPipeline[i]);
-		const auto writes = FindWrittenResources(passPipeline[i]);
+		DepthFirstSearch(adjacentNode, visited, stack);
+	}
 
-		// We need to remove resource that are both read and write during this pass from the read-only list.
-		for (auto iter = reads.begin(); iter != reads.end();)
+	stack.push(node);
+}
+
+void RenderGraph::TopologicalSort()
+{
+	sorted.reserve(passes.size());  // Most passes are unlikely to be trimmed.
+
+	std::vector<bool> visited(passes.size(), false);
+	std::stack<bool> stack;
+
+	for (int i = 0; i < passes.size(); ++i)
+	{
+		if (!visited[i])
 		{
-			if (writes.count(*iter))
-				iter = reads.erase(iter);
-			else
-				++iter;
+			DepthFirstSearch(i, visited, stack);
+		}
+	}
+
+	while (stack.size() > 0)
+	{
+		sorted.push_back(stack.top());
+		stack.pop();
+	}
+}
+
+void RenderGraph::BuildDepthMap()
+{
+	for (const auto pass : sorted)
+	{
+		for (const auto adjacentPass : adjacencyList[pass])
+		{
+			if (depthMap[adjacentPass] < depthMap[pass] + 1)
+			{
+				depthMap[adjacentPass] = depthMap[pass] + 1;
+			}
+		}
+	}
+}
+
+void RenderGraph::InjectStateBarriers()
+{
+	for (int i = 0; i < passes.size(); ++i)
+	{
+		auto& pass = passes[i];
+		auto& list = passLists[i];
+
+		for (const auto resource : pass->reads)
+		{
+			auto buffer = resourceManager.GetOptionalBuffer(resource);
+			auto texture = resourceManager.GetOptionalTexture(resource);
+
+			const auto Transition = [&](D3D12_RESOURCE_STATES state)
+			{
+				if (buffer)
+				{
+					list->TransitionBarrier(*buffer, state);
+				}
+
+				else if (texture)
+				{
+					list->TransitionBarrier(*texture, state);
+				}
+			};
+
+			switch (pass->bindInfo[resource])
+			{
+			case ResourceBind::CBV: Transition(D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER); break;
+			case ResourceBind::SRV: Transition(D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE); break;
+			case ResourceBind::UAV: Transition(D3D12_RESOURCE_STATE_UNORDERED_ACCESS); break;
+			case ResourceBind::DSV: Transition(D3D12_RESOURCE_STATE_DEPTH_READ); break;
+			}
 		}
 
-		checkState(i, reads, false);
-		checkState(i, writes, true);
+		for (const auto resource : pass->writes)
+		{
+			auto buffer = resourceManager.GetOptionalBuffer(resource);
+			auto texture = resourceManager.GetOptionalTexture(resource);
+
+			const auto Transition = [&](D3D12_RESOURCE_STATES state)
+			{
+				if (buffer)
+				{
+					list->TransitionBarrier(*buffer, state);
+				}
+
+				else if (texture)
+				{
+					list->TransitionBarrier(*texture, state);
+				}
+			};
+
+			if (pass->outputBindInfo.contains(resource))
+			{
+				switch (pass->outputBindInfo[resource].first)
+				{
+				case OutputBind::RTV: Transition(D3D12_RESOURCE_STATE_RENDER_TARGET); break;
+				case OutputBind::DSV: Transition(D3D12_RESOURCE_STATE_DEPTH_WRITE); break;
+				}
+			}
+
+			else
+			{
+				switch (pass->bindInfo[resource])
+				{
+				case ResourceBind::UAV: Transition(D3D12_RESOURCE_STATE_UNORDERED_ACCESS); break;
+				}
+			}
+		}
 	}
 
-	// #TODO: Strongly consider looking ahead at sequential reading passes (up until a write pass) and merge their required
-	// read state into the current barrier in order to avoid transitions from a read-only state to another read-only state.
-
-	// Placed all the barriers, now flush them.
-	for (auto& list : lists)
+	for (auto& list : passLists)
 	{
 		list->FlushBarriers();
 	}
 }
 
-void RenderGraph::InjectRaceBarriers(std::vector<std::shared_ptr<CommandList>>& lists)
+std::pair<uint32_t, uint32_t> RenderGraph::GetBackBufferResolution(RenderDevice* device)
 {
-	// #TODO: Place UAV barriers when needed.
+	VGAssert(taggedResources.contains(ResourceTag::BackBuffer), "Render graph doesn't have tagged back buffer resource.");
 
-	// Placed all the barriers, now flush them.
-	for (auto& list : lists)
-	{
-		list->FlushBarriers();
-	}
+	const auto backBuffer = resourceManager.GetTexture(taggedResources[ResourceTag::BackBuffer]);
+	const auto& buffer = device->GetResourceManager().Get(backBuffer);
+	return std::make_pair(buffer.description.width, buffer.description.height);
 }
 
-RenderPass& RenderGraph::AddPass(const std::string_view staticName)
+RenderPass& RenderGraph::AddPass(std::string_view stableName, ExecutionQueue execution)
 {
-	VGScopedCPUStat("Render Graph Add Pass");
-
-	for (const auto& pass : passes)
-	{
-		VGAssert(std::strcmp(pass->staticName, staticName.data()) != 0, "Attempted to add multiple passes with the same name!");
-	}
-
-	return *passes.emplace_back(std::make_unique<RenderPass>(*this, staticName, passes.size()));
+	return *passes.emplace_back(std::make_unique<RenderPass>(&resourceManager, stableName));
 }
 
 void RenderGraph::Build()
 {
-	VGScopedCPUStat("Render Graph Build");
+	for (const auto& pass : passes)
+	{
+		pass->Validate();
+	}
 
-	VGAssert(Validate(), "Failed to validate render graph!");
-
-	// Serialize the execution pipeline, we need to do this to resolve resource state and barriers.
-	Serialize();
-
-	resolver.BuildTransients(device, resourceDependencies, resourceUsages);
+	BuildAdjacencyList();
+	TopologicalSort();
 }
 
-void RenderGraph::Execute()
+void RenderGraph::Execute(RenderDevice* device)
 {
-	VGScopedCPUStat("Render Graph Execute");
+	resourceManager.BuildTransients(device, this);
 
-	VGAssert(passPipeline.size(), "Render graph is empty, ensure you built the graph before execution.");
+	passLists.reserve(passes.size());
 
-	std::vector<std::shared_ptr<CommandList>> passCommands;
-	passCommands.resize(passPipeline.size());
-
-	size_t index = 0;
-	for (auto passIndex : passPipeline)
+	for (int i = 0; i < passes.size(); ++i)
 	{
-		passCommands[index] = device->AllocateFrameCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT);
-		++index;
+		passLists.emplace_back(std::move(device->AllocateFrameCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT)));
 	}
 
-	InjectStateBarriers(passCommands);
+	InjectStateBarriers();
 
-	// #TODO: Parallel recording.
-	index = 0;
-	for (auto passIndex : passPipeline)
+	for (int i = 0; i < passLists.size(); ++i)
 	{
-		VGScopedCPUStat(passes[passIndex]->staticName);
+		auto& pass = passes[i];
+		auto& list = passLists[i];
 
-		passes[passIndex]->execution(resolver, *passCommands[index]);
-		++index;
+		// #TODO: Inject scoped GPU zone.
+
+		// If graphics pass...
+
+		list->BindDescriptorAllocator(device->GetDescriptorAllocator());
+
+		D3D12_VIEWPORT viewport{
+			.TopLeftX = 0.f,
+			.TopLeftY = 0.f,
+			.Width = static_cast<float>(device->renderWidth),
+			.Height = static_cast<float>(device->renderHeight),
+			.MinDepth = 0.f,
+			.MaxDepth = 1.f
+		};
+
+		list->Native()->RSSetViewports(1, &viewport);
+
+		D3D12_RECT scissor{
+			.left = 0,
+			.top = 0,
+			.right = static_cast<LONG>(device->renderWidth),
+			.bottom = static_cast<LONG>(device->renderHeight)
+		};
+
+		list->Native()->RSSetScissorRects(1, &scissor);
+
+		std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> renderTargets;
+		renderTargets.reserve(pass->outputBindInfo.size());
+		D3D12_CPU_DESCRIPTOR_HANDLE depthStencil;
+		bool hasDepthStencil = false;
+
+		for (const auto& [resource, info] : pass->outputBindInfo)
+		{
+			const auto texture = resourceManager.GetTexture(resource);
+			auto& component = device->GetResourceManager().Get(texture);
+
+			if (info.first == OutputBind::RTV)
+			{
+				renderTargets.emplace_back(*component.RTV);
+			}
+
+			else if (info.first == OutputBind::DSV)
+			{
+				hasDepthStencil = true;
+				depthStencil = *component.DSV;
+			}
+		}
+
+		// If we don't have a depth stencil output, we might still have one as an input.
+		if (!hasDepthStencil)
+		{
+			for (const auto [resource, bind] : pass->bindInfo)
+			{
+				if (bind == ResourceBind::DSV)
+				{
+					const auto texture = resourceManager.GetTexture(resource);
+					auto& component = device->GetResourceManager().Get(texture);
+
+					hasDepthStencil = true;
+					depthStencil = *component.DSV;
+
+					break;
+				}
+			}
+		}
+
+		// #TODO: Replace with render passes.
+		list->Native()->OMSetRenderTargets(renderTargets.size(), renderTargets.size() > 0 ? renderTargets.data() : nullptr, false, hasDepthStencil ? &depthStencil : nullptr);
+
+		const float ClearColor[] = { 0.2f, 0.2f, 0.2f, 1.f };
+
+		for (const auto& [resource, info] : pass->outputBindInfo)
+		{
+			if (info.second)
+			{
+				const auto texture = resourceManager.GetTexture(resource);
+				auto& component = device->GetResourceManager().Get(texture);
+
+				if (info.first == OutputBind::RTV)
+				{
+					list->Native()->ClearRenderTargetView(*component.RTV, ClearColor, 0, nullptr);
+				}
+
+				else if (info.first == OutputBind::DSV)
+				{
+					// #TODO: Stencil clearing.
+					list->Native()->ClearDepthStencilView(*component.DSV, D3D12_CLEAR_FLAG_DEPTH/* | D3D12_CLEAR_FLAG_STENCIL*/, 1.f, 0, 0, nullptr);
+				}
+			}
+		}
+
+		list->Native()->OMSetStencilRef(0);
+
+		pass->Execute(*list, resourceManager);
+
+		// #TODO: End render pass.
 	}
 
-	InjectRaceBarriers(passCommands);
+	// Present the back buffer. #TODO: Implement as a present pass.
+	const auto backBuffer = resourceManager.GetTexture(taggedResources[ResourceTag::BackBuffer]);
+	passLists[passLists.size() - 1]->TransitionBarrier(backBuffer, D3D12_RESOURCE_STATE_PRESENT);
 
-	// Ensure the back buffer is in presentation state at the very end of the graph.
-	passCommands[passCommands.size() - 1]->TransitionBarrier(resolver.FetchAsTexture(*FindUsage(RGUsage::BackBuffer)), D3D12_RESOURCE_STATE_PRESENT);
+	// Close and submit the command lists.
 
-	std::vector<ID3D12CommandList*> passLists;
-	passLists.reserve(passCommands.size() + 1);
+	std::vector<ID3D12CommandList*> commandLists;
+	commandLists.reserve(passLists.size() + 1);
 
 	device->GetDirectList().FlushBarriers();
 	device->GetDirectList().Close();
-	passLists.emplace_back(device->GetDirectList().Native());  // Add the device's main draw list. #TEMP: Get rid of this monolithic list.
+	commandLists.emplace_back(device->GetDirectList().Native());
 
-	for (auto& list : passCommands)
+	for (auto& list : passLists)
 	{
 		list->FlushBarriers();
 		list->Close();
-		passLists.emplace_back(list->Native());
+		commandLists.emplace_back(list->Native());
 	}
 
-	device->GetDirectQueue()->ExecuteCommandLists(static_cast<UINT>(passLists.size()), passLists.data());
+	device->GetDirectQueue()->ExecuteCommandLists(commandLists.size(), commandLists.data());
 }

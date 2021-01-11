@@ -5,9 +5,6 @@
 	"CBV(b1, visibility = SHADER_VISIBILITY_VERTEX)," \
 	"DescriptorTable(" \
 		"SRV(t1)," \
-		"SRV(t2)," \
-		"SRV(t3)," \
-		"SRV(t4)," \
 		"visibility = SHADER_VISIBILITY_PIXEL)," \
 	"StaticSampler(" \
 		"s0," \

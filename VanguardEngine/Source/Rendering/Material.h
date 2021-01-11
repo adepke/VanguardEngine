@@ -2,19 +2,20 @@
 
 #pragma once
 
+#include <Rendering/Resource.h>
+
 #include <memory>
 
 class PipelineState;
-struct Texture;
 
 struct Material
 {
 	std::unique_ptr<PipelineState> pipeline;
 
-	std::shared_ptr<Texture> albedo;
-	std::shared_ptr<Texture> normal;
-	std::shared_ptr<Texture> roughness;
-	std::shared_ptr<Texture> metallic;
+	TextureHandle albedo;
+	TextureHandle normal;
+	TextureHandle roughness;
+	TextureHandle metallic;
 
 	bool backFaceCulling;
 };

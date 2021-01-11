@@ -2,14 +2,14 @@
 
 #include <Asset/TextureLoader.h>
 #include <Rendering/Device.h>
-#include <Rendering/Texture.h>
+#include <Rendering/Resource.h>
 
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 
 namespace AssetLoader
 {
-	std::shared_ptr<Texture> LoadTexture(RenderDevice& device, std::filesystem::path path)
+	TextureHandle LoadTexture(RenderDevice& device, std::filesystem::path path)
 	{
 		VGScopedCPUStat("Load Texture");
 
@@ -44,18 +44,19 @@ namespace AssetLoader
 		}
 
 		TextureDescription description{};
+		description.bindFlags = BindFlag::ShaderResource;
+		description.accessFlags = AccessFlag::CPUWrite;
 		description.width = pixelsX;
 		description.height = pixelsY;
 		description.format = DXGI_FORMAT_R8G8B8A8_UNORM;
-		description.updateRate = ResourceFrequency::Static;
-		description.bindFlags = BindFlag::ShaderResource;
-		description.accessFlags = AccessFlag::CPUWrite;
 
 		// #TODO: Derive name from asset name + texture type.
-		auto textureResource = device.CreateResource(description, VGText("Asset Texture"));
+		auto textureResource = device.GetResourceManager().Create(description, VGText("Asset texture"));
 
-		device.WriteResource(textureResource, dataResource);
+		device.GetResourceManager().Write(textureResource, dataResource);
 
-		return std::move(textureResource);
+		device.GetDirectList().TransitionBarrier(textureResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+		return textureResource;
 	}
 }

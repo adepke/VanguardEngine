@@ -2,9 +2,6 @@
 
 SamplerState defaultSampler : register(s0);
 Texture2D albedoMap : register(t1);
-Texture2D normalMap : register(t2);
-Texture2D roughnessMap : register(t3);
-Texture2D metallicMap : register(t4);
 
 struct Input
 {
@@ -18,11 +15,11 @@ struct Input
 
 struct Output
 {
-	float4 Color;
+	float4 Color : SV_Target;
 };
 
 [RootSignature(RS)]
-Output main(Input input) : SV_TARGET
+Output main(Input input)
 {
 	Output output;
 	output.Color = albedoMap.Sample(defaultSampler, input.uv);

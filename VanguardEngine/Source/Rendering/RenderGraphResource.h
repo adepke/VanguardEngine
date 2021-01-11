@@ -4,51 +4,50 @@
 
 #include <Rendering/Resource.h>
 
+#include <functional>
+#include <type_traits>
 #include <optional>
-#include <unordered_set>
-#include <unordered_map>
 
-enum class RGUsage
+// Typed resource for compile time validation.
+struct RenderResource
 {
-	Default,  // Standard usage, used if the resource doesn't qualify for any of the specific usages below.
-	RenderTarget,
-	DepthStencil,
-	BackBuffer,  // Same as render target, used for extracting dependencies.
+	size_t id;
+
+	bool operator==(const RenderResource other) const
+	{
+		return id == other.id;
+	}
+
+	bool operator<(const RenderResource other) const
+	{
+		return id < other.id;
+	}
 };
 
-enum RGBufferTypeFlag
+namespace std
 {
-	VertexBuf = 1 << 0,
-	IndexBuf = 1 << 1,
-	ConstantBuf = 1 << 2,
-};
+	template <>
+	struct hash<RenderResource>
+	{
+		size_t operator()(const RenderResource resource) const
+		{
+			return hash<remove_cv_t<decltype(resource.id)>>{}(resource.id);
+		}
+	};
+}
 
-// Reduced resource descriptions, the render graph will automatically determine the bind flags, access flags, etc.
-
-struct RGBufferDescription
+struct TransientBufferDescription
 {
-	uint32_t bufferTypeFlags;
 	ResourceFrequency updateRate = ResourceFrequency::Dynamic;
-	size_t size;  // Element count. Size * Stride = Byte count.
+	size_t size;  // Element count. size * stride = bytes.
 	size_t stride = 0;
 	std::optional<DXGI_FORMAT> format;
 };
 
-struct RGTextureDescription
+struct TransientTextureDescription
 {
-	uint32_t width = 1;
-	uint32_t height = 1;
+	uint32_t width = 0;  // Will match back buffer resolution if left at 0.
+	uint32_t height = 0;  // Will match back buffer resolution if left at 0.
 	uint32_t depth = 1;
 	DXGI_FORMAT format;
-};
-
-struct ResourceDependencyData
-{
-	std::unordered_set<size_t> readingPasses;  // List of passes that read from this resource.
-	std::unordered_set<size_t> writingPasses;  // List of passes that write to this resource.
-};
-
-struct ResourceUsageData
-{
-	std::unordered_map<size_t, RGUsage> passUsage;  // Map of pass index to usage.
 };

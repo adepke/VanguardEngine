@@ -3,8 +3,16 @@
 #pragma once
 
 #include <Rendering/Base.h>
+#include <Rendering/DescriptorHeap.h>
 
+#include <optional>
+
+#include <entt/entt.hpp>
+
+// #TODO: Fix Windows.h leaking.
 #include <D3D12MemAlloc.h>
+
+class ResourceManager;
 
 enum class ResourceFrequency
 {
@@ -27,34 +35,68 @@ enum AccessFlag
 {
 	CPURead = 1 << 0,
 	CPUWrite = 1 << 1,
-	GPUWrite = 1 << 2,  // #TODO: Do we need this?
+	GPUWrite = 1 << 2,
 };
 
-struct ResourceDescription
+struct BufferDescription
 {
-	ResourceFrequency updateRate;
+	ResourceFrequency updateRate = ResourceFrequency::Dynamic;
 	uint32_t bindFlags = 0;  // Determines the view type(s) created.
 	uint32_t accessFlags = 0;
+	size_t size;  // Element count. Size * Stride = Byte count.
+	size_t stride;
+	std::optional<DXGI_FORMAT> format;
 };
 
-class ResourceManager;
-
-struct Resource
+struct TextureDescription
 {
-	friend class ResourceManager;
+	uint32_t bindFlags = 0;  // Determines the view type(s) created.
+	uint32_t accessFlags = 0;
+	uint32_t width = 1;
+	uint32_t height = 1;
+	uint32_t depth = 1;
+	DXGI_FORMAT format;
+};
 
-protected:
+struct BufferComponent
+{
 	ResourcePtr<D3D12MA::Allocation> allocation;
-
-public:
 	D3D12_RESOURCE_STATES state;
 
-	Resource() = default;  // #TODO: Prevent creation outside of the resource manager.
-	Resource(const Resource&) = delete;
-	Resource(Resource&&) noexcept = default;
+	BufferDescription description;
 
-	Resource& operator=(const Resource&) = delete;
-	Resource& operator=(Resource&&) noexcept = default;
+	std::optional<DescriptorHandle> CBV;
+	std::optional<DescriptorHandle> SRV;
+	std::optional<DescriptorHandle> UAV;
 
-	auto* Native() const noexcept { return allocation->GetResource(); }
+	// #TODO: Remove.
+	ID3D12Resource* Native() { return allocation->GetResource(); }
+};
+
+struct TextureComponent
+{
+	ResourcePtr<D3D12MA::Allocation> allocation;
+	D3D12_RESOURCE_STATES state;
+
+	TextureDescription description;
+
+	std::optional<DescriptorHandle> RTV;
+	std::optional<DescriptorHandle> DSV;
+	std::optional<DescriptorHandle> SRV;
+	// #TODO: UAV support.
+
+	// #TODO: Remove.
+	ID3D12Resource* Native() { return allocation->GetResource(); }
+};
+
+// Lightweight type safe generational handles for render resources.
+
+struct BufferHandle
+{
+	entt::entity handle = entt::null;
+};
+
+struct TextureHandle
+{
+	entt::entity handle = entt::null;
 };

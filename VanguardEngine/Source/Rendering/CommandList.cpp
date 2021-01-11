@@ -55,6 +55,22 @@ void CommandList::SetName(std::wstring_view name)
 	list->SetName(name.data());
 }
 
+void CommandList::TransitionBarrier(BufferHandle resource, D3D12_RESOURCE_STATES state)
+{
+	auto& component = device->GetResourceManager().Get(resource);
+
+	TransitionBarrierInternal(component.Native(), component.state, state);
+	component.state = state;
+}
+
+void CommandList::TransitionBarrier(TextureHandle resource, D3D12_RESOURCE_STATES state)
+{
+	auto& component = device->GetResourceManager().Get(resource);
+
+	TransitionBarrierInternal(component.Native(), component.state, state);
+	component.state = state;
+}
+
 void CommandList::FlushBarriers()
 {
 	VGScopedCPUStat("Command List Barrier Flush");
@@ -67,7 +83,7 @@ void CommandList::FlushBarriers()
 	pendingBarriers.clear();
 }
 
-void CommandList::BindPipelineState(PipelineState& state)
+void CommandList::BindPipelineState(const PipelineState& state)
 {
 	VGScopedCPUStat("Bind Pipeline");
 

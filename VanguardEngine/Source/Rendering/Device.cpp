@@ -2,32 +2,26 @@
 
 #include <Rendering/Device.h>
 #include <Rendering/ResourceManager.h>
-#include <Rendering/Buffer.h>
-#include <Rendering/Texture.h>
 #include <Rendering/Material.h>
 #include <Core/Config.h>
 
 #include <algorithm>
 
-#include <wrl/client.h>
+#if !BUILD_RELEASE
+#include <dxgidebug.h>
+#endif
 
 void RenderDevice::SetNames()
 {
 #if !BUILD_RELEASE
 	VGScopedCPUStat("Device Set Names");
 
-	device->SetName(VGText("Primary Render Device"));
+	device->SetName(VGText("Primary render device"));
 
-	directCommandQueue->SetName(VGText("Direct Command Queue"));
+	directCommandQueue->SetName(VGText("Direct command queue"));
 	for (uint32_t i = 0; i < frameCount; ++i)
 	{
-		directCommandList[i].SetName(VGText("Direct Command List"));
-	}
-
-	computeCommandQueue->SetName(VGText("Compute Command Queue"));
-	for (uint32_t i = 0; i < frameCount; ++i)
-	{
-		computeCommandList[i].SetName(VGText("Compute Command List"));
+		directCommandList[i].SetName(VGText("Direct command list"));
 	}
 #endif
 }
@@ -48,28 +42,8 @@ void RenderDevice::SetupRenderTargets()
 			VGLogFatal(Rendering) << "Failed to get swap chain buffer for frame " << i << ": " << result;
 		}
 
-		backBufferTextures[i] = std::move(allocatorManager.TextureFromSwapChain(static_cast<void*>(intermediateResource), VGText("Back Buffer")));
+		backBufferTextures[i] = resourceManager.CreateFromSwapChain(static_cast<void*>(intermediateResource), VGText("Back buffer"));
 	}
-}
-
-std::shared_ptr<Buffer> RenderDevice::CreateResource(const BufferDescription& description, const std::wstring_view name)
-{
-	return std::move(allocatorManager.AllocateBuffer(description, name));
-}
-
-std::shared_ptr<Texture> RenderDevice::CreateResource(const TextureDescription& description, const std::wstring_view name)
-{
-	return std::move(allocatorManager.AllocateTexture(description, name));
-}
-
-void RenderDevice::WriteResource(std::shared_ptr<Buffer>& target, const std::vector<uint8_t>& source, size_t targetOffset)
-{
-	allocatorManager.WriteBuffer(target, source, targetOffset);
-}
-
-void RenderDevice::WriteResource(std::shared_ptr<Texture>& target, const std::vector<uint8_t>& source)
-{
-	allocatorManager.WriteTexture(target, source);
 }
 
 void RenderDevice::ResetFrame(size_t frameID)
@@ -105,17 +79,37 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 	{
 		VGScopedCPUStat("Render Device Enable Debug Layer");
 
-		ResourcePtr<ID3D12Debug> debugController;
+		ResourcePtr<ID3D12Debug1> debugController;
 
 		auto result = D3D12GetDebugInterface(IID_PPV_ARGS(debugController.Indirect()));
 		if (FAILED(result))
 		{
-			VGLogError(Rendering) << "Failed to get debug interface: " << result;
+			VGLogError(Rendering) << "Failed to get D3D12 debug interface: " << result;
 		}
 
 		else
 		{
 			debugController->EnableDebugLayer();
+
+			// Limit GPU-based validation to debug builds only, as it has far greater performance impacts than
+			// the debug layer. Development builds shouldn't be slowed down by this.
+#if BUILD_DEBUG
+			debugController->SetEnableGPUBasedValidation(true);
+#endif
+		}
+
+		ResourcePtr<IDXGIInfoQueue> infoQueue;
+
+		result = DXGIGetDebugInterface1(0, IID_PPV_ARGS(infoQueue.Indirect()));
+		if (FAILED(result))
+		{
+			VGLogError(Rendering) << "Failed to get DXGI info queue: " << result;
+		}
+
+		else
+		{
+			infoQueue->SetBreakOnSeverity(DXGI_DEBUG_ALL, DXGI_INFO_QUEUE_MESSAGE_SEVERITY_ERROR, true);
+			infoQueue->SetBreakOnSeverity(DXGI_DEBUG_ALL, DXGI_INFO_QUEUE_MESSAGE_SEVERITY_CORRUPTION, true);
 		}
 	}
 
@@ -135,11 +129,33 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 
 	renderAdapter.Initialize(factory, targetFeatureLevel, software);
 
-	result = D3D12CreateDevice(renderAdapter.Native(), targetFeatureLevel, IID_PPV_ARGS(device.Indirect()));
+	Microsoft::WRL::ComPtr<ID3D12Device3> deviceCom;
+
+	result = D3D12CreateDevice(renderAdapter.Native(), targetFeatureLevel, IID_PPV_ARGS(deviceCom.GetAddressOf()));
 	if (FAILED(result))
 	{
 		VGLogFatal(Rendering) << "Failed to create render device: " << result;
 	}
+
+	// Now that the device has been created, we can get the info queue and enable D3D12 message breaking.
+	if (enableDebugging)
+	{
+		Microsoft::WRL::ComPtr<ID3D12InfoQueue> infoQueue;
+
+		result = deviceCom.As(&infoQueue);
+		if (FAILED(result))
+		{
+			VGLogError(Rendering) << "Failed to get D3D12 info queue: " << result;
+		}
+		
+		else
+		{
+			infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true);
+			infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, true);
+		}
+	}
+
+	device.Reset(deviceCom.Detach());
 
 	D3D12MA::ALLOCATOR_DESC allocatorDesc{};
 	allocatorDesc.pAdapter = renderAdapter.Native();
@@ -152,7 +168,7 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 		VGLogFatal(Rendering) << "Failed to create device allocator: " << result;
 	}
 
-	allocatorManager.Initialize(this, frameCount);
+	resourceManager.Initialize(this, frameCount);
 
 	descriptorManager.Initialize(this, 1024, 128);
 
@@ -180,31 +196,6 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 		if (i > 0)
 		{
 			directCommandList[i].Close();
-		}
-	}
-
-	// Compute
-
-	D3D12_COMMAND_QUEUE_DESC computeCommandQueueDesc{};
-	computeCommandQueueDesc.Type = D3D12_COMMAND_LIST_TYPE_COMPUTE;
-	computeCommandQueueDesc.Priority = D3D12_COMMAND_QUEUE_PRIORITY_NORMAL;
-	computeCommandQueueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-	computeCommandQueueDesc.NodeMask = 0;
-
-	result = device->CreateCommandQueue(&computeCommandQueueDesc, IID_PPV_ARGS(computeCommandQueue.Indirect()));
-	if (FAILED(result))
-	{
-		VGLogFatal(Rendering) << "Failed to create compute command queue: " << result;
-	}
-
-	for (int i = 0; i < frameCount; ++i)
-	{
-		computeCommandList[i].Create(this, D3D12_COMMAND_LIST_TYPE_COMPUTE);
-
-		// Close all lists except the current frame's list.
-		if (i > 0)
-		{
-			computeCommandList[i].Close();
 		}
 	}
 
@@ -257,7 +248,7 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 		VGLogFatal(Rendering) << "Failed to create intra sync fence: " << result;
 	}
 
-	if (syncEvent = ::CreateEvent(nullptr, false, false, VGText("Intra Sync Fence Event")); !syncEvent)
+	if (syncEvent = ::CreateEvent(nullptr, false, false, VGText("Intra sync fence event")); !syncEvent)
 	{
 		VGLogFatal(Rendering) << "Failed to create sync event: " << GetPlatformError();
 	}
@@ -274,7 +265,7 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 		description.bindFlags = 0;
 		description.accessFlags = AccessFlag::CPUWrite;
 
-		frameBuffers[i] = std::move(allocatorManager.AllocateBuffer(description, VGText("Frame Buffer")));
+		frameBuffers[i] = resourceManager.Create(description, VGText("Frame buffer"));
 	}
 
 	SetupRenderTargets();
@@ -289,6 +280,24 @@ RenderDevice::~RenderDevice()
 	SyncInterframe(true);
 
 	::CloseHandle(syncEvent);
+
+#if !BUILD_RELEASE
+	if (debugging)
+	{
+		ResourcePtr<IDXGIDebug1> dxgiDebug;
+
+		auto result = DXGIGetDebugInterface1(0, IID_PPV_ARGS(dxgiDebug.Indirect()));
+		if (FAILED(result))
+		{
+			VGLogError(Rendering) << "Failed to get DXGI debug interface: " << result;
+		}
+
+		else
+		{
+			dxgiDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_FLAGS{ DXGI_DEBUG_RLO_ALL | DXGI_DEBUG_RLO_IGNORE_INTERNAL });
+		}
+	}
+#endif
 }
 
 void RenderDevice::CheckFeatureSupport()
@@ -406,7 +415,7 @@ void RenderDevice::CheckFeatureSupport()
 	}
 }
 
-std::pair<std::shared_ptr<Buffer>, size_t> RenderDevice::FrameAllocate(size_t size)
+std::pair<BufferHandle, size_t> RenderDevice::FrameAllocate(size_t size)
 {
 	const auto frameIndex = frame % frameCount;
 
@@ -422,7 +431,7 @@ std::shared_ptr<CommandList> RenderDevice::AllocateFrameCommandList(D3D12_COMMAN
 
 	frameCommandLists[frameIndex].emplace_back(std::make_shared<CommandList>());
 	frameCommandLists[frameIndex][size]->Create(this, type);
-	frameCommandLists[frameIndex][size]->SetName(VGText("Frame Command List"));
+	frameCommandLists[frameIndex][size]->SetName(VGText("Frame command list"));
 
 	return frameCommandLists[frameIndex][size];
 }
@@ -462,9 +471,6 @@ void RenderDevice::SyncIntraframe(SyncType type)
 	case SyncType::Direct:
 		syncQueue = directCommandQueue.Get();
 		break;
-	case SyncType::Compute:
-		syncQueue = computeCommandQueue.Get();
-		break;
 	}
 
 	auto result = syncQueue->Signal(intraSyncFence.Get(), ++intraSyncValue);
@@ -495,7 +501,7 @@ void RenderDevice::AdvanceCPU()
 	frameBufferOffsets[(frame + 1) % frameCount] = 0;  // GPU has fully consumed the frame resources, we can now reuse the buffer.
 
 	// The frame has finished, cleanup its resources. #TODO: Will leave additional GPU gaps if we're bottlenecking on the CPU, consider deferred cleanup?
-	allocatorManager.CleanupFrameResources(frame + 1);
+	resourceManager.CleanupFrameResources(frame + 1);
 
 	ResetFrame(frame + 1);
 
@@ -528,7 +534,11 @@ void RenderDevice::SetResolution(uint32_t width, uint32_t height, bool inFullscr
 
 	// #TODO: Fullscreen.
 
-	backBufferTextures = {};  // Release the render targets.
+	// Release the swap chain frame surfaces.
+	for (const auto texture : backBufferTextures)
+	{
+		resourceManager.Destroy(texture);
+	}
 
 	auto result = swapChain->ResizeBuffers(static_cast<UINT>(frameCount), static_cast<UINT>(width), static_cast<UINT>(height), DXGI_FORMAT_UNKNOWN, 0);
 	if (FAILED(result))

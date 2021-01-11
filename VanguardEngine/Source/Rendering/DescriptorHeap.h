@@ -31,8 +31,6 @@ private:
 	uint64_t gpuPointer;
 
 public:
-	inline ~DescriptorHandle();
-
 	DescriptorHandle() = default;
 	DescriptorHandle(const DescriptorHandle&) = delete;
 	DescriptorHandle(DescriptorHandle&&) noexcept = default;
@@ -42,6 +40,8 @@ public:
 
 	operator D3D12_CPU_DESCRIPTOR_HANDLE() noexcept { return { cpuPointer }; }
 	operator D3D12_GPU_DESCRIPTOR_HANDLE() noexcept { return { gpuPointer }; }
+
+	void Free();
 };
 
 class DescriptorHeapBase
@@ -79,8 +79,9 @@ public:
 	~FreeQueueDescriptorHeap();
 };
 
-inline DescriptorHandle::~DescriptorHandle()
+inline void DescriptorHandle::Free()
 {
+	// Linearly allocated descriptors don't have a parentHeap.
 	if (parentHeap)
 	{
 		parentHeap->Free(std::move(*this));

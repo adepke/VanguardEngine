@@ -4,7 +4,7 @@
 
 #include <Rendering/Material.h>
 #include <Rendering/Device.h>
-#include <Rendering/Buffer.h>
+#include <Rendering/Resource.h>
 
 #include <memory>
 #include <vector>
@@ -26,8 +26,8 @@ struct MeshComponent
 
 	std::vector<Subset> subsets;
 
-	std::shared_ptr<Buffer> vertexBuffer;
-	std::shared_ptr<Buffer> indexBuffer;
+	BufferHandle vertexBuffer;
+	BufferHandle indexBuffer;
 };
 
 struct CameraComponent
@@ -50,12 +50,12 @@ inline MeshComponent CreateMeshComponent(RenderDevice& device, const std::vector
 	vertexDescription.bindFlags = BindFlag::ShaderResource;  // Don't bind as vertex buffer, we aren't using the fixed pipeline vertex processing.
 	vertexDescription.accessFlags = AccessFlag::CPUWrite;
 
-	result.vertexBuffer = std::move(device.CreateResource(vertexDescription, VGText("Vertex Buffer")));
+	result.vertexBuffer = device.GetResourceManager().Create(vertexDescription, VGText("Vertex buffer"));
 
 	std::vector<uint8_t> vertexResource{};
 	vertexResource.resize(sizeof(Vertex) * vertices.size());
 	std::memcpy(vertexResource.data(), vertices.data(), vertexResource.size());
-	device.WriteResource(result.vertexBuffer, vertexResource);
+	device.GetResourceManager().Write(result.vertexBuffer, vertexResource);
 
 	device.GetDirectList().TransitionBarrier(result.vertexBuffer, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
@@ -66,15 +66,14 @@ inline MeshComponent CreateMeshComponent(RenderDevice& device, const std::vector
 	indexDescription.bindFlags = BindFlag::IndexBuffer;
 	indexDescription.accessFlags = AccessFlag::CPUWrite;
 
-	result.indexBuffer = std::move(device.CreateResource(indexDescription, VGText("Index Buffer")));
+	result.indexBuffer = device.GetResourceManager().Create(indexDescription, VGText("Index buffer"));
 
 	std::vector<uint8_t> indexResource{};
 	indexResource.resize(sizeof(uint32_t) * indices.size());
 	std::memcpy(indexResource.data(), indices.data(), indexResource.size());
-	device.WriteResource(result.indexBuffer, indexResource);
+	device.GetResourceManager().Write(result.indexBuffer, indexResource);
 
 	device.GetDirectList().TransitionBarrier(result.indexBuffer, D3D12_RESOURCE_STATE_INDEX_BUFFER);
-	device.GetDirectList().FlushBarriers();
 
 	return std::move(result);
 }

@@ -169,14 +169,14 @@ project "Engine"
 	-- Specific Files
 		
 	filter { "platforms:Win64" }
-		files { "VanguardEngine/Source/Asset/Windows/*.h", "VanguardEngine/Source/Asset/Windows/*.cpp" }
-		files { "VanguardEngine/Source/Core/Windows/*.h", "VanguardEngine/Source/Core/Windows/*.cpp" }
-		files { "VanguardEngine/Source/Debug/Windows/*.h", "VanguardEngine/Source/Debug/Windows/*.cpp" }
-		files { "VanguardEngine/Source/Editor/Windows/*.h", "VanguardEngine/Source/Editor/Windows/*.cpp" }
-		files { "VanguardEngine/Source/Rendering/Windows/*.h", "VanguardEngine/Source/Rendering/Windows/*.cpp" }
-		files { "VanguardEngine/Source/Threading/Windows/*.h", "VanguardEngine/Source/Threading/Windows/*.cpp" }
-		files { "VanguardEngine/Source/Utility/Windows/*.h", "VanguardEngine/Source/Utility/Windows/*.cpp" }
-		files { "VanguardEngine/Source/Window/Windows/*.h", "VanguardEngine/Source/Window/Windows/*.cpp" }
+		files { "VanguardEngine/Source/Asset/Windows/**.h", "VanguardEngine/Source/Asset/Windows/**.cpp" }
+		files { "VanguardEngine/Source/Core/Windows/**.h", "VanguardEngine/Source/Core/Windows/**.cpp" }
+		files { "VanguardEngine/Source/Debug/Windows/**.h", "VanguardEngine/Source/Debug/Windows/**.cpp" }
+		files { "VanguardEngine/Source/Editor/Windows/**.h", "VanguardEngine/Source/Editor/Windows/**.cpp" }
+		files { "VanguardEngine/Source/Rendering/Windows/**.h", "VanguardEngine/Source/Rendering/Windows/**.cpp" }
+		files { "VanguardEngine/Source/Threading/Windows/**.h", "VanguardEngine/Source/Threading/Windows/**.cpp" }
+		files { "VanguardEngine/Source/Utility/Windows/**.h", "VanguardEngine/Source/Utility/Windows/**.cpp" }
+		files { "VanguardEngine/Source/Window/Windows/**.h", "VanguardEngine/Source/Window/Windows/**.cpp" }
 
 	filter {}
 	
@@ -197,6 +197,9 @@ project "Engine"
 		
 	filter { "platforms:not Win64" }
 		links { "pthread" }
+		
+	filter { "platforms:Win64", "configurations:not Release" }
+		links { "dxguid" }
 		
 	filter {}
 	

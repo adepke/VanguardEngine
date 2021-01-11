@@ -491,7 +491,7 @@ public:
     */
     LPCWSTR GetName() const { return m_Name; }
 
-	void CreateManual(ID3D12Resource* resource);
+	void CreateManual(ID3D12Resource* resource, AllocatorPimpl* allocator);
 
 private:
     friend class AllocatorPimpl;
@@ -499,7 +499,7 @@ private:
     friend class JsonWriter;
 	friend class ::ResourceManager;
     template<typename T> friend void D3D12MA_DELETE(const ALLOCATION_CALLBACKS&, T*);
-
+public: // #TEMP
     AllocatorPimpl* m_Allocator = nullptr;
     enum Type
     {
@@ -795,8 +795,11 @@ private:
     Allocator(const ALLOCATION_CALLBACKS& allocationCallbacks, const ALLOCATOR_DESC& desc);
     ~Allocator();
     
+    // #TEMP
+public:
     AllocatorPimpl* m_Pimpl;
     
+private:
     D3D12MA_CLASS_NO_COPY(Allocator)
 };
 

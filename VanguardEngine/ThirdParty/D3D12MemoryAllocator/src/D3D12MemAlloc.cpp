@@ -4266,7 +4266,7 @@ void Allocation::Release()
 
     FreeName();
 
-	if (m_Allocator)
+	if (m_Allocator && m_Type != TYPE_COUNT)  // #TEMP: Don't free TYPE_COUNT allocations, which are manual allocations.
 	{
 		D3D12MA_DELETE(m_Allocator->GetAllocs(), this);
 	}
@@ -4315,10 +4315,12 @@ void Allocation::SetName(LPCWSTR Name)
     }
 }
 
-void Allocation::CreateManual(ID3D12Resource* resource)
+void Allocation::CreateManual(ID3D12Resource* resource, AllocatorPimpl* allocator)
 {
 	m_Resource = resource;
+    m_Allocator = allocator;  // Need the allocator for the name.
 	m_Type = TYPE_COUNT;  // This is used to prevent nullptr dereference during Release().
+    m_Name = nullptr;
 }
 
 Allocation::Allocation()

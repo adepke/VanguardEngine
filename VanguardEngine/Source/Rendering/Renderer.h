@@ -6,14 +6,15 @@
 #include <Utility/Singleton.h>
 #include <Window/WindowFrame.h>
 #include <Rendering/Device.h>
-#include <Rendering/PipelineState.h>
+#include <Rendering/PipelineBuilder.h>
 #include <Rendering/Material.h>
-#include <Rendering/Buffer.h>
-#include <Rendering/Texture.h>
 #include <Rendering/UserInterface.h>
 #include <Rendering/DescriptorAllocator.h>
 
 #include <entt/entt.hpp>
+
+// #TODO: Fix Windows.h leaking.
+#include <Rendering/Resource.h>
 
 class CommandList;
 
@@ -24,14 +25,17 @@ public:
 	std::unique_ptr<RenderDevice> device;  // Destruct the device after all other resources.
 
 private:
-	std::shared_ptr<Buffer> cameraBuffer;
-	std::vector<Material> materials;
+	PipelineBuilder pipelines;  // Manages all the pipelines.
+
+	BufferHandle cameraBuffer;
 	std::unique_ptr<UserInterfaceManager> userInterface;
 
 	DescriptorHandle nullDescriptor;
 
 private:
 	void UpdateCameraBuffer();
+	void CreatePipelines();
+	std::pair<BufferHandle, size_t> CreateInstanceBuffer(const entt::registry& registry);
 
 public:
 	~Renderer();
