@@ -84,7 +84,7 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 		auto result = D3D12GetDebugInterface(IID_PPV_ARGS(debugController.Indirect()));
 		if (FAILED(result))
 		{
-			VGLogError(Rendering) << "Failed to get debug interface: " << result;
+			VGLogError(Rendering) << "Failed to get D3D12 debug interface: " << result;
 		}
 
 		else
@@ -96,6 +96,20 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 #if BUILD_DEBUG
 			debugController->SetEnableGPUBasedValidation(true);
 #endif
+		}
+
+		ResourcePtr<IDXGIInfoQueue> infoQueue;
+
+		result = DXGIGetDebugInterface1(0, IID_PPV_ARGS(infoQueue.Indirect()));
+		if (FAILED(result))
+		{
+			VGLogError(Rendering) << "Failed to get DXGI info queue: " << result;
+		}
+
+		else
+		{
+			infoQueue->SetBreakOnSeverity(DXGI_DEBUG_ALL, DXGI_INFO_QUEUE_MESSAGE_SEVERITY_ERROR, true);
+			infoQueue->SetBreakOnSeverity(DXGI_DEBUG_ALL, DXGI_INFO_QUEUE_MESSAGE_SEVERITY_CORRUPTION, true);
 		}
 	}
 
@@ -115,11 +129,33 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 
 	renderAdapter.Initialize(factory, targetFeatureLevel, software);
 
-	result = D3D12CreateDevice(renderAdapter.Native(), targetFeatureLevel, IID_PPV_ARGS(device.Indirect()));
+	Microsoft::WRL::ComPtr<ID3D12Device3> deviceCom;
+
+	result = D3D12CreateDevice(renderAdapter.Native(), targetFeatureLevel, IID_PPV_ARGS(deviceCom.GetAddressOf()));
 	if (FAILED(result))
 	{
 		VGLogFatal(Rendering) << "Failed to create render device: " << result;
 	}
+
+	// Now that the device has been created, we can get the info queue and enable D3D12 message breaking.
+	if (enableDebugging)
+	{
+		Microsoft::WRL::ComPtr<ID3D12InfoQueue> infoQueue;
+
+		result = deviceCom.As(&infoQueue);
+		if (FAILED(result))
+		{
+			VGLogError(Rendering) << "Failed to get D3D12 info queue: " << result;
+		}
+		
+		else
+		{
+			infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true);
+			infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, true);
+		}
+	}
+
+	device.Reset(deviceCom.Detach());
 
 	D3D12MA::ALLOCATOR_DESC allocatorDesc{};
 	allocatorDesc.pAdapter = renderAdapter.Native();
