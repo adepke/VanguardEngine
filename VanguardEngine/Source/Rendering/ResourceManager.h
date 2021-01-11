@@ -96,12 +96,22 @@ inline void ResourceManager::Destroy(BufferHandle handle)
 {
 	VGAssert(registry.valid(handle.handle), "Destroying invalid buffer handle.");
 
+	auto& component = Get(handle);
+	if (component.CBV) component.CBV->Free();
+	if (component.SRV) component.SRV->Free();
+	if (component.UAV) component.UAV->Free();
+
 	registry.destroy(handle.handle);
 }
 
 inline void ResourceManager::Destroy(TextureHandle handle)
 {
 	VGAssert(registry.valid(handle.handle), "Destroying invalid texture handle.");
+
+	auto& component = Get(handle);
+	if (component.RTV) component.RTV->Free();
+	if (component.DSV) component.DSV->Free();
+	if (component.SRV) component.SRV->Free();
 
 	registry.destroy(handle.handle);
 }

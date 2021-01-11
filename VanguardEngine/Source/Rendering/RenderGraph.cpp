@@ -254,7 +254,7 @@ void RenderGraph::Execute(RenderDevice* device)
 		// If we don't have a depth stencil output, we might still have one as an input.
 		if (!hasDepthStencil)
 		{
-			for (const auto& [resource, bind] : pass->bindInfo)
+			for (const auto [resource, bind] : pass->bindInfo)
 			{
 				if (bind == ResourceBind::DSV)
 				{

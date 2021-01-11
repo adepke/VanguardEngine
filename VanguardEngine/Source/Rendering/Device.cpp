@@ -85,7 +85,7 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 	{
 		VGScopedCPUStat("Render Device Enable Debug Layer");
 
-		ResourcePtr<ID3D12Debug> debugController;
+		ResourcePtr<ID3D12Debug1> debugController;
 
 		auto result = D3D12GetDebugInterface(IID_PPV_ARGS(debugController.Indirect()));
 		if (FAILED(result))
@@ -96,6 +96,12 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 		else
 		{
 			debugController->EnableDebugLayer();
+
+			// Limit GPU-based validation to debug builds only, as it has far greater performance impacts than
+			// the debug layer. Development builds shouldn't be slowed down by this.
+#if BUILD_DEBUG
+			debugController->SetEnableGPUBasedValidation(true);
+#endif
 		}
 	}
 
@@ -283,7 +289,7 @@ RenderDevice::~RenderDevice()
 
 		else
 		{
-			dxgiDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_FLAGS(DXGI_DEBUG_RLO_ALL | DXGI_DEBUG_RLO_IGNORE_INTERNAL));
+			dxgiDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_FLAGS{ DXGI_DEBUG_RLO_ALL | DXGI_DEBUG_RLO_IGNORE_INTERNAL });
 		}
 	}
 #endif
@@ -525,9 +531,6 @@ void RenderDevice::SetResolution(uint32_t width, uint32_t height, bool inFullscr
 	fullscreen = inFullscreen;
 
 	// #TODO: Fullscreen.
-
-	// #TEMP:
-	std::this_thread::sleep_for(150ms);
 
 	// Release the swap chain frame surfaces.
 	for (const auto texture : backBufferTextures)

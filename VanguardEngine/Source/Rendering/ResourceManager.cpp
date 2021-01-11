@@ -473,7 +473,7 @@ const TextureHandle ResourceManager::CreateFromSwapChain(void* surface, const st
 
 	auto& component = Get(handle);
 
-	component.allocation->CreateManual(static_cast<ID3D12Resource*>(surface));
+	component.allocation->CreateManual(static_cast<ID3D12Resource*>(surface), device->allocator->m_Pimpl);
 
 	CreateResourceViews(component);
 	NameResource(component.allocation, name);
