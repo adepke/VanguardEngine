@@ -75,6 +75,7 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 
 	debugging = enableDebugging;
 
+#if !BUILD_RELEASE
 	if (enableDebugging)
 	{
 		VGScopedCPUStat("Render Device Enable Debug Layer");
@@ -112,6 +113,7 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 			infoQueue->SetBreakOnSeverity(DXGI_DEBUG_ALL, DXGI_INFO_QUEUE_MESSAGE_SEVERITY_CORRUPTION, true);
 		}
 	}
+#endif
 
 	ResourcePtr<IDXGIFactory7> factory;
 	uint32_t factoryFlags = 0;
@@ -137,6 +139,7 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 		VGLogFatal(Rendering) << "Failed to create render device: " << result;
 	}
 
+#if !BUILD_RELEASE
 	// Now that the device has been created, we can get the info queue and enable D3D12 message breaking.
 	if (enableDebugging)
 	{
@@ -154,6 +157,7 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 			infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, true);
 		}
 	}
+#endif
 
 	device.Reset(deviceCom.Detach());
 
