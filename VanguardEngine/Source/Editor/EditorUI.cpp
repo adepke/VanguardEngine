@@ -9,6 +9,33 @@
 
 #include <iterator>
 
+void EditorUI::DrawLayout()
+{
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.f);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.f);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 0.f, 0.f });
+
+	auto* viewport = ImGui::GetMainViewport();
+	ImGui::SetNextWindowPos(viewport->GetWorkPos());
+	ImGui::SetNextWindowSize(viewport->GetWorkSize());
+	ImGui::SetNextWindowViewport(viewport->ID);
+
+	ImGui::Begin("Dock Space", nullptr,
+		ImGuiWindowFlags_NoTitleBar |
+		ImGuiWindowFlags_NoCollapse |
+		ImGuiWindowFlags_NoResize |
+		ImGuiWindowFlags_NoMove |
+		ImGuiWindowFlags_NoBringToFrontOnFocus |
+		ImGuiWindowFlags_NoNavFocus |
+		ImGuiWindowFlags_MenuBar |
+		ImGuiWindowFlags_NoDocking);
+
+	const auto dockSpaceId = ImGui::GetID("DockSpace");
+	ImGui::DockSpace(dockSpaceId, { 0.f, 0.f }, ImGuiDockNodeFlags_None);
+
+	ImGui::PopStyleVar(3);
+}
+
 void EditorUI::DrawScene()
 {
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 0.f, 0.f });  // Remove window padding.
@@ -18,31 +45,11 @@ void EditorUI::DrawScene()
 
 	ImGui::Begin("Scene", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse);
 
-	const auto windowPos = ImGui::GetWindowPos();
-
-	auto contentMin = ImGui::GetWindowContentRegionMin();
-	auto contentMax = ImGui::GetWindowContentRegionMax();
-
-	contentMin.x += windowPos.x;
-	contentMin.y += windowPos.y;
-	contentMax.x += windowPos.x;
-	contentMax.y += windowPos.y;
-
-	sceneViewport.positionX = contentMin.x;
-	sceneViewport.positionY = contentMin.y;
-	sceneViewport.width = contentMax.x - contentMin.x;
-	sceneViewport.height = contentMax.y - contentMin.y;
+	// #TODO: Use ImGui::Image() to draw the back buffer.
 
 	ImGui::End();
 
 	ImGui::PopStyleVar();
-}
-
-void EditorUI::DrawToolbar()
-{
-	ImGui::Begin("Toolbar", nullptr, ImGuiWindowFlags_None);
-
-	ImGui::End();
 }
 
 void EditorUI::DrawEntityHierarchy(entt::registry& registry)
@@ -126,13 +133,6 @@ void EditorUI::DrawEntityPropertyViewer(entt::registry& registry)
 			ImGui::Text("No components.");
 		}
 	}
-
-	ImGui::End();
-}
-
-void EditorUI::DrawAssetBrowser()
-{
-	ImGui::Begin("Asset Browser", nullptr, ImGuiWindowFlags_None);
 
 	ImGui::End();
 }

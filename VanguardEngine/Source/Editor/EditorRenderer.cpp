@@ -5,17 +5,13 @@
 
 namespace EditorRenderer
 {
-	Viewport GetSceneViewport()
-	{
-		return EditorUI::Get().sceneViewport;
-	}
-
 	void Render(entt::registry& registry)
 	{
-		EditorUI::Get().DrawScene();
-		EditorUI::Get().DrawToolbar();
+		// #TODO: Docking layout is disabled until bindless is implemented, which will allow
+		// render graph textures to be used with ImGui.
+		//EditorUI::Get().DrawLayout();
+		//EditorUI::Get().DrawScene();
 		EditorUI::Get().DrawEntityHierarchy(registry);
 		EditorUI::Get().DrawEntityPropertyViewer(registry);
-		EditorUI::Get().DrawAssetBrowser();
 	}
 }

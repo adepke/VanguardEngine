@@ -13,12 +13,8 @@ private:
 	entt::entity hierarchySelectedEntity = entt::null;
 
 public:
-	Viewport sceneViewport;
-
-public:
+	void DrawLayout();
 	void DrawScene();
-	void DrawToolbar();
 	void DrawEntityHierarchy(entt::registry& registry);
 	void DrawEntityPropertyViewer(entt::registry& registry);
-	void DrawAssetBrowser();
 };

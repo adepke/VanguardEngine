@@ -204,7 +204,7 @@ namespace Input
 		io.BackendFlags |= ImGuiBackendFlags_HasSetMousePos;
 		io.BackendFlags |= ImGuiBackendFlags_PlatformHasViewports;
 		io.BackendFlags |= ImGuiBackendFlags_HasMouseHoveredViewport;
-		io.BackendPlatformName = "ImGui Win64";
+		io.BackendPlatformName = "Vanguard Win64";
 
 		ImGui::GetMainViewport()->PlatformHandleRaw = window;
 
