@@ -21,7 +21,7 @@ function LinkThirdParty()
 	
 	links "imgui"
 	links "Jobs"
-	links "Tracy"
+	links "TracyClient"
 	links "D3D12MemoryAllocator"
 	links "dxcompiler"
 	links "assimp"
@@ -32,7 +32,6 @@ function RunThirdParty()
 	include "VanguardEngine/ThirdParty/imgui"
 	include "VanguardEngine/ThirdParty/Jobs"
 	include "VanguardEngine/ThirdParty/Tracy"
-	include "VanguardEngine/ThirdParty/Tracy/server"
 	include "VanguardEngine/ThirdParty/D3D12MemoryAllocator"
 	include "VanguardEngine/ThirdParty/assimp"
 end
@@ -184,6 +183,11 @@ project "Engine"
 	
 	IncludeThirdParty()
 	
+	filter { "configurations:not Release" }
+		buildoptions "/Zi"  -- Disable symbols for edit and continue, since Tracy needs __LINE__ to be a constant.
+		
+	filter {}
+	
 	-- General Links
 	
 	libdirs {}
@@ -204,7 +208,8 @@ project "Engine"
 	filter {}
 	
 	postbuildcommands {
-		"{COPY} ../../VanguardEngine/ThirdParty/DirectXShaderCompiler/*.dll ../Bin/%{cfg.platform}_%{cfg.buildcfg}/"
+		"{COPY} ../../VanguardEngine/ThirdParty/DirectXShaderCompiler/*.dll ../Bin/%{cfg.platform}_%{cfg.buildcfg}/",
+		"{COPY} ../ThirdParty/TracyClient/Bin/%{cfg.platform}_%{cfg.buildcfg}/*.dll ../Bin/%{cfg.platform}_%{cfg.buildcfg}/"
 	}
 	
 	-- Third Party Links

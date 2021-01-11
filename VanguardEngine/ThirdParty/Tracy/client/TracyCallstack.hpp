@@ -22,7 +22,7 @@
 namespace tracy
 {
 
-struct SymbolData
+struct CallstackSymbolData
 {
     const char* file;
     uint32_t line;
@@ -45,8 +45,8 @@ struct CallstackEntryData
     const char* imageName;
 };
 
-SymbolData DecodeSymbolAddress( uint64_t ptr );
-SymbolData DecodeCodeAddress( uint64_t ptr );
+CallstackSymbolData DecodeSymbolAddress( uint64_t ptr );
+CallstackSymbolData DecodeCodeAddress( uint64_t ptr );
 const char* DecodeCallstackPtrFast( uint64_t ptr );
 CallstackEntryData DecodeCallstackPtr( uint64_t ptr );
 void InitCallstack();
@@ -100,8 +100,8 @@ static tracy_force_inline void* Callstack( int depth )
 {
     assert( depth >= 1 );
 
-    auto trace = (uintptr_t*)tracy_malloc( ( 1 + depth ) * sizeof( uintptr_t ) );
-    const auto num = backtrace( (void**)(trace+1), depth );
+    auto trace = (uintptr_t*)tracy_malloc( ( 1 + (size_t)depth ) * sizeof( uintptr_t ) );
+    const auto num = (size_t)backtrace( (void**)(trace+1), depth );
     *trace = num;
 
     return trace;
