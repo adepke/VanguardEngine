@@ -1,20 +1,10 @@
 #include "Prepass_RS.hlsli"
+#include "Object.hlsli"
+#include "Camera.hlsli"
 
 #pragma pack_matrix(row_major)
 
-struct PerObject
-{
-	matrix worldMatrix;
-};
-
 ConstantBuffer<PerObject> perObject : register(b0);
-
-struct CameraBuffer
-{
-	matrix viewMatrix;
-	matrix projectionMatrix;
-};
-
 ConstantBuffer<CameraBuffer> cameraBuffer : register(b1);
 
 struct Vertex
@@ -28,15 +18,20 @@ struct Vertex
 
 StructuredBuffer<Vertex> vertexBuffer : register(t0);
 
+struct Input
+{
+	uint vertexID : SV_VertexID;
+};
+
 struct Output
 {
 	float4 positionCS : SV_POSITION;  // Clip space.
 };
 
 [RootSignature(RS)]
-Output main(uint vertexID : SV_VertexID)
+Output main(Input input)
 {
-	Vertex vertex = vertexBuffer[vertexID];
+	Vertex vertex = vertexBuffer[input.vertexID];
 
 	Output output;
 	output.positionCS = float4(vertex.position, 1.f);
