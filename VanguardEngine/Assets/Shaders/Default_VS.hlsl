@@ -2,8 +2,6 @@
 #include "Object.hlsli"
 #include "Camera.hlsli"
 
-#pragma pack_matrix(row_major)
-
 ConstantBuffer<PerObject> perObject : register(b0);
 ConstantBuffer<CameraBuffer> cameraBuffer : register(b1);
 
