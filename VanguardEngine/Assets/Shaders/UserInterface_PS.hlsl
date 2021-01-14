@@ -1,3 +1,5 @@
+// Copyright (c) 2019-2021 Andrew Depke
+
 #include "UserInterface_RS.hlsli"
 
 struct PS_INPUT

@@ -1,3 +1,5 @@
+// Copyright (c) 2019-2021 Andrew Depke
+
 #define RS \
 	"RootFlags(" \
 		"ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |" \

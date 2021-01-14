@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2020 Andrew Depke
+// Copyright (c) 2019-2021 Andrew Depke
 
 #include <Editor/EditorRenderer.h>
 #include <Editor/EditorUI.h>

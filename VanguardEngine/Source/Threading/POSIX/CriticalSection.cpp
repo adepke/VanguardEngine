@@ -1,3 +1,4 @@
+// Copyright (c) 2019-2021 Andrew Depke
 // Copyright (c) 2019 Andrew Depke
 
 #include <Threading/CriticalSection.h>

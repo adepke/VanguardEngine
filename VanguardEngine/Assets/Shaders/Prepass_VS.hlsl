@@ -1,3 +1,5 @@
+// Copyright (c) 2019-2021 Andrew Depke
+
 #include "Prepass_RS.hlsli"
 #include "Object.hlsli"
 #include "Camera.hlsli"

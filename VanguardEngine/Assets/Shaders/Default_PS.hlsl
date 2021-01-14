@@ -1,3 +1,5 @@
+// Copyright (c) 2019-2021 Andrew Depke
+
 #include "Default_RS.hlsli"
 
 SamplerState defaultSampler : register(s0);
