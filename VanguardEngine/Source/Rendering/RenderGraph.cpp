@@ -203,7 +203,8 @@ void RenderGraph::Execute(RenderDevice* device)
 		auto& pass = passes[i];
 		auto& list = passLists[i];
 
-		// #TODO: Inject scoped GPU zone.
+		// #TODO: Dynamic zone naming. See #10.
+		VGScopedGPUStat("Unnamed Zone", device->GetDirectContext(), list->Native());
 
 		// If graphics pass...
 

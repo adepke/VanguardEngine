@@ -47,6 +47,7 @@ private:
 	Adapter renderAdapter;
 
 	ResourcePtr<ID3D12CommandQueue> directCommandQueue;
+	TracyD3D12Ctx directContext;
 	CommandList directCommandList[frameCount];  // #TODO: One per worker thread.
 
 	ResourcePtr<IDXGISwapChain3> swapChain;
@@ -105,6 +106,7 @@ public:
 	size_t GetFrameIndex() const noexcept { return frame % RenderDevice::frameCount; }
 
 	auto* GetDirectQueue() const noexcept { return directCommandQueue.Get(); }
+	auto* GetDirectContext() const noexcept { return directContext; }
 	auto& GetDirectList() noexcept { return directCommandList[GetFrameIndex()]; }
 	auto* GetSwapChain() const noexcept { return swapChain.Get(); }
 	auto GetBackBuffer() const noexcept { return backBufferTextures[swapChain->GetCurrentBackBufferIndex()]; }  // Resizing affects the buffer index, so use the swap chain's index.

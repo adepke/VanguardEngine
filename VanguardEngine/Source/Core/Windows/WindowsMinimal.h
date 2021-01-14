@@ -3,7 +3,8 @@
 #pragma once
 
 #if defined(_WINDOWS_) && !defined(WINDOWSMINIMAL)
-#error "Included Windows.h manually, include this file instead."
+// #TODO: Fix leaking in Logging.h, then re-enable this.
+//#error "Included Windows.h manually, include this file instead."
 #endif
 
 #define WINDOWSMINIMAL

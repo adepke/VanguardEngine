@@ -192,6 +192,8 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 		VGLogFatal(Rendering) << "Failed to create direct command queue: " << result;
 	}
 
+	directContext = TracyD3D12Context(device.Get(), directCommandQueue.Get());
+
 	for (int i = 0; i < frameCount; ++i)
 	{
 		directCommandList[i].Create(this, D3D12_COMMAND_LIST_TYPE_DIRECT);
@@ -511,7 +513,7 @@ void RenderDevice::AdvanceCPU()
 
 	// #TODO: Check our CPU frame budget, try and get some additional work done if we have time?
 
-	VGStatFrame;  // Mark the new frame.
+	VGStatFrameCPU();  // Mark the new frame.
 	++frame;
 }
 
@@ -524,6 +526,8 @@ void RenderDevice::AdvanceGPU()
 	{
 		VGLogFatal(Rendering) << "Failed to submit signal command to GPU during frame advancement: " << result;
 	}
+
+	VGStatFrameGPU(directContext);
 }
 
 void RenderDevice::SetResolution(uint32_t width, uint32_t height, bool inFullscreen)

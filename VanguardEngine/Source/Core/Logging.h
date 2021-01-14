@@ -8,6 +8,12 @@
 
 #if ENABLE_PROFILING
 #include <Tracy.hpp>
+
+// TracyD3D12.hpp includes wrl/client.h, which is a big leak.
+// #TODO: Fix Windows.h leaking.
+#define NOMINMAX
+
+#include <TracyD3D12.hpp>
 #endif
 
 #include <chrono>
@@ -148,12 +154,14 @@ VGWarningPop
 
 #if ENABLE_PROFILING
 #define VGScopedCPUStat(name) ZoneScopedN(name)
-#define VGScopedGPUStat(name) do {} while (0)  // #TODO: GPU Profiling through PIX. Do we need the command list, command queue, and/or device context?
-#define VGStatFrame FrameMark
+#define VGScopedGPUStat(name, context, list) TracyD3D12Zone(context, list, name)
+#define VGStatFrameCPU() FrameMark
+#define VGStatFrameGPU(context) TracyD3D12Collect(context); TracyD3D12NewFrame(context)
 #else
 #define VGScopedCPUStat(name) do {} while (0)
 #define VGScopedGPUStat(name) do {} while (0)
-#define VGStatFrame do {} while (0)
+#define VGStatFrameCPU() do {} while (0)
+#define VGStatFrameGPU(context) do {} while (0)
 #endif
 
 // Global Subsystems
