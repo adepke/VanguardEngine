@@ -36,7 +36,7 @@ namespace AssetLoader
 		{
 			VGScopedCPUStat("Copy");
 
-			dataResource.resize(static_cast<size_t>(pixelsX)* static_cast<size_t>(pixelsY)* static_cast<size_t>(STBI_rgb_alpha));
+			dataResource.resize(static_cast<size_t>(pixelsX) * static_cast<size_t>(pixelsY) * static_cast<size_t>(STBI_rgb_alpha));
 
 			std::memcpy(dataResource.data(), data, dataResource.size());
 

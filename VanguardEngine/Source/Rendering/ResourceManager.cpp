@@ -548,6 +548,10 @@ void ResourceManager::Write(TextureHandle target, const std::vector<uint8_t>& so
 
 	const auto frameIndex = device->GetFrameIndex();
 
+	// Texture placed footprint source copies need to be aligned to D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT. Buffers don't
+	// need this alignment, so only align here.
+	uploadOffsets[frameIndex] = AlignedSize(uploadOffsets[frameIndex], D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
+
 	VGAssert(uploadOffsets[frameIndex] + source.size() <= uploadResources[frameIndex]->GetResource()->GetDesc().Width, "Failed to write to texture, exhausted frame upload heap.");
 
 	std::memcpy(static_cast<uint8_t*>(uploadPtrs[frameIndex]) + uploadOffsets[frameIndex], source.data(), source.size());
