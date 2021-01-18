@@ -21,7 +21,7 @@ struct MeshComponent
 		size_t indexOffset = 0;  // Offset into the index buffer.
 		size_t indices = 0;
 
-		std::shared_ptr<Material> material;
+		Material material;
 	};
 
 	std::vector<Subset> subsets;

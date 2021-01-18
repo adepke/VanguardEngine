@@ -96,15 +96,8 @@ void CommandList::BindDescriptorAllocator(DescriptorAllocator& allocator)
 {
 	VGScopedCPUStat("Bind Descriptor Allocator");
 
-	std::vector<ID3D12DescriptorHeap*> heaps;
-	heaps.reserve(allocator.onlineHeaps.size());
-	
-	for (auto& heap : allocator.onlineHeaps)
-	{
-		heaps.push_back(heap[device->GetFrameIndex()].Native());
-	}
-
-	list->SetDescriptorHeaps(static_cast<UINT>(heaps.size()), heaps.data());
+	auto* descriptorHeap = allocator.defaultHeap.Native();
+	list->SetDescriptorHeaps(1, &descriptorHeap);
 }
 
 HRESULT CommandList::Close()

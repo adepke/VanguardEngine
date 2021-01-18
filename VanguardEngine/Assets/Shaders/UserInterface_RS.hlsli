@@ -7,9 +7,10 @@
 		"DENY_DOMAIN_SHADER_ROOT_ACCESS |" \
 		"DENY_GEOMETRY_SHADER_ROOT_ACCESS)," \
 	"RootConstants(num32BitConstants = 16, b0, visibility = SHADER_VISIBILITY_VERTEX)," \
+	"RootConstants(num32BitConstants = 1, b0, visibility = SHADER_VISIBILITY_PIXEL)," \
 	"SRV(t0, visibility = SHADER_VISIBILITY_VERTEX)," \
 	"DescriptorTable(" \
-		"SRV(t1, numDescriptors = 1)," \
+		"SRV(t0, numDescriptors = unbounded, flags = DESCRIPTORS_VOLATILE)," \
 		"visibility = SHADER_VISIBILITY_PIXEL)," \
 	"StaticSampler(" \
 		"s0," \

@@ -5,12 +5,10 @@
 
 namespace EditorRenderer
 {
-	void Render(entt::registry& registry)
+	void Render(RenderDevice* device, entt::registry& registry, TextureHandle sceneTexture)
 	{
-		// #TODO: Docking layout is disabled until bindless is implemented, which will allow
-		// render graph textures to be used with ImGui.
-		//EditorUI::Get().DrawLayout();
-		//EditorUI::Get().DrawScene();
+		EditorUI::Get().DrawLayout();
+		EditorUI::Get().DrawScene(device, sceneTexture);
 		EditorUI::Get().DrawEntityHierarchy(registry);
 		EditorUI::Get().DrawEntityPropertyViewer(registry);
 	}

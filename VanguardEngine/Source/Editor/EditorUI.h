@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <Rendering/Resource.h>
 #include <Rendering/Viewport.h>
 #include <Utility/Singleton.h>
 
@@ -14,7 +15,7 @@ private:
 
 public:
 	void DrawLayout();
-	void DrawScene();
+	void DrawScene(RenderDevice* device, TextureHandle sceneTexture);
 	void DrawEntityHierarchy(entt::registry& registry);
 	void DrawEntityPropertyViewer(entt::registry& registry);
 };

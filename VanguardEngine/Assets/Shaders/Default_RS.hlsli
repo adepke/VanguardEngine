@@ -5,11 +5,13 @@
 	"CBV(b0, visibility = SHADER_VISIBILITY_VERTEX)," \
 	"SRV(t0, visibility = SHADER_VISIBILITY_VERTEX)," \
 	"CBV(b1, visibility = SHADER_VISIBILITY_VERTEX)," \
+	"CBV(b0, visibility = SHADER_VISIBILITY_PIXEL)," \
 	"DescriptorTable(" \
-		"SRV(t1)," \
+		"SRV(t0, space = 0, numDescriptors = unbounded, flags = DESCRIPTORS_VOLATILE)," \
 		"visibility = SHADER_VISIBILITY_PIXEL)," \
 	"StaticSampler(" \
 		"s0," \
+		"space = 0," \
 		"filter = FILTER_MIN_MAG_MIP_LINEAR," \
 		"addressU = TEXTURE_ADDRESS_WRAP," \
 		"addressV = TEXTURE_ADDRESS_WRAP," \
@@ -20,5 +22,4 @@
 		"borderColor = STATIC_BORDER_COLOR_TRANSPARENT_BLACK," \
 		"minLOD = 0.f," \
 		"maxLOD = 0.f," \
-		"space = 0," \
 		"visibility = SHADER_VISIBILITY_PIXEL)"

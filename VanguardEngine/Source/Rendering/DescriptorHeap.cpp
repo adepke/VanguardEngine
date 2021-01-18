@@ -35,22 +35,6 @@ void DescriptorHeapBase::Create(RenderDevice* device, DescriptorType type, size_
 	totalDescriptors = descriptors;
 }
 
-DescriptorHandle LinearDescriptorHeap::Allocate()
-{
-	VGScopedCPUStat("Descriptor Heap Allocate");
-
-	VGEnsure(allocatedDescriptors < totalDescriptors, "Ran out of linear descriptor heap memory.");
-	allocatedDescriptors++;
-
-	const auto offset = (allocatedDescriptors - 1) * descriptorSize;
-
-	DescriptorHandle handle{};
-	handle.cpuPointer = cpuHeapStart + offset;
-	handle.gpuPointer = gpuHeapStart + offset;
-
-	return handle;
-}
-
 DescriptorHandle FreeQueueDescriptorHeap::Allocate()
 {
 	VGScopedCPUStat("Descriptor Heap Allocate");
@@ -66,6 +50,7 @@ DescriptorHandle FreeQueueDescriptorHeap::Allocate()
 		handle.parentHeap = this;
 		handle.cpuPointer = cpuHeapStart + offset;
 		handle.gpuPointer = gpuHeapStart + offset;
+		handle.bindlessIndex = allocatedDescriptors - 1;
 
 		return handle;
 	}

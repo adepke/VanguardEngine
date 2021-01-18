@@ -1,9 +1,16 @@
 // Copyright (c) 2019-2021 Andrew Depke
 
 #include "Default_RS.hlsli"
+#include "Base.hlsli"
 
 SamplerState defaultSampler : register(s0);
-Texture2D albedoMap : register(t1);
+
+struct Material
+{
+	uint albedo;
+};
+
+ConstantBuffer<Material> material : register(b0);
 
 struct Input
 {
@@ -23,6 +30,8 @@ struct Output
 [RootSignature(RS)]
 Output main(Input input)
 {
+	Texture2D albedoMap = textures[material.albedo];
+
 	Output output;
 	output.Color = albedoMap.Sample(defaultSampler, input.uv);
 

@@ -31,6 +31,9 @@ private:
 	uint64_t gpuPointer;
 
 public:
+	uint32_t bindlessIndex;
+
+public:
 	DescriptorHandle() = default;
 	DescriptorHandle(const DescriptorHandle&) = delete;
 	DescriptorHandle(DescriptorHandle&&) noexcept = default;
@@ -58,13 +61,8 @@ public:
 	void Create(RenderDevice* device, DescriptorType type, size_t descriptors, bool visible);
 
 	auto* Native() noexcept { return heap.Get(); }
-};
 
-class LinearDescriptorHeap : public DescriptorHeapBase
-{
-public:
-	DescriptorHandle Allocate();
-	void Reset() { allocatedDescriptors = 0; }
+	size_t GetGPUHeapStart() const { return gpuHeapStart; }
 };
 
 class FreeQueueDescriptorHeap : public DescriptorHeapBase
@@ -81,7 +79,7 @@ public:
 
 inline void DescriptorHandle::Free()
 {
-	// Linearly allocated descriptors don't have a parentHeap.
+	// parentHeap isn't always valid.
 	if (parentHeap)
 	{
 		parentHeap->Free(std::move(*this));

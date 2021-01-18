@@ -60,14 +60,24 @@ namespace AssetLoader
 		auto trimmedPath = path;
 		trimmedPath.remove_filename();
 
-		std::vector<std::shared_ptr<Material>> materials{};
+		std::vector<Material> materials{};
 		materials.reserve(scene->mNumMaterials);
 
 		for (uint32_t i = 0; i < scene->mNumMaterials; ++i)
 		{
+			materials.emplace_back();
 			const auto& mat = *scene->mMaterials[i];
 
-			materials.emplace_back(std::make_shared<Material>());
+			// Create the material table.
+			BufferDescription matTableDesc{
+				.updateRate = ResourceFrequency::Static,
+				.bindFlags = BindFlag::ConstantBuffer,
+				.accessFlags = AccessFlag::CPUWrite,
+				.size = 1,
+				.stride = sizeof(uint32_t)
+			};
+
+			materials[i].materialBuffer = device.GetResourceManager().Create(matTableDesc, VGText("Material table"));
 
 			aiString texturePath;
 
@@ -86,11 +96,26 @@ namespace AssetLoader
 
 			// Prefer PBR texture types, but fall back to legacy types (which may still be PBR, just incorrectly set in the asset).
 
+			// Only use the albedo while working on bindless.
 			if (SearchTextureType(std::array{ aiTextureType_BASE_COLOR, aiTextureType_DIFFUSE }))
 			{
-				materials[i]->albedo = LoadTexture(device, trimmedPath / texturePath.C_Str());
+				const auto textureHandle = LoadTexture(device, trimmedPath / texturePath.C_Str());
+				const TextureComponent& textureComponent = device.GetResourceManager().Get(textureHandle);
+				const auto bindlessIndex = textureComponent.SRV->bindlessIndex;
+
+				std::vector<uint32_t> materialTable{};
+				materialTable.emplace_back(bindlessIndex);
+
+				std::vector<uint8_t> materialTableBytes{};
+				materialTableBytes.resize(materialTable.size() * sizeof(uint32_t));
+				std::memcpy(materialTableBytes.data(), materialTable.data(), materialTableBytes.size());
+
+				device.GetResourceManager().Write(materials[i].materialBuffer, materialTableBytes);
+
+				device.GetDirectList().TransitionBarrier(materials[i].materialBuffer, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
 			}
 			
+			/*
 			if (SearchTextureType(std::array{ aiTextureType_NORMAL_CAMERA, aiTextureType_NORMALS, aiTextureType_HEIGHT }))
 			{
 				materials[i]->normal = LoadTexture(device, trimmedPath / texturePath.C_Str());
@@ -115,6 +140,7 @@ namespace AssetLoader
 			{
 				//Materials[Iter]->ambientOcclusion = LoadTexture(Device, TrimmedPath / TexturePath.C_Str());
 			}
+			*/
 		}
 
 		// Sum vertices/indices from all the submeshes.

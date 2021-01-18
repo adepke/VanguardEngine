@@ -8,6 +8,7 @@
 #include <Core/Config.h>
 #include <Core/Input.h>
 #include <Window/WindowFrame.h>
+#include <Utility/AlignedSize.h>
 
 #include <imgui.h>
 #include <d3dcompiler.h>
@@ -53,10 +54,10 @@ void UserInterfaceManager::SetupRenderState(ImDrawData* drawData, CommandList& l
 		float B = drawData->DisplayPos.y + drawData->DisplaySize.y;
 		float mvp[4][4] =
 		{
-			{ 2.0f / (R - L),   0.0f,           0.0f,       0.0f },
-			{ 0.0f,         2.0f / (T - B),     0.0f,       0.0f },
-			{ 0.0f,         0.0f,           0.5f,       0.0f },
-			{ (R + L) / (L - R),  (T + B) / (B - T),    0.5f,       1.0f },
+			{ 2.0f / (R - L),    0.0f,              0.0f, 0.0f },
+			{ 0.0f,              2.0f / (T - B),    0.0f, 0.0f },
+			{ 0.0f,              0.0f,              0.5f, 0.0f },
+			{ (R + L) / (L - R), (T + B) / (B - T), 0.5f, 1.0f },
 		};
 		memcpy(&vertexConstantBuffer.mvp, mvp, sizeof(mvp));
 	}
@@ -81,11 +82,14 @@ void UserInterfaceManager::SetupRenderState(ImDrawData* drawData, CommandList& l
 	list.Native()->IASetIndexBuffer(&ibv);
 
 	list.Native()->SetGraphicsRoot32BitConstants(0, 16, &vertexConstantBuffer, 0);
-	list.Native()->SetDescriptorHeaps(1, fontHeap.Indirect());
+	list.BindDescriptorAllocator(device->GetDescriptorAllocator());
 
 	// Setup blend factor
 	const float blendFactor[4] = { 0.f, 0.f, 0.f, 0.f };
 	list.Native()->OMSetBlendFactor(blendFactor);
+
+	// Set the bindless textures.
+	list.Native()->SetGraphicsRootDescriptorTable(3, device->GetDescriptorAllocator().GetBindlessHeap());
 }
 
 void UserInterfaceManager::CreateFontTexture()
@@ -99,142 +103,33 @@ void UserInterfaceManager::CreateFontTexture()
 	io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
 
 	// Upload texture to graphics system
+
+	TextureDescription fontDesc{
+		.bindFlags = BindFlag::ShaderResource,
+		.accessFlags = AccessFlag::CPUWrite,
+		.width = (uint32_t)width,
+		.height = (uint32_t)height,
+		.depth = 1,
+		.format = DXGI_FORMAT_R8G8B8A8_UNORM
+	};
+
+	const auto fontHandle = device->GetResourceManager().Create(fontDesc, VGText("ImGui font texture"));
+
+	UINT uploadPitch = AlignedSize(width * 4, D3D12_TEXTURE_DATA_PITCH_ALIGNMENT);
+	UINT uploadSize = height * uploadPitch;
+
+	std::vector<uint8_t> textureData;
+	textureData.resize(uploadSize);
+
+	for (int y = 0; y < height; y++)
 	{
-		D3D12_HEAP_PROPERTIES props;
-		memset(&props, 0, sizeof(D3D12_HEAP_PROPERTIES));
-		props.Type = D3D12_HEAP_TYPE_DEFAULT;
-		props.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-		props.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-
-		D3D12_RESOURCE_DESC desc;
-		ZeroMemory(&desc, sizeof(desc));
-		desc.Dimension = D3D12_RESOURCE_DIMENSION_TEXTURE2D;
-		desc.Alignment = 0;
-		desc.Width = width;
-		desc.Height = height;
-		desc.DepthOrArraySize = 1;
-		desc.MipLevels = 1;
-		desc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-		desc.SampleDesc.Count = 1;
-		desc.SampleDesc.Quality = 0;
-		desc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;
-		desc.Flags = D3D12_RESOURCE_FLAG_NONE;
-
-		fontTextureResource = {};
-
-		device->Native()->CreateCommittedResource(&props, D3D12_HEAP_FLAG_NONE, &desc,
-			D3D12_RESOURCE_STATE_COPY_DEST, NULL, IID_PPV_ARGS(fontTextureResource.Indirect()));
-
-		UINT uploadPitch = (width * 4 + D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u) & ~(D3D12_TEXTURE_DATA_PITCH_ALIGNMENT - 1u);
-		UINT uploadSize = height * uploadPitch;
-		desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-		desc.Alignment = 0;
-		desc.Width = uploadSize;
-		desc.Height = 1;
-		desc.DepthOrArraySize = 1;
-		desc.MipLevels = 1;
-		desc.Format = DXGI_FORMAT_UNKNOWN;
-		desc.SampleDesc.Count = 1;
-		desc.SampleDesc.Quality = 0;
-		desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-		desc.Flags = D3D12_RESOURCE_FLAG_NONE;
-
-		props.Type = D3D12_HEAP_TYPE_UPLOAD;
-		props.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-		props.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-
-		ID3D12Resource* uploadBuffer = NULL;
-		HRESULT hr = device->Native()->CreateCommittedResource(&props, D3D12_HEAP_FLAG_NONE, &desc,
-			D3D12_RESOURCE_STATE_GENERIC_READ, NULL, IID_PPV_ARGS(&uploadBuffer));
-		IM_ASSERT(SUCCEEDED(hr));
-
-		void* mapped = NULL;
-		D3D12_RANGE range = { 0, uploadSize };
-		hr = uploadBuffer->Map(0, &range, &mapped);
-		IM_ASSERT(SUCCEEDED(hr));
-		for (int y = 0; y < height; y++)
-			memcpy((void*)((uintptr_t)mapped + y * uploadPitch), pixels + y * width * 4, width * 4);
-		uploadBuffer->Unmap(0, &range);
-
-		D3D12_TEXTURE_COPY_LOCATION srcLocation = {};
-		srcLocation.pResource = uploadBuffer;
-		srcLocation.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-		srcLocation.PlacedFootprint.Footprint.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-		srcLocation.PlacedFootprint.Footprint.Width = width;
-		srcLocation.PlacedFootprint.Footprint.Height = height;
-		srcLocation.PlacedFootprint.Footprint.Depth = 1;
-		srcLocation.PlacedFootprint.Footprint.RowPitch = uploadPitch;
-
-		D3D12_TEXTURE_COPY_LOCATION dstLocation = {};
-		dstLocation.pResource = fontTextureResource.Get();
-		dstLocation.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-		dstLocation.SubresourceIndex = 0;
-
-		D3D12_RESOURCE_BARRIER barrier = {};
-		barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_TRANSITION;
-		barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
-		barrier.Transition.pResource = fontTextureResource.Get();
-		barrier.Transition.Subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES;
-		barrier.Transition.StateBefore = D3D12_RESOURCE_STATE_COPY_DEST;
-		barrier.Transition.StateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE;
-
-		ID3D12Fence* fence = NULL;
-		hr = device->Native()->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&fence));
-		IM_ASSERT(SUCCEEDED(hr));
-
-		HANDLE event = CreateEvent(0, 0, 0, 0);
-		IM_ASSERT(event != NULL);
-
-		D3D12_COMMAND_QUEUE_DESC queueDesc = {};
-		queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-		queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-		queueDesc.NodeMask = 1;
-
-		ID3D12CommandQueue* cmdQueue = NULL;
-		hr = device->Native()->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&cmdQueue));
-		IM_ASSERT(SUCCEEDED(hr));
-
-		ID3D12CommandAllocator* cmdAlloc = NULL;
-		hr = device->Native()->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&cmdAlloc));
-		IM_ASSERT(SUCCEEDED(hr));
-
-		ID3D12GraphicsCommandList* cmdList = NULL;
-		hr = device->Native()->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, cmdAlloc, NULL, IID_PPV_ARGS(&cmdList));
-		IM_ASSERT(SUCCEEDED(hr));
-
-		cmdList->CopyTextureRegion(&dstLocation, 0, 0, 0, &srcLocation, NULL);
-		cmdList->ResourceBarrier(1, &barrier);
-
-		hr = cmdList->Close();
-		IM_ASSERT(SUCCEEDED(hr));
-
-		cmdQueue->ExecuteCommandLists(1, (ID3D12CommandList* const*)&cmdList);
-		hr = cmdQueue->Signal(fence, 1);
-		IM_ASSERT(SUCCEEDED(hr));
-
-		fence->SetEventOnCompletion(1, event);
-		WaitForSingleObject(event, INFINITE);
-
-		cmdList->Release();
-		cmdAlloc->Release();
-		cmdQueue->Release();
-		CloseHandle(event);
-		fence->Release();
-		uploadBuffer->Release();
-
-		// Create texture view
-		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc;
-		ZeroMemory(&srvDesc, sizeof(srvDesc));
-		srvDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-		srvDesc.Texture2D.MipLevels = desc.MipLevels;
-		srvDesc.Texture2D.MostDetailedMip = 0;
-		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-		device->Native()->CreateShaderResourceView(fontTextureResource.Get(), &srvDesc, fontHeap->GetCPUDescriptorHandleForHeapStart());
+		memcpy(textureData.data() + (y * uploadPitch), pixels + y * width * 4, width * 4);
 	}
 
-	// Store our identifier
-	io.Fonts->TexID = (ImTextureID)fontHeap->GetGPUDescriptorHandleForHeapStart().ptr;
+	device->GetResourceManager().Write(fontHandle, textureData);
+	device->GetDirectList().TransitionBarrier(fontHandle, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+	io.Fonts->TexID = (ImTextureID)device->GetResourceManager().Get(fontHandle).SRV->bindlessIndex;
 }
 
 void UserInterfaceManager::CreateDeviceObjects()
@@ -281,16 +176,6 @@ void UserInterfaceManager::CreateDeviceObjects()
 
 	pipeline->Build(*device, description);
 
-	// Create font heap.
-	D3D12_DESCRIPTOR_HEAP_DESC heapDesc{};
-	heapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-	heapDesc.NumDescriptors = 1;
-	heapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-	heapDesc.NodeMask = 0;
-
-	if (device->Native()->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(fontHeap.Indirect())) != S_OK)
-		return;
-
 	CreateFontTexture();
 }
 
@@ -301,8 +186,6 @@ void UserInterfaceManager::InvalidateDeviceObjects()
 	vertexShaderBlob = {};
 	pixelShaderBlob = {};
 	pipeline.reset();
-	fontTextureResource = {};
-	fontHeap = {};
 
 	ImGuiIO& io = ImGui::GetIO();
 	io.Fonts->TexID = NULL; // We copied g_pFontTextureView to io.Fonts->TexID so let's clear that as well.
@@ -498,9 +381,9 @@ void UserInterfaceManager::Render(CommandList& list)
 			{
 				// Apply Scissor, Bind texture, Draw
 				const D3D12_RECT r = { (LONG)(pcmd->ClipRect.x - clip_off.x), (LONG)(pcmd->ClipRect.y - clip_off.y), (LONG)(pcmd->ClipRect.z - clip_off.x), (LONG)(pcmd->ClipRect.w - clip_off.y) };
-				list.Native()->SetGraphicsRootDescriptorTable(2, *(D3D12_GPU_DESCRIPTOR_HANDLE*)&pcmd->TextureId);
+				list.Native()->SetGraphicsRoot32BitConstant(1, *(uint32_t*)&pcmd->TextureId, 0);
 				list.Native()->RSSetScissorRects(1, &r);
-				list.Native()->SetGraphicsRootShaderResourceView(1, resources->vertexBuffer->GetGPUVirtualAddress() + (pcmd->VtxOffset + global_vtx_offset) * sizeof(ImDrawVert));
+				list.Native()->SetGraphicsRootShaderResourceView(2, resources->vertexBuffer->GetGPUVirtualAddress() + (pcmd->VtxOffset + global_vtx_offset) * sizeof(ImDrawVert));
 				list.Native()->DrawIndexedInstanced(pcmd->ElemCount, 1, pcmd->IdxOffset + global_idx_offset, 0, 0);
 			}
 		}

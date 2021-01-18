@@ -1,6 +1,7 @@
 // Copyright (c) 2019-2021 Andrew Depke
 
 #include <Editor/EditorUI.h>
+#include <Rendering/Device.h>
 #include <Core/CoreComponents.h>
 #include <Rendering/RenderComponents.h>
 #include <Editor/EntityReflection.h>
@@ -33,10 +34,12 @@ void EditorUI::DrawLayout()
 	const auto dockSpaceId = ImGui::GetID("DockSpace");
 	ImGui::DockSpace(dockSpaceId, { 0.f, 0.f }, ImGuiDockNodeFlags_None);
 
+	ImGui::End();
+
 	ImGui::PopStyleVar(3);
 }
 
-void EditorUI::DrawScene()
+void EditorUI::DrawScene(RenderDevice* device, TextureHandle sceneTexture)
 {
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 0.f, 0.f });  // Remove window padding.
 
@@ -45,7 +48,8 @@ void EditorUI::DrawScene()
 
 	ImGui::Begin("Scene", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse);
 
-	// #TODO: Use ImGui::Image() to draw the back buffer.
+	const auto& sceneTextureComponent = device->GetResourceManager().Get(sceneTexture);
+	ImGui::Image((ImTextureID)sceneTextureComponent.SRV->bindlessIndex, { (float)sceneTextureComponent.description.width, (float)sceneTextureComponent.description.height });
 
 	ImGui::End();
 

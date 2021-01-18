@@ -69,7 +69,7 @@ void Renderer::CreatePipelines()
 	prepassStateDesc.blendDescription.RenderTarget[0].RenderTargetWriteMask = 0;
 
 	prepassStateDesc.rasterizerDescription.FillMode = D3D12_FILL_MODE_SOLID;
-	prepassStateDesc.rasterizerDescription.CullMode = D3D12_CULL_MODE_BACK;
+	prepassStateDesc.rasterizerDescription.CullMode = D3D12_CULL_MODE_NONE;//D3D12_CULL_MODE_BACK;  // #TEMP: Fix sponza model.
 	prepassStateDesc.rasterizerDescription.FrontCounterClockwise = false;
 	prepassStateDesc.rasterizerDescription.DepthBias = 0;
 	prepassStateDesc.rasterizerDescription.DepthBiasClamp = 0.f;
@@ -111,7 +111,7 @@ void Renderer::CreatePipelines()
 	forwardStateDesc.blendDescription.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
 	forwardStateDesc.rasterizerDescription.FillMode = D3D12_FILL_MODE_SOLID;
-	forwardStateDesc.rasterizerDescription.CullMode = D3D12_CULL_MODE_BACK;
+	forwardStateDesc.rasterizerDescription.CullMode = D3D12_CULL_MODE_NONE;//D3D12_CULL_MODE_BACK;  // #TEMP: Fix sponza model.
 	forwardStateDesc.rasterizerDescription.FrontCounterClockwise = false;
 	forwardStateDesc.rasterizerDescription.DepthBias = 0;
 	forwardStateDesc.rasterizerDescription.DepthBiasClamp = 0.f;
@@ -270,15 +270,21 @@ void Renderer::Render(entt::registry& registry)
 	});
 	
 	auto& forwardPass = graph.AddPass("Forward Pass", ExecutionQueue::Graphics);
+	const auto mainOutputTag = forwardPass.Create(TransientTextureDescription{
+		.format = DXGI_FORMAT_B8G8R8A8_UNORM
+		}, VGText("Main output"));
 	forwardPass.Read(depthStencilTag, ResourceBind::DSV);
 	forwardPass.Read(cameraBufferTag, ResourceBind::CBV);
-	forwardPass.Output(backBufferTag, OutputBind::RTV, true);
+	forwardPass.Output(mainOutputTag, OutputBind::RTV, true);
 	forwardPass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
 	{
 		auto cameraBuffer = resources.GetBuffer(cameraBufferTag);
 		auto& cameraBufferComponent = device->GetResourceManager().Get(cameraBuffer);
 
 		list.BindPipelineState(pipelines["ForwardOpaque"]);
+
+		// Set the bindless textures.
+		list.Native()->SetGraphicsRootDescriptorTable(4, device->GetDescriptorAllocator().GetBindlessHeap());
 
 		// Bind the camera data.
 		list.Native()->SetGraphicsRootConstantBufferView(2, cameraBufferComponent.Native()->GetGPUVirtualAddress());
@@ -309,19 +315,12 @@ void Renderer::Render(entt::registry& registry)
 				auto& vertexBuffer = device->GetResourceManager().Get(mesh.vertexBuffer);
 				list.Native()->SetGraphicsRootShaderResourceView(1, vertexBuffer.Native()->GetGPUVirtualAddress() + (subset.vertexOffset * sizeof(Vertex)));
 
-				// Bind the albedo texture.
-				if (device->GetResourceManager().Valid(subset.material->albedo))
+				// Set the material data.
+				if (device->GetResourceManager().Valid(subset.material.materialBuffer))
 				{
-					auto& albedoComponent = device->GetResourceManager().Get(subset.material->albedo);
-					device->GetDescriptorAllocator().AddTableEntry(*albedoComponent.SRV, DescriptorTableEntryType::ShaderResource);
+					auto& materialBuffer = device->GetResourceManager().Get(subset.material.materialBuffer);
+					list.Native()->SetGraphicsRootConstantBufferView(3, materialBuffer.Native()->GetGPUVirtualAddress());
 				}
-
-				else
-				{
-					device->GetDescriptorAllocator().AddTableEntry(nullDescriptor, DescriptorTableEntryType::ShaderResource);
-				}
-				
-				device->GetDescriptorAllocator().BuildTable(*device, list, 3);
 
 				list.Native()->DrawIndexedInstanced(static_cast<uint32_t>(subset.indices), 1, static_cast<uint32_t>(subset.indexOffset), 0, 0);
 			}
@@ -333,11 +332,12 @@ void Renderer::Render(entt::registry& registry)
 #if ENABLE_EDITOR
 	auto& editorPass = graph.AddPass("Editor Pass", ExecutionQueue::Graphics);
 	editorPass.Read(depthStencilTag, ResourceBind::SRV);
+	editorPass.Read(mainOutputTag, ResourceBind::SRV);
 	editorPass.Output(backBufferTag, OutputBind::RTV, false);
 	editorPass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
 	{
 		userInterface->NewFrame();
-		EditorRenderer::Render(registry);
+		EditorRenderer::Render(device.get(), registry, resources.GetTexture(mainOutputTag));
 		userInterface->Render(list);
 	});
 #endif
