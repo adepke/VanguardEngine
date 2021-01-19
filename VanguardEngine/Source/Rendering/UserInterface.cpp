@@ -9,6 +9,7 @@
 #include <Core/Input.h>
 #include <Window/WindowFrame.h>
 #include <Utility/AlignedSize.h>
+#include <Editor/ImGuiExtensions.h>
 
 #include <imgui.h>
 #include <d3dcompiler.h>
@@ -204,10 +205,7 @@ UserInterfaceManager::UserInterfaceManager(RenderDevice* inDevice) : device(inDe
 
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
-	ImGui::StyleColorsDark();
-
-	auto& style = ImGui::GetStyle();
-	style.Colors[ImGuiCol_WindowBg].w = 1.f;  // Opaque window backgrounds.
+	ImGui::StyleColorsVanguard();
 
 	const auto configPath = (Config::engineRootPath / "Config/UserInterface.ini").generic_string();
 
