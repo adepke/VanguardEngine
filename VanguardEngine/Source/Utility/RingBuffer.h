@@ -4,48 +4,95 @@
 
 #include <cstdlib>
 #include <utility>
+#include <vector>
 
-template <typename T, size_t size>
+template <typename T>
 struct RingBuffer
 {
 private:
-	T data[size];
-	size_t head{ 0 };
-	size_t tail{ 0 };
+	std::vector<T> buffer;
+	size_t head = 0;
+	size_t tail = 0;
+	size_t contentSize = 0;
+
+	void BumpHead()
+	{
+		if (contentSize == 0)
+			return;
+
+		++head;
+		--contentSize;
+		if (head == buffer.size())
+			head = 0;
+	}
+
+	void BumpTail()
+	{
+		++tail;
+		++contentSize;
+		if (tail == buffer.size())
+			tail = 0;
+	}
 
 public:
-	RingBuffer() = default;
+	RingBuffer(size_t size) : head(1)
+	{
+		buffer.resize(size);
+	}
+
 	RingBuffer(const RingBuffer&) = default;
 	RingBuffer(RingBuffer&&) noexcept = default;
 
 	RingBuffer& operator=(const RingBuffer&) = default;
 	RingBuffer& operator=(RingBuffer&&) noexcept = default;
 
-	template <typename U>
-	bool push_back(U&& element)
+	T& front()
 	{
-		auto next = (head + 1) % size;
-		if (next != tail)
-		{
-			data[head] = std::move(element);
-			head = next;
-
-			return true;
-		}
-
-		return false;
+		return buffer[head];
 	}
 
-	bool pop_front(T& element)
+	const T& front() const
 	{
-		if (tail != head)
-		{
-			element = std::move(data[tail]);
-			tail = (tail + 1) % size;
-			
-			return true;
-		}
-
-		return false;
+		return buffer[head];
 	}
+
+	T& back()
+	{
+		return buffer[tail];
+	}
+
+	const T& back() const
+	{
+		return buffer[tail];
+	}
+
+	size_t size() const
+	{
+		return contentSize;
+	}
+
+	void push_back(const T& element)
+	{
+		BumpTail();
+		if (contentSize > buffer.size())
+			BumpHead();
+		buffer[tail] = element;
+	}
+
+	void pop_front()
+	{
+		BumpHead();
+	}
+
+	T& operator[](size_t index)
+	{
+		return buffer[index];
+	}
+
+	const T& operator[](size_t index) const
+	{
+		return buffer[index];
+	}
+
+	void* data() { return buffer.data(); }
 };
