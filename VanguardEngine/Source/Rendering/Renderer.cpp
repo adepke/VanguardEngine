@@ -337,7 +337,7 @@ void Renderer::Render(entt::registry& registry)
 	editorPass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
 	{
 		userInterface->NewFrame();
-		EditorRenderer::Render(device.get(), registry, resources.GetTexture(mainOutputTag));
+		EditorRenderer::Render(device.get(), registry, resources.GetTexture(depthStencilTag), resources.GetTexture(mainOutputTag));
 		userInterface->Render(list);
 	});
 #endif

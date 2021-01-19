@@ -5,10 +5,28 @@
 #include <Core/CoreComponents.h>
 #include <Rendering/RenderComponents.h>
 #include <Editor/EntityReflection.h>
+#include <Editor/ImGuiExtensions.h>
 
 #include <imgui.h>
 
 #include <iterator>
+
+void EditorUI::DrawMenu()
+{
+	if (ImGui::BeginMenuBar())
+	{
+		if (ImGui::BeginMenu("View"))
+		{
+			ImGui::MenuItem("Entity Hierarchy", nullptr, &entityHierarchyOpen);
+			ImGui::MenuItem("Entity Properties", nullptr, &entityPropertyViewerOpen);
+			ImGui::MenuItem("Render Graph", nullptr, &renderGraphOpen);
+
+			ImGui::EndMenu();
+		}
+
+		ImGui::EndMenuBar();
+	}
+}
 
 void EditorUI::DrawLayout()
 {
@@ -21,6 +39,7 @@ void EditorUI::DrawLayout()
 	ImGui::SetNextWindowSize(viewport->GetWorkSize());
 	ImGui::SetNextWindowViewport(viewport->ID);
 
+	// Always draw the dock space.
 	ImGui::Begin("Dock Space", nullptr,
 		ImGuiWindowFlags_NoTitleBar |
 		ImGuiWindowFlags_NoCollapse |
@@ -32,24 +51,31 @@ void EditorUI::DrawLayout()
 		ImGuiWindowFlags_NoDocking);
 
 	const auto dockSpaceId = ImGui::GetID("DockSpace");
-	ImGui::DockSpace(dockSpaceId, { 0.f, 0.f }, ImGuiDockNodeFlags_None);
+	ImGui::DockSpace(dockSpaceId, { 0.f, 0.f });
+
+	// Draw the menu in the dock space window.
+	DrawMenu();
 
 	ImGui::End();
 
 	ImGui::PopStyleVar(3);
 }
 
+void EditorUI::DrawDemoWindow()
+{
+	static bool demoWindowOpen = true;
+
+	ImGui::ShowDemoWindow(&demoWindowOpen);
+}
+
 void EditorUI::DrawScene(RenderDevice* device, TextureHandle sceneTexture)
 {
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 0.f, 0.f });  // Remove window padding.
 
-	ImGui::SetNextWindowSize({ 400, 300 }, ImGuiCond_FirstUseEver);  // First use prevents the viewport from snapping back to the set size.
-	ImGui::SetNextWindowBgAlpha(0.f);
-
-	ImGui::Begin("Scene", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse);
-
-	const auto& sceneTextureComponent = device->GetResourceManager().Get(sceneTexture);
-	ImGui::Image((ImTextureID)sceneTextureComponent.SRV->bindlessIndex, { (float)sceneTextureComponent.description.width, (float)sceneTextureComponent.description.height });
+	if (ImGui::Begin("Scene", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse))
+	{
+		ImGui::Image(device, sceneTexture);
+	}
 
 	ImGui::End();
 
@@ -58,85 +84,108 @@ void EditorUI::DrawScene(RenderDevice* device, TextureHandle sceneTexture)
 
 void EditorUI::DrawEntityHierarchy(entt::registry& registry)
 {
-	entt::entity selectedEntity = entt::null;
-
-	ImGui::Begin("Entity Hierarchy", nullptr, ImGuiWindowFlags_None);
-	ImGui::Text("%i Entities", registry.size());
-	ImGui::Separator();
-	
-	registry.each([this, &registry, &selectedEntity](auto entity)
-		{
-			ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_None;
-
-			if (entity == hierarchySelectedEntity)
-				nodeFlags |= ImGuiTreeNodeFlags_Selected;
-
-			bool nodeOpen = false;
-
-			ImGui::PushID(static_cast<int32_t>(entity));  // Use the entity as the ID.
-
-			if (registry.has<NameComponent>(entity))
-			{
-				nodeOpen = ImGui::TreeNodeEx("EntityTreeNode", nodeFlags, registry.get<NameComponent>(entity).name.c_str());
-			}
-
-			else
-			{
-				// Strip the version info from the entity, we only care about the actual ID.
-				nodeOpen = ImGui::TreeNodeEx("EntityTreeNode", nodeFlags, "Entity_%i", registry.entity(entity));
-			}
-
-			if (ImGui::IsItemClicked())
-			{
-				selectedEntity = entity;
-			}
-
-			if (nodeOpen)
-			{
-				// #TODO: Draw entity children.
-
-				ImGui::TreePop();
-			}
-
-			ImGui::PopID();
-		});
-
-	ImGui::End();
-
-	// Check if it's valid first, otherwise deselecting will remove the property viewer.
-	if (registry.valid(selectedEntity))
+	if (entityHierarchyOpen)
 	{
-		hierarchySelectedEntity = selectedEntity;
+		entt::entity selectedEntity = entt::null;
+
+		if (ImGui::Begin("Entity Hierarchy", &entityHierarchyOpen))
+		{
+			ImGui::Text("%i Entities", registry.size());
+			ImGui::Separator();
+
+			registry.each([this, &registry, &selectedEntity](auto entity)
+			{
+				ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_None;
+
+				if (entity == hierarchySelectedEntity)
+					nodeFlags |= ImGuiTreeNodeFlags_Selected;
+
+				bool nodeOpen = false;
+
+				ImGui::PushID(static_cast<int32_t>(entity));  // Use the entity as the ID.
+
+				if (registry.has<NameComponent>(entity))
+				{
+					nodeOpen = ImGui::TreeNodeEx("EntityTreeNode", nodeFlags, registry.get<NameComponent>(entity).name.c_str());
+				}
+
+				else
+				{
+					// Strip the version info from the entity, we only care about the actual ID.
+					nodeOpen = ImGui::TreeNodeEx("EntityTreeNode", nodeFlags, "Entity_%i", registry.entity(entity));
+				}
+
+				if (ImGui::IsItemClicked())
+				{
+					selectedEntity = entity;
+				}
+
+				if (nodeOpen)
+				{
+					// #TODO: Draw entity children.
+
+					ImGui::TreePop();
+				}
+
+				ImGui::PopID();
+			});
+		}
+
+		ImGui::End();
+
+		// Check if it's valid first, otherwise deselecting will remove the property viewer.
+		if (registry.valid(selectedEntity))
+		{
+			hierarchySelectedEntity = selectedEntity;
+		}
 	}
 }
 
 void EditorUI::DrawEntityPropertyViewer(entt::registry& registry)
 {
-	ImGui::Begin("Property Viewer", nullptr, ImGuiWindowFlags_None);
-
-	if (registry.valid(hierarchySelectedEntity))
+	if (entityPropertyViewerOpen)
 	{
-		uint32_t componentCount = 0;
-
-		for (auto& [metaID, renderFunction] : EntityReflection::componentMap)
+		if (ImGui::Begin("Property Viewer", &entityPropertyViewerOpen))
 		{
-			entt::id_type metaList[] = { metaID };
-
-			if (registry.runtime_view(std::cbegin(metaList), std::cend(metaList)).contains(hierarchySelectedEntity))
+			if (registry.valid(hierarchySelectedEntity))
 			{
-				++componentCount;
+				uint32_t componentCount = 0;
 
-				renderFunction(registry, hierarchySelectedEntity);
+				for (auto& [metaID, renderFunction] : EntityReflection::componentMap)
+				{
+					entt::id_type metaList[] = { metaID };
 
-				ImGui::Separator();
+					if (registry.runtime_view(std::cbegin(metaList), std::cend(metaList)).contains(hierarchySelectedEntity))
+					{
+						++componentCount;
+
+						renderFunction(registry, hierarchySelectedEntity);
+
+						ImGui::Separator();
+					}
+				}
+
+				if (componentCount == 0)
+				{
+					ImGui::Text("No components.");
+				}
 			}
 		}
 
-		if (componentCount == 0)
-		{
-			ImGui::Text("No components.");
-		}
+		ImGui::End();
 	}
+}
 
-	ImGui::End();
+void EditorUI::DrawRenderGraph(RenderDevice* device, TextureHandle depthStencil, TextureHandle scene)
+{
+	if (renderGraphOpen)
+	{
+		if (ImGui::Begin("Render Graph", &renderGraphOpen))
+		{
+			ImGui::Image(device, depthStencil, 0.25f);
+			ImGui::Image(device, scene, 0.25f);
+		}
+
+		ImGui::End();
+	}
 }

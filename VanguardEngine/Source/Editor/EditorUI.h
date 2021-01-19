@@ -13,9 +13,19 @@ class EditorUI : public Singleton<EditorUI>
 private:
 	entt::entity hierarchySelectedEntity = entt::null;
 
+	// Window states.
+	bool entityHierarchyOpen = true;
+	bool entityPropertyViewerOpen = true;
+	bool renderGraphOpen = false;
+
+private:
+	void DrawMenu();
+
 public:
 	void DrawLayout();
+	void DrawDemoWindow();
 	void DrawScene(RenderDevice* device, TextureHandle sceneTexture);
 	void DrawEntityHierarchy(entt::registry& registry);
 	void DrawEntityPropertyViewer(entt::registry& registry);
+	void DrawRenderGraph(RenderDevice* device, TextureHandle depthStencil, TextureHandle scene);
 };
