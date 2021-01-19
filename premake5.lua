@@ -9,6 +9,7 @@ function IncludeThirdParty()
 	includedirs "VanguardEngine/ThirdParty/assimp/Include"
 	includedirs "VanguardEngine/ThirdParty/stb"
 	includedirs "VanguardEngine/ThirdParty/IconFontCppHeaders"
+	includedirs "VanguardEngine/ThirdParty/PIX/Include"
 end
 
 function LinkThirdParty()
@@ -18,6 +19,7 @@ function LinkThirdParty()
 	libdirs "Build/ThirdParty/D3D12MemoryAllocator/Bin/*"
 	libdirs "VanguardEngine/ThirdParty/DirectXShaderCompiler"
 	libdirs "VanguardEngine/ThirdParty/assimp/Bin/*"
+	libdirs "VanguardEngine/ThirdParty/PIX"
 	
 	links "imgui"
 	links "Jobs"
@@ -25,6 +27,7 @@ function LinkThirdParty()
 	links "D3D12MemoryAllocator"
 	links "dxcompiler"
 	links "assimp"
+	links "WinPixEventRuntime"
 end
 
 function RunThirdParty()
@@ -110,7 +113,7 @@ project "Engine"
 		end
 		
 		if EnableProfiling then
-			defines { "ENABLE_PROFILING=1", "TRACY_ENABLE" }
+			defines { "ENABLE_PROFILING=1", "TRACY_ENABLE", "USE_PIX" }
 		else
 			defines { "ENABLE_PROFILING=0" }
 		end
@@ -209,7 +212,8 @@ project "Engine"
 	
 	postbuildcommands {
 		"{COPY} ../../VanguardEngine/ThirdParty/DirectXShaderCompiler/*.dll ../Bin/%{cfg.platform}_%{cfg.buildcfg}/",
-		"{COPY} ../ThirdParty/TracyClient/Bin/%{cfg.platform}_%{cfg.buildcfg}/*.dll ../Bin/%{cfg.platform}_%{cfg.buildcfg}/"
+		"{COPY} ../ThirdParty/TracyClient/Bin/%{cfg.platform}_%{cfg.buildcfg}/*.dll ../Bin/%{cfg.platform}_%{cfg.buildcfg}/",
+		"{COPY} ../../VanguardEngine/ThirdParty/PIX/*.dll ../Bin/%{cfg.platform}_%{cfg.buildcfg}/"
 	}
 	
 	-- Third Party Links
