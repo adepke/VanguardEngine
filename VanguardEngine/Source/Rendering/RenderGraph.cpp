@@ -203,8 +203,7 @@ void RenderGraph::Execute(RenderDevice* device)
 		auto& pass = passes[i];
 		auto& list = passLists[i];
 
-		// #TODO: Dynamic zone naming. See #10.
-		VGScopedGPUStat("Unnamed Zone", device->GetDirectContext(), list->Native());
+		VGScopedGPUTransientStat(pass->stableName.data(), device->GetDirectContext(), list->Native());
 
 		// If graphics pass...
 

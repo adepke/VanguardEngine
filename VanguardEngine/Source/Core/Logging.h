@@ -155,6 +155,7 @@ VGWarningPop
 #if ENABLE_PROFILING
 #define VGScopedCPUStat(name) ZoneScopedN(name)
 #define VGScopedGPUStat(name, context, list) TracyD3D12Zone(context, list, name)
+#define VGScopedGPUTransientStat(name, context, list) TracyD3D12ZoneTransient(context, __transientGpuZone, list, name, true)
 #define VGStatFrameCPU() FrameMark
 #define VGStatFrameGPU(context) TracyD3D12Collect(context); TracyD3D12NewFrame(context)
 #else

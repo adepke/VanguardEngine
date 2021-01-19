@@ -24,6 +24,8 @@ enum class OutputBind
 class RenderPass
 {
 public:
+	std::string_view stableName;
+
 	std::set<RenderResource> reads;
 	std::set<RenderResource> writes;
 
@@ -32,7 +34,6 @@ public:
 
 private:
 	RenderGraphResourceManager* resourceManager;
-	std::string_view stableName;
 	std::function<void(CommandList&, RenderGraphResourceManager&)> binding;
 
 #if !BUILD_RELEASE
