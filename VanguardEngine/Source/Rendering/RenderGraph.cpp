@@ -273,7 +273,8 @@ void RenderGraph::Execute(RenderDevice* device)
 		// #TODO: Replace with render passes.
 		list->Native()->OMSetRenderTargets(renderTargets.size(), renderTargets.size() > 0 ? renderTargets.data() : nullptr, false, hasDepthStencil ? &depthStencil : nullptr);
 
-		const float ClearColor[] = { 0.2f, 0.2f, 0.2f, 1.f };
+		// #TODO: This should be the same as the color given during resource creation. Only store this value in one place.
+		const float ClearColor[] = { 0.f, 0.f, 0.f, 1.f };
 
 		for (const auto& [resource, info] : pass->outputBindInfo)
 		{
