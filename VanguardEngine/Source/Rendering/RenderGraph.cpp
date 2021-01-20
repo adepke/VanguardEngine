@@ -203,6 +203,7 @@ void RenderGraph::Execute(RenderDevice* device)
 		auto& pass = passes[i];
 		auto& list = passLists[i];
 
+		VGScopedCPUTransientStat(pass->stableName.data());
 		VGScopedGPUTransientStat(pass->stableName.data(), device->GetDirectContext(), list->Native());
 
 		// If graphics pass...
