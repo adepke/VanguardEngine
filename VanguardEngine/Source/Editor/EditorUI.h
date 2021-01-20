@@ -8,6 +8,8 @@
 
 #include <entt/entt.hpp>
 
+#include <deque>
+
 class EditorUI : public Singleton<EditorUI>
 {
 private:
@@ -16,10 +18,15 @@ private:
 	// Window states.
 	bool entityHierarchyOpen = true;
 	bool entityPropertyViewerOpen = true;
+	bool performanceMetricsOpen = true;
 	bool renderGraphOpen = false;
+
+	std::deque<float> frameTimes;
+	size_t frameTimeHistoryCount = 0;
 
 private:
 	void DrawMenu();
+	void DrawFrameTimeHistory();
 
 public:
 	void DrawLayout();
@@ -27,5 +34,6 @@ public:
 	void DrawScene(RenderDevice* device, TextureHandle sceneTexture);
 	void DrawEntityHierarchy(entt::registry& registry);
 	void DrawEntityPropertyViewer(entt::registry& registry);
+	void DrawPerformanceMetrics(float frameTimeMs);
 	void DrawRenderGraph(RenderDevice* device, TextureHandle depthStencil, TextureHandle scene);
 };

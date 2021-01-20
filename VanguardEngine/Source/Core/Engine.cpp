@@ -12,6 +12,7 @@
 
 #include <string>
 #include <memory>
+#include <chrono>
 
 // #TEMP
 #include <thread>
@@ -90,7 +91,9 @@ void EngineLoop()
 	const auto sponza = tempReg.create();
 	tempReg.emplace<NameComponent>(sponza, "Sponza");
 	tempReg.emplace<TransformComponent>(sponza);
-	tempReg.emplace<MeshComponent>(sponza, AssetLoader::LoadMesh(*Renderer::Get().device, Config::shadersPath / "../Models/Sponza.obj"));  // #TEMP
+	tempReg.emplace<MeshComponent>(sponza, AssetLoader::LoadMesh(*Renderer::Get().device, Config::shadersPath / "../Models/SponzaTest/sponza.obj"));  // #TEMP
+
+	auto frameBegin = std::chrono::high_resolution_clock::now();
 
 	while (true)
 	{
@@ -117,6 +120,12 @@ void EngineLoop()
 		Renderer::Get().Render(tempReg);
 
 		Renderer::Get().device->AdvanceCPU();
+
+		auto frameEnd = std::chrono::high_resolution_clock::now();
+		const auto frameDelta = std::chrono::duration_cast<std::chrono::microseconds>(frameEnd - frameBegin).count();
+		frameBegin = frameEnd;
+
+		Renderer::Get().SubmitFrameTime(frameDelta);
 	}
 }
 

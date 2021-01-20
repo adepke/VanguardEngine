@@ -32,6 +32,8 @@ private:
 
 	DescriptorHandle nullDescriptor;
 
+	float lastFrameTime = -1.f;
+
 private:
 	void UpdateCameraBuffer();
 	void CreatePipelines();
@@ -44,4 +46,11 @@ public:
 
 	// Entity data is safe to write to immediately after this function returns. Do not attempt to write before Render() returns.
 	void Render(entt::registry& registry);
+
+	void SubmitFrameTime(uint32_t timeUs);
 };
+
+inline void Renderer::SubmitFrameTime(uint32_t timeUs)
+{
+	lastFrameTime = static_cast<float>(timeUs);
+}

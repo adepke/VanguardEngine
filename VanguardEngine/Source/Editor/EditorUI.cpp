@@ -8,8 +8,10 @@
 #include <Editor/ImGuiExtensions.h>
 
 #include <imgui.h>
+#include <imgui_internal.h>
 
-#include <iterator>
+#include <algorithm>
+#include <numeric>
 
 void EditorUI::DrawMenu()
 {
@@ -19,6 +21,7 @@ void EditorUI::DrawMenu()
 		{
 			ImGui::MenuItem("Entity Hierarchy", nullptr, &entityHierarchyOpen);
 			ImGui::MenuItem("Entity Properties", nullptr, &entityPropertyViewerOpen);
+			ImGui::MenuItem("Performance Metrics", nullptr, &performanceMetricsOpen);
 			ImGui::MenuItem("Render Graph", nullptr, &renderGraphOpen);
 
 			ImGui::EndMenu();
@@ -26,6 +29,67 @@ void EditorUI::DrawMenu()
 
 		ImGui::EndMenuBar();
 	}
+}
+
+void EditorUI::DrawFrameTimeHistory()
+{
+	if (ImGui::Begin("Performance Metrics", &performanceMetricsOpen))
+	{
+		// Compute statistics.
+		const auto [min, max] = std::minmax_element(frameTimes.begin(), frameTimes.end());
+		const auto mean = std::accumulate(frameTimes.begin(), frameTimes.end(), 0) / static_cast<float>(frameTimes.size());
+
+		auto* window = ImGui::GetCurrentWindow();
+		auto& style = ImGui::GetStyle();
+
+		const auto frameWidth = ImGui::GetContentRegionAvailWidth() - window->WindowPadding.x - ImGui::CalcTextSize("Mean: 00.000").x;
+		const auto frameHeight = (ImGui::GetTextLineHeight() + style.ItemSpacing.y) * 3.f + 10.f;  // Max, mean, min.
+
+		const ImRect frameBoundingBox = { window->DC.CursorPos, window->DC.CursorPos + ImVec2{ frameWidth, frameHeight } };
+
+		ImGui::ItemSize(frameBoundingBox, style.FramePadding.y);
+		if (!ImGui::ItemAdd(frameBoundingBox, 0))  // Don't support navigation to the frame.
+		{
+			ImGui::End();
+			return;
+		}
+
+		ImGui::RenderFrame(frameBoundingBox.Min, frameBoundingBox.Max, ImGui::GetColorU32(ImGuiCol_FrameBg), true, style.FrameRounding);
+
+		// Internal region for rendering the plot lines.
+		const ImRect frameRenderSpace = { frameBoundingBox.Min + style.FramePadding, frameBoundingBox.Max - style.FramePadding };
+
+		// Adaptively update the sample count.
+		frameTimeHistoryCount = frameRenderSpace.GetWidth() / 2.f;
+
+		if (frameTimes.size() > 1)
+		{
+			const ImVec2 lineSize = { frameRenderSpace.GetWidth() / (frameTimes.size() - 1), frameRenderSpace.GetHeight() / (*max - *min) };
+			const auto lineColor = ImGui::ColorConvertFloat4ToU32(style.Colors[ImGuiCol_PlotLines]);
+
+			for (int i = 0; i < frameTimes.size() - 1; ++i)  // Don't draw the final point.
+			{
+				window->DrawList->AddLine(
+					{ frameRenderSpace.Min.x + (lineSize.x * i), frameRenderSpace.Min.y + frameRenderSpace.GetHeight() - (lineSize.y * (frameTimes[i] - *min)) },
+					{ frameRenderSpace.Min.x + (lineSize.x * (i + 1)), frameRenderSpace.Min.y + frameRenderSpace.GetHeight() - (lineSize.y * (frameTimes[i + 1] - *min)) },
+					lineColor);
+			}
+		}
+
+		if (min != frameTimes.end() && max != frameTimes.end())
+		{
+			ImGui::SameLine();
+			ImGui::BeginGroup();
+
+			ImGui::Text("Max:  %.3f", *max / 1000.f);
+			ImGui::Text("Mean: %.3f", mean / 1000.f);
+			ImGui::Text("Min:  %.3f", *min / 1000.f);
+
+			ImGui::EndGroup();
+		}
+	}
+
+	ImGui::End();
 }
 
 void EditorUI::DrawLayout()
@@ -173,6 +237,21 @@ void EditorUI::DrawEntityPropertyViewer(entt::registry& registry)
 		}
 
 		ImGui::End();
+	}
+}
+
+void EditorUI::DrawPerformanceMetrics(float frameTimeMs)
+{
+	frameTimes.push_back(frameTimeMs);
+
+	while (frameTimes.size() > frameTimeHistoryCount)
+	{
+		frameTimes.pop_front();
+	}
+
+	if (performanceMetricsOpen)
+	{
+		DrawFrameTimeHistory();
 	}
 }
 

@@ -13,5 +13,5 @@ class RenderDevice;
 
 namespace EditorRenderer
 {
-	void Render(RenderDevice* device, entt::registry& registry, TextureHandle depthStencilTexture, TextureHandle sceneTexture);
+	void Render(RenderDevice* device, entt::registry& registry, float frameTimeMs, TextureHandle depthStencilTexture, TextureHandle sceneTexture);
 };
