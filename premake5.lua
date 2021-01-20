@@ -124,6 +124,8 @@ project "Engine"
 			defines { "ENABLE_EDITOR=0" }
 		end
 		
+		defines "IMGUI_DEFINE_MATH_OPERATORS"
+		
 	-- Specific Build
 		
 	filter { "platforms:Win64" }

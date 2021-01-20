@@ -9,4 +9,6 @@ project "imgui"
 	
 	targetname "imgui"
 	
+	defines "IMGUI_DEFINE_MATH_OPERATORS"
+	
 	files { "imconfig.h", "imgui.h", "imgui.cpp", "imgui_draw.cpp", "imgui_widgets.cpp", "imgui_demo.cpp" }
