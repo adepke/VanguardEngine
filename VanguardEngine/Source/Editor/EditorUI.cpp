@@ -94,14 +94,14 @@ void EditorUI::DrawFrameTimeHistory()
 
 void EditorUI::DrawLayout()
 {
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.f);
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.f);
-	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 0.f, 0.f });
-
 	auto* viewport = ImGui::GetMainViewport();
 	ImGui::SetNextWindowPos(viewport->GetWorkPos());
 	ImGui::SetNextWindowSize(viewport->GetWorkSize());
 	ImGui::SetNextWindowViewport(viewport->ID);
+
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.f);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.f);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 0.f, 0.f });
 
 	// Always draw the dock space.
 	ImGui::Begin("Dock Space", nullptr,
@@ -114,6 +114,8 @@ void EditorUI::DrawLayout()
 		ImGuiWindowFlags_MenuBar |
 		ImGuiWindowFlags_NoDocking);
 
+	ImGui::PopStyleVar(3);
+
 	const auto dockSpaceId = ImGui::GetID("DockSpace");
 	ImGui::DockSpace(dockSpaceId, { 0.f, 0.f });
 
@@ -121,8 +123,6 @@ void EditorUI::DrawLayout()
 	DrawMenu();
 
 	ImGui::End();
-
-	ImGui::PopStyleVar(3);
 }
 
 void EditorUI::DrawDemoWindow()
