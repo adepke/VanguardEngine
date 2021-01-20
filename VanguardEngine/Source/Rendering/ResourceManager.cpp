@@ -19,7 +19,7 @@ void ResourceManager::CreateResourceViews(BufferComponent& target)
 
 		D3D12_CONSTANT_BUFFER_VIEW_DESC viewDesc{};
 		viewDesc.BufferLocation = target.Native()->GetGPUVirtualAddress();
-		viewDesc.SizeInBytes = static_cast<UINT>(AlignedSize(target.description.size * target.description.stride, 256));  // CBV's must be a multiple of 256 bytes.
+		viewDesc.SizeInBytes = static_cast<UINT>(AlignedSize(target.description.size * target.description.stride, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT));  // Constant buffers require alignment.
 
 		device->Native()->CreateConstantBufferView(&viewDesc, *target.CBV);
 	}
@@ -260,7 +260,7 @@ const BufferHandle ResourceManager::Create(const BufferDescription& description,
 	VGAssert(description.size > 0, "Failed to create buffer, must have non-zero size.");
 
 	D3D12_RESOURCE_DESC resourceDesc{};
-	resourceDesc.Alignment = D3D12_DEFAULT_RESOURCE_PLACEMENT_ALIGNMENT;
+	resourceDesc.Alignment = 0;  // Let the device determine the alignment, see: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_resource_desc#alignment
 	resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
 	resourceDesc.Width = description.size * description.stride;
 	resourceDesc.Height = 1;
@@ -271,6 +271,12 @@ const BufferHandle ResourceManager::Create(const BufferDescription& description,
 	resourceDesc.SampleDesc.Count = 1;
 	resourceDesc.SampleDesc.Quality = 0;
 	resourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
+
+	// Constant buffers need to be aligned to D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT.
+	if (description.bindFlags & BindFlag::ConstantBuffer)
+	{
+		resourceDesc.Width = AlignedSize(resourceDesc.Width, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
+	}
 
 	if (description.bindFlags & BindFlag::UnorderedAccess)
 	{
