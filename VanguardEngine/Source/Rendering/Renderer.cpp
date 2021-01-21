@@ -169,7 +169,7 @@ std::pair<BufferHandle, size_t> Renderer::CreateInstanceBuffer(const entt::regis
 Renderer::~Renderer()
 {
 	// Sync the device so that resource members in Renderer.h don't get destroyed while in-flight.
-	device->SyncInterframe(true);
+	device->Synchronize();
 }
 
 void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_ptr<RenderDevice>&& inDevice)

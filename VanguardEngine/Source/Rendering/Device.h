@@ -53,10 +53,9 @@ private:
 	ResourcePtr<IDXGISwapChain3> swapChain;
 	size_t frame = 0;  // Stores the actual frame number. Refers to the current CPU frame being run, stepped after finishing CPU pass.
 
-	size_t intraSyncValue = 0;  // Value to ensure that we signal a unique value every time we intra sync.
-	ResourcePtr<ID3D12Fence> interSyncFence;
-	ResourcePtr<ID3D12Fence> intraSyncFence;
-	HANDLE syncEvent;  // Shared event for inter and intra syncing.
+	std::vector<uint64_t> syncValues;
+	ResourcePtr<ID3D12Fence> syncFence;
+	HANDLE syncEvent;
 
 	ResourcePtr<D3D12MA::Allocator> allocator;
 	ResourceManager resourceManager;
@@ -96,10 +95,8 @@ public:
 
 	DescriptorHandle AllocateDescriptor(DescriptorType type);
 
-	// Sync the GPU until it is either fully caught up or within the max buffered frames limit, determined by FullSync. Blocking.
-	void SyncInterframe(bool fullSync);
-	// Sync the specified GPU engine within the active frame on the GPU. Blocking.
-	void SyncIntraframe(SyncType type);
+	// Fully sync the GPU, flushes all commands.
+	void Synchronize();
 
 	void AdvanceCPU();  // Steps the CPU frame counter, blocking sync with GPU.
 	void AdvanceGPU();  // Steps the GPU frame counter.

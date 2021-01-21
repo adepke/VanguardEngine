@@ -216,7 +216,7 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 	swapChainDescription.SampleDesc.Quality = 0;
 	swapChainDescription.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
 	swapChainDescription.Stereo = false;
-	swapChainDescription.Flags = 0;  // #TODO: Check for tearing support, and enable if available.
+	swapChainDescription.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;  // #TODO: Check for tearing support before enabling.
 
 	DXGI_SWAP_CHAIN_FULLSCREEN_DESC swapChainFSDescription{};
 	swapChainFSDescription.RefreshRate.Numerator = 60;  // #TODO: Determine this based on the current monitor refresh rate?
@@ -242,19 +242,17 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 		VGLogFatal(Rendering) << "Failed to bind device to window: " << result;
 	}
 
-	result = device->CreateFence(frame, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(interSyncFence.Indirect()));
+	syncValues.resize(frameCount, 0);
+
+	result = device->CreateFence(syncValues[GetFrameIndex()], D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(syncFence.Indirect()));
 	if (FAILED(result))
 	{
-		VGLogFatal(Rendering) << "Failed to create inter sync fence: " << result;
+		VGLogFatal(Rendering) << "Failed to create sync fence: " << result;
 	}
 
-	result = device->CreateFence(intraSyncValue, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(intraSyncFence.Indirect()));
-	if (FAILED(result))
-	{
-		VGLogFatal(Rendering) << "Failed to create intra sync fence: " << result;
-	}
+	++syncValues[GetFrameIndex()];
 
-	if (syncEvent = ::CreateEvent(nullptr, false, false, VGText("Intra sync fence event")); !syncEvent)
+	if (syncEvent = ::CreateEvent(nullptr, false, false, VGText("Sync fence event")); !syncEvent)
 	{
 		VGLogFatal(Rendering) << "Failed to create sync event: " << GetPlatformError();
 	}
@@ -283,7 +281,7 @@ RenderDevice::~RenderDevice()
 {
 	VGScopedCPUStat("Render Device Shutdown");
 
-	SyncInterframe(true);
+	Synchronize();
 
 	::CloseHandle(syncEvent);
 
@@ -447,54 +445,27 @@ DescriptorHandle RenderDevice::AllocateDescriptor(DescriptorType type)
 	return descriptorManager.Allocate(type);
 }
 
-void RenderDevice::SyncInterframe(bool fullSync)
+void RenderDevice::Synchronize()
 {
-	VGScopedCPUStat("Render Sync Interframe");
+	VGScopedCPUStat("Synchronize");
 
-	// If we're doing a full sync, wait until the renderer is fully caught up, otherwise make sure it's within the latency limit.
-	const auto targetValue = fullSync ? std::max(static_cast<uint32_t>(frame), uint32_t{ 1 }) - 1 : std::max(static_cast<uint32_t>(frame), frameCount - 2) - (frameCount - 2);
-
-	if (interSyncFence->GetCompletedValue() < targetValue)
-	{
-		const auto result = interSyncFence->SetEventOnCompletion(targetValue, syncEvent);
-		if (FAILED(result))
-		{
-			VGLogFatal(Rendering) << "Failed to set fence completion event during sync: " << result;
-		}
-
-		WaitForSingleObject(syncEvent, INFINITE);
-	}
-}
-
-void RenderDevice::SyncIntraframe(SyncType type)
-{
-	VGScopedCPUStat("Render Sync Intraframe");
-
-	ID3D12CommandQueue* syncQueue = nullptr;
-
-	switch (type)
-	{
-	case SyncType::Direct:
-		syncQueue = directCommandQueue.Get();
-		break;
-	}
-
-	auto result = syncQueue->Signal(intraSyncFence.Get(), ++intraSyncValue);
+	// Dispatch a signal at the end of the command queue. This will ensure all commands
+	// have finished execution.
+	auto result = directCommandQueue->Signal(syncFence.Get(), syncValues[GetFrameIndex()]);
 	if (FAILED(result))
 	{
-		VGLogFatal(Rendering) << "Failed to submit signal command to GPU during sync: " << result;
+		VGLogFatal(Rendering) << "Failed to signal the sync fence during synchronization: " << result;
 	}
 
-	if (intraSyncFence->GetCompletedValue() != intraSyncValue)
+	result = syncFence->SetEventOnCompletion(syncValues[GetFrameIndex()], syncEvent);
+	if (FAILED(result))
 	{
-		result = intraSyncFence->SetEventOnCompletion(intraSyncValue, syncEvent);
-		if (FAILED(result))
-		{
-			VGLogFatal(Rendering) << "Failed to set fence completion event during sync: " << result;
-		}
-
-		WaitForSingleObject(syncEvent, INFINITE);
+		VGLogFatal(Rendering) << "Failed to set fence completion event during synchronization: " << result;
 	}
+
+	WaitForSingleObject(syncEvent, INFINITE);
+
+	++syncValues[GetFrameIndex()];
 }
 
 void RenderDevice::AdvanceCPU()
@@ -502,31 +473,48 @@ void RenderDevice::AdvanceCPU()
 	VGScopedCPUStat("CPU Frame Advance");
 
 	// Make sure we don't get too many CPU frames ahead of the GPU.
-	SyncInterframe(false);
+	const auto fenceValue = syncValues[GetFrameIndex()];
+	const auto nextFrameIndex = (frame + 1) % frameCount;
 
-	frameBufferOffsets[(frame + 1) % frameCount] = 0;  // GPU has fully consumed the frame resources, we can now reuse the buffer.
+	auto result = directCommandQueue->Signal(syncFence.Get(), fenceValue);
+	if (FAILED(result))
+	{
+		VGLogFatal(Rendering) << "Failed to signal the sync fence during CPU advance: " << result;
+	}
+
+	if (syncFence->GetCompletedValue() < syncValues[nextFrameIndex])
+	{
+		result = syncFence->SetEventOnCompletion(syncValues[nextFrameIndex], syncEvent);
+		if (FAILED(result))
+		{
+			VGLogFatal(Rendering) << "Failed to set fence completion event during CPU advance: " << result;
+		}
+
+		VGScopedCPUStat("Wait for GPU");
+
+		WaitForSingleObjectEx(syncEvent, INFINITE, false);
+	}
+
+	syncValues[nextFrameIndex] = fenceValue + 1;
 
 	// The frame has finished, cleanup its resources. #TODO: Will leave additional GPU gaps if we're bottlenecking on the CPU, consider deferred cleanup?
+	frameBufferOffsets[nextFrameIndex] = 0;  // GPU has fully consumed the frame resources, we can now reuse the buffer.
 	resourceManager.CleanupFrameResources(frame + 1);
-
 	ResetFrame(frame + 1);
 
 	// #TODO: Check our CPU frame budget, try and get some additional work done if we have time?
 
 	VGStatFrameCPU();  // Mark the new frame.
 	++frame;
+
+	// #TODO: We should probably be using the swap chain's back buffer index, however we mismatch when resizing the
+	// swap chain. Doesn't seem to be a problem for now, so leave it as is.
+	//VGAssert(GetFrameIndex() == swapChain->GetCurrentBackBufferIndex(), "Mismatched swap chain frame index.");
 }
 
 void RenderDevice::AdvanceGPU()
 {
 	VGScopedCPUStat("GPU Frame Advance");
-
-	const auto result = directCommandQueue->Signal(interSyncFence.Get(), frame);
-	if (FAILED(result))
-	{
-		VGLogFatal(Rendering) << "Failed to submit signal command to GPU during frame advancement: " << result;
-	}
-
 	VGStatFrameGPU(directContext);
 }
 
@@ -534,7 +522,13 @@ void RenderDevice::SetResolution(uint32_t width, uint32_t height, bool inFullscr
 {
 	VGScopedCPUStat("Render Device Change Resolution");
 
-	SyncInterframe(true);
+	Synchronize();
+
+	// Reset the sync values to the active sync value for this frame.
+	for (auto& syncValue : syncValues)
+	{
+		syncValue = syncValues[GetFrameIndex()];
+	}
 
 	renderWidth = width;
 	renderHeight = height;
@@ -548,7 +542,8 @@ void RenderDevice::SetResolution(uint32_t width, uint32_t height, bool inFullscr
 		resourceManager.Destroy(texture);
 	}
 
-	auto result = swapChain->ResizeBuffers(static_cast<UINT>(frameCount), static_cast<UINT>(width), static_cast<UINT>(height), DXGI_FORMAT_UNKNOWN, 0);
+	// #TODO: Don't duplicate flags, use the original swap chain flags.
+	auto result = swapChain->ResizeBuffers(static_cast<UINT>(frameCount), static_cast<UINT>(width), static_cast<UINT>(height), DXGI_FORMAT_UNKNOWN, DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING);
 	if (FAILED(result))
 	{
 		VGLogFatal(Rendering) << "Failed to resize swap chain buffers: " << result;
