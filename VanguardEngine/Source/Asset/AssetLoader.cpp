@@ -68,17 +68,6 @@ namespace AssetLoader
 			materials.emplace_back();
 			const auto& mat = *scene->mMaterials[i];
 
-			// Create the material table.
-			BufferDescription matTableDesc{
-				.updateRate = ResourceFrequency::Static,
-				.bindFlags = BindFlag::ConstantBuffer,
-				.accessFlags = AccessFlag::CPUWrite,
-				.size = 1,
-				.stride = sizeof(uint32_t)
-			};
-
-			materials[i].materialBuffer = device.GetResourceManager().Create(matTableDesc, VGText("Material table"));
-
 			aiString texturePath;
 
 			const auto SearchTextureType = [&mat, texturePathPtr = &texturePath](auto& textureTypeList)
@@ -99,6 +88,21 @@ namespace AssetLoader
 			// Only use the albedo while working on bindless.
 			if (SearchTextureType(std::array{ aiTextureType_BASE_COLOR, aiTextureType_DIFFUSE }))
 			{
+				// This was moved back due to materials that don't have an albedo texture causing the default value (bindlessIndex = 0)
+				// to be bound, potentially causing a descriptor type mismatch. Instead, only build the material buffer if we have the
+				// albedo.
+
+				// Create the material table.
+				BufferDescription matTableDesc{
+					.updateRate = ResourceFrequency::Static,
+					.bindFlags = BindFlag::ConstantBuffer,
+					.accessFlags = AccessFlag::CPUWrite,
+					.size = 1,
+					.stride = sizeof(uint32_t)
+				};
+
+				materials[i].materialBuffer = device.GetResourceManager().Create(matTableDesc, VGText("Material table"));
+
 				const auto textureHandle = LoadTexture(device, trimmedPath / texturePath.C_Str());
 				const TextureComponent& textureComponent = device.GetResourceManager().Get(textureHandle);
 				const auto bindlessIndex = textureComponent.SRV->bindlessIndex;
