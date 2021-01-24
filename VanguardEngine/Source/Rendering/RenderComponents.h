@@ -32,8 +32,8 @@ struct MeshComponent
 
 struct CameraComponent
 {
-	float nearPlane = 0.01f;
-	float farPlane = 10000.f;
+	float nearPlane = 0.1f;
+	float farPlane = 5000.f;
 	float fieldOfView = 1.57079633f;  // 90 Degrees.
 };
 
