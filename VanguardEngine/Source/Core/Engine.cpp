@@ -91,7 +91,7 @@ void EngineLoop()
 	const auto sponza = tempReg.create();
 	tempReg.emplace<NameComponent>(sponza, "Sponza");
 	tempReg.emplace<TransformComponent>(sponza);
-	tempReg.emplace<MeshComponent>(sponza, AssetLoader::LoadMesh(*Renderer::Get().device, Config::shadersPath / "../Models/SponzaTest/sponza.obj"));  // #TEMP
+	tempReg.emplace<MeshComponent>(sponza, AssetLoader::LoadMesh(*Renderer::Get().device, Config::shadersPath / "../Models/Sponza/glTF/Sponza.gltf"));
 
 	auto frameBegin = std::chrono::high_resolution_clock::now();
 

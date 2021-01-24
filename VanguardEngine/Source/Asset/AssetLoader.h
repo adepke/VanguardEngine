@@ -10,5 +10,5 @@ class RenderDevice;
 
 namespace AssetLoader
 {
-	MeshComponent LoadMesh(RenderDevice& device, std::filesystem::path path);
+	MeshComponent LoadMesh(RenderDevice& device, const std::filesystem::path& path);
 }

@@ -2,95 +2,124 @@
 
 #include <Asset/AssetLoader.h>
 #include <Asset/TextureLoader.h>
+#include <Rendering/RenderComponents.h>
 
-#include <assimp/Importer.hpp>
-#include <assimp/scene.h>
-#include <assimp/mesh.h>
-#include <assimp/texture.h>
-#include <assimp/light.h>
-#include <assimp/postprocess.h>
+#define TINYGLTF_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include <tiny_gltf.h>
 
 #include <vector>
 #include <utility>
+#include <algorithm>
 
 namespace AssetLoader
 {
-	MeshComponent LoadMesh(RenderDevice& device, std::filesystem::path path)
+	template <typename T, typename U, typename V>
+	auto FindVertexAttribute(const char* name, U&& model, V&& primitive) -> std::pair<const T*, size_t>
+	{
+		if (const auto iterator = primitive.attributes.find(name); iterator != primitive.attributes.end())
+		{
+			const auto& accessor = model.accessors[iterator->second];
+			const auto& bufferView = model.bufferViews[accessor.bufferView];
+			const auto& buffer = model.buffers[bufferView.buffer];
+			const auto* data = reinterpret_cast<const T*>(buffer.data.data() + bufferView.byteOffset);
+
+			return { data, accessor.count };
+		}
+
+		return { nullptr, 0 };
+	}
+
+	MeshComponent LoadMesh(RenderDevice& device, const std::filesystem::path& path)
 	{
 		VGScopedCPUStat("Load Mesh");
 
-		Assimp::Importer importer{};
+		std::string error;
+		std::string warning;
 
-		const aiScene* scene = nullptr;
+		tinygltf::Model model;
+		tinygltf::TinyGLTF loader;
 
-		{
-			VGScopedCPUStat("Importer Read");
-
-			scene = importer.ReadFile(path.generic_string(), 0);
-		}
-
-		if (!scene || !scene->mNumMeshes)
-		{
-			VGLogError(Asset) << "Failed to load asset at '" << path.generic_wstring() << "'.";
-			return {};
-		}
-
-		if (!scene->mNumMaterials)
-		{
-			VGLogError(Asset) << "Asset at '" << path.generic_wstring() << "' doesn't contain any materials.";
-			return {};
-		}
-
-		// #TODO: Load lights.
-
-		constexpr auto postProcessFlags =
-			aiProcess_CalcTangentSpace |  // We need tangents and bitangents for normal mapping.
-			aiProcess_Triangulate |  // We can only accept triangle faces.
-			aiProcess_JoinIdenticalVertices |
-			aiProcess_RemoveRedundantMaterials |
-			aiProcess_PreTransformVertices |  // Mesh merging.
-			aiProcess_OptimizeMeshes;  // Mesh merging.
+		bool result = false;
 
 		{
-			VGScopedCPUStat("Post Process");
+			VGScopedCPUStat("Import");
 
-			scene = importer.ApplyPostProcessing(postProcessFlags);
-		}
-
-		auto trimmedPath = path;
-		trimmedPath.remove_filename();
-
-		std::vector<Material> materials{};
-		materials.reserve(scene->mNumMaterials);
-
-		for (uint32_t i = 0; i < scene->mNumMaterials; ++i)
-		{
-			materials.emplace_back();
-			const auto& mat = *scene->mMaterials[i];
-
-			aiString texturePath;
-
-			const auto SearchTextureType = [&mat, texturePathPtr = &texturePath](auto& textureTypeList)
+			if (path.has_extension() && path.extension() == ".gltf")
 			{
-				for (size_t i = 0; i < std::size(textureTypeList); ++i)
-				{
-					if (mat.GetTexture(textureTypeList[i], 0, texturePathPtr) == aiReturn_SUCCESS)
-						return true;
-				}
+				result = loader.LoadASCIIFromFile(&model, &error, &warning, path.generic_string());
+			}
 
-				return false;
-			};
-
-			// #TODO: Assimp sometimes returns an absolute path, sometimes a relative path. We should convert all paths to relative before sending them to LoadTexture.
-
-			// Prefer PBR texture types, but fall back to legacy types (which may still be PBR, just incorrectly set in the asset).
-
-			// Only use the albedo while working on bindless.
-			if (SearchTextureType(std::array{ aiTextureType_BASE_COLOR, aiTextureType_DIFFUSE }))
+			else if (path.has_extension() && path.extension() == ".glb")
 			{
-				// This was moved back due to materials that don't have an albedo texture causing the default value (bindlessIndex = 0)
-				// to be bound, potentially causing a descriptor type mismatch. Instead, only build the material buffer if we have the
-				// albedo.
+				result = loader.LoadBinaryFromFile(&model, &error, &warning, path.generic_string());
+			}
+
+			else
+			{
+				VGLogError(Asset) << "Unknown asset load file extension '" << (path.has_extension() ? path.extension() : "[ No extension ]") << "'.";
+			}
+		}
+
+		if (!warning.empty())
+		{
+			//VGLogWarning(Asset) << "GLTF load: " << warning;
+		}
+
+		if (!error.empty())
+		{
+			//VGLogError(Asset) << "GLTF load: " << error;
+		}
+
+		if (!result)
+		{
+			//VGLogError(Asset) << "Failed to load asset '" << path.filename().generic_string() << "'.";
+		}
+
+		else
+		{
+			//VGLog(Asset) << "Loaded asset '" << path.filename().generic_string() << "'.";
+		}
+
+		std::vector<MeshComponent::Subset> subsets;
+		std::vector<uint32_t> indices;
+		std::vector<Vertex> vertices;
+		size_t indexOffset = 0;
+		size_t vertexOffset = 0;
+
+		const auto& scene = model.scenes[model.defaultScene];
+
+		for (const auto nodeIndex : scene.nodes)
+		{
+			const auto& node = model.nodes[nodeIndex];  // #TODO: Nodes can have children.
+			const auto& mesh = model.meshes[node.mesh];
+
+			// Load the model materials.
+
+			std::vector<Material> materials;
+			materials.reserve(model.materials.size());
+
+			for (int i = 0; i < model.materials.size(); ++i)
+			{
+				// #TODO: Implement full PBR textures and other material features.				
+
+				const auto& material = model.materials[i];
+				materials.emplace_back();
+
+				const auto& albedoTextureMeta = material.pbrMetallicRoughness.baseColorTexture;
+				const auto& albedoTexture = model.images[model.textures[albedoTextureMeta.index].source];
+
+				TextureDescription description{};
+				description.bindFlags = BindFlag::ShaderResource;
+				description.accessFlags = AccessFlag::CPUWrite;
+				description.width = albedoTexture.width;
+				description.height = albedoTexture.height;
+				description.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+				// #TODO: Derive name from asset name + texture type.
+				auto textureResource = device.GetResourceManager().Create(description, VGText("Asset texture"));
+				device.GetResourceManager().Write(textureResource, albedoTexture.image);
+				device.GetDirectList().TransitionBarrier(textureResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 				// Create the material table.
 				BufferDescription matTableDesc{
@@ -102,9 +131,7 @@ namespace AssetLoader
 				};
 
 				materials[i].materialBuffer = device.GetResourceManager().Create(matTableDesc, VGText("Material table"));
-
-				const auto textureHandle = LoadTexture(device, trimmedPath / texturePath.C_Str());
-				const TextureComponent& textureComponent = device.GetResourceManager().Get(textureHandle);
+				const auto& textureComponent = device.GetResourceManager().Get(textureResource);
 				const auto bindlessIndex = textureComponent.SRV->bindlessIndex;
 
 				std::vector<uint32_t> materialTable{};
@@ -115,141 +142,80 @@ namespace AssetLoader
 				std::memcpy(materialTableBytes.data(), materialTable.data(), materialTableBytes.size());
 
 				device.GetResourceManager().Write(materials[i].materialBuffer, materialTableBytes);
-
 				device.GetDirectList().TransitionBarrier(materials[i].materialBuffer, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
 			}
-			
-			/*
-			if (SearchTextureType(std::array{ aiTextureType_NORMAL_CAMERA, aiTextureType_NORMALS, aiTextureType_HEIGHT }))
+
+			subsets.reserve(mesh.primitives.size());
+
+			for (const auto& primitive : mesh.primitives)
 			{
-				materials[i]->normal = LoadTexture(device, trimmedPath / texturePath.C_Str());
-			}
+				const auto& indexAccessor = model.accessors[primitive.indices];
 
-			if (SearchTextureType(std::array{ aiTextureType_EMISSION_COLOR, aiTextureType_EMISSIVE }))
-			{
-				//Materials[Iter]->emissive = LoadTexture(Device, TrimmedPath / TexturePath.C_Str());
-			}
+				VGAssert(
+					indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT ||
+					indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT,
+					"Indices must be unsigned 16 or 32 bit ints.");
+				VGAssert(indexAccessor.bufferView >= 0 && indexAccessor.bufferView < model.bufferViews.size(), "Index buffer view is invalid.");
 
-			if (SearchTextureType(std::array{ aiTextureType_DIFFUSE_ROUGHNESS }))
-			{
-				materials[i]->roughness = LoadTexture(device, trimmedPath / texturePath.C_Str());
-			}
+				const auto& indexBufferView = model.bufferViews[indexAccessor.bufferView];
+				const auto& indexBuffer = model.buffers[indexBufferView.buffer];
+				const auto* indexData16 = reinterpret_cast<const uint16_t*>(indexBuffer.data.data() + indexBufferView.byteOffset);
+				const auto* indexData32 = reinterpret_cast<const uint32_t*>(indexBuffer.data.data() + indexBufferView.byteOffset);
 
-			if (SearchTextureType(std::array{ aiTextureType_METALNESS }))
-			{
-				materials[i]->metallic = LoadTexture(device, trimmedPath / texturePath.C_Str());
-			}
+				indices.reserve(indices.size() + indexAccessor.count);
 
-			if (SearchTextureType(std::array{ aiTextureType_AMBIENT_OCCLUSION }))
-			{
-				//Materials[Iter]->ambientOcclusion = LoadTexture(Device, TrimmedPath / TexturePath.C_Str());
-			}
-			*/
-		}
-
-		// Sum vertices/indices from all the submeshes.
-		size_t vertexCount = 0;
-		size_t indexCount = 0;
-
-		for (uint32_t i = 0; i < scene->mNumMeshes; ++i)
-		{
-			const auto* mesh = scene->mMeshes[i];
-
-			// Basic mesh validation.
-
-			if (!mesh->HasPositions())
-			{
-				VGLogError(Asset) << "Asset at '" << path.generic_wstring() << "' doesn't contain vertex positions.";
-				return {};
-			}
-
-			if (!mesh->HasNormals())
-			{
-				VGLogError(Asset) << "Asset at '" << path.generic_wstring() << "' doesn't contain vertex normals.";
-				return {};
-			}
-
-			if (!mesh->HasTextureCoords(0))
-			{
-				VGLogError(Asset) << "Asset at '" << path.generic_wstring() << "' doesn't contain vertex UVs.";
-				return {};
-			}
-
-			if (!mesh->HasTangentsAndBitangents())
-			{
-				VGLogError(Asset) << "Asset at '" << path.generic_wstring() << "' doesn't contain vertex tangents.";
-				return {};
-			}
-
-			vertexCount += mesh->mNumVertices;
-			indexCount += mesh->mNumFaces * 3;
-		}
-
-		std::vector<MeshComponent::Subset> subsets;
-		std::vector<Vertex> vertices;
-		std::vector<uint32_t> indices;
-
-		vertices.reserve(vertexCount);
-		indices.reserve(indexCount);
-
-		size_t vertexOffset = 0;
-		size_t indexOffset = 0;
-
-		{
-			VGScopedCPUStat("Mesh Building");
-
-			for (uint32_t i = 0; i < scene->mNumMeshes; ++i)
-			{
-				const auto* mesh = scene->mMeshes[i];
-
-				MeshComponent::Subset subset{};
-				subset.vertexOffset = vertexOffset;
-				subset.indexOffset = indexOffset;
-				subset.indices = mesh->mNumFaces * 3;
-
-				vertexOffset += mesh->mNumVertices;
-				indexOffset += subset.indices;
-
-				for (uint32_t j = 0; j < mesh->mNumVertices; ++j)
+				for (int i = 0; i < indexAccessor.count; ++i)
 				{
-					const auto& position = mesh->mVertices[j];
-					const auto& normal = mesh->mVertices[j];
-					const auto& texCoord = mesh->mTextureCoords[0][j];
-					const auto& tangent = mesh->mTangents[j];
-					const auto& bitangent = mesh->mBitangents[j];
+					if (indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT)
+					{
+						indices.emplace_back(static_cast<uint32_t>(*(indexData16 + i)));
+					}
 
-					Vertex result{
-						{ position.x, position.y, position.z },
-						{ normal.x, normal.y, normal.z },
-						{ texCoord.x, texCoord.y },
-						{ tangent.x, tangent.y, tangent.z },
-						{ bitangent.x, bitangent.y, bitangent.z }
-					};
-
-					vertices.emplace_back(result);
+					else if (indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT)
+					{
+						indices.emplace_back(*(indexData32 + i));
+					}
 				}
 
-				for (uint32_t j = 0; j < mesh->mNumFaces; ++j)
-				{
-					const auto& face = mesh->mFaces[j];
+				const auto [positionData, positionCount] = FindVertexAttribute<XMFLOAT3>("POSITION", model, primitive);
+				const auto [normalData, normalCount] = FindVertexAttribute<XMFLOAT3>("NORMAL", model, primitive);
+				const auto [texcoordData, texcoordCount] = FindVertexAttribute<XMFLOAT2>("TEXCOORD_0", model, primitive);
+				const auto [tangentData, tangentCount] = FindVertexAttribute<XMFLOAT3>("TANGENT", model, primitive);
 
-					indices.emplace_back(face.mIndices[0]);
-					indices.emplace_back(face.mIndices[1]);
-					indices.emplace_back(face.mIndices[2]);
+				vertices.reserve(vertices.size() + positionCount);
+
+				for (int i = 0; i < positionCount; ++i)
+				{
+					vertices.push_back({
+						.position = *(positionData + i),
+						.normal = normalData ? *(normalData + i) : XMFLOAT3{ 0.f, 0.f, 0.f },
+						.uv = texcoordData ? *(texcoordData + i) : XMFLOAT2{ 0.f, 0.f },
+						.tangent = tangentData ? *(tangentData + i) : XMFLOAT3{ 0.f, 0.f, 0.f },
+						.bitangent = XMFLOAT3{ 0.f, 0.f, 0.f }  // #TODO: Bitangents.
+					});
 				}
 
-				// Copy the submesh material, don't move since multiple submeshes can share a material.
-				subset.material = materials[mesh->mMaterialIndex];
+				subsets.push_back({
+					.vertexOffset = vertexOffset,
+					.indexOffset = indexOffset,
+					.indices = indexAccessor.count,
+					.material = materials[primitive.material]
+				});
 
-				// #TODO: Get the mesh AABB.
-
-				subsets.emplace_back(std::move(subset));
+				indexOffset += indexAccessor.count;
+				vertexOffset += positionCount;
 			}
 		}
 
-		auto meshComp = std::move(CreateMeshComponent(device, vertices, indices));
-		meshComp.subsets = subsets;
+		// Reverse the model's winding order.
+		for (int i = 2; i < indices.size(); i += 3)
+		{
+			std::iter_swap(indices.begin() + i - 2, indices.begin() + i);
+		}
 
-		return std::move(meshComp);
+		auto meshComponent = std::move(CreateMeshComponent(device, vertices, indices));
+		meshComponent.subsets = std::move(subsets);
+
+		return std::move(meshComponent);
 	}
 }

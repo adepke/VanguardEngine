@@ -69,7 +69,7 @@ void Renderer::CreatePipelines()
 	prepassStateDesc.blendDescription.RenderTarget[0].RenderTargetWriteMask = 0;
 
 	prepassStateDesc.rasterizerDescription.FillMode = D3D12_FILL_MODE_SOLID;
-	prepassStateDesc.rasterizerDescription.CullMode = D3D12_CULL_MODE_NONE;//D3D12_CULL_MODE_BACK;  // #TEMP: Fix sponza model.
+	prepassStateDesc.rasterizerDescription.CullMode = D3D12_CULL_MODE_BACK;
 	prepassStateDesc.rasterizerDescription.FrontCounterClockwise = false;
 	prepassStateDesc.rasterizerDescription.DepthBias = 0;
 	prepassStateDesc.rasterizerDescription.DepthBiasClamp = 0.f;
@@ -111,7 +111,7 @@ void Renderer::CreatePipelines()
 	forwardStateDesc.blendDescription.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 
 	forwardStateDesc.rasterizerDescription.FillMode = D3D12_FILL_MODE_SOLID;
-	forwardStateDesc.rasterizerDescription.CullMode = D3D12_CULL_MODE_NONE;//D3D12_CULL_MODE_BACK;  // #TEMP: Fix sponza model.
+	forwardStateDesc.rasterizerDescription.CullMode = D3D12_CULL_MODE_BACK;
 	forwardStateDesc.rasterizerDescription.FrontCounterClockwise = false;
 	forwardStateDesc.rasterizerDescription.DepthBias = 0;
 	forwardStateDesc.rasterizerDescription.DepthBiasClamp = 0.f;
