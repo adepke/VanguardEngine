@@ -14,12 +14,13 @@ class EditorUI : public Singleton<EditorUI>
 {
 private:
 	entt::entity hierarchySelectedEntity = entt::null;
+	bool linearizeDepth = true;
 
 	// Window states.
 	bool entityHierarchyOpen = true;
 	bool entityPropertyViewerOpen = true;
 	bool performanceMetricsOpen = true;
-	bool renderGraphOpen = false;
+	bool renderGraphOpen = true;
 
 	std::deque<float> frameTimes;
 	size_t frameTimeHistoryCount = 0;

@@ -90,7 +90,7 @@ void UserInterfaceManager::SetupRenderState(ImDrawData* drawData, CommandList& l
 	list.Native()->OMSetBlendFactor(blendFactor);
 
 	// Set the bindless textures.
-	list.Native()->SetGraphicsRootDescriptorTable(3, device->GetDescriptorAllocator().GetBindlessHeap());
+	list.Native()->SetGraphicsRootDescriptorTable(4, device->GetDescriptorAllocator().GetBindlessHeap());
 }
 
 void UserInterfaceManager::CreateFontTexture()
@@ -373,7 +373,7 @@ void UserInterfaceManager::Render(CommandList& list)
 				if (pcmd->UserCallback == ImDrawCallback_ResetRenderState)
 					SetupRenderState(drawData, list, resources);
 				else
-					pcmd->UserCallback(cmd_list, pcmd);
+					pcmd->UserCallback(&list);
 			}
 			else
 			{
@@ -381,7 +381,7 @@ void UserInterfaceManager::Render(CommandList& list)
 				const D3D12_RECT r = { (LONG)(pcmd->ClipRect.x - clip_off.x), (LONG)(pcmd->ClipRect.y - clip_off.y), (LONG)(pcmd->ClipRect.z - clip_off.x), (LONG)(pcmd->ClipRect.w - clip_off.y) };
 				list.Native()->SetGraphicsRoot32BitConstant(1, *(uint32_t*)&pcmd->TextureId, 0);
 				list.Native()->RSSetScissorRects(1, &r);
-				list.Native()->SetGraphicsRootShaderResourceView(2, resources->vertexBuffer->GetGPUVirtualAddress() + (pcmd->VtxOffset + global_vtx_offset) * sizeof(ImDrawVert));
+				list.Native()->SetGraphicsRootShaderResourceView(3, resources->vertexBuffer->GetGPUVirtualAddress() + (pcmd->VtxOffset + global_vtx_offset) * sizeof(ImDrawVert));
 				list.Native()->DrawIndexedInstanced(pcmd->ElemCount, 1, pcmd->IdxOffset + global_idx_offset, 0, 0);
 			}
 		}

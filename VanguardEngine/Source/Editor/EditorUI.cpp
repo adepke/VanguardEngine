@@ -261,7 +261,26 @@ void EditorUI::DrawRenderGraph(RenderDevice* device, TextureHandle depthStencil,
 	{
 		if (ImGui::Begin("Render Graph", &renderGraphOpen))
 		{
+			ImGui::Checkbox("Linearize depth", &linearizeDepth);
+
+			if (linearizeDepth)
+			{
+				ImGui::GetWindowDrawList()->AddCallback([](auto* list)
+				{
+					list->Native()->SetGraphicsRoot32BitConstant(2, true, 0);
+				}, nullptr);
+			}
+
 			ImGui::Image(device, depthStencil, 0.25f);
+
+			if (linearizeDepth)
+			{
+				ImGui::GetWindowDrawList()->AddCallback([](auto* list)
+				{
+					list->Native()->SetGraphicsRoot32BitConstant(2, false, 0);
+				}, nullptr);
+			}
+
 			ImGui::Image(device, scene, 0.25f);
 		}
 
