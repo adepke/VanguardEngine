@@ -49,7 +49,7 @@ namespace Config
 		nlohmann::json engineConfig;
 		engineConfigStream >> engineConfig;
 
-		shadersPath = engineRootPath / "Assets" / engineConfig["ShadersPath"].get<std::string>();
-		materialsPath = engineRootPath / "Assets" / engineConfig["MaterialsPath"].get<std::string>();
+		shadersPath = engineRootPath / engineConfig["ShadersPath"].get<std::string>();
+		materialsPath = engineRootPath / engineConfig["MaterialsPath"].get<std::string>();
 	}
 }

@@ -181,6 +181,16 @@ project "Engine"
 
 	filter {}
 	
+	-- Shaders
+	
+	files { "VanguardEngine/Shaders/*.hlsl", "VanguardEngine/Shaders/*.hlsli" }
+	
+	-- Disable shader compiling as a build step, we compile shaders at runtime.
+	filter "files:**.hlsl"
+		buildaction "None"
+		
+	filter {}
+	
 	-- Third Party Files
 	
 	IncludeThirdParty()
