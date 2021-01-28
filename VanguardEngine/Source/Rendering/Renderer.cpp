@@ -151,8 +151,12 @@ std::pair<BufferHandle, size_t> Renderer::CreateInstanceBuffer(const entt::regis
 		const auto rotation = XMVectorSet(transform.rotation.x, transform.rotation.y, transform.rotation.z, 0.f);
 		const auto translation = XMVectorSet(transform.translation.x, transform.translation.y, transform.translation.z, 0.f);
 
+		const auto scalingMat = XMMatrixScalingFromVector(scaling);
+		const auto rotationMat = XMMatrixRotationX(-transform.rotation.x) * XMMatrixRotationY(-transform.rotation.y) * XMMatrixRotationZ(-transform.rotation.z);
+		const auto translationMat = XMMatrixTranslationFromVector(translation);
+
 		EntityInstance instance;
-		instance.worldMatrix = XMMatrixAffineTransformation(scaling, XMVectorZero(), rotation, translation);
+		instance.worldMatrix = scalingMat * rotationMat * translationMat;
 
 		std::vector<uint8_t> instanceData{};
 		instanceData.resize(sizeof(EntityInstance));

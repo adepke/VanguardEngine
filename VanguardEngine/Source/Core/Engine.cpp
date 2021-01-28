@@ -88,9 +88,13 @@ void EngineLoop()
 	tempReg.emplace<CameraComponent>(spectator);
 	tempReg.emplace<ControlComponent>(spectator);  // #TEMP
 
+	TransformComponent sponzaTransform{};
+	sponzaTransform.translation = { 1200.f, -50.f, -120.f };
+	sponzaTransform.rotation = { -1.57079633f, 0.f, 0.f };  // Rotate the sponza into our coordinate space.
+
 	const auto sponza = tempReg.create();
 	tempReg.emplace<NameComponent>(sponza, "Sponza");
-	tempReg.emplace<TransformComponent>(sponza);
+	tempReg.emplace<TransformComponent>(sponza, std::move(sponzaTransform));
 	tempReg.emplace<MeshComponent>(sponza, AssetLoader::LoadMesh(*Renderer::Get().device, Config::shadersPath / "../Assets/Models/Sponza/glTF/Sponza.gltf"));
 
 	auto frameBegin = std::chrono::high_resolution_clock::now();

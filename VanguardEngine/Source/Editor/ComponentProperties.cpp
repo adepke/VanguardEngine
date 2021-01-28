@@ -27,11 +27,23 @@ void ComponentProperties::RenderTransformComponent(entt::registry& registry, ent
 	float rotation[] = { component.rotation.x, component.rotation.y, component.rotation.z };
 	float scale[] = { component.scale.x, component.scale.y, component.scale.z };
 
+	// Convert radians to degrees.
+	for (auto& dimension : rotation)
+	{
+		dimension *= 180.f / 3.14159265359f;
+	}
+
 	ImGui::Text("Transform");
 
-	ImGui::DragFloat3("Translation", translation, 1.0, -100000.0, 100000.0, "%.4f");
-	ImGui::DragFloat3("Rotation", rotation, 1.0, -100.0, 100.0, "%.4f");
-	ImGui::DragFloat3("Scale", scale, 0.2, -10000.0, 10000.0, "%.4f");
+	ImGui::DragFloat3("Translation", translation, 1.f, -100000.0, 100000.0, "%.4f");
+	ImGui::DragFloat3("Rotation", rotation, 0.5f, -360.0, 360.0, "%.4f");
+	ImGui::DragFloat3("Scale", scale, 0.025f, -10000.0, 10000.0, "%.4f");
+
+	// Convert degrees to radians.
+	for (auto& dimension : rotation)
+	{
+		dimension *= 3.14159265359f / 180.f;
+	}
 
 	component.translation = XMFLOAT3{ translation };
 	component.rotation = XMFLOAT3{ rotation };
