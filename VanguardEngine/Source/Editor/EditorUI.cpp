@@ -134,6 +134,10 @@ void EditorUI::DrawDemoWindow()
 
 void EditorUI::DrawScene(RenderDevice* device, TextureHandle sceneTexture)
 {
+	const auto& sceneDescription = device->GetResourceManager().Get(sceneTexture).description;
+
+	ImGui::SetNextWindowSizeConstraints({ 100.f, 100.f }, { (float)sceneDescription.width, (float)sceneDescription.height });
+
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 0.f, 0.f });  // Remove window padding.
 
 	if (ImGui::Begin("Scene", nullptr, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse))
@@ -141,12 +145,8 @@ void EditorUI::DrawScene(RenderDevice* device, TextureHandle sceneTexture)
 		const auto viewportMin = ImGui::GetWindowContentRegionMin();
 		const auto viewportMax = ImGui::GetWindowContentRegionMax();
 		const auto viewportSize = viewportMax - viewportMin;
-
-		const auto& sceneDescription = device->GetResourceManager().Get(sceneTexture).description;
-		const auto widthScale = viewportSize.x / sceneDescription.width;
-		const auto heightScale = viewportSize.y / sceneDescription.height;
-		const auto widthUV = (1.f - widthScale) * 0.5f;
-		const auto heightUV = (1.f - heightScale) * 0.5f;
+		const auto widthUV = (1.f - (viewportSize.x / sceneDescription.width)) * 0.5f;
+		const auto heightUV = (1.f - (viewportSize.y / sceneDescription.height)) * 0.5f;
 
 		ImGui::Image(device, sceneTexture, { 1.f, 1.f }, { widthUV, heightUV }, { 1.f + widthUV, 1.f + heightUV });
 	}
