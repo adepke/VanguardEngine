@@ -3,7 +3,6 @@
 #pragma once
 
 #include <Rendering/Resource.h>
-#include <Rendering/Viewport.h>
 #include <Utility/Singleton.h>
 
 #include <entt/entt.hpp>
