@@ -21,6 +21,9 @@ private:
 	bool performanceMetricsOpen = true;
 	bool renderGraphOpen = true;
 
+	// Focus states.
+	bool entityPropertyViewerFocus = false;
+
 	std::deque<float> frameTimes;
 	size_t frameTimeHistoryCount = 0;
 

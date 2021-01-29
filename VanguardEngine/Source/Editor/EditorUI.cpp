@@ -202,6 +202,13 @@ void EditorUI::DrawEntityHierarchy(entt::registry& registry)
 				}
 
 				ImGui::PopID();
+
+				// Open the property viewer with focus on left click. Test the condition for each tree node.
+				if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && ImGui::IsItemHovered(ImGuiHoveredFlags_None))
+				{
+					entityPropertyViewerOpen = true;
+					entityPropertyViewerFocus = true;
+				}
 			});
 		}
 
@@ -219,6 +226,12 @@ void EditorUI::DrawEntityPropertyViewer(entt::registry& registry)
 {
 	if (entityPropertyViewerOpen)
 	{
+		if (entityPropertyViewerFocus)
+		{
+			entityPropertyViewerFocus = false;
+			ImGui::SetNextWindowFocus();
+		}
+
 		if (ImGui::Begin("Property Viewer", &entityPropertyViewerOpen))
 		{
 			if (registry.valid(hierarchySelectedEntity))

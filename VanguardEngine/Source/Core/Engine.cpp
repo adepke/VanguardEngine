@@ -130,6 +130,7 @@ void EngineLoop()
 		frameBegin = frameEnd;
 
 		Renderer::Get().SubmitFrameTime(frameDelta);
+		Input::SubmitFrameTime(frameDelta);
 	}
 }
 

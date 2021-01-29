@@ -380,4 +380,10 @@ namespace Input
 		UpdateMouse(window);
 		UpdateGamepad();
 	}
+
+	void SubmitFrameTime(uint32_t timeUs)
+	{
+		auto& io = ImGui::GetIO();
+		io.DeltaTime = (float)timeUs / 1000000.f;
+	}
 }

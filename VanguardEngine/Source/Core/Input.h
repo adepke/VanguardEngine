@@ -12,4 +12,6 @@ namespace Input
 
 	bool ProcessWindowMessage(void* window, uint32_t message, int64_t wParam, uint64_t lParam);
 	void UpdateInputDevices(void* window);
+
+	void SubmitFrameTime(uint32_t timeUs);
 };
