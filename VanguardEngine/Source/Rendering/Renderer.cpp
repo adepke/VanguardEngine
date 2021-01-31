@@ -82,7 +82,7 @@ void Renderer::CreatePipelines()
 
 	prepassStateDesc.depthStencilDescription.DepthEnable = true;  // Enable depth.
 	prepassStateDesc.depthStencilDescription.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;  // Write to the depth buffer.
-	prepassStateDesc.depthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_LESS;  // Traditional depth buffer.
+	prepassStateDesc.depthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_GREATER;  // Inverse depth buffer.
 	prepassStateDesc.depthStencilDescription.StencilEnable = false;
 	prepassStateDesc.depthStencilDescription.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
 	prepassStateDesc.depthStencilDescription.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;

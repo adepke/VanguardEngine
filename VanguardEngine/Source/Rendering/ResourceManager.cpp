@@ -426,7 +426,7 @@ const TextureHandle ResourceManager::Create(const TextureDescription& descriptio
 		case DXGI_FORMAT_R24G8_TYPELESS: clearValue.Format = DXGI_FORMAT_D24_UNORM_S8_UINT; break;
 		}
 
-		clearValue.DepthStencil.Depth = 1.f;
+		clearValue.DepthStencil.Depth = 0.f;  // Inverse Z.
 		clearValue.DepthStencil.Stencil = 0;
 	}
 

@@ -73,14 +73,14 @@ void CameraSystem::Update(entt::registry& registry)
 	
 	// Iterate all camera entities that have control.
 	registry.view<TransformComponent, const CameraComponent, const ControlComponent>().each([&](auto entity, auto& transform, const auto& camera)
-		{
-			auto viewMatrix = SpectatorCameraView(transform, camera, pitchDelta, yawDelta, moveForward, moveBackward, moveLeft, moveRight, moveUp, moveDown);
+	{
+		auto viewMatrix = SpectatorCameraView(transform, camera, pitchDelta, yawDelta, moveForward, moveBackward, moveLeft, moveRight, moveUp, moveDown);
 
-			const auto aspectRatio = static_cast<float>(Renderer::Get().device->renderWidth) / static_cast<float>(Renderer::Get().device->renderHeight);
-			const auto projectionMatrix = XMMatrixPerspectiveFovRH(camera.fieldOfView / 2.f, aspectRatio, camera.nearPlane, camera.farPlane);
-			
-			// #TODO: Support multiple cameras.
-			globalViewMatrix = viewMatrix;
-			globalProjectionMatrix = projectionMatrix;
-		});
+		const auto aspectRatio = static_cast<float>(Renderer::Get().device->renderWidth) / static_cast<float>(Renderer::Get().device->renderHeight);
+		const auto projectionMatrix = XMMatrixPerspectiveFovRH(camera.fieldOfView / 2.f, aspectRatio, camera.farPlane, camera.nearPlane);  // Inverse Z.
+		
+		// #TODO: Support multiple cameras.
+		globalViewMatrix = viewMatrix;
+		globalProjectionMatrix = projectionMatrix;
+	});
 }

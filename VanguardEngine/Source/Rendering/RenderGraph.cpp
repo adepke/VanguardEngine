@@ -291,7 +291,8 @@ void RenderGraph::Execute(RenderDevice* device)
 				else if (info.first == OutputBind::DSV)
 				{
 					// #TODO: Stencil clearing.
-					list->Native()->ClearDepthStencilView(*component.DSV, D3D12_CLEAR_FLAG_DEPTH/* | D3D12_CLEAR_FLAG_STENCIL*/, 1.f, 0, 0, nullptr);
+					// #TODO: Retrieve clear color from the resource description.
+					list->Native()->ClearDepthStencilView(*component.DSV, D3D12_CLEAR_FLAG_DEPTH/* | D3D12_CLEAR_FLAG_STENCIL*/, 0.f, 0, 0, nullptr);  // Inverse Z.
 				}
 			}
 		}
