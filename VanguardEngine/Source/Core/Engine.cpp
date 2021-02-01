@@ -98,6 +98,7 @@ void EngineLoop()
 	tempReg.emplace<MeshComponent>(sponza, AssetLoader::LoadMesh(*Renderer::Get().device, Config::shadersPath / "../Assets/Models/Sponza/glTF/Sponza.gltf"));
 
 	auto frameBegin = std::chrono::high_resolution_clock::now();
+	float lastDeltaTime = 0.f;
 
 	while (true)
 	{
@@ -119,7 +120,7 @@ void EngineLoop()
 
 		ControlSystem::Update(tempReg);
 
-		CameraSystem::Update(tempReg);
+		CameraSystem::Update(tempReg, lastDeltaTime);
 
 		Renderer::Get().Render(tempReg);
 
@@ -128,6 +129,7 @@ void EngineLoop()
 		auto frameEnd = std::chrono::high_resolution_clock::now();
 		const auto frameDelta = std::chrono::duration_cast<std::chrono::microseconds>(frameEnd - frameBegin).count();
 		frameBegin = frameEnd;
+		lastDeltaTime = static_cast<float>(frameDelta) / 1000000.f;
 
 		Renderer::Get().SubmitFrameTime(frameDelta);
 		Input::SubmitFrameTime(frameDelta);

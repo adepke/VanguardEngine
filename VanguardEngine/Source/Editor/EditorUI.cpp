@@ -132,7 +132,7 @@ void EditorUI::DrawDemoWindow()
 	ImGui::ShowDemoWindow(&demoWindowOpen);
 }
 
-void EditorUI::DrawScene(RenderDevice* device, TextureHandle sceneTexture)
+void EditorUI::DrawScene(RenderDevice* device, entt::registry& registry, TextureHandle sceneTexture)
 {
 	const auto& sceneDescription = device->GetResourceManager().Get(sceneTexture).description;
 
@@ -149,6 +149,19 @@ void EditorUI::DrawScene(RenderDevice* device, TextureHandle sceneTexture)
 		const auto heightUV = (1.f - (viewportSize.y / sceneDescription.height)) * 0.5f;
 
 		ImGui::Image(device, sceneTexture, { 1.f, 1.f }, { widthUV, heightUV }, { 1.f + widthUV, 1.f + heightUV });
+
+		// Double clicking the viewport grants control.
+		if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && ImGui::IsItemHovered(ImGuiHoveredFlags_None))
+		{
+			// #TODO: Grant control to only the camera that the viewport is linked to, not every camera-owning entity.
+			registry.view<const CameraComponent>().each([&](auto entity, const auto&)
+			{
+				if (!registry.has<ControlComponent>(entity))
+				{
+					registry.emplace<ControlComponent>(entity);
+				}
+			});
+		}
 	}
 
 	ImGui::End();

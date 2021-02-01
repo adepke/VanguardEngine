@@ -6,5 +6,5 @@
 
 struct CameraSystem
 {
-	static void Update(entt::registry& registry);
+	static void Update(entt::registry& registry, float deltaTime);
 };

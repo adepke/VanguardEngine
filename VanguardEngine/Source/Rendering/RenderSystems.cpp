@@ -13,17 +13,19 @@
 
 #include <DirectXMath.h>
 
-XMMATRIX SpectatorCameraView(TransformComponent& transform, const CameraComponent& camera, float deltaPitch, float deltaYaw,
-	bool moveForward, bool moveBackward, bool moveLeft, bool moveRight, bool moveUp, bool moveDown)
+XMMATRIX SpectatorCameraView(TransformComponent& transform, const CameraComponent& camera, float deltaTime, float deltaPitch, float deltaYaw,
+	bool moveForward, bool moveBackward, bool moveLeft, bool moveRight, bool moveUp, bool moveDown, bool moveSprint)
 {
 	VGScopedCPUStat("Spectator Camera View");
 
-	constexpr auto movementSpeed = 0.5f;  // #TODO: Multiply by delta time.
+	const auto movementSpeed = 250.f * (moveSprint ? 3.f : 1.f) * deltaTime;
 	constexpr auto rotationSpeed = 0.4f;
 
-	// #TODO: Pitch locking.
 	transform.rotation.y += deltaPitch * rotationSpeed * -1.f;
 	transform.rotation.z += deltaYaw * rotationSpeed;
+
+	constexpr auto maxPitch = 89.999999f * 3.14159265359f / 180.f;
+	transform.rotation.y = std::clamp(transform.rotation.y, maxPitch * -1.f, maxPitch);
 
 	const auto rotationMatrix = XMMatrixRotationX(-transform.rotation.x) * XMMatrixRotationY(-transform.rotation.y) * XMMatrixRotationZ(-transform.rotation.z);
 
@@ -37,7 +39,7 @@ XMMATRIX SpectatorCameraView(TransformComponent& transform, const CameraComponen
 
 	auto eyePosition = XMVectorSet(transform.translation.x, transform.translation.y, transform.translation.z, 0.f);
 	eyePosition += forward * forwardMovement * movementSpeed;
-	eyePosition += upward * upMovement * movementSpeed;
+	eyePosition += XMVectorSet(0.f, 0.f, 1.f, 0.f) * upMovement * movementSpeed;  // Upward movement is not relative to the camera rotation.
 	eyePosition += across * leftMovement * movementSpeed;
 
 	XMStoreFloat3(&transform.translation, eyePosition);
@@ -48,7 +50,7 @@ XMMATRIX SpectatorCameraView(TransformComponent& transform, const CameraComponen
 	return XMMatrixLookAtRH(eyePosition, focusPosition, upward);
 }
 
-void CameraSystem::Update(entt::registry& registry)
+void CameraSystem::Update(entt::registry& registry, float deltaTime)
 {
 	VGScopedCPUStat("Camera System");
 
@@ -58,6 +60,7 @@ void CameraSystem::Update(entt::registry& registry)
 	bool moveRight = false;
 	bool moveUp = false;
 	bool moveDown = false;
+	bool moveSprint = false;
 
 	auto& io = ImGui::GetIO();
 	const auto pitchDelta = io.MouseDelta.y * 0.005f;
@@ -70,11 +73,12 @@ void CameraSystem::Update(entt::registry& registry)
 	if (io.KeysDown[0x44]) moveRight = true;  // D
 	if (io.KeysDown[VK_SPACE]) moveUp = true;  // Spacebar
 	if (io.KeysDown[VK_CONTROL]) moveDown = true;  // Ctrl
+	if (io.KeysDown[VK_SHIFT]) moveSprint = true;  // Shift
 	
 	// Iterate all camera entities that have control.
 	registry.view<TransformComponent, const CameraComponent, const ControlComponent>().each([&](auto entity, auto& transform, const auto& camera)
 	{
-		auto viewMatrix = SpectatorCameraView(transform, camera, pitchDelta, yawDelta, moveForward, moveBackward, moveLeft, moveRight, moveUp, moveDown);
+		auto viewMatrix = SpectatorCameraView(transform, camera, deltaTime, pitchDelta, yawDelta, moveForward, moveBackward, moveLeft, moveRight, moveUp, moveDown, moveSprint);
 
 		const auto aspectRatio = static_cast<float>(Renderer::Get().device->renderWidth) / static_cast<float>(Renderer::Get().device->renderHeight);
 		const auto projectionMatrix = XMMatrixPerspectiveFovRH(camera.fieldOfView / 2.f, aspectRatio, camera.farPlane, camera.nearPlane);  // Inverse Z.

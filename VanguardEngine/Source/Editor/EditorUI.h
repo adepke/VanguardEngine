@@ -34,7 +34,7 @@ private:
 public:
 	void DrawLayout();
 	void DrawDemoWindow();
-	void DrawScene(RenderDevice* device, TextureHandle sceneTexture);
+	void DrawScene(RenderDevice* device, entt::registry& registry, TextureHandle sceneTexture);
 	void DrawEntityHierarchy(entt::registry& registry);
 	void DrawEntityPropertyViewer(entt::registry& registry);
 	void DrawPerformanceMetrics(float frameTimeMs);

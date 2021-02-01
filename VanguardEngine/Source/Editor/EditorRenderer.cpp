@@ -9,7 +9,7 @@ namespace EditorRenderer
 	{
 		EditorUI::Get().DrawLayout();
 		EditorUI::Get().DrawDemoWindow();
-		EditorUI::Get().DrawScene(device, sceneTexture);
+		EditorUI::Get().DrawScene(device, registry, sceneTexture);
 		EditorUI::Get().DrawEntityHierarchy(registry);
 		EditorUI::Get().DrawEntityPropertyViewer(registry);
 		EditorUI::Get().DrawPerformanceMetrics(frameTimeMs);
