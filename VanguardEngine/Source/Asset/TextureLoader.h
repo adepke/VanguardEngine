@@ -11,5 +11,5 @@ class RenderDevice;
 
 namespace AssetLoader
 {
-	TextureHandle LoadTexture(RenderDevice& device, std::filesystem::path path);
+	TextureHandle LoadTexture(RenderDevice& device, std::filesystem::path path, bool sRGB);
 }

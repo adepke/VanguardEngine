@@ -111,7 +111,7 @@ void UserInterfaceManager::CreateFontTexture()
 		.width = (uint32_t)width,
 		.height = (uint32_t)height,
 		.depth = 1,
-		.format = DXGI_FORMAT_R8G8B8A8_UNORM
+		.format = DXGI_FORMAT_R8G8B8A8_UNORM  // Fonts can be either linear or sRGB, full white maps to the same value in each color space. Use linear here to avoid unnecessary hardware conversion.
 	};
 
 	const auto fontHandle = device->GetResourceManager().Create(fontDesc, VGText("ImGui font texture"));

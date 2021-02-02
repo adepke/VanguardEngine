@@ -114,7 +114,7 @@ namespace AssetLoader
 				description.accessFlags = AccessFlag::CPUWrite;
 				description.width = albedoTexture.width;
 				description.height = albedoTexture.height;
-				description.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+				description.format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;  // Albedo and emissive textures are sRGB.
 
 				// #TODO: Derive name from asset name + texture type.
 				auto textureResource = device.GetResourceManager().Create(description, VGText("Asset texture"));

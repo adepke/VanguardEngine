@@ -1,6 +1,7 @@
 // Copyright (c) 2019-2021 Andrew Depke
 
 #include "UserInterface_RS.hlsli"
+#include "Color.hlsli"
 
 struct Projections
 {
@@ -42,6 +43,10 @@ Output main(Input input)
 	output.color.b = float((vertex.color >> 16) & 0xFF) / 255.f;
 	output.color.a = float((vertex.color >> 24) & 0xFF) / 255.f;
 	output.uv = vertex.uv;
+
+	// Convert the vertex color to linear space, this will be converted back to sRGB during presentation.
+	// See https://github.com/ocornut/imgui/issues/578 and https://github.com/ocornut/imgui/issues/578#issuecomment-379467586 for details.
+	output.color.xyz = SRGBToLinear(output.color.xyz);
 	
 	return output;
 }

@@ -9,7 +9,7 @@
 
 namespace AssetLoader
 {
-	TextureHandle LoadTexture(RenderDevice& device, std::filesystem::path path)
+	TextureHandle LoadTexture(RenderDevice& device, std::filesystem::path path, bool sRGB)
 	{
 		VGScopedCPUStat("Load Texture");
 
@@ -48,7 +48,7 @@ namespace AssetLoader
 		description.accessFlags = AccessFlag::CPUWrite;
 		description.width = pixelsX;
 		description.height = pixelsY;
-		description.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+		description.format = sRGB ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R8G8B8A8_UNORM;
 
 		// #TODO: Derive name from asset name + texture type.
 		auto textureResource = device.GetResourceManager().Create(description, VGText("Asset texture"));

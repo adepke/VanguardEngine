@@ -3,6 +3,7 @@
 #include "UserInterface_RS.hlsli"
 #include "Base.hlsli"
 #include "Camera.hlsli"
+#include "Color.hlsli"
 
 SamplerState defaultSampler : register(s0);
 
@@ -38,6 +39,9 @@ float4 main(Input input) : SV_Target
 	{
 		output.xyz = 1.f - LinearizeDepth(output.x);
 		output.w = 1.f;
+
+		// Counteract the gamma correction on depth textures during presentation.
+		output.xyz = SRGBToLinear(output.xyz);
 	}
 
 	return output;
