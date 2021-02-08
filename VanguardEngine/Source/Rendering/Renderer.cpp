@@ -135,6 +135,31 @@ void Renderer::CreatePipelines()
 	forwardStateDesc.topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 
 	pipelines.AddGraphicsState(device.get(), "ForwardOpaque", forwardStateDesc);
+
+	forwardStateDesc.shaderPath = Config::shadersPath / "Default";
+
+	// Disable back face culling.
+	forwardStateDesc.rasterizerDescription.CullMode = D3D12_CULL_MODE_NONE;
+
+	// Transparency blending.
+	forwardStateDesc.blendDescription.AlphaToCoverageEnable = false;  // Not using MSAA.
+	forwardStateDesc.blendDescription.IndependentBlendEnable = false;  // Only rendering to a single render target, discard others.
+	forwardStateDesc.blendDescription.RenderTarget[0].BlendEnable = true;
+	forwardStateDesc.blendDescription.RenderTarget[0].LogicOpEnable = false;  // No special blend logic.
+	forwardStateDesc.blendDescription.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
+	forwardStateDesc.blendDescription.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
+	forwardStateDesc.blendDescription.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+	forwardStateDesc.blendDescription.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_SRC_ALPHA;
+	forwardStateDesc.blendDescription.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
+	forwardStateDesc.blendDescription.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	forwardStateDesc.blendDescription.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;
+	forwardStateDesc.blendDescription.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
+	// Test against the prepass depth, but don't use EQUAL operation since we're not writing transparent object data
+	// into the buffer, so it would result in transparent pixels only being drawn when overlapping with an opaque pixel.
+	forwardStateDesc.depthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_GREATER;
+
+	pipelines.AddGraphicsState(device.get(), "ForwardTransparent", forwardStateDesc);
 }
 
 std::pair<BufferHandle, size_t> Renderer::CreateInstanceBuffer(const entt::registry& registry)
@@ -260,6 +285,10 @@ void Renderer::Render(entt::registry& registry)
 
 			for (const auto& subset : mesh.subsets)
 			{
+				// Early out if we're a transparent material. We don't want transparent meshes in our depth buffer.
+				if (subset.material.transparent)
+					continue;
+
 				// #TODO: Only bind once per mesh, and pass subset.vertexOffset into the draw call. This isn't yet supported with DXC, see: https://github.com/microsoft/DirectXShaderCompiler/issues/2907
 
 				// Set the vertex buffer.
@@ -284,6 +313,8 @@ void Renderer::Render(entt::registry& registry)
 	{
 		auto cameraBuffer = resources.GetBuffer(cameraBufferTag);
 		auto& cameraBufferComponent = device->GetResourceManager().Get(cameraBuffer);
+
+		// Opaque
 
 		list.BindPipelineState(pipelines["ForwardOpaque"]);
 
@@ -313,6 +344,61 @@ void Renderer::Render(entt::registry& registry)
 
 			for (const auto& subset : mesh.subsets)
 			{
+				// Early out if we're a transparent material. We cannot be drawn in this initial pass.
+				if (subset.material.transparent)
+					continue;
+
+				// #TODO: Only bind once per mesh, and pass subset.vertexOffset into the draw call. This isn't yet supported with DXC, see: https://github.com/microsoft/DirectXShaderCompiler/issues/2907
+
+				// Set the vertex buffer.
+				auto& vertexBuffer = device->GetResourceManager().Get(mesh.vertexBuffer);
+				list.Native()->SetGraphicsRootShaderResourceView(1, vertexBuffer.Native()->GetGPUVirtualAddress() + (subset.vertexOffset * sizeof(Vertex)));
+
+				// Set the material data.
+				if (device->GetResourceManager().Valid(subset.material.materialBuffer))
+				{
+					auto& materialBuffer = device->GetResourceManager().Get(subset.material.materialBuffer);
+					list.Native()->SetGraphicsRootConstantBufferView(3, materialBuffer.Native()->GetGPUVirtualAddress());
+				}
+
+				list.Native()->DrawIndexedInstanced(static_cast<uint32_t>(subset.indices), 1, static_cast<uint32_t>(subset.indexOffset), 0, 0);
+			}
+
+			++entityIndex;
+		});
+
+		// Transparent
+
+		list.BindPipelineState(pipelines["ForwardTransparent"]);
+		list.Native()->SetGraphicsRootDescriptorTable(4, device->GetDescriptorAllocator().GetBindlessHeap());
+		list.Native()->SetGraphicsRootConstantBufferView(2, cameraBufferComponent.Native()->GetGPUVirtualAddress());
+
+		// #TODO: Sort transparent mesh components by distance.
+
+		entityIndex = 0;
+		registry.view<const TransformComponent, const MeshComponent>().each([&](auto entity, const auto&, const auto& mesh)
+		{
+			// Set the per object buffer.
+			auto& instanceBufferComponent = device->GetResourceManager().Get(instanceBuffer);
+			const auto finalInstanceBufferOffset = instanceOffset + (entityIndex * sizeof(EntityInstance));
+			list.Native()->SetGraphicsRootConstantBufferView(0, instanceBufferComponent.Native()->GetGPUVirtualAddress() + finalInstanceBufferOffset);
+
+			// Set the index buffer.
+			auto& indexBuffer = device->GetResourceManager().Get(mesh.indexBuffer);
+
+			D3D12_INDEX_BUFFER_VIEW indexView{};
+			indexView.BufferLocation = indexBuffer.Native()->GetGPUVirtualAddress();
+			indexView.SizeInBytes = static_cast<UINT>(indexBuffer.description.size * indexBuffer.description.stride);
+			indexView.Format = DXGI_FORMAT_R32_UINT;
+
+			list.Native()->IASetIndexBuffer(&indexView);
+
+			for (const auto& subset : mesh.subsets)
+			{
+				// Early out if we're an opaque material.
+				if (!subset.material.transparent)
+					continue;
+
 				// #TODO: Only bind once per mesh, and pass subset.vertexOffset into the draw call. This isn't yet supported with DXC, see: https://github.com/microsoft/DirectXShaderCompiler/issues/2907
 
 				// Set the vertex buffer.

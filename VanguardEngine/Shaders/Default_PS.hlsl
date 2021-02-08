@@ -8,6 +8,7 @@ SamplerState defaultSampler : register(s0);
 struct Material
 {
 	uint albedo;
+	uint emissive;
 };
 
 ConstantBuffer<Material> material : register(b0);

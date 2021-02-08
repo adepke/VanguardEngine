@@ -106,20 +106,7 @@ namespace AssetLoader
 				const auto& material = model.materials[i];
 				materials.emplace_back();
 
-				const auto& albedoTextureMeta = material.pbrMetallicRoughness.baseColorTexture;
-				const auto& albedoTexture = model.images[model.textures[albedoTextureMeta.index].source];
-
-				TextureDescription description{};
-				description.bindFlags = BindFlag::ShaderResource;
-				description.accessFlags = AccessFlag::CPUWrite;
-				description.width = albedoTexture.width;
-				description.height = albedoTexture.height;
-				description.format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;  // Albedo and emissive textures are sRGB.
-
-				// #TODO: Derive name from asset name + texture type.
-				auto textureResource = device.GetResourceManager().Create(description, VGText("Asset texture"));
-				device.GetResourceManager().Write(textureResource, albedoTexture.image);
-				device.GetDirectList().TransitionBarrier(textureResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+				materials[i].transparent = material.alphaMode != "OPAQUE";
 
 				// Create the material table.
 				BufferDescription matTableDesc{
@@ -127,15 +114,70 @@ namespace AssetLoader
 					.bindFlags = BindFlag::ConstantBuffer,
 					.accessFlags = AccessFlag::CPUWrite,
 					.size = 1,
-					.stride = sizeof(uint32_t)
+					.stride = 2 * sizeof(uint32_t)
 				};
 
 				materials[i].materialBuffer = device.GetResourceManager().Create(matTableDesc, VGText("Material table"));
-				const auto& textureComponent = device.GetResourceManager().Get(textureResource);
-				const auto bindlessIndex = textureComponent.SRV->bindlessIndex;
+
+				TextureDescription sRGBTexture{};
+				sRGBTexture.bindFlags = BindFlag::ShaderResource;
+				sRGBTexture.accessFlags = AccessFlag::CPUWrite;
+				sRGBTexture.format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;  // Albedo and emissive textures are sRGB.
+
+				TextureDescription linearTexture{};
+				linearTexture.bindFlags = BindFlag::ShaderResource;
+				linearTexture.accessFlags = AccessFlag::CPUWrite;
+				linearTexture.format = DXGI_FORMAT_R8G8B8A8_UNORM;
 
 				std::vector<uint32_t> materialTable{};
-				materialTable.emplace_back(bindlessIndex);
+
+				const auto& albedoTextureMeta = material.pbrMetallicRoughness.baseColorTexture;
+				if (albedoTextureMeta.index > 0)
+				{
+					const auto& albedoTexture = model.images[model.textures[albedoTextureMeta.index].source];
+
+					sRGBTexture.width = albedoTexture.width;
+					sRGBTexture.height = albedoTexture.height;
+
+					// #TODO: Derive name from asset name + texture type.
+					auto textureResource = device.GetResourceManager().Create(sRGBTexture, VGText("Albedo asset texture"));
+					device.GetResourceManager().Write(textureResource, albedoTexture.image);
+					device.GetDirectList().TransitionBarrier(textureResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+					const auto& textureComponent = device.GetResourceManager().Get(textureResource);
+					const auto bindlessIndex = textureComponent.SRV->bindlessIndex;
+
+					materialTable.emplace_back(bindlessIndex);
+				}
+
+				else
+				{
+					materialTable.emplace_back(0);
+				}
+
+				const auto& emissiveTextureMeta = material.emissiveTexture;
+				if (emissiveTextureMeta.index > 0)
+				{
+					const auto& emissiveTexture = model.images[model.textures[emissiveTextureMeta.index].source];
+
+					sRGBTexture.width = emissiveTexture.width;
+					sRGBTexture.height = emissiveTexture.height;
+
+					// #TODO: Derive name from asset name + texture type.
+					auto textureResource = device.GetResourceManager().Create(sRGBTexture, VGText("Emissive asset texture"));
+					device.GetResourceManager().Write(textureResource, emissiveTexture.image);
+					device.GetDirectList().TransitionBarrier(textureResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+					const auto& textureComponent = device.GetResourceManager().Get(textureResource);
+					const auto bindlessIndex = textureComponent.SRV->bindlessIndex;
+
+					materialTable.emplace_back(bindlessIndex);
+				}
+
+				else
+				{
+					materialTable.emplace_back(0);
+				}
 
 				std::vector<uint8_t> materialTableBytes{};
 				materialTableBytes.resize(materialTable.size() * sizeof(uint32_t));

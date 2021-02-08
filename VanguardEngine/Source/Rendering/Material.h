@@ -7,4 +7,5 @@
 struct Material
 {
 	BufferHandle materialBuffer;
+	bool transparent = false;
 };
