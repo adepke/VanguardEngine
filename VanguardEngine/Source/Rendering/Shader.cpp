@@ -138,6 +138,8 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderT
 	const auto stableShaderName = path.filename().generic_wstring();
 	const auto stableShaderIncludePath = includeSearchDirectory.generic_wstring();
 
+	// See https://github.com/microsoft/DirectXShaderCompiler/blob/master/include/dxc/Support/HLSLOptions.td for compiler arguments.
+
 	std::vector<const wchar_t*> compileArguments;
 	compileArguments.emplace_back(stableShaderName.data());
 	compileArguments.emplace_back(VGText("-E"));
@@ -149,6 +151,7 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderT
 	//compileArguments.emplace_back(DXC_ARG_PACK_MATRIX_ROW_MAJOR);  // Row major matrices. #TODO: Use uniform packing, ImGui uses column major currently.
 #if BUILD_DEBUG || BUILD_DEVELOPMENT
 	compileArguments.emplace_back(DXC_ARG_DEBUG);  // Enable debug information.
+	compileArguments.emplace_back(VGText("-Qembed_debug"));  // Embed the PDB.
 #endif
 #if BUILD_DEBUG
 	compileArguments.emplace_back(DXC_ARG_SKIP_OPTIMIZATIONS);  // Disable optimization.
