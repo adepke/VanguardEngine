@@ -119,7 +119,7 @@ public:
 VGWarningPush
 VGWarningDisable(4100, unused-parameter)
 	// Can't use a stream operator here, causes precedence issues.
-	void operator+=(const Detail::LogRecord& record)
+	VGForceInline void operator+=(const Detail::LogRecord& record)
 VGWarningPop
 	{
 #if ENABLE_LOGGING

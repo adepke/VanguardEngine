@@ -155,6 +155,10 @@ project "Engine"
 		omitframepointer "On"
 		exceptionhandling "Off"
 		
+	filter { "configurations:not Release" }
+		buildoptions "/Ob1"  -- Inline VGForceInline's, this is necessary to prevent the logger from breaking on the wrong line. Use default expansion in release builds.
+		buildoptions "/Zi"  -- Disable symbols for edit and continue, since Tracy needs __LINE__ to be a constant.
+		
 	-- General Files
 		
 	filter {}
@@ -194,11 +198,6 @@ project "Engine"
 	-- Third Party Files
 	
 	IncludeThirdParty()
-	
-	filter { "configurations:not Release" }
-		buildoptions "/Zi"  -- Disable symbols for edit and continue, since Tracy needs __LINE__ to be a constant.
-		
-	filter {}
 	
 	-- General Links
 	

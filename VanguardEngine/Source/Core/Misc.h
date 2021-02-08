@@ -25,3 +25,9 @@
 #else
 #define VGBreak() raise(SIGTRAP)
 #endif
+
+#ifdef _MSC_VER
+#define VGForceInline __forceinline
+#else
+#define VGForceInline __attribute__((always_inline))
+#endif
