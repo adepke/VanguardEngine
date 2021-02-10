@@ -4,6 +4,7 @@
 #include <Rendering/ResourceManager.h>
 #include <Rendering/Material.h>
 #include <Core/Config.h>
+#include <Utility/AlignedSize.h>
 
 #include <algorithm>
 
@@ -423,6 +424,8 @@ std::pair<BufferHandle, size_t> RenderDevice::FrameAllocate(size_t size)
 {
 	const auto frameIndex = frame % frameCount;
 
+	// Constant buffers require 256 byte alignment.
+	size = AlignedSize(size, 256);
 	frameBufferOffsets[frameIndex] += size;
 
 	return { frameBuffers[frameIndex], frameBufferOffsets[frameIndex] - size };
