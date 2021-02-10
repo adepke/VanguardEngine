@@ -526,9 +526,10 @@ void ResourceManager::Write(BufferHandle target, const std::vector<uint8_t>& sou
 
 		void* mappedPtr = nullptr;
 
-		D3D12_RANGE mapRange{ targetOffset, targetOffset + source.size() };
+		D3D12_RANGE readRange{ 0, 0 };  // We don't want to read any data here, so set the end range equal to the begin range.
+		D3D12_RANGE writeRange{ targetOffset, targetOffset + source.size() };
 
-		auto result = component.Native()->Map(0, &mapRange, &mappedPtr);
+		auto result = component.Native()->Map(0, &readRange, &mappedPtr);
 		if (FAILED(result))
 		{
 			VGLogError(Rendering) << "Failed to map buffer resource during resource write: " << result;
@@ -536,9 +537,10 @@ void ResourceManager::Write(BufferHandle target, const std::vector<uint8_t>& sou
 			return;
 		}
 
-		std::memcpy(mappedPtr, source.data(), source.size());
+		auto* offsetMappedPtr = static_cast<uint8_t*>(mappedPtr) + targetOffset;
+		std::memcpy(offsetMappedPtr, source.data(), source.size());
 
-		component.Native()->Unmap(0, nullptr);
+		component.Native()->Unmap(0, &writeRange);
 	}
 }
 
