@@ -32,15 +32,25 @@ struct CameraBuffer
 {
 	XMMATRIX viewMatrix;
 	XMMATRIX projectionMatrix;
+	XMFLOAT3 position;
+	uint32_t padding;
 };
 
-void Renderer::UpdateCameraBuffer()
+void Renderer::UpdateCameraBuffer(const entt::registry& registry)
 {
 	VGScopedCPUStat("Update Camera Buffer");
+
+	XMFLOAT3 translation;
+	registry.view<const TransformComponent, const CameraComponent>().each([&](auto entity, const auto& transform, const auto&)
+	{
+		// #TODO: Support more than one camera.
+		translation = transform.translation;
+	});
 
 	CameraBuffer bufferData;
 	bufferData.viewMatrix = globalViewMatrix;
 	bufferData.projectionMatrix = globalProjectionMatrix;
+	bufferData.position = translation;
 
 	std::vector<uint8_t> byteData;
 	byteData.resize(sizeof(CameraBuffer));
@@ -167,7 +177,8 @@ std::pair<BufferHandle, size_t> Renderer::CreateInstanceBuffer(const entt::regis
 	VGScopedCPUStat("Create Instance Buffer");
 
 	const auto instanceView = registry.view<const TransformComponent, const MeshComponent>();
-	const auto [bufferHandle, bufferOffset] = device->FrameAllocate(sizeof(EntityInstance) * instanceView.size());
+	const auto viewSize = instanceView.size();
+	const auto [bufferHandle, bufferOffset] = device->FrameAllocate(sizeof(EntityInstance) * viewSize);
 
 	size_t index = 0;
 	instanceView.each([&](auto entity, const auto& transform, const auto&)
@@ -191,6 +202,46 @@ std::pair<BufferHandle, size_t> Renderer::CreateInstanceBuffer(const entt::regis
 
 		++index;
 	});
+
+	VGAssert(viewSize == index, "Mismatched entity count during buffer creation.");
+
+	return std::make_pair(bufferHandle, bufferOffset);
+}
+
+std::pair<BufferHandle, size_t> Renderer::CreateLightBuffer(const entt::registry& registry)
+{
+	VGScopedCPUStat("Create Light Buffer");
+
+	struct PointLightInstance
+	{
+		XMFLOAT3 color;
+		uint32_t padding0;
+		XMFLOAT3 position;
+		uint32_t padding1;
+	};
+
+	const auto lightView = registry.view<const TransformComponent, const PointLightComponent>();
+	const auto viewSize = lightView.size();
+	const auto [bufferHandle, bufferOffset] = device->FrameAllocate(sizeof(PointLightInstance) * viewSize);
+
+	size_t index = 0;
+	lightView.each([&](auto entity, const auto& transform, const auto& pointLight)
+	{
+		PointLightInstance instance{
+			.color = pointLight.color,
+			.position = transform.translation
+		};
+
+		std::vector<uint8_t> instanceData{};
+		instanceData.resize(sizeof(PointLightInstance));
+		std::memcpy(instanceData.data(), &instance, instanceData.size());
+
+		device->GetResourceManager().Write(bufferHandle, instanceData, bufferOffset + (index * sizeof(PointLightInstance)));
+
+		++index;
+	});
+
+	VGAssert(viewSize == index, "Mismatched entity count during buffer creation.");
 
 	return std::make_pair(bufferHandle, bufferOffset);
 }
@@ -238,11 +289,12 @@ void Renderer::Render(entt::registry& registry)
 	VGScopedCPUStat("Render");
 
 	// Update the camera buffer immediately.
-	UpdateCameraBuffer();
+	UpdateCameraBuffer(registry);
 
 	RenderGraph graph{};
 	
 	const auto [instanceBuffer, instanceOffset] = CreateInstanceBuffer(registry);
+	const auto [lightBuffer, lightOffset] = CreateLightBuffer(registry);
 
 	auto backBufferTag = graph.Import(device->GetBackBuffer());
 	auto cameraBufferTag = graph.Import(cameraBuffer);
@@ -319,10 +371,14 @@ void Renderer::Render(entt::registry& registry)
 		list.BindPipelineState(pipelines["ForwardOpaque"]);
 
 		// Set the bindless textures.
-		list.Native()->SetGraphicsRootDescriptorTable(4, device->GetDescriptorAllocator().GetBindlessHeap());
+		list.Native()->SetGraphicsRootDescriptorTable(5, device->GetDescriptorAllocator().GetBindlessHeap());
 
 		// Bind the camera data.
 		list.Native()->SetGraphicsRootConstantBufferView(2, cameraBufferComponent.Native()->GetGPUVirtualAddress());
+
+		// Bind the light data.
+		auto& lightBufferComponent = device->GetResourceManager().Get(lightBuffer);
+		list.Native()->SetGraphicsRootConstantBufferView(4, lightBufferComponent.Native()->GetGPUVirtualAddress() + lightOffset);
 
 		size_t entityIndex = 0;
 		registry.view<const TransformComponent, const MeshComponent>().each([&](auto entity, const auto&, const auto& mesh)
@@ -334,7 +390,6 @@ void Renderer::Render(entt::registry& registry)
 
 			// Set the index buffer.
 			auto& indexBuffer = device->GetResourceManager().Get(mesh.indexBuffer);
-
 			D3D12_INDEX_BUFFER_VIEW indexView{};
 			indexView.BufferLocation = indexBuffer.Native()->GetGPUVirtualAddress();
 			indexView.SizeInBytes = static_cast<UINT>(indexBuffer.description.size * indexBuffer.description.stride);
@@ -370,11 +425,11 @@ void Renderer::Render(entt::registry& registry)
 		// Transparent
 
 		list.BindPipelineState(pipelines["ForwardTransparent"]);
-		list.Native()->SetGraphicsRootDescriptorTable(4, device->GetDescriptorAllocator().GetBindlessHeap());
+		list.Native()->SetGraphicsRootDescriptorTable(5, device->GetDescriptorAllocator().GetBindlessHeap());
 		list.Native()->SetGraphicsRootConstantBufferView(2, cameraBufferComponent.Native()->GetGPUVirtualAddress());
+		list.Native()->SetGraphicsRootConstantBufferView(4, lightBufferComponent.Native()->GetGPUVirtualAddress() + lightOffset);
 
 		// #TODO: Sort transparent mesh components by distance.
-
 		entityIndex = 0;
 		registry.view<const TransformComponent, const MeshComponent>().each([&](auto entity, const auto&, const auto& mesh)
 		{

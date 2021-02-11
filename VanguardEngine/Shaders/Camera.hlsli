@@ -5,7 +5,11 @@
 struct CameraBuffer
 {
 	matrix viewMatrix;
+	// Boundary
 	matrix projectionMatrix;
+	// Boundary
+	float3 position;
+	float padding;
 };
 
 float LinearizeDepth(float hyperbolicDepth)

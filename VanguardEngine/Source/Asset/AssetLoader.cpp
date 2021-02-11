@@ -101,12 +101,20 @@ namespace AssetLoader
 
 			for (int i = 0; i < model.materials.size(); ++i)
 			{
-				// #TODO: Implement full PBR textures and other material features.				
+				// #TODO: Conform to PBR specification, including terms such as emissive factor.			
 
 				const auto& material = model.materials[i];
 				materials.emplace_back();
 
 				materials[i].transparent = material.alphaMode != "OPAQUE";
+
+				// Table layout:
+				// Base color texture
+				// Metallic roughness texture
+				// Normal texture
+				// Occlusion texture
+				// Emissive texture
+				// Padding[3]
 
 				// Create the material table.
 				BufferDescription matTableDesc{
@@ -114,34 +122,106 @@ namespace AssetLoader
 					.bindFlags = BindFlag::ConstantBuffer,
 					.accessFlags = AccessFlag::CPUWrite,
 					.size = 1,
-					.stride = 2 * sizeof(uint32_t)
+					.stride = 8 * sizeof(uint32_t)
 				};
 
 				materials[i].materialBuffer = device.GetResourceManager().Create(matTableDesc, VGText("Material table"));
 
-				TextureDescription sRGBTexture{};
-				sRGBTexture.bindFlags = BindFlag::ShaderResource;
-				sRGBTexture.accessFlags = AccessFlag::CPUWrite;
-				sRGBTexture.format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;  // Albedo and emissive textures are sRGB.
-
-				TextureDescription linearTexture{};
-				linearTexture.bindFlags = BindFlag::ShaderResource;
-				linearTexture.accessFlags = AccessFlag::CPUWrite;
-				linearTexture.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+				TextureDescription textureDescription{};
+				textureDescription.bindFlags = BindFlag::ShaderResource;
+				textureDescription.accessFlags = AccessFlag::CPUWrite;
 
 				std::vector<uint32_t> materialTable{};
 
-				const auto& albedoTextureMeta = material.pbrMetallicRoughness.baseColorTexture;
-				if (albedoTextureMeta.index > 0)
-				{
-					const auto& albedoTexture = model.images[model.textures[albedoTextureMeta.index].source];
+				// #TODO: Reduce code duplication.
 
-					sRGBTexture.width = albedoTexture.width;
-					sRGBTexture.height = albedoTexture.height;
+				const auto& baseColorTextureMeta = material.pbrMetallicRoughness.baseColorTexture;
+				if (baseColorTextureMeta.index > 0)
+				{
+					const auto& baseColorTexture = model.images[model.textures[baseColorTextureMeta.index].source];
+
+					textureDescription.width = baseColorTexture.width;
+					textureDescription.height = baseColorTexture.height;
+					textureDescription.format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
 
 					// #TODO: Derive name from asset name + texture type.
-					auto textureResource = device.GetResourceManager().Create(sRGBTexture, VGText("Albedo asset texture"));
-					device.GetResourceManager().Write(textureResource, albedoTexture.image);
+					auto textureResource = device.GetResourceManager().Create(textureDescription, VGText("Base color asset texture"));
+					device.GetResourceManager().Write(textureResource, baseColorTexture.image);
+					device.GetDirectList().TransitionBarrier(textureResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+					const auto& textureComponent = device.GetResourceManager().Get(textureResource);
+					const auto bindlessIndex = textureComponent.SRV->bindlessIndex;
+
+					materialTable.emplace_back(bindlessIndex);
+				}
+
+				else
+				{
+					materialTable.emplace_back(0);
+				}
+
+				const auto& metallicRoughnessTextureMeta = material.pbrMetallicRoughness.metallicRoughnessTexture;
+				if (metallicRoughnessTextureMeta.index > 0)
+				{
+					const auto& metallicRoughnessTexture = model.images[model.textures[metallicRoughnessTextureMeta.index].source];
+
+					textureDescription.width = metallicRoughnessTexture.width;
+					textureDescription.height = metallicRoughnessTexture.height;
+					textureDescription.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+					// #TODO: Derive name from asset name + texture type.
+					auto textureResource = device.GetResourceManager().Create(textureDescription, VGText("Metallic roughness asset texture"));
+					device.GetResourceManager().Write(textureResource, metallicRoughnessTexture.image);
+					device.GetDirectList().TransitionBarrier(textureResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+					const auto& textureComponent = device.GetResourceManager().Get(textureResource);
+					const auto bindlessIndex = textureComponent.SRV->bindlessIndex;
+
+					materialTable.emplace_back(bindlessIndex);
+				}
+
+				else
+				{
+					materialTable.emplace_back(0);
+				}
+
+				const auto& normalTextureMeta = material.normalTexture;
+				if (normalTextureMeta.index > 0)
+				{
+					const auto& normalTexture = model.images[model.textures[normalTextureMeta.index].source];
+
+					textureDescription.width = normalTexture.width;
+					textureDescription.height = normalTexture.height;
+					textureDescription.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+
+					// #TODO: Derive name from asset name + texture type.
+					auto textureResource = device.GetResourceManager().Create(textureDescription, VGText("Normal asset texture"));
+					device.GetResourceManager().Write(textureResource, normalTexture.image);
+					device.GetDirectList().TransitionBarrier(textureResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+					const auto& textureComponent = device.GetResourceManager().Get(textureResource);
+					const auto bindlessIndex = textureComponent.SRV->bindlessIndex;
+
+					materialTable.emplace_back(bindlessIndex);
+				}
+
+				else
+				{
+					materialTable.emplace_back(0);
+				}
+
+				const auto& occlusionTextureMeta = material.occlusionTexture;
+				if (occlusionTextureMeta.index > 0)
+				{
+					const auto& occlusionTexture = model.images[model.textures[occlusionTextureMeta.index].source];
+
+					textureDescription.width = occlusionTexture.width;
+					textureDescription.height = occlusionTexture.height;
+					textureDescription.format = DXGI_FORMAT_R8_UNORM;
+
+					// #TODO: Derive name from asset name + texture type.
+					auto textureResource = device.GetResourceManager().Create(textureDescription, VGText("Occlusion asset texture"));
+					device.GetResourceManager().Write(textureResource, occlusionTexture.image);
 					device.GetDirectList().TransitionBarrier(textureResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 					const auto& textureComponent = device.GetResourceManager().Get(textureResource);
@@ -160,11 +240,12 @@ namespace AssetLoader
 				{
 					const auto& emissiveTexture = model.images[model.textures[emissiveTextureMeta.index].source];
 
-					sRGBTexture.width = emissiveTexture.width;
-					sRGBTexture.height = emissiveTexture.height;
+					textureDescription.width = emissiveTexture.width;
+					textureDescription.height = emissiveTexture.height;
+					textureDescription.format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;  // #TODO: Is this the correct format?
 
 					// #TODO: Derive name from asset name + texture type.
-					auto textureResource = device.GetResourceManager().Create(sRGBTexture, VGText("Emissive asset texture"));
+					auto textureResource = device.GetResourceManager().Create(textureDescription, VGText("Emissive asset texture"));
 					device.GetResourceManager().Write(textureResource, emissiveTexture.image);
 					device.GetDirectList().TransitionBarrier(textureResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
@@ -178,6 +259,13 @@ namespace AssetLoader
 				{
 					materialTable.emplace_back(0);
 				}
+
+				// Padding.
+				materialTable.emplace_back(0);
+				materialTable.emplace_back(0);
+				materialTable.emplace_back(0);
+				
+				VGAssert(materialTable.size() == 8, "");
 
 				std::vector<uint8_t> materialTableBytes{};
 				materialTableBytes.resize(materialTable.size() * sizeof(uint32_t));

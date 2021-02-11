@@ -97,6 +97,16 @@ void EngineLoop()
 	tempReg.emplace<TransformComponent>(sponza, std::move(sponzaTransform));
 	tempReg.emplace<MeshComponent>(sponza, AssetLoader::LoadMesh(*Renderer::Get().device, Config::shadersPath / "../Assets/Models/Sponza/glTF/Sponza.gltf"));
 
+	PointLightComponent pointLight{};
+	pointLight.color = { 1.f, 0.8f, 0.8f };
+	TransformComponent lightTransform{};
+	lightTransform.translation = { 1200.f, 0.f, 6.f };;
+
+	const auto light = tempReg.create();
+	tempReg.emplace<NameComponent>(light, "Point light");
+	tempReg.emplace<TransformComponent>(light, std::move(lightTransform));
+	tempReg.emplace<PointLightComponent>(light, std::move(pointLight));
+
 	auto frameBegin = std::chrono::high_resolution_clock::now();
 	float lastDeltaTime = 0.f;
 

@@ -37,6 +37,11 @@ struct CameraComponent
 	float fieldOfView = 1.57079633f;  // 90 Degrees.
 };
 
+struct PointLightComponent
+{
+	XMFLOAT3 color;
+};
+
 inline MeshComponent CreateMeshComponent(RenderDevice& device, const std::vector<Vertex>& vertices, const std::vector<uint32_t>& indices)
 {
 	VGScopedCPUStat("Create Mesh Component");
