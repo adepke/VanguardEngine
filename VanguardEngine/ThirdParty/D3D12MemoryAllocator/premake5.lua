@@ -9,4 +9,4 @@ project "D3D12MemoryAllocator"
 	
 	targetname "D3D12MemoryAllocator"
 	
-	files "src/D3D12MemAlloc.cpp"
+	files { "src/*.h", "src/*.cpp" }
