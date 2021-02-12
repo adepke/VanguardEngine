@@ -74,8 +74,13 @@ Output main(Input input)
 
 	if (material.normal > 0)
 	{
+		// Construct the TBN matrix.
+		float3x3 TBN = float3x3(input.tangent, input.bitangent, input.normal);
+
 		Texture2D normalMap = textures[material.normal];
 		normal = normalMap.Sample(defaultSampler, input.uv).rgb;
+		normal = normal * 2.0 - 1.0;  // Remap from [0, 1] to [-1, 1].
+		normal = normalize(mul(normal, TBN));  // Convert the normal vector from tangent space to world space.
 	}
 
 	if (material.occlusion > 0)
@@ -95,7 +100,7 @@ Output main(Input input)
 	output.color.a = baseColor.a;
 
 	float3 viewDirection = normalize(cameraBuffer.position - input.position);
-	float3 normalDirection = normalize(input.normal);
+	float3 normalDirection = normal;
 
 	// For each light...
 

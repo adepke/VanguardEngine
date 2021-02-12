@@ -313,6 +313,7 @@ namespace AssetLoader
 				const auto [tangentData, tangentCount] = FindVertexAttribute<XMFLOAT3>("TANGENT", model, primitive);
 
 				vertices.reserve(vertices.size() + positionCount);
+				const auto verticesSize = vertices.size();
 
 				for (int i = 0; i < positionCount; ++i)
 				{
@@ -321,8 +322,17 @@ namespace AssetLoader
 						.normal = normalData ? *(normalData + i) : XMFLOAT3{ 0.f, 0.f, 0.f },
 						.uv = texcoordData ? *(texcoordData + i) : XMFLOAT2{ 0.f, 0.f },
 						.tangent = tangentData ? *(tangentData + i) : XMFLOAT3{ 0.f, 0.f, 0.f },
-						.bitangent = XMFLOAT3{ 0.f, 0.f, 0.f }  // #TODO: Bitangents.
+						.bitangent = XMFLOAT3{ 0.f, 0.f, 0.f }
 					});
+
+					// Compute bitangent.
+					if (tangentData)
+					{
+						const auto normal = XMLoadFloat3(&vertices[verticesSize + i].normal);
+						const auto tangent = XMLoadFloat3(&vertices[verticesSize + i].tangent);
+
+						XMStoreFloat3(&vertices[verticesSize + i].bitangent, XMVector3Cross(normal, tangent));
+					}
 				}
 
 				subsets.push_back({
