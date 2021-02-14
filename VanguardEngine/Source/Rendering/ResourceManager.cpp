@@ -466,7 +466,7 @@ const TextureHandle ResourceManager::CreateFromSwapChain(void* surface, const st
 	description.width = device->renderWidth;
 	description.height = device->renderHeight;
 	description.depth = 1;
-	description.format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+	description.format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;  // SRGB swap chain.
 
 	TextureComponent textureComponent;
 	textureComponent.allocation.Reset(new D3D12MA::Allocation);

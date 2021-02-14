@@ -104,7 +104,7 @@ void PipelineState::CreateDescriptorTables(RenderDevice& device)
 	VGScopedCPUStat("Create Descriptor Tables");
 }
 
-void PipelineState::Build(RenderDevice& device, const PipelineStateDescription& inDescription)
+void PipelineState::Build(RenderDevice& device, const PipelineStateDescription& inDescription, bool backBufferOutput)
 {
 	VGScopedCPUStat("Build Pipeline");
 
@@ -155,7 +155,7 @@ void PipelineState::Build(RenderDevice& device, const PipelineStateDescription& 
 	case D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP: desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE; break;
 	}
 	desc.NumRenderTargets = 1;  // #TODO: Pull from render graph.
-	desc.RTVFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;  // #TODO: Pull from render graph.
+	desc.RTVFormats[0] = backBufferOutput ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R16G16B16A16_FLOAT;  // #TODO: Pull from render graph.
 	desc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
 	desc.SampleDesc = { 1, 0 };  // #TODO: Support multi-sampling.
 	desc.NodeMask = 0;

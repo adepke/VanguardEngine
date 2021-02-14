@@ -101,7 +101,7 @@ void Renderer::CreatePipelines()
 
 	prepassStateDesc.topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 
-	pipelines.AddGraphicsState(device.get(), "Prepass", prepassStateDesc);
+	pipelines.AddGraphicsState(device.get(), "Prepass", prepassStateDesc, false);
 
 	PipelineStateDescription forwardStateDesc;
 
@@ -144,7 +144,7 @@ void Renderer::CreatePipelines()
 
 	forwardStateDesc.topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 
-	pipelines.AddGraphicsState(device.get(), "ForwardOpaque", forwardStateDesc);
+	pipelines.AddGraphicsState(device.get(), "ForwardOpaque", forwardStateDesc, false);
 
 	forwardStateDesc.shaderPath = Config::shadersPath / "Default";
 
@@ -169,7 +169,49 @@ void Renderer::CreatePipelines()
 	// into the buffer, so it would result in transparent pixels only being drawn when overlapping with an opaque pixel.
 	forwardStateDesc.depthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_GREATER;
 
-	pipelines.AddGraphicsState(device.get(), "ForwardTransparent", forwardStateDesc);
+	pipelines.AddGraphicsState(device.get(), "ForwardTransparent", forwardStateDesc, false);
+
+	PipelineStateDescription postProcessStateDesc;
+
+	postProcessStateDesc.shaderPath = Config::shadersPath / "PostProcess";
+
+	postProcessStateDesc.blendDescription.AlphaToCoverageEnable = false;
+	postProcessStateDesc.blendDescription.IndependentBlendEnable = false;
+	postProcessStateDesc.blendDescription.RenderTarget[0].BlendEnable = false;
+	postProcessStateDesc.blendDescription.RenderTarget[0].LogicOpEnable = false;
+	postProcessStateDesc.blendDescription.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
+	postProcessStateDesc.blendDescription.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;
+	postProcessStateDesc.blendDescription.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+	postProcessStateDesc.blendDescription.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+	postProcessStateDesc.blendDescription.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+	postProcessStateDesc.blendDescription.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	postProcessStateDesc.blendDescription.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;
+	postProcessStateDesc.blendDescription.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
+	postProcessStateDesc.rasterizerDescription.FillMode = D3D12_FILL_MODE_SOLID;
+	postProcessStateDesc.rasterizerDescription.CullMode = D3D12_CULL_MODE_BACK;
+	postProcessStateDesc.rasterizerDescription.FrontCounterClockwise = false;
+	postProcessStateDesc.rasterizerDescription.DepthBias = 0;
+	postProcessStateDesc.rasterizerDescription.DepthBiasClamp = 0.f;
+	postProcessStateDesc.rasterizerDescription.SlopeScaledDepthBias = 0.f;
+	postProcessStateDesc.rasterizerDescription.DepthClipEnable = true;
+	postProcessStateDesc.rasterizerDescription.MultisampleEnable = false;
+	postProcessStateDesc.rasterizerDescription.AntialiasedLineEnable = false;
+	postProcessStateDesc.rasterizerDescription.ForcedSampleCount = 0;
+	postProcessStateDesc.rasterizerDescription.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+
+	postProcessStateDesc.depthStencilDescription.DepthEnable = false;
+	postProcessStateDesc.depthStencilDescription.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+	postProcessStateDesc.depthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_NEVER;
+	postProcessStateDesc.depthStencilDescription.StencilEnable = false;
+	postProcessStateDesc.depthStencilDescription.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
+	postProcessStateDesc.depthStencilDescription.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
+	postProcessStateDesc.depthStencilDescription.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
+	postProcessStateDesc.depthStencilDescription.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
+
+	postProcessStateDesc.topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+
+	pipelines.AddGraphicsState(device.get(), "PostProcess", postProcessStateDesc, true);
 }
 
 std::pair<BufferHandle, size_t> Renderer::CreateInstanceBuffer(const entt::registry& registry)
@@ -355,12 +397,12 @@ void Renderer::Render(entt::registry& registry)
 	});
 	
 	auto& forwardPass = graph.AddPass("Forward Pass", ExecutionQueue::Graphics);
-	const auto mainOutputTag = forwardPass.Create(TransientTextureDescription{
-		.format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB
-		}, VGText("Main output"));
+	const auto outputHDRTag = forwardPass.Create(TransientTextureDescription{
+		.format = DXGI_FORMAT_R16G16B16A16_FLOAT
+	}, VGText("Output HDR sRGB"));
 	forwardPass.Read(depthStencilTag, ResourceBind::DSV);
 	forwardPass.Read(cameraBufferTag, ResourceBind::CBV);
-	forwardPass.Output(mainOutputTag, OutputBind::RTV, true);
+	forwardPass.Output(outputHDRTag, OutputBind::RTV, true);
 	forwardPass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
 	{
 		auto cameraBuffer = resources.GetBuffer(cameraBufferTag);
@@ -474,15 +516,37 @@ void Renderer::Render(entt::registry& registry)
 		});
 	});
 
+	auto& postProcessPass = graph.AddPass("Post Process Pass", ExecutionQueue::Graphics);
+	const auto outputSDRTag = postProcessPass.Create(TransientTextureDescription{
+		.format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB
+	}, VGText("Output SDR sRGB"));
+	postProcessPass.Read(outputHDRTag, ResourceBind::SRV);
+	postProcessPass.Output(outputSDRTag, OutputBind::RTV, true);
+	postProcessPass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
+	{
+		list.BindPipelineState(pipelines["PostProcess"]);
+
+		// Set the bindless textures.
+		list.Native()->SetGraphicsRootDescriptorTable(1, device->GetDescriptorAllocator().GetBindlessHeap());
+
+		auto outputHDR = resources.GetTexture(outputHDRTag);
+		auto& outputHDRComponent = device->GetResourceManager().Get(outputHDR);
+
+		// Set the output texture index.
+		list.Native()->SetGraphicsRoot32BitConstant(0, outputHDRComponent.SRV->bindlessIndex, 0);
+
+		list.DrawFullscreenQuad();
+	});
+
 #if ENABLE_EDITOR
 	auto& editorPass = graph.AddPass("Editor Pass", ExecutionQueue::Graphics);
 	editorPass.Read(depthStencilTag, ResourceBind::SRV);
-	editorPass.Read(mainOutputTag, ResourceBind::SRV);
+	editorPass.Read(outputSDRTag, ResourceBind::SRV);
 	editorPass.Output(backBufferTag, OutputBind::RTV, false);
 	editorPass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
 	{
 		userInterface->NewFrame();
-		EditorRenderer::Render(device.get(), registry, lastFrameTime, resources.GetTexture(depthStencilTag), resources.GetTexture(mainOutputTag));
+		EditorRenderer::Render(device.get(), registry, lastFrameTime, resources.GetTexture(depthStencilTag), resources.GetTexture(outputSDRTag));
 		userInterface->Render(list);
 	});
 #endif

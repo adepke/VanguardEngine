@@ -175,7 +175,7 @@ void UserInterfaceManager::CreateDeviceObjects()
 	description.depthStencilDescription.BackFace = description.depthStencilDescription.FrontFace;
 	description.topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 
-	pipeline->Build(*device, description);
+	pipeline->Build(*device, description, true);
 
 	CreateFontTexture();
 }

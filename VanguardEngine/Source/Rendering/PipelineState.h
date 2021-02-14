@@ -42,5 +42,5 @@ public:
 
 	auto* Native() const noexcept { return pipeline.Get(); }
 
-	void Build(RenderDevice& device, const PipelineStateDescription& inDescription);
+	void Build(RenderDevice& device, const PipelineStateDescription& inDescription, bool backBufferOutput);
 };

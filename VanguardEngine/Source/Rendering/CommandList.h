@@ -39,6 +39,8 @@ public:
 	void BindPipelineState(const PipelineState& state);
 	void BindDescriptorAllocator(DescriptorAllocator& allocator);
 
+	void DrawFullscreenQuad();
+
 	HRESULT Close();
 	HRESULT Reset();
 };

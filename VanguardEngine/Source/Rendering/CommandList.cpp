@@ -100,6 +100,11 @@ void CommandList::BindDescriptorAllocator(DescriptorAllocator& allocator)
 	list->SetDescriptorHeaps(1, &descriptorHeap);
 }
 
+void CommandList::DrawFullscreenQuad()
+{
+	list->DrawInstanced(3, 1, 0, 0);
+}
+
 HRESULT CommandList::Close()
 {
 	return list->Close();

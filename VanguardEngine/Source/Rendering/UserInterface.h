@@ -23,8 +23,6 @@ private:
 	ResourcePtr<ID3D10Blob> pixelShaderBlob;
 	std::unique_ptr<PipelineState> pipeline;
 
-	const DXGI_FORMAT rtvFormat = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;  // #TODO: Centralize RTV format.
-
 private:
 	void SetupRenderState(ImDrawData* drawData, CommandList& list, FrameResources* resources);
 	void CreateFontTexture();

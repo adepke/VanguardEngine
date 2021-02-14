@@ -117,7 +117,8 @@ Output main(Input input)
 	//
 
 	// Ambient contribution.
-	float3 ambient = float3(0.008, 0.008, 0.008) * baseColor.rgb * ambientOcclusion;
+	const float ambientLight = 0.025;
+	float3 ambient = ambientLight * baseColor.rgb * ambientOcclusion;
 	output.color.rgb += ambient;
 
 	return output;
