@@ -2,14 +2,19 @@
 
 #pragma pack_matrix(row_major)
 
-struct CameraBuffer
+struct CameraData
 {
 	matrix viewMatrix;
-	// Boundary
 	matrix projectionMatrix;
-	// Boundary
 	float3 position;
 	float padding;
+};
+
+// #TODO: Near and far plane, FOV.
+struct Camera
+{
+    float3 position;  // World space.
+    float padding;
 };
 
 float LinearizeDepth(float hyperbolicDepth)

@@ -2,35 +2,21 @@
 
 #include "Default_RS.hlsli"
 #include "Base.hlsli"
-#include "Camera.hlsli"
-#include "BRDF.hlsli"
+#include "Light.hlsli"
 
 SamplerState defaultSampler : register(s0);
 
-struct Material
+ConstantBuffer<MaterialData> material : register(b0);
+ConstantBuffer<CameraData> cameraBuffer : register(b1);
+
+// We can't use GetDimensions() on a root SRV, so instead pass the light count separately.
+struct LightCount
 {
-	uint baseColor;
-	uint metallicRoughness;
-	uint normal;
-	uint occlusion;
-	// Boundary
-	uint emissive;
-	float3 padding;
+    uint count;
 };
 
-ConstantBuffer<Material> material : register(b0);
-ConstantBuffer<CameraBuffer> cameraBuffer : register(b1);
-
-struct PointLight
-{
-	float3 color;
-	float padding0;
-	// Boundary
-	float3 position;
-	float padding1;
-};
-
-ConstantBuffer<PointLight> pointLight : register(b2);
+ConstantBuffer<LightCount> lightCount : register(b2);
+StructuredBuffer<Light> lights : register(t0, space1);
 
 struct Input
 {
@@ -101,20 +87,23 @@ Output main(Input input)
 
 	float3 viewDirection = normalize(cameraBuffer.position - input.position);
 	float3 normalDirection = normal;
-
-	// For each light...
-
-	float3 lightDirection = normalize(pointLight.position - input.position);
-	float3 halfwayDirection = normalize(viewDirection + lightDirection);
-
-	float distance = length(pointLight.position - input.position) * 0.002;
-	float attenuation = 1.0 / (distance * distance);
-	float3 radiance = pointLight.color * attenuation;
-
-	float3 lightContribution = BRDF(normalDirection, viewDirection, halfwayDirection, lightDirection, baseColor.rgb, metallicRoughness.r, metallicRoughness.g, radiance);
-	output.color.rgb += lightContribution;
-
-	//
+	
+    Material materialSample;
+    materialSample.baseColor = baseColor;
+    materialSample.metalness = metallicRoughness.r;
+    materialSample.roughness = metallicRoughness.g;
+    materialSample.normal = normal;
+    materialSample.occlusion = ambientOcclusion;
+    materialSample.emissive = emissive;
+	
+    Camera camera;
+    camera.position = cameraBuffer.position;
+	
+    for (uint i = 0; i < lightCount.count; ++i)
+    {
+        LightSample sample = SampleLight(lights[i], materialSample, camera, viewDirection, input.position, normalDirection);
+        output.color.rgb += sample.diffuse.rgb;
+    }
 
 	// Ambient contribution.
 	const float ambientLight = 0.025;

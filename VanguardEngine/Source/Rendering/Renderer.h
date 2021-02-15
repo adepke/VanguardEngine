@@ -38,7 +38,7 @@ private:
 	void UpdateCameraBuffer(const entt::registry& registry);
 	void CreatePipelines();
 	std::pair<BufferHandle, size_t> CreateInstanceBuffer(const entt::registry& registry);
-	std::pair<BufferHandle, size_t> CreateLightBuffer(const entt::registry& registry);
+	BufferHandle CreateLightBuffer(const entt::registry& registry);
 
 public:
 	~Renderer();

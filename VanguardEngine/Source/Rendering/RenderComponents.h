@@ -37,7 +37,7 @@ struct CameraComponent
 	float fieldOfView = 1.57079633f;  // 90 Degrees.
 };
 
-struct PointLightComponent
+struct LightComponent
 {
 	XMFLOAT3 color;
 };

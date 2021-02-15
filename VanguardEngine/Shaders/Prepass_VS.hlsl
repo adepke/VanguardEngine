@@ -5,7 +5,7 @@
 #include "Camera.hlsli"
 
 ConstantBuffer<PerObject> perObject : register(b0);
-ConstantBuffer<CameraBuffer> cameraBuffer : register(b1);
+ConstantBuffer<CameraData> cameraBuffer : register(b1);
 
 struct Vertex
 {

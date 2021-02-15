@@ -36,6 +36,14 @@ struct CameraBuffer
 	uint32_t padding;
 };
 
+struct Light
+{
+	XMFLOAT3 position;
+	uint32_t type;
+	XMFLOAT3 color;
+	uint32_t padding;
+};
+
 void Renderer::UpdateCameraBuffer(const entt::registry& registry)
 {
 	VGScopedCPUStat("Update Camera Buffer");
@@ -250,42 +258,44 @@ std::pair<BufferHandle, size_t> Renderer::CreateInstanceBuffer(const entt::regis
 	return std::make_pair(bufferHandle, bufferOffset);
 }
 
-std::pair<BufferHandle, size_t> Renderer::CreateLightBuffer(const entt::registry& registry)
+BufferHandle Renderer::CreateLightBuffer(const entt::registry& registry)
 {
 	VGScopedCPUStat("Create Light Buffer");
 
-	struct PointLightInstance
-	{
-		XMFLOAT3 color;
-		uint32_t padding0;
-		XMFLOAT3 position;
-		uint32_t padding1;
-	};
-
-	const auto lightView = registry.view<const TransformComponent, const PointLightComponent>();
+	const auto lightView = registry.view<const TransformComponent, const LightComponent>();
 	const auto viewSize = lightView.size();
-	const auto [bufferHandle, bufferOffset] = device->FrameAllocate(sizeof(PointLightInstance) * viewSize);
+
+	BufferDescription lightBufferDescription;
+	lightBufferDescription.updateRate = ResourceFrequency::Dynamic;
+	lightBufferDescription.bindFlags = BindFlag::ShaderResource;
+	lightBufferDescription.accessFlags = AccessFlag::CPUWrite;
+	lightBufferDescription.size = viewSize;
+	lightBufferDescription.stride = sizeof(Light);
+
+	const auto bufferHandle = device->GetResourceManager().Create(lightBufferDescription, VGText("Light buffer"));
+	device->GetResourceManager().AddFrameResource(device->GetFrameIndex(), bufferHandle);
 
 	size_t index = 0;
-	lightView.each([&](auto entity, const auto& transform, const auto& pointLight)
+	lightView.each([&](auto entity, const auto& transform, const auto& light)
 	{
-		PointLightInstance instance{
-			.color = pointLight.color,
-			.position = transform.translation
+		Light instance{
+			.position = transform.translation,
+			.type = 0,
+			.color = light.color
 		};
 
 		std::vector<uint8_t> instanceData{};
-		instanceData.resize(sizeof(PointLightInstance));
+		instanceData.resize(sizeof(Light));
 		std::memcpy(instanceData.data(), &instance, instanceData.size());
 
-		device->GetResourceManager().Write(bufferHandle, instanceData, bufferOffset + (index * sizeof(PointLightInstance)));
+		device->GetResourceManager().Write(bufferHandle, instanceData, index * sizeof(Light));
 
 		++index;
 	});
 
 	VGAssert(viewSize == index, "Mismatched entity count during buffer creation.");
 
-	return std::make_pair(bufferHandle, bufferOffset);
+	return bufferHandle;
 }
 
 Renderer::~Renderer()
@@ -336,7 +346,7 @@ void Renderer::Render(entt::registry& registry)
 	RenderGraph graph{};
 	
 	const auto [instanceBuffer, instanceOffset] = CreateInstanceBuffer(registry);
-	const auto [lightBuffer, lightOffset] = CreateLightBuffer(registry);
+	const auto lightBuffer = CreateLightBuffer(registry);
 
 	auto backBufferTag = graph.Import(device->GetBackBuffer());
 	auto cameraBufferTag = graph.Import(cameraBuffer);
@@ -413,14 +423,15 @@ void Renderer::Render(entt::registry& registry)
 		list.BindPipelineState(pipelines["ForwardOpaque"]);
 
 		// Set the bindless textures.
-		list.Native()->SetGraphicsRootDescriptorTable(5, device->GetDescriptorAllocator().GetBindlessHeap());
+		list.Native()->SetGraphicsRootDescriptorTable(6, device->GetDescriptorAllocator().GetBindlessHeap());
 
 		// Bind the camera data.
 		list.Native()->SetGraphicsRootConstantBufferView(2, cameraBufferComponent.Native()->GetGPUVirtualAddress());
 
 		// Bind the light data.
 		auto& lightBufferComponent = device->GetResourceManager().Get(lightBuffer);
-		list.Native()->SetGraphicsRootConstantBufferView(4, lightBufferComponent.Native()->GetGPUVirtualAddress() + lightOffset);
+		list.Native()->SetGraphicsRoot32BitConstant(4, lightBufferComponent.description.size, 0);
+		list.Native()->SetGraphicsRootShaderResourceView(5, lightBufferComponent.Native()->GetGPUVirtualAddress());
 
 		size_t entityIndex = 0;
 		registry.view<const TransformComponent, const MeshComponent>().each([&](auto entity, const auto&, const auto& mesh)
@@ -467,9 +478,10 @@ void Renderer::Render(entt::registry& registry)
 		// Transparent
 
 		list.BindPipelineState(pipelines["ForwardTransparent"]);
-		list.Native()->SetGraphicsRootDescriptorTable(5, device->GetDescriptorAllocator().GetBindlessHeap());
+		list.Native()->SetGraphicsRootDescriptorTable(6, device->GetDescriptorAllocator().GetBindlessHeap());
 		list.Native()->SetGraphicsRootConstantBufferView(2, cameraBufferComponent.Native()->GetGPUVirtualAddress());
-		list.Native()->SetGraphicsRootConstantBufferView(4, lightBufferComponent.Native()->GetGPUVirtualAddress() + lightOffset);
+		list.Native()->SetGraphicsRoot32BitConstant(4, lightBufferComponent.description.size, 0);
+		list.Native()->SetGraphicsRootShaderResourceView(5, lightBufferComponent.Native()->GetGPUVirtualAddress());
 
 		// #TODO: Sort transparent mesh components by distance.
 		entityIndex = 0;

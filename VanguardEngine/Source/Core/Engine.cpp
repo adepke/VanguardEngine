@@ -97,15 +97,34 @@ void EngineLoop()
 	tempReg.emplace<TransformComponent>(sponza, std::move(sponzaTransform));
 	tempReg.emplace<MeshComponent>(sponza, AssetLoader::LoadMesh(*Renderer::Get().device, Config::shadersPath / "../Assets/Models/Sponza/glTF/Sponza.gltf"));
 
-	PointLightComponent pointLight{};
-	pointLight.color = { 1.f, 0.8f, 0.8f };
-	TransformComponent lightTransform{};
-	lightTransform.translation = { 1200.f, 0.f, 6.f };;
+	LightComponent pointLight1{};
+	pointLight1.color = { 1.f, 1.f, 1.f };
+	LightComponent pointLight2{};
+	pointLight2.color = { 1.f, 1.f, 1.f };
+	LightComponent pointLight3{};
+	pointLight3.color = { 1.f, 1.f, 1.f };
 
-	const auto light = tempReg.create();
-	tempReg.emplace<NameComponent>(light, "Point light");
-	tempReg.emplace<TransformComponent>(light, std::move(lightTransform));
-	tempReg.emplace<PointLightComponent>(light, std::move(pointLight));
+	TransformComponent light1Transform{};
+	light1Transform.translation = { 800.f, 0.f, 70.f };
+	TransformComponent light2Transform{};
+	light2Transform.translation = { 1200.f, 0.f, 70.f };
+	TransformComponent light3Transform{};
+	light3Transform.translation = { 1600.f, 0.f, 70.f };
+
+	const auto light1 = tempReg.create();
+	tempReg.emplace<NameComponent>(light1, "Light1");
+	tempReg.emplace<TransformComponent>(light1, std::move(light1Transform));
+	tempReg.emplace<LightComponent>(light1, pointLight1);
+	
+	const auto light2 = tempReg.create();
+	tempReg.emplace<NameComponent>(light2, "Light2");
+	tempReg.emplace<TransformComponent>(light2, std::move(light2Transform));
+	tempReg.emplace<LightComponent>(light2, pointLight2);
+
+	const auto light3 = tempReg.create();
+	tempReg.emplace<NameComponent>(light3, "Light3");
+	tempReg.emplace<TransformComponent>(light3, std::move(light3Transform));
+	tempReg.emplace<LightComponent>(light3, pointLight3);
 
 	auto frameBegin = std::chrono::high_resolution_clock::now();
 	float lastDeltaTime = 0.f;

@@ -267,7 +267,7 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 		description.size = frameBufferSize;
 		description.stride = 1;
 		description.updateRate = ResourceFrequency::Dynamic;
-		description.bindFlags = 0;
+		description.bindFlags = BindFlag::ConstantBuffer;
 		description.accessFlags = AccessFlag::CPUWrite;
 
 		frameBuffers[i] = resourceManager.Create(description, VGText("Frame buffer"));
@@ -299,7 +299,7 @@ RenderDevice::~RenderDevice()
 
 		else
 		{
-			dxgiDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_FLAGS{ DXGI_DEBUG_RLO_ALL | DXGI_DEBUG_RLO_IGNORE_INTERNAL });
+			dxgiDebug->ReportLiveObjects(DXGI_DEBUG_ALL, DXGI_DEBUG_RLO_FLAGS(DXGI_DEBUG_RLO_ALL | DXGI_DEBUG_RLO_IGNORE_INTERNAL));
 		}
 	}
 #endif

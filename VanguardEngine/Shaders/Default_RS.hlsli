@@ -6,7 +6,8 @@
 	"SRV(t0, visibility = SHADER_VISIBILITY_VERTEX)," \
 	"CBV(b1, visibility = SHADER_VISIBILITY_ALL)," \
 	"CBV(b0, visibility = SHADER_VISIBILITY_PIXEL)," \
-	"CBV(b2, visibility = SHADER_VISIBILITY_PIXEL)," \
+	"RootConstants(b2, num32BitConstants = 1, visibility = SHADER_VISIBILITY_PIXEL)," \
+	"SRV(t0, space = 1, visibility = SHADER_VISIBILITY_PIXEL)," \
 	"DescriptorTable(" \
 		"SRV(t0, space = 0, numDescriptors = unbounded, flags = DESCRIPTORS_VOLATILE)," \
 		"visibility = SHADER_VISIBILITY_PIXEL)," \
