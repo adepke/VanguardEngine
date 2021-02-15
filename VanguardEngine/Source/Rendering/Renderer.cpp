@@ -433,47 +433,51 @@ void Renderer::Render(entt::registry& registry)
 		list.Native()->SetGraphicsRoot32BitConstant(4, lightBufferComponent.description.size, 0);
 		list.Native()->SetGraphicsRootShaderResourceView(5, lightBufferComponent.Native()->GetGPUVirtualAddress());
 
-		size_t entityIndex = 0;
-		registry.view<const TransformComponent, const MeshComponent>().each([&](auto entity, const auto&, const auto& mesh)
 		{
-			// Set the per object buffer.
-			auto& instanceBufferComponent = device->GetResourceManager().Get(instanceBuffer);
-			const auto finalInstanceBufferOffset = instanceOffset + (entityIndex * sizeof(EntityInstance));
-			list.Native()->SetGraphicsRootConstantBufferView(0, instanceBufferComponent.Native()->GetGPUVirtualAddress() + finalInstanceBufferOffset);
+			VGScopedGPUStat("Opaque", device->GetDirectContext(), list.Native());
 
-			// Set the index buffer.
-			auto& indexBuffer = device->GetResourceManager().Get(mesh.indexBuffer);
-			D3D12_INDEX_BUFFER_VIEW indexView{};
-			indexView.BufferLocation = indexBuffer.Native()->GetGPUVirtualAddress();
-			indexView.SizeInBytes = static_cast<UINT>(indexBuffer.description.size * indexBuffer.description.stride);
-			indexView.Format = DXGI_FORMAT_R32_UINT;
-
-			list.Native()->IASetIndexBuffer(&indexView);
-
-			for (const auto& subset : mesh.subsets)
+			size_t entityIndex = 0;
+			registry.view<const TransformComponent, const MeshComponent>().each([&](auto entity, const auto&, const auto& mesh)
 			{
-				// Early out if we're a transparent material. We cannot be drawn in this initial pass.
-				if (subset.material.transparent)
-					continue;
+				// Set the per object buffer.
+				auto& instanceBufferComponent = device->GetResourceManager().Get(instanceBuffer);
+				const auto finalInstanceBufferOffset = instanceOffset + (entityIndex * sizeof(EntityInstance));
+				list.Native()->SetGraphicsRootConstantBufferView(0, instanceBufferComponent.Native()->GetGPUVirtualAddress() + finalInstanceBufferOffset);
 
-				// #TODO: Only bind once per mesh, and pass subset.vertexOffset into the draw call. This isn't yet supported with DXC, see: https://github.com/microsoft/DirectXShaderCompiler/issues/2907
+				// Set the index buffer.
+				auto& indexBuffer = device->GetResourceManager().Get(mesh.indexBuffer);
+				D3D12_INDEX_BUFFER_VIEW indexView{};
+				indexView.BufferLocation = indexBuffer.Native()->GetGPUVirtualAddress();
+				indexView.SizeInBytes = static_cast<UINT>(indexBuffer.description.size * indexBuffer.description.stride);
+				indexView.Format = DXGI_FORMAT_R32_UINT;
 
-				// Set the vertex buffer.
-				auto& vertexBuffer = device->GetResourceManager().Get(mesh.vertexBuffer);
-				list.Native()->SetGraphicsRootShaderResourceView(1, vertexBuffer.Native()->GetGPUVirtualAddress() + (subset.vertexOffset * sizeof(Vertex)));
+				list.Native()->IASetIndexBuffer(&indexView);
 
-				// Set the material data.
-				if (device->GetResourceManager().Valid(subset.material.materialBuffer))
+				for (const auto& subset : mesh.subsets)
 				{
-					auto& materialBuffer = device->GetResourceManager().Get(subset.material.materialBuffer);
-					list.Native()->SetGraphicsRootConstantBufferView(3, materialBuffer.Native()->GetGPUVirtualAddress());
+					// Early out if we're a transparent material. We cannot be drawn in this initial pass.
+					if (subset.material.transparent)
+						continue;
+
+					// #TODO: Only bind once per mesh, and pass subset.vertexOffset into the draw call. This isn't yet supported with DXC, see: https://github.com/microsoft/DirectXShaderCompiler/issues/2907
+
+					// Set the vertex buffer.
+					auto& vertexBuffer = device->GetResourceManager().Get(mesh.vertexBuffer);
+					list.Native()->SetGraphicsRootShaderResourceView(1, vertexBuffer.Native()->GetGPUVirtualAddress() + (subset.vertexOffset * sizeof(Vertex)));
+
+					// Set the material data.
+					if (device->GetResourceManager().Valid(subset.material.materialBuffer))
+					{
+						auto& materialBuffer = device->GetResourceManager().Get(subset.material.materialBuffer);
+						list.Native()->SetGraphicsRootConstantBufferView(3, materialBuffer.Native()->GetGPUVirtualAddress());
+					}
+
+					list.Native()->DrawIndexedInstanced(static_cast<uint32_t>(subset.indices), 1, static_cast<uint32_t>(subset.indexOffset), 0, 0);
 				}
 
-				list.Native()->DrawIndexedInstanced(static_cast<uint32_t>(subset.indices), 1, static_cast<uint32_t>(subset.indexOffset), 0, 0);
-			}
-
-			++entityIndex;
-		});
+				++entityIndex;
+			});
+		}
 
 		// Transparent
 
@@ -483,49 +487,53 @@ void Renderer::Render(entt::registry& registry)
 		list.Native()->SetGraphicsRoot32BitConstant(4, lightBufferComponent.description.size, 0);
 		list.Native()->SetGraphicsRootShaderResourceView(5, lightBufferComponent.Native()->GetGPUVirtualAddress());
 
-		// #TODO: Sort transparent mesh components by distance.
-		entityIndex = 0;
-		registry.view<const TransformComponent, const MeshComponent>().each([&](auto entity, const auto&, const auto& mesh)
 		{
-			// Set the per object buffer.
-			auto& instanceBufferComponent = device->GetResourceManager().Get(instanceBuffer);
-			const auto finalInstanceBufferOffset = instanceOffset + (entityIndex * sizeof(EntityInstance));
-			list.Native()->SetGraphicsRootConstantBufferView(0, instanceBufferComponent.Native()->GetGPUVirtualAddress() + finalInstanceBufferOffset);
+			VGScopedGPUStat("Transparent", device->GetDirectContext(), list.Native());
 
-			// Set the index buffer.
-			auto& indexBuffer = device->GetResourceManager().Get(mesh.indexBuffer);
-
-			D3D12_INDEX_BUFFER_VIEW indexView{};
-			indexView.BufferLocation = indexBuffer.Native()->GetGPUVirtualAddress();
-			indexView.SizeInBytes = static_cast<UINT>(indexBuffer.description.size * indexBuffer.description.stride);
-			indexView.Format = DXGI_FORMAT_R32_UINT;
-
-			list.Native()->IASetIndexBuffer(&indexView);
-
-			for (const auto& subset : mesh.subsets)
+			// #TODO: Sort transparent mesh components by distance.
+			size_t entityIndex = 0;
+			registry.view<const TransformComponent, const MeshComponent>().each([&](auto entity, const auto&, const auto& mesh)
 			{
-				// Early out if we're an opaque material.
-				if (!subset.material.transparent)
-					continue;
+				// Set the per object buffer.
+				auto& instanceBufferComponent = device->GetResourceManager().Get(instanceBuffer);
+				const auto finalInstanceBufferOffset = instanceOffset + (entityIndex * sizeof(EntityInstance));
+				list.Native()->SetGraphicsRootConstantBufferView(0, instanceBufferComponent.Native()->GetGPUVirtualAddress() + finalInstanceBufferOffset);
 
-				// #TODO: Only bind once per mesh, and pass subset.vertexOffset into the draw call. This isn't yet supported with DXC, see: https://github.com/microsoft/DirectXShaderCompiler/issues/2907
+				// Set the index buffer.
+				auto& indexBuffer = device->GetResourceManager().Get(mesh.indexBuffer);
 
-				// Set the vertex buffer.
-				auto& vertexBuffer = device->GetResourceManager().Get(mesh.vertexBuffer);
-				list.Native()->SetGraphicsRootShaderResourceView(1, vertexBuffer.Native()->GetGPUVirtualAddress() + (subset.vertexOffset * sizeof(Vertex)));
+				D3D12_INDEX_BUFFER_VIEW indexView{};
+				indexView.BufferLocation = indexBuffer.Native()->GetGPUVirtualAddress();
+				indexView.SizeInBytes = static_cast<UINT>(indexBuffer.description.size * indexBuffer.description.stride);
+				indexView.Format = DXGI_FORMAT_R32_UINT;
 
-				// Set the material data.
-				if (device->GetResourceManager().Valid(subset.material.materialBuffer))
+				list.Native()->IASetIndexBuffer(&indexView);
+
+				for (const auto& subset : mesh.subsets)
 				{
-					auto& materialBuffer = device->GetResourceManager().Get(subset.material.materialBuffer);
-					list.Native()->SetGraphicsRootConstantBufferView(3, materialBuffer.Native()->GetGPUVirtualAddress());
+					// Early out if we're an opaque material.
+					if (!subset.material.transparent)
+						continue;
+
+					// #TODO: Only bind once per mesh, and pass subset.vertexOffset into the draw call. This isn't yet supported with DXC, see: https://github.com/microsoft/DirectXShaderCompiler/issues/2907
+
+					// Set the vertex buffer.
+					auto& vertexBuffer = device->GetResourceManager().Get(mesh.vertexBuffer);
+					list.Native()->SetGraphicsRootShaderResourceView(1, vertexBuffer.Native()->GetGPUVirtualAddress() + (subset.vertexOffset * sizeof(Vertex)));
+
+					// Set the material data.
+					if (device->GetResourceManager().Valid(subset.material.materialBuffer))
+					{
+						auto& materialBuffer = device->GetResourceManager().Get(subset.material.materialBuffer);
+						list.Native()->SetGraphicsRootConstantBufferView(3, materialBuffer.Native()->GetGPUVirtualAddress());
+					}
+
+					list.Native()->DrawIndexedInstanced(static_cast<uint32_t>(subset.indices), 1, static_cast<uint32_t>(subset.indexOffset), 0, 0);
 				}
 
-				list.Native()->DrawIndexedInstanced(static_cast<uint32_t>(subset.indices), 1, static_cast<uint32_t>(subset.indexOffset), 0, 0);
-			}
-
-			++entityIndex;
-		});
+				++entityIndex;
+			});
+		}
 	});
 
 	auto& postProcessPass = graph.AddPass("Post Process Pass", ExecutionQueue::Graphics);
