@@ -82,15 +82,19 @@ void UserInterfaceManager::SetupRenderState(ImDrawData* drawData, CommandList& l
 	ibv.Format = sizeof(ImDrawIdx) == 2 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
 	list.Native()->IASetIndexBuffer(&ibv);
 
-	list.Native()->SetGraphicsRoot32BitConstants(0, 16, &vertexConstantBuffer, 0);
+	std::vector<uint32_t> projectionData;
+	projectionData.resize(16);
+
+	std::memcpy(projectionData.data(), &vertexConstantBuffer.mvp, projectionData.size() * sizeof(float));
+
+	list.BindConstants("projections", projectionData);
 	list.BindDescriptorAllocator(device->GetDescriptorAllocator());
 
 	// Setup blend factor
 	const float blendFactor[4] = { 0.f, 0.f, 0.f, 0.f };
 	list.Native()->OMSetBlendFactor(blendFactor);
 
-	// Set the bindless textures.
-	list.Native()->SetGraphicsRootDescriptorTable(4, device->GetDescriptorAllocator().GetBindlessHeap());
+	list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
 }
 
 void UserInterfaceManager::CreateFontTexture()
@@ -379,7 +383,7 @@ void UserInterfaceManager::Render(CommandList& list)
 			{
 				// Apply Scissor, Bind texture, Draw
 				const D3D12_RECT r = { (LONG)(pcmd->ClipRect.x - clip_off.x), (LONG)(pcmd->ClipRect.y - clip_off.y), (LONG)(pcmd->ClipRect.z - clip_off.x), (LONG)(pcmd->ClipRect.w - clip_off.y) };
-				list.Native()->SetGraphicsRoot32BitConstant(1, *(uint32_t*)&pcmd->TextureId, 0);
+				list.BindConstants("bindlessTexture", { *(uint32_t*)&pcmd->TextureId });
 				list.Native()->RSSetScissorRects(1, &r);
 				list.Native()->SetGraphicsRootShaderResourceView(3, resources->vertexBuffer->GetGPUVirtualAddress() + (pcmd->VtxOffset + global_vtx_offset) * sizeof(ImDrawVert));
 				list.Native()->DrawIndexedInstanced(pcmd->ElemCount, 1, pcmd->IdxOffset + global_idx_offset, 0, 0);

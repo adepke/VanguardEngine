@@ -16,9 +16,12 @@ struct ShaderReflection
 		size_t semanticIndex;
 	};
 
-	struct ConstantBuffer
+	enum class ResourceBindType
 	{
-		std::string name;
+		Unknown,
+		ConstantBuffer,
+		ShaderResource,
+		UnorderedAccess,
 	};
 
 	struct Resource
@@ -26,10 +29,11 @@ struct ShaderReflection
 		std::string name;
 		size_t bindPoint;
 		size_t bindCount;
+		size_t bindSpace;
+		ResourceBindType type;
 	};
 
 	std::vector<InputElement> inputElements;
-	std::vector<ConstantBuffer> constantBuffers;
 	std::vector<Resource> resourceBindings;
 	size_t instructionCount = 0;
 };

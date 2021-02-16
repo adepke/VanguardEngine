@@ -10,6 +10,7 @@
 class RenderDevice;
 class PipelineState;
 class DescriptorAllocator;
+struct PipelineStateReflection;
 
 class CommandList
 {
@@ -17,6 +18,9 @@ protected:
 	ResourcePtr<ID3D12CommandAllocator> allocator;  // #TODO: Potentially share allocators? Something to look into in the future.
 	ResourcePtr<ID3D12GraphicsCommandList5> list;
 	RenderDevice* device;
+
+	// Stateful tracking of the bound pipeline's reflection data for binding.
+	const PipelineStateReflection* boundPipelineReflection = nullptr;
 
 	std::vector<D3D12_RESOURCE_BARRIER> pendingBarriers;
 
@@ -38,6 +42,9 @@ public:
 
 	void BindPipelineState(const PipelineState& state);
 	void BindDescriptorAllocator(DescriptorAllocator& allocator);
+	void BindConstants(const std::string& bindName, std::vector<uint32_t> data, size_t offset = 0);
+	void BindResource(const std::string& bindName, BufferHandle handle, size_t offset = 0);
+	void BindResourceTable(const std::string& bindName, D3D12_GPU_DESCRIPTOR_HANDLE descriptor);
 
 	void DrawFullscreenQuad();
 

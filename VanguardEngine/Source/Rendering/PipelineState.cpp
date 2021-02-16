@@ -10,6 +10,148 @@
 #include <vector>
 #include <limits>
 
+void PipelineState::ReflectRootSignature()
+{
+	ResourcePtr<ID3D12RootSignatureDeserializer> deserializer;
+
+	const auto result = D3D12CreateRootSignatureDeserializer(vertexShader->bytecode.data(), vertexShader->bytecode.size(), IID_PPV_ARGS(deserializer.Indirect()));
+	if (FAILED(result))
+	{
+		VGLogError(Rendering) << "Failed to create root signature deserializer during reflection: " << result;
+
+		return;
+	}
+
+	const auto* rootSignatureDescription = deserializer->GetRootSignatureDesc();
+	for (int i = 0; i < rootSignatureDescription->NumParameters; ++i)
+	{
+		const auto& parameter = rootSignatureDescription->pParameters[i];
+
+		size_t shaderRegister = 0;
+		size_t shaderSpace = 0;
+		PipelineStateReflection::ResourceBindType type;
+
+		switch (parameter.ParameterType)
+		{
+		case D3D12_ROOT_PARAMETER_TYPE::D3D12_ROOT_PARAMETER_TYPE_32BIT_CONSTANTS:
+			shaderRegister = parameter.Constants.ShaderRegister;
+			shaderSpace = parameter.Constants.RegisterSpace;
+			type = PipelineStateReflection::ResourceBindType::RootConstants;
+			break;
+		case D3D12_ROOT_PARAMETER_TYPE::D3D12_ROOT_PARAMETER_TYPE_CBV:
+			shaderRegister = parameter.Constants.ShaderRegister;
+			shaderSpace = parameter.Constants.RegisterSpace;
+			type = PipelineStateReflection::ResourceBindType::ConstantBuffer;
+			break;
+		case D3D12_ROOT_PARAMETER_TYPE::D3D12_ROOT_PARAMETER_TYPE_SRV:
+			shaderRegister = parameter.Descriptor.ShaderRegister;
+			shaderSpace = parameter.Descriptor.RegisterSpace;
+			type = PipelineStateReflection::ResourceBindType::ShaderResource;
+			break;
+		case D3D12_ROOT_PARAMETER_TYPE::D3D12_ROOT_PARAMETER_TYPE_UAV:
+			shaderRegister = parameter.Descriptor.ShaderRegister;
+			shaderSpace = parameter.Descriptor.RegisterSpace;
+			type = PipelineStateReflection::ResourceBindType::UnorderedAccess;
+			break;
+		case D3D12_ROOT_PARAMETER_TYPE::D3D12_ROOT_PARAMETER_TYPE_DESCRIPTOR_TABLE:
+			// For tables, we only need to match the first descriptor of the first range.
+			// We don't care about the rest because when binding, we just bind the descriptor block start.
+			const auto& firstDescriptorRange = parameter.DescriptorTable.pDescriptorRanges[0];
+
+			shaderRegister = firstDescriptorRange.BaseShaderRegister;
+			shaderSpace = firstDescriptorRange.RegisterSpace;
+
+			switch (firstDescriptorRange.RangeType)
+			{
+			case D3D12_DESCRIPTOR_RANGE_TYPE_CBV: type = PipelineStateReflection::ResourceBindType::ConstantBuffer; break;
+			case D3D12_DESCRIPTOR_RANGE_TYPE_SRV: type = PipelineStateReflection::ResourceBindType::ShaderResource; break;
+			case D3D12_DESCRIPTOR_RANGE_TYPE_UAV: type = PipelineStateReflection::ResourceBindType::UnorderedAccess; break;
+			}
+
+			break;
+		}
+
+		constexpr auto BindTypeMatches = [](const auto shaderReflectionType, const auto rootSignatureReflectionType)
+		{
+			switch (shaderReflectionType)
+			{
+			case ShaderReflection::ResourceBindType::ConstantBuffer:
+				return
+					rootSignatureReflectionType == PipelineStateReflection::ResourceBindType::RootConstants ||
+					rootSignatureReflectionType == PipelineStateReflection::ResourceBindType::ConstantBuffer;
+			case ShaderReflection::ResourceBindType::ShaderResource:
+				return rootSignatureReflectionType == PipelineStateReflection::ResourceBindType::ShaderResource;
+			case ShaderReflection::ResourceBindType::UnorderedAccess:
+				return rootSignatureReflectionType == PipelineStateReflection::ResourceBindType::UnorderedAccess;
+			}
+
+			return false;
+		};
+
+		// Match the register and space to the corresponding shader reflection resource bind.
+		const auto MatchShaderBindings = [&](const auto& shader)
+		{
+			bool hasFoundBinding = false;
+
+			if (!shader)
+			{
+				return;
+			}
+
+			for (const auto& binding : shader->reflection.resourceBindings)
+			{
+				if (binding.bindPoint == shaderRegister && binding.bindSpace == shaderSpace && BindTypeMatches(binding.type, type))
+				{
+					VGAssert(!hasFoundBinding, "Already found binding for root signature index '%i'.", i);
+					hasFoundBinding = true;
+
+					if (reflection.resourceIndexMap.contains(binding.name))
+					{
+						const auto otherSignatureIndex = reflection.resourceIndexMap[binding.name].signatureIndex;
+
+						VGAssert(otherSignatureIndex == i, "Multiple unique bind candidates found for '%s' during root signature reflection. Candidates: %i, %i", binding.name, otherSignatureIndex, i);
+					}
+
+					else
+					{
+						reflection.resourceIndexMap[binding.name] = { type, static_cast<size_t>(i) };
+					}
+
+#if !BUILD_DEBUG
+					break;  // Stop iterating after the first binding, only do this in release for validation purposes.
+#endif
+				}
+			}
+		};
+
+		switch (parameter.ShaderVisibility)
+		{
+		case D3D12_SHADER_VISIBILITY_ALL:
+			MatchShaderBindings(vertexShader);
+			MatchShaderBindings(pixelShader);
+			MatchShaderBindings(hullShader);
+			MatchShaderBindings(domainShader);
+			MatchShaderBindings(geometryShader);
+			break;
+		case D3D12_SHADER_VISIBILITY_VERTEX:
+			MatchShaderBindings(vertexShader);
+			break;
+		case D3D12_SHADER_VISIBILITY_HULL:
+			MatchShaderBindings(hullShader);
+			break;
+		case D3D12_SHADER_VISIBILITY_DOMAIN:
+			MatchShaderBindings(domainShader);
+			break;
+		case D3D12_SHADER_VISIBILITY_GEOMETRY:
+			MatchShaderBindings(geometryShader);
+			break;
+		case D3D12_SHADER_VISIBILITY_PIXEL:
+			MatchShaderBindings(pixelShader);
+			break;
+		}
+	}
+}
+
 void PipelineState::CreateShaders(RenderDevice& device, const std::filesystem::path& shaderPath)
 {
 	VGScopedCPUStat("Create Shaders");
@@ -97,6 +239,8 @@ void PipelineState::CreateRootSignature(RenderDevice& device)
 	{
 		VGLogError(Rendering) << "Failed to create root signature: " << result;
 	}
+
+	ReflectRootSignature();
 }
 
 void PipelineState::CreateDescriptorTables(RenderDevice& device)

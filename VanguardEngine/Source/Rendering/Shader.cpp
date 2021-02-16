@@ -40,21 +40,6 @@ void ReflectShader(std::unique_ptr<Shader>& inShader, ID3D12ShaderReflection* re
 		inShader->reflection.inputElements.push_back({ parameterDesc.SemanticName, parameterDesc.SemanticIndex });
 	}
 
-	inShader->reflection.constantBuffers.reserve(shaderDesc.ConstantBuffers);
-	for (uint32_t i = 0; i < shaderDesc.ConstantBuffers; ++i)
-	{
-		auto* constantBufferReflection = reflection->GetConstantBufferByIndex(i);
-		D3D12_SHADER_BUFFER_DESC bufferDesc;
-		result = constantBufferReflection->GetDesc(&bufferDesc);
-		if (FAILED(result))
-		{
-			VGLogError(Rendering) << "Shader reflection for '" << name << "' failed internally: " << result;
-			return;
-		}
-
-		inShader->reflection.constantBuffers.push_back({ bufferDesc.Name });
-	}
-
 	inShader->reflection.resourceBindings.reserve(shaderDesc.BoundResources);
 	for (uint32_t i = 0; i < shaderDesc.BoundResources; ++i)
 	{
@@ -66,7 +51,18 @@ void ReflectShader(std::unique_ptr<Shader>& inShader, ID3D12ShaderReflection* re
 			return;
 		}
 
-		inShader->reflection.resourceBindings.push_back({ bindDesc.Name, bindDesc.BindPoint, bindDesc.BindCount });
+		ShaderReflection::ResourceBindType type = ShaderReflection::ResourceBindType::Unknown;
+
+		switch (bindDesc.Type)
+		{
+		case D3D_SIT_CBUFFER: type = ShaderReflection::ResourceBindType::ConstantBuffer; break;
+		case D3D_SIT_TBUFFER: type = ShaderReflection::ResourceBindType::ShaderResource; break;
+		case D3D_SIT_TEXTURE: type = ShaderReflection::ResourceBindType::ShaderResource; break;
+		case D3D_SIT_UAV_RWTYPED: type = ShaderReflection::ResourceBindType::UnorderedAccess; break;
+		case D3D_SIT_STRUCTURED: type = ShaderReflection::ResourceBindType::ShaderResource; break;
+		}
+
+		inShader->reflection.resourceBindings.push_back({ bindDesc.Name, bindDesc.BindPoint, bindDesc.BindCount, bindDesc.Space, type });
 	}
 
 	inShader->reflection.instructionCount = shaderDesc.InstructionCount;

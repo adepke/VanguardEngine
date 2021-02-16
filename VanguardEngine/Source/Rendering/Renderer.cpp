@@ -14,8 +14,6 @@
 #include <Editor/EditorRenderer.h>
 #endif
 
-#include <imgui.h>
-
 #include <vector>
 #include <utility>
 #include <cstring>
@@ -361,25 +359,16 @@ void Renderer::Render(entt::registry& registry)
 	prePass.Output(depthStencilTag, OutputBind::DSV, true);
 	prePass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
 	{
-		auto cameraBuffer = resources.GetBuffer(cameraBufferTag);
-		auto& cameraBufferComponent = device->GetResourceManager().Get(cameraBuffer);
-
 		list.BindPipelineState(pipelines["Prepass"]);
-
-		// Bind the camera data.
-		list.Native()->SetGraphicsRootConstantBufferView(2, cameraBufferComponent.Native()->GetGPUVirtualAddress());
+		list.BindResource("cameraBuffer", resources.GetBuffer(cameraBufferTag));
 
 		size_t entityIndex = 0;
 		registry.view<const TransformComponent, const MeshComponent>().each([&](auto entity, const auto&, const auto& mesh)
 		{
-			// Set the per object buffer.
-			auto& instanceBufferComponent = device->GetResourceManager().Get(instanceBuffer);
-			const auto finalInstanceBufferOffset = instanceOffset + (entityIndex * sizeof(EntityInstance));
-			list.Native()->SetGraphicsRootConstantBufferView(0, instanceBufferComponent.Native()->GetGPUVirtualAddress() + finalInstanceBufferOffset);
+			list.BindResource("perObject", instanceBuffer, instanceOffset + (entityIndex * sizeof(EntityInstance)));
 
 			// Set the index buffer.
 			auto& indexBuffer = device->GetResourceManager().Get(mesh.indexBuffer);
-
 			D3D12_INDEX_BUFFER_VIEW indexView{};
 			indexView.BufferLocation = indexBuffer.Native()->GetGPUVirtualAddress();
 			indexView.SizeInBytes = static_cast<UINT>(indexBuffer.description.size * indexBuffer.description.stride);
@@ -394,10 +383,7 @@ void Renderer::Render(entt::registry& registry)
 					continue;
 
 				// #TODO: Only bind once per mesh, and pass subset.vertexOffset into the draw call. This isn't yet supported with DXC, see: https://github.com/microsoft/DirectXShaderCompiler/issues/2907
-
-				// Set the vertex buffer.
-				auto& vertexBuffer = device->GetResourceManager().Get(mesh.vertexBuffer);
-				list.Native()->SetGraphicsRootShaderResourceView(1, vertexBuffer.Native()->GetGPUVirtualAddress() + (subset.vertexOffset * sizeof(Vertex)));
+				list.BindResource("vertexBuffer", mesh.vertexBuffer, subset.vertexOffset * sizeof(Vertex));
 
 				list.Native()->DrawIndexedInstanced(static_cast<uint32_t>(subset.indices), 1, static_cast<uint32_t>(subset.indexOffset), 0, 0);
 			}
@@ -415,23 +401,13 @@ void Renderer::Render(entt::registry& registry)
 	forwardPass.Output(outputHDRTag, OutputBind::RTV, true);
 	forwardPass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
 	{
-		auto cameraBuffer = resources.GetBuffer(cameraBufferTag);
-		auto& cameraBufferComponent = device->GetResourceManager().Get(cameraBuffer);
-
 		// Opaque
 
 		list.BindPipelineState(pipelines["ForwardOpaque"]);
-
-		// Set the bindless textures.
-		list.Native()->SetGraphicsRootDescriptorTable(6, device->GetDescriptorAllocator().GetBindlessHeap());
-
-		// Bind the camera data.
-		list.Native()->SetGraphicsRootConstantBufferView(2, cameraBufferComponent.Native()->GetGPUVirtualAddress());
-
-		// Bind the light data.
-		auto& lightBufferComponent = device->GetResourceManager().Get(lightBuffer);
-		list.Native()->SetGraphicsRoot32BitConstant(4, lightBufferComponent.description.size, 0);
-		list.Native()->SetGraphicsRootShaderResourceView(5, lightBufferComponent.Native()->GetGPUVirtualAddress());
+		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
+		list.BindResource("cameraBuffer", resources.GetBuffer(cameraBufferTag));
+		list.BindConstants("lightCount", { (uint32_t)device->GetResourceManager().Get(lightBuffer).description.size });
+		list.BindResource("lights", lightBuffer);
 
 		{
 			VGScopedGPUStat("Opaque", device->GetDirectContext(), list.Native());
@@ -439,10 +415,7 @@ void Renderer::Render(entt::registry& registry)
 			size_t entityIndex = 0;
 			registry.view<const TransformComponent, const MeshComponent>().each([&](auto entity, const auto&, const auto& mesh)
 			{
-				// Set the per object buffer.
-				auto& instanceBufferComponent = device->GetResourceManager().Get(instanceBuffer);
-				const auto finalInstanceBufferOffset = instanceOffset + (entityIndex * sizeof(EntityInstance));
-				list.Native()->SetGraphicsRootConstantBufferView(0, instanceBufferComponent.Native()->GetGPUVirtualAddress() + finalInstanceBufferOffset);
+				list.BindResource("perObject", instanceBuffer, instanceOffset + (entityIndex * sizeof(EntityInstance)));
 
 				// Set the index buffer.
 				auto& indexBuffer = device->GetResourceManager().Get(mesh.indexBuffer);
@@ -460,16 +433,12 @@ void Renderer::Render(entt::registry& registry)
 						continue;
 
 					// #TODO: Only bind once per mesh, and pass subset.vertexOffset into the draw call. This isn't yet supported with DXC, see: https://github.com/microsoft/DirectXShaderCompiler/issues/2907
-
-					// Set the vertex buffer.
-					auto& vertexBuffer = device->GetResourceManager().Get(mesh.vertexBuffer);
-					list.Native()->SetGraphicsRootShaderResourceView(1, vertexBuffer.Native()->GetGPUVirtualAddress() + (subset.vertexOffset * sizeof(Vertex)));
+					list.BindResource("vertexBuffer", mesh.vertexBuffer, subset.vertexOffset * sizeof(Vertex));
 
 					// Set the material data.
 					if (device->GetResourceManager().Valid(subset.material.materialBuffer))
 					{
-						auto& materialBuffer = device->GetResourceManager().Get(subset.material.materialBuffer);
-						list.Native()->SetGraphicsRootConstantBufferView(3, materialBuffer.Native()->GetGPUVirtualAddress());
+						list.BindResource("material", subset.material.materialBuffer);
 					}
 
 					list.Native()->DrawIndexedInstanced(static_cast<uint32_t>(subset.indices), 1, static_cast<uint32_t>(subset.indexOffset), 0, 0);
@@ -482,10 +451,10 @@ void Renderer::Render(entt::registry& registry)
 		// Transparent
 
 		list.BindPipelineState(pipelines["ForwardTransparent"]);
-		list.Native()->SetGraphicsRootDescriptorTable(6, device->GetDescriptorAllocator().GetBindlessHeap());
-		list.Native()->SetGraphicsRootConstantBufferView(2, cameraBufferComponent.Native()->GetGPUVirtualAddress());
-		list.Native()->SetGraphicsRoot32BitConstant(4, lightBufferComponent.description.size, 0);
-		list.Native()->SetGraphicsRootShaderResourceView(5, lightBufferComponent.Native()->GetGPUVirtualAddress());
+		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
+		list.BindResource("cameraBuffer", resources.GetBuffer(cameraBufferTag));
+		list.BindConstants("lightCount", { (uint32_t)device->GetResourceManager().Get(lightBuffer).description.size });
+		list.BindResource("lights", lightBuffer);
 
 		{
 			VGScopedGPUStat("Transparent", device->GetDirectContext(), list.Native());
@@ -494,14 +463,10 @@ void Renderer::Render(entt::registry& registry)
 			size_t entityIndex = 0;
 			registry.view<const TransformComponent, const MeshComponent>().each([&](auto entity, const auto&, const auto& mesh)
 			{
-				// Set the per object buffer.
-				auto& instanceBufferComponent = device->GetResourceManager().Get(instanceBuffer);
-				const auto finalInstanceBufferOffset = instanceOffset + (entityIndex * sizeof(EntityInstance));
-				list.Native()->SetGraphicsRootConstantBufferView(0, instanceBufferComponent.Native()->GetGPUVirtualAddress() + finalInstanceBufferOffset);
+				list.BindResource("perObject", instanceBuffer, instanceOffset + (entityIndex * sizeof(EntityInstance)));
 
 				// Set the index buffer.
 				auto& indexBuffer = device->GetResourceManager().Get(mesh.indexBuffer);
-
 				D3D12_INDEX_BUFFER_VIEW indexView{};
 				indexView.BufferLocation = indexBuffer.Native()->GetGPUVirtualAddress();
 				indexView.SizeInBytes = static_cast<UINT>(indexBuffer.description.size * indexBuffer.description.stride);
@@ -516,16 +481,12 @@ void Renderer::Render(entt::registry& registry)
 						continue;
 
 					// #TODO: Only bind once per mesh, and pass subset.vertexOffset into the draw call. This isn't yet supported with DXC, see: https://github.com/microsoft/DirectXShaderCompiler/issues/2907
-
-					// Set the vertex buffer.
-					auto& vertexBuffer = device->GetResourceManager().Get(mesh.vertexBuffer);
-					list.Native()->SetGraphicsRootShaderResourceView(1, vertexBuffer.Native()->GetGPUVirtualAddress() + (subset.vertexOffset * sizeof(Vertex)));
+					list.BindResource("vertexBuffer", mesh.vertexBuffer, subset.vertexOffset * sizeof(Vertex));
 
 					// Set the material data.
 					if (device->GetResourceManager().Valid(subset.material.materialBuffer))
 					{
-						auto& materialBuffer = device->GetResourceManager().Get(subset.material.materialBuffer);
-						list.Native()->SetGraphicsRootConstantBufferView(3, materialBuffer.Native()->GetGPUVirtualAddress());
+						list.BindResource("material", subset.material.materialBuffer);
 					}
 
 					list.Native()->DrawIndexedInstanced(static_cast<uint32_t>(subset.indices), 1, static_cast<uint32_t>(subset.indexOffset), 0, 0);
@@ -545,15 +506,13 @@ void Renderer::Render(entt::registry& registry)
 	postProcessPass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
 	{
 		list.BindPipelineState(pipelines["PostProcess"]);
-
-		// Set the bindless textures.
-		list.Native()->SetGraphicsRootDescriptorTable(1, device->GetDescriptorAllocator().GetBindlessHeap());
+		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
 
 		auto outputHDR = resources.GetTexture(outputHDRTag);
 		auto& outputHDRComponent = device->GetResourceManager().Get(outputHDR);
 
 		// Set the output texture index.
-		list.Native()->SetGraphicsRoot32BitConstant(0, outputHDRComponent.SRV->bindlessIndex, 0);
+		list.BindConstants("inputTextures", { outputHDRComponent.SRV->bindlessIndex });
 
 		list.DrawFullscreenQuad();
 	});

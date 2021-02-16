@@ -303,7 +303,7 @@ void EditorUI::DrawRenderGraph(RenderDevice* device, TextureHandle depthStencil,
 			{
 				ImGui::GetWindowDrawList()->AddCallback([](auto* list)
 				{
-					list->Native()->SetGraphicsRoot32BitConstant(2, true, 0);
+					list->BindConstants("drawData", { 1 });
 				}, nullptr);
 			}
 
@@ -313,7 +313,7 @@ void EditorUI::DrawRenderGraph(RenderDevice* device, TextureHandle depthStencil,
 			{
 				ImGui::GetWindowDrawList()->AddCallback([](auto* list)
 				{
-					list->Native()->SetGraphicsRoot32BitConstant(2, false, 0);
+					list->BindConstants("drawData", { 0 });
 				}, nullptr);
 			}
 
