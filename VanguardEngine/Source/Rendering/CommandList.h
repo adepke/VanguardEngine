@@ -42,7 +42,7 @@ public:
 
 	void BindPipelineState(const PipelineState& state);
 	void BindDescriptorAllocator(DescriptorAllocator& allocator);
-	void BindConstants(const std::string& bindName, std::vector<uint32_t> data, size_t offset = 0);
+	void BindConstants(const std::string& bindName, const std::vector<uint32_t>& data, size_t offset = 0);
 	void BindResource(const std::string& bindName, BufferHandle handle, size_t offset = 0);
 	void BindResourceTable(const std::string& bindName, D3D12_GPU_DESCRIPTOR_HANDLE descriptor);
 

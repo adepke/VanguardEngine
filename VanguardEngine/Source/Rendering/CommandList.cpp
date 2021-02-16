@@ -102,7 +102,7 @@ void CommandList::BindDescriptorAllocator(DescriptorAllocator& allocator)
 	list->SetDescriptorHeaps(1, &descriptorHeap);
 }
 
-void CommandList::BindConstants(const std::string& bindName, std::vector<uint32_t> data, size_t offset)
+void CommandList::BindConstants(const std::string& bindName, const std::vector<uint32_t>& data, size_t offset)
 {
 	VGAssert(boundPipelineReflection, "Attempted to bind resource without first binding a pipeline.");
 
