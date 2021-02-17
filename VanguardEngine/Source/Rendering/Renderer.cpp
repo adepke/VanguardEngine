@@ -498,11 +498,11 @@ void Renderer::Render(entt::registry& registry)
 	});
 
 	auto& postProcessPass = graph.AddPass("Post Process Pass", ExecutionQueue::Graphics);
-	const auto outputSDRTag = postProcessPass.Create(TransientTextureDescription{
+	const auto outputLDRTag = postProcessPass.Create(TransientTextureDescription{
 		.format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB
-	}, VGText("Output SDR sRGB"));
+	}, VGText("Output LDR sRGB"));
 	postProcessPass.Read(outputHDRTag, ResourceBind::SRV);
-	postProcessPass.Output(outputSDRTag, OutputBind::RTV, true);
+	postProcessPass.Output(outputLDRTag, OutputBind::RTV, true);
 	postProcessPass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
 	{
 		list.BindPipelineState(pipelines["PostProcess"]);
@@ -520,12 +520,12 @@ void Renderer::Render(entt::registry& registry)
 #if ENABLE_EDITOR
 	auto& editorPass = graph.AddPass("Editor Pass", ExecutionQueue::Graphics);
 	editorPass.Read(depthStencilTag, ResourceBind::SRV);
-	editorPass.Read(outputSDRTag, ResourceBind::SRV);
+	editorPass.Read(outputLDRTag, ResourceBind::SRV);
 	editorPass.Output(backBufferTag, OutputBind::RTV, false);
 	editorPass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
 	{
 		userInterface->NewFrame();
-		EditorRenderer::Render(device.get(), registry, lastFrameTime, resources.GetTexture(depthStencilTag), resources.GetTexture(outputSDRTag));
+		EditorRenderer::Render(device.get(), registry, lastFrameTime, resources.GetTexture(depthStencilTag), resources.GetTexture(outputLDRTag));
 		userInterface->Render(list);
 	});
 #endif

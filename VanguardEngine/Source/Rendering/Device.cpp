@@ -209,7 +209,7 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 	DXGI_SWAP_CHAIN_DESC1 swapChainDescription{};
 	swapChainDescription.Width = renderWidth;
 	swapChainDescription.Height = renderHeight;
-	swapChainDescription.Format = DXGI_FORMAT_R8G8B8A8_UNORM;  // SDR non-sRGB. Create the RTV with sRGB. See: https://docs.microsoft.com/en-us/windows/win32/direct3ddxgi/converting-data-color-space. #TODO: Support HDR.
+	swapChainDescription.Format = DXGI_FORMAT_R8G8B8A8_UNORM;  // LDR non-sRGB. Create the RTV with sRGB. See: https://docs.microsoft.com/en-us/windows/win32/direct3ddxgi/converting-data-color-space. #TODO: Support HDR.
 	swapChainDescription.BufferCount = frameCount;
 	swapChainDescription.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
 	swapChainDescription.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
