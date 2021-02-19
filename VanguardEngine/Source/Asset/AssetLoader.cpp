@@ -24,6 +24,9 @@ namespace AssetLoader
 			const auto& buffer = model.buffers[bufferView.buffer];
 			const auto* data = reinterpret_cast<const T*>(buffer.data.data() + bufferView.byteOffset);
 
+			// Safety checks.
+			VGAssert(sizeof(T) / sizeof(float) == accessor.type, "Mismatched vertex attribute data type.");
+
 			return { data, accessor.count };
 		}
 
@@ -310,18 +313,26 @@ namespace AssetLoader
 				const auto [positionData, positionCount] = FindVertexAttribute<XMFLOAT3>("POSITION", model, primitive);
 				const auto [normalData, normalCount] = FindVertexAttribute<XMFLOAT3>("NORMAL", model, primitive);
 				const auto [texcoordData, texcoordCount] = FindVertexAttribute<XMFLOAT2>("TEXCOORD_0", model, primitive);
-				const auto [tangentData, tangentCount] = FindVertexAttribute<XMFLOAT3>("TANGENT", model, primitive);
+				const auto [tangentData, tangentCount] = FindVertexAttribute<XMFLOAT4>("TANGENT", model, primitive);
 
 				vertices.reserve(vertices.size() + positionCount);
 				const auto verticesSize = vertices.size();
 
 				for (int i = 0; i < positionCount; ++i)
 				{
+					// Tangent has to be handled differently because we're trimming the fourth dimension.
+					XMFLOAT3 tangent = { 0.f, 0.f, 0.f };
+					if (tangentData)
+					{
+						const auto tangent4D = *(tangentData + i);
+						tangent = { tangent4D.x, tangent4D.y, tangent4D.z };
+					}
+
 					vertices.push_back({
 						.position = *(positionData + i),
 						.normal = normalData ? *(normalData + i) : XMFLOAT3{ 0.f, 0.f, 0.f },
 						.uv = texcoordData ? *(texcoordData + i) : XMFLOAT2{ 0.f, 0.f },
-						.tangent = tangentData ? *(tangentData + i) : XMFLOAT3{ 0.f, 0.f, 0.f },
+						.tangent = tangent,
 						.bitangent = XMFLOAT3{ 0.f, 0.f, 0.f }
 					});
 
