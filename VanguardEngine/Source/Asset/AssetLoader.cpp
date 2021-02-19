@@ -66,22 +66,22 @@ namespace AssetLoader
 
 		if (!warning.empty())
 		{
-			//VGLogWarning(Asset) << "GLTF load: " << warning;
+			VGLogWarning(Asset) << "GLTF load: " << warning;
 		}
 
 		if (!error.empty())
 		{
-			//VGLogError(Asset) << "GLTF load: " << error;
+			VGLogError(Asset) << "GLTF load: " << error;
 		}
 
 		if (!result)
 		{
-			//VGLogError(Asset) << "Failed to load asset '" << path.filename().generic_string() << "'.";
+			VGLogError(Asset) << "Failed to load asset '" << path.filename().generic_string() << "'.";
 		}
 
 		else
 		{
-			//VGLog(Asset) << "Loaded asset '" << path.filename().generic_string() << "'.";
+			VGLog(Asset) << "Loaded asset '" << path.filename().generic_string() << "'.";
 		}
 
 		std::vector<MeshComponent::Subset> subsets;

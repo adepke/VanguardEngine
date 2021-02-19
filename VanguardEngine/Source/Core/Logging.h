@@ -85,8 +85,23 @@ namespace Detail
 		}
 #endif
 
+		// Overload to handle non-wide strings.
+		LogRecord& operator<<(std::string& data)
+		{
+			std::wstring convertedData{ data.begin(), data.end() };
+			messageStream << convertedData;
+			return *this;
+		}
+
+		LogRecord& operator<<(std::string&& data)
+		{
+			std::wstring convertedData{ data.begin(), data.end() };
+			messageStream << convertedData;
+			return *this;
+		}
+
 		template <typename T>
-		LogRecord& operator<<(const T& data)
+		LogRecord& operator<<(T&& data)
 		{
 			messageStream << data;
 			return *this;
