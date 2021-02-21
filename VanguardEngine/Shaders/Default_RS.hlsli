@@ -23,5 +23,5 @@
 		"comparisonFunc = COMPARISON_ALWAYS," \
 		"borderColor = STATIC_BORDER_COLOR_TRANSPARENT_BLACK," \
 		"minLOD = 0.f," \
-		"maxLOD = 0.f," \
+		"maxLOD = 100.f," \
 		"visibility = SHADER_VISIBILITY_PIXEL)"
