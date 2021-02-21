@@ -153,8 +153,8 @@ void UserInterfaceManager::CreateDeviceObjects()
 	description.blendDescription.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
 	description.blendDescription.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
 	description.blendDescription.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-	description.blendDescription.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
-	description.blendDescription.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+	description.blendDescription.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+	description.blendDescription.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
 	description.blendDescription.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
 	description.blendDescription.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 	description.rasterizerDescription.FillMode = D3D12_FILL_MODE_SOLID;
@@ -169,7 +169,7 @@ void UserInterfaceManager::CreateDeviceObjects()
 	description.rasterizerDescription.ForcedSampleCount = 0;
 	description.rasterizerDescription.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
 	description.depthStencilDescription.DepthEnable = false;
-	description.depthStencilDescription.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;
+	description.depthStencilDescription.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
 	description.depthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
 	description.depthStencilDescription.StencilEnable = false;
 	description.depthStencilDescription.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
