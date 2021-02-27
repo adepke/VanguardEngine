@@ -19,8 +19,8 @@ protected:
 	ResourcePtr<ID3D12GraphicsCommandList5> list;
 	RenderDevice* device;
 
-	// Stateful tracking of the bound pipeline's reflection data for binding.
-	const PipelineStateReflection* boundPipelineReflection = nullptr;
+	// Stateful tracking of the bound pipeline.
+	const PipelineState* boundPipeline = nullptr;
 
 	std::vector<D3D12_RESOURCE_BARRIER> pendingBarriers;
 
@@ -36,6 +36,8 @@ public:
 	// #TODO: Support split barriers.
 	void TransitionBarrier(BufferHandle resource, D3D12_RESOURCE_STATES state);
 	void TransitionBarrier(TextureHandle resource, D3D12_RESOURCE_STATES state);
+	void UAVBarrier(BufferHandle resource);
+	void UAVBarrier(TextureHandle resource);
 
 	// Batch submits all pending barriers to the driver.
 	void FlushBarriers();

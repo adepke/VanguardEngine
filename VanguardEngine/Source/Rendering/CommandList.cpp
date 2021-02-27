@@ -71,6 +71,26 @@ void CommandList::TransitionBarrier(TextureHandle resource, D3D12_RESOURCE_STATE
 	component.state = state;
 }
 
+void CommandList::UAVBarrier(BufferHandle resource)
+{
+	D3D12_RESOURCE_BARRIER barrier;
+	barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+	barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+	barrier.UAV.pResource = device->GetResourceManager().Get(resource).Native();
+
+	pendingBarriers.emplace_back(std::move(barrier));
+}
+
+void CommandList::UAVBarrier(TextureHandle resource)
+{
+	D3D12_RESOURCE_BARRIER barrier;
+	barrier.Type = D3D12_RESOURCE_BARRIER_TYPE_UAV;
+	barrier.Flags = D3D12_RESOURCE_BARRIER_FLAG_NONE;
+	barrier.UAV.pResource = device->GetResourceManager().Get(resource).Native();
+
+	pendingBarriers.emplace_back(std::move(barrier));
+}
+
 void CommandList::FlushBarriers()
 {
 	VGScopedCPUStat("Command List Barrier Flush");
@@ -87,10 +107,23 @@ void CommandList::BindPipelineState(const PipelineState& state)
 {
 	VGScopedCPUStat("Bind Pipeline");
 
-	boundPipelineReflection = state.GetReflectionData();
+	boundPipeline = &state;
 
-	list->IASetPrimitiveTopology(state.description.topology);
-	list->SetGraphicsRootSignature(state.rootSignature.Get());
+	if (state.vertexShader)
+	{
+		list->IASetPrimitiveTopology(state.graphicsDescription.topology);
+	}
+
+	if (state.vertexShader)
+	{
+		list->SetGraphicsRootSignature(state.rootSignature.Get());
+	}
+
+	else
+	{
+		list->SetComputeRootSignature(state.rootSignature.Get());
+	}
+
 	list->SetPipelineState(state.Native());
 }
 
@@ -104,13 +137,22 @@ void CommandList::BindDescriptorAllocator(DescriptorAllocator& allocator)
 
 void CommandList::BindConstants(const std::string& bindName, const std::vector<uint32_t>& data, size_t offset)
 {
-	VGAssert(boundPipelineReflection, "Attempted to bind resource without first binding a pipeline.");
+	VGAssert(boundPipeline, "Attempted to bind resource without first binding a pipeline.");
 
-	const auto& bindMetadata = boundPipelineReflection->resourceIndexMap.at(bindName);  // Can't use operator[] due to lack of const-ness.
+	const auto& bindMetadata = boundPipeline->GetReflectionData()->resourceIndexMap.at(bindName);  // Can't use operator[] due to lack of const-ness.
 	switch (bindMetadata.type)
 	{
 	case PipelineStateReflection::ResourceBindType::RootConstants:
-		list->SetGraphicsRoot32BitConstants(bindMetadata.signatureIndex, data.size(), data.data(), offset);
+		if (boundPipeline->vertexShader)
+		{
+			list->SetGraphicsRoot32BitConstants(bindMetadata.signatureIndex, data.size(), data.data(), offset);
+		}
+
+		else
+		{
+			list->SetComputeRoot32BitConstants(bindMetadata.signatureIndex, data.size(), data.data(), offset);
+		}
+
 		break;
 	default:
 		VGAssert(false, "Invalid binding, attempting to bind constants to binding '%s', where the bind type is '%i'.", bindName, bindMetadata.type);
@@ -120,21 +162,48 @@ void CommandList::BindConstants(const std::string& bindName, const std::vector<u
 
 void CommandList::BindResource(const std::string& bindName, BufferHandle handle, size_t offset)
 {
-	VGAssert(boundPipelineReflection, "Attempted to bind resource without first binding a pipeline.");
+	VGAssert(boundPipeline, "Attempted to bind resource without first binding a pipeline.");
 
 	auto& bufferComponent = device->GetResourceManager().Get(handle);
 
-	const auto& bindMetadata = boundPipelineReflection->resourceIndexMap.at(bindName);  // Can't use operator[] due to lack of const-ness.
+	const auto& bindMetadata = boundPipeline->GetReflectionData()->resourceIndexMap.at(bindName);  // Can't use operator[] due to lack of const-ness.
 	switch (bindMetadata.type)
 	{
 	case PipelineStateReflection::ResourceBindType::ConstantBuffer:
-		list->SetGraphicsRootConstantBufferView(bindMetadata.signatureIndex, bufferComponent.Native()->GetGPUVirtualAddress() + offset);
+		if (boundPipeline->vertexShader)
+		{
+			list->SetGraphicsRootConstantBufferView(bindMetadata.signatureIndex, bufferComponent.Native()->GetGPUVirtualAddress() + offset);
+		}
+
+		else
+		{
+			list->SetComputeRootConstantBufferView(bindMetadata.signatureIndex, bufferComponent.Native()->GetGPUVirtualAddress() + offset);
+		}
+
 		break;
 	case PipelineStateReflection::ResourceBindType::ShaderResource:
-		list->SetGraphicsRootShaderResourceView(bindMetadata.signatureIndex, bufferComponent.Native()->GetGPUVirtualAddress() + offset);
+		if (boundPipeline->vertexShader)
+		{
+			list->SetGraphicsRootShaderResourceView(bindMetadata.signatureIndex, bufferComponent.Native()->GetGPUVirtualAddress() + offset);
+		}
+
+		else
+		{
+			list->SetComputeRootShaderResourceView(bindMetadata.signatureIndex, bufferComponent.Native()->GetGPUVirtualAddress() + offset);
+		}
+
 		break;
 	case PipelineStateReflection::ResourceBindType::UnorderedAccess:
-		list->SetGraphicsRootUnorderedAccessView(bindMetadata.signatureIndex, bufferComponent.Native()->GetGPUVirtualAddress() + offset);
+		if (boundPipeline->vertexShader)
+		{
+			list->SetGraphicsRootUnorderedAccessView(bindMetadata.signatureIndex, bufferComponent.Native()->GetGPUVirtualAddress() + offset);
+		}
+
+		else
+		{
+			list->SetComputeRootUnorderedAccessView(bindMetadata.signatureIndex, bufferComponent.Native()->GetGPUVirtualAddress() + offset);
+		}
+
 		break;
 	default:
 		VGAssert(false, "Invalid binding, attempting to bind buffer to binding '%s', where the bind type is '%i'.", bindName, bindMetadata.type);
@@ -144,10 +213,19 @@ void CommandList::BindResource(const std::string& bindName, BufferHandle handle,
 
 void CommandList::BindResourceTable(const std::string& bindName, D3D12_GPU_DESCRIPTOR_HANDLE descriptor)
 {
-	VGAssert(boundPipelineReflection, "Attempted to bind resource without first binding a pipeline.");
+	VGAssert(boundPipeline, "Attempted to bind resource without first binding a pipeline.");
 
-	const auto& bindMetadata = boundPipelineReflection->resourceIndexMap.at(bindName);  // Can't use operator[] due to lack of const-ness.
-	list->SetGraphicsRootDescriptorTable(bindMetadata.signatureIndex, descriptor);
+	const auto& bindMetadata = boundPipeline->GetReflectionData()->resourceIndexMap.at(bindName);  // Can't use operator[] due to lack of const-ness.
+
+	if (boundPipeline->vertexShader)
+	{
+		list->SetGraphicsRootDescriptorTable(bindMetadata.signatureIndex, descriptor);
+	}
+
+	else
+	{
+		list->SetComputeRootDescriptorTable(bindMetadata.signatureIndex, descriptor);
+	}
 }
 
 void CommandList::DrawFullscreenQuad()
