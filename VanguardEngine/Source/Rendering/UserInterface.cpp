@@ -146,7 +146,7 @@ void UserInterfaceManager::CreateDeviceObjects()
 
 	pipeline = std::make_unique<PipelineState>();
 
-	PipelineStateDescription description{};
+	GraphicsPipelineStateDescription description{};
 	description.shaderPath = Config::shadersPath / "UserInterface";
 	description.blendDescription.AlphaToCoverageEnable = false;
 	description.blendDescription.RenderTarget[0].BlendEnable = true;

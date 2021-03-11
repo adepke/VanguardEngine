@@ -12,13 +12,18 @@
 
 class RenderDevice;
 
-struct PipelineStateDescription
+struct GraphicsPipelineStateDescription
 {
 	std::filesystem::path shaderPath;
 	D3D12_BLEND_DESC blendDescription;
 	D3D12_RASTERIZER_DESC rasterizerDescription;
 	D3D12_DEPTH_STENCIL_DESC depthStencilDescription;
 	D3D12_PRIMITIVE_TOPOLOGY topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+};
+
+struct ComputePipelineStateDescription
+{
+	std::filesystem::path shaderPath;
 };
 
 struct PipelineStateReflection
@@ -48,14 +53,14 @@ class PipelineState
 
 private:
 	ResourcePtr<ID3D12PipelineState> pipeline;
-	PipelineStateDescription description;
+	GraphicsPipelineStateDescription graphicsDescription;
+	ComputePipelineStateDescription computeDescription;
 	PipelineStateReflection reflection;
 
 	void ReflectRootSignature();
 
 	void CreateShaders(RenderDevice& device, const std::filesystem::path& shaderPath);
 	void CreateRootSignature(RenderDevice& device);
-	void CreateDescriptorTables(RenderDevice& device);
 
 public:
 	ResourcePtr<ID3D12RootSignature> rootSignature;
@@ -64,10 +69,12 @@ public:
 	std::unique_ptr<Shader> hullShader;
 	std::unique_ptr<Shader> domainShader;
 	std::unique_ptr<Shader> geometryShader;
+	std::unique_ptr<Shader> computeShader;
 
 	auto* Native() const noexcept { return pipeline.Get(); }
 
 	auto* GetReflectionData() const noexcept { return &reflection; }
 
-	void Build(RenderDevice& device, const PipelineStateDescription& inDescription, bool backBufferOutput);
+	void Build(RenderDevice& device, const GraphicsPipelineStateDescription& inDescription, bool backBufferOutput);
+	void Build(RenderDevice& device, const ComputePipelineStateDescription& inDescription);
 };

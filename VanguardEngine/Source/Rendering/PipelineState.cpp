@@ -14,7 +14,9 @@ void PipelineState::ReflectRootSignature()
 {
 	ResourcePtr<ID3D12RootSignatureDeserializer> deserializer;
 
-	const auto result = D3D12CreateRootSignatureDeserializer(vertexShader->bytecode.data(), vertexShader->bytecode.size(), IID_PPV_ARGS(deserializer.Indirect()));
+	const auto& rootSignatureData = vertexShader ? vertexShader->bytecode : computeShader->bytecode;
+
+	const auto result = D3D12CreateRootSignatureDeserializer(rootSignatureData.data(), rootSignatureData.size(), IID_PPV_ARGS(deserializer.Indirect()));
 	if (FAILED(result))
 	{
 		VGLogError(Rendering) << "Failed to create root signature deserializer during reflection: " << result;
@@ -132,6 +134,7 @@ void PipelineState::ReflectRootSignature()
 			MatchShaderBindings(hullShader);
 			MatchShaderBindings(domainShader);
 			MatchShaderBindings(geometryShader);
+			MatchShaderBindings(computeShader);
 			break;
 		case D3D12_SHADER_VISIBILITY_VERTEX:
 			MatchShaderBindings(vertexShader);
@@ -194,6 +197,11 @@ void PipelineState::CreateShaders(RenderDevice& device, const std::filesystem::p
 				type = ShaderType::Geometry;
 			}
 
+			else if (findType(VGText("_CS")))
+			{
+				type = ShaderType::Compute;
+			}
+
 			else if (findType(VGText("_RS")))
 			{
 				type = std::nullopt;  // Root signature, we don't need to do anything.
@@ -224,6 +232,8 @@ void PipelineState::CreateShaders(RenderDevice& device, const std::filesystem::p
 				case ShaderType::Geometry:
 					geometryShader = std::move(compiledShader);
 					break;
+				case ShaderType::Compute:
+					computeShader = std::move(compiledShader);
 				}
 			}
 		}
@@ -234,7 +244,9 @@ void PipelineState::CreateRootSignature(RenderDevice& device)
 {
 	VGScopedCPUStat("Create Root Signature");
 
-	const auto result = device.Native()->CreateRootSignature(0, vertexShader->bytecode.data(), vertexShader->bytecode.size(), IID_PPV_ARGS(rootSignature.Indirect()));
+	const auto& rootSignatureData = vertexShader ? vertexShader->bytecode : computeShader->bytecode;
+
+	const auto result = device.Native()->CreateRootSignature(0, rootSignatureData.data(), rootSignatureData.size(), IID_PPV_ARGS(rootSignature.Indirect()));
 	if (FAILED(result))
 	{
 		VGLogError(Rendering) << "Failed to create root signature: " << result;
@@ -243,27 +255,22 @@ void PipelineState::CreateRootSignature(RenderDevice& device)
 	ReflectRootSignature();
 }
 
-void PipelineState::CreateDescriptorTables(RenderDevice& device)
-{
-	VGScopedCPUStat("Create Descriptor Tables");
-}
-
-void PipelineState::Build(RenderDevice& device, const PipelineStateDescription& inDescription, bool backBufferOutput)
+void PipelineState::Build(RenderDevice& device, const GraphicsPipelineStateDescription& inDescription, bool backBufferOutput)
 {
 	VGScopedCPUStat("Build Pipeline");
 
-	description = inDescription;
+	graphicsDescription = inDescription;
 
-	VGLog(Rendering) << "Building pipeline for shader '" << description.shaderPath.filename().generic_wstring() << "'.";
+	VGLog(Rendering) << "Building graphics pipeline for shader '" << graphicsDescription.shaderPath.filename().generic_wstring() << "'.";
 
-	const auto& filename = description.shaderPath.filename().generic_wstring();
+	const auto& filename = graphicsDescription.shaderPath.filename().generic_wstring();
 
-	if (description.shaderPath.has_extension())
+	if (graphicsDescription.shaderPath.has_extension())
 	{
-		VGLogWarning(Rendering) << "Improper shader path '" << description.shaderPath.filename().generic_wstring() << "', do not include extension.";
+		VGLogWarning(Rendering) << "Improper shader path '" << graphicsDescription.shaderPath.filename().generic_wstring() << "', do not include extension.";
 	}
 
-	CreateShaders(device, description.shaderPath);
+	CreateShaders(device, graphicsDescription.shaderPath);
 
 	if (!vertexShader)
 	{
@@ -273,42 +280,73 @@ void PipelineState::Build(RenderDevice& device, const PipelineStateDescription& 
 	}
 
 	CreateRootSignature(device);
-	CreateDescriptorTables(device);
 
-	D3D12_GRAPHICS_PIPELINE_STATE_DESC desc{};
-	desc.pRootSignature = rootSignature.Get();
-	desc.VS = { vertexShader->bytecode.data(), vertexShader->bytecode.size() };
-	desc.PS = { pixelShader ? pixelShader->bytecode.data() : nullptr, pixelShader ? pixelShader->bytecode.size() : 0 };
-	desc.DS = { domainShader ? domainShader->bytecode.data() : nullptr, domainShader ? domainShader->bytecode.size() : 0 };
-	desc.HS = { hullShader ? hullShader->bytecode.data() : nullptr, hullShader ? hullShader->bytecode.size() : 0 };
-	desc.GS = { geometryShader ? geometryShader->bytecode.data() : nullptr, geometryShader ? geometryShader->bytecode.size() : 0 };
-	desc.StreamOutput = { nullptr, 0, nullptr, 0, 0 };  // Don't support GPU out streaming.
-	desc.BlendState = description.blendDescription;
-	desc.SampleMask = std::numeric_limits<UINT>::max();
-	desc.RasterizerState = description.rasterizerDescription;
-	desc.DepthStencilState = description.depthStencilDescription;
-	desc.InputLayout = { nullptr, 0 };  // We aren't using the input assembler, use programmable vertex pulling.
-	desc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;  // Don't support strip topology cuts.
-	switch (description.topology)  // #TODO: Support patch topology, which is needed for hull and domain shaders.
+	D3D12_GRAPHICS_PIPELINE_STATE_DESC graphicsDesc{};
+	graphicsDesc.pRootSignature = rootSignature.Get();
+	graphicsDesc.VS = { vertexShader->bytecode.data(), vertexShader->bytecode.size() };
+	graphicsDesc.PS = { pixelShader ? pixelShader->bytecode.data() : nullptr, pixelShader ? pixelShader->bytecode.size() : 0 };
+	graphicsDesc.DS = { domainShader ? domainShader->bytecode.data() : nullptr, domainShader ? domainShader->bytecode.size() : 0 };
+	graphicsDesc.HS = { hullShader ? hullShader->bytecode.data() : nullptr, hullShader ? hullShader->bytecode.size() : 0 };
+	graphicsDesc.GS = { geometryShader ? geometryShader->bytecode.data() : nullptr, geometryShader ? geometryShader->bytecode.size() : 0 };
+	graphicsDesc.StreamOutput = { nullptr, 0, nullptr, 0, 0 };  // Don't support GPU out streaming.
+	graphicsDesc.BlendState = graphicsDescription.blendDescription;
+	graphicsDesc.SampleMask = std::numeric_limits<UINT>::max();
+	graphicsDesc.RasterizerState = graphicsDescription.rasterizerDescription;
+	graphicsDesc.DepthStencilState = graphicsDescription.depthStencilDescription;
+	graphicsDesc.InputLayout = { nullptr, 0 };  // We aren't using the input assembler, use programmable vertex pulling.
+	graphicsDesc.IBStripCutValue = D3D12_INDEX_BUFFER_STRIP_CUT_VALUE_DISABLED;  // Don't support strip topology cuts.
+	switch (graphicsDescription.topology)  // #TODO: Support patch topology, which is needed for hull and domain shaders.
 	{
-	case D3D_PRIMITIVE_TOPOLOGY_UNDEFINED: desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_UNDEFINED; break;
-	case D3D_PRIMITIVE_TOPOLOGY_POINTLIST: desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT; break;
+	case D3D_PRIMITIVE_TOPOLOGY_UNDEFINED: graphicsDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_UNDEFINED; break;
+	case D3D_PRIMITIVE_TOPOLOGY_POINTLIST: graphicsDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_POINT; break;
 	case D3D_PRIMITIVE_TOPOLOGY_LINELIST:
-	case D3D_PRIMITIVE_TOPOLOGY_LINESTRIP: desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE; break;
+	case D3D_PRIMITIVE_TOPOLOGY_LINESTRIP: graphicsDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_LINE; break;
 	case D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST:
-	case D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP: desc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE; break;
+	case D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP: graphicsDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE; break;
 	}
-	desc.NumRenderTargets = 1;  // #TODO: Pull from render graph.
-	desc.RTVFormats[0] = backBufferOutput ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R16G16B16A16_FLOAT;  // #TODO: Pull from render graph.
-	desc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
-	desc.SampleDesc = { 1, 0 };  // #TODO: Support multi-sampling.
-	desc.NodeMask = 0;
-	desc.CachedPSO = { nullptr, 0 };  // #TODO: Pipeline caching.
-	desc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;  // #TODO: Add debugging flag if we're a software adapter.
+	graphicsDesc.NumRenderTargets = 1;  // #TODO: Pull from render graph.
+	graphicsDesc.RTVFormats[0] = backBufferOutput ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R16G16B16A16_FLOAT;  // #TODO: Pull from render graph.
+	graphicsDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	graphicsDesc.SampleDesc = { 1, 0 };  // #TODO: Support multi-sampling.
+	graphicsDesc.NodeMask = 0;
+	graphicsDesc.CachedPSO = { nullptr, 0 };  // #TODO: Pipeline caching.
+	graphicsDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;  // #TODO: Add debugging flag if we're a software adapter.
 
-	const auto result = device.Native()->CreateGraphicsPipelineState(&desc, IID_PPV_ARGS(pipeline.Indirect()));
+	const auto result = device.Native()->CreateGraphicsPipelineState(&graphicsDesc, IID_PPV_ARGS(pipeline.Indirect()));
 	if (FAILED(result))
 	{
-		VGLogFatal(Rendering) << "Failed to create pipeline state: " << result;
+		VGLogFatal(Rendering) << "Failed to create graphics pipeline state: " << result;
+	}
+}
+
+void PipelineState::Build(RenderDevice& device, const ComputePipelineStateDescription& inDescription)
+{
+	VGScopedCPUStat("Build Pipeline");
+
+	computeDescription = inDescription;
+
+	VGLog(Rendering) << "Building compute pipeline for shader '" << computeDescription.shaderPath.filename().generic_wstring() << "'.";
+
+	const auto& filename = computeDescription.shaderPath.filename().generic_wstring();
+
+	if (computeDescription.shaderPath.has_extension())
+	{
+		VGLogWarning(Rendering) << "Improper shader path '" << computeDescription.shaderPath.filename().generic_wstring() << "', do not include extension.";
+	}
+
+	CreateShaders(device, computeDescription.shaderPath);
+	CreateRootSignature(device);
+
+	D3D12_COMPUTE_PIPELINE_STATE_DESC computeDesc{};
+	computeDesc.pRootSignature = rootSignature.Get();
+	computeDesc.CS = { computeShader->bytecode.data(), computeShader->bytecode.size() };
+	computeDesc.NodeMask = 0;
+	computeDesc.CachedPSO = { nullptr, 0 };  // #TODO: Pipeline caching.
+	computeDesc.Flags = D3D12_PIPELINE_STATE_FLAG_NONE;  // #TODO: Add debugging flag if we're a software adapter.
+
+	const auto result = device.Native()->CreateComputePipelineState(&computeDesc, IID_PPV_ARGS(pipeline.Indirect()));
+	if (FAILED(result))
+	{
+		VGLogFatal(Rendering) << "Failed to create compute pipeline state: " << result;
 	}
 }

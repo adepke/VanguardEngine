@@ -4,10 +4,15 @@
 #include <Rendering/Device.h>
 #include <Rendering/Resource.h>
 #include <Utility/AlignedSize.h>
+#include <Rendering/ResourceFormat.h>
+#include <Core/Config.h>
+#include <Utility/Math.h>
 
 #include <D3D12MemAlloc.h>
 
 #include <cstring>
+#include <algorithm>
+#include <cmath>
 
 void ResourceManager::CreateResourceViews(BufferComponent& target)
 {
@@ -73,7 +78,7 @@ void ResourceManager::CreateResourceViews(TextureComponent& target)
 		{
 		case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
 			viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE1D;
-			viewDesc.Texture1D.MipSlice = 0;  // #TODO: Support texture mips.
+			viewDesc.Texture1D.MipSlice = 0;
 			break;
 		case D3D12_RESOURCE_DIMENSION_TEXTURE2D:
 			viewDesc.ViewDimension = D3D12_RTV_DIMENSION_TEXTURE2D;
@@ -111,7 +116,7 @@ void ResourceManager::CreateResourceViews(TextureComponent& target)
 		{
 		case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
 			viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE1D;
-			viewDesc.Texture1D.MipSlice = 0;  // #TODO: Support texture mips.
+			viewDesc.Texture1D.MipSlice = 0;
 			break;
 		case D3D12_RESOURCE_DIMENSION_TEXTURE2D:
 			viewDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
@@ -147,7 +152,7 @@ void ResourceManager::CreateResourceViews(TextureComponent& target)
 		case D3D12_RESOURCE_DIMENSION_TEXTURE1D:
 			viewDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE1D;
 			viewDesc.Texture1D.MostDetailedMip = 0;
-			viewDesc.Texture1D.MipLevels = -1;  // #TODO: Support texture mips.
+			viewDesc.Texture1D.MipLevels = -1;
 			viewDesc.Texture1D.ResourceMinLODClamp = 0.f;
 			break;
 		case D3D12_RESOURCE_DIMENSION_TEXTURE2D:
@@ -189,6 +194,14 @@ void ResourceManager::NameResource(ResourcePtr<D3D12MA::Allocation>& target, con
 #endif
 }
 
+void ResourceManager::CreateMipmapTools()
+{
+	ComputePipelineStateDescription mipmapDescription;
+	mipmapDescription.shaderPath = Config::shadersPath / "GenerateMipmaps";
+	
+	mipmapPipeline.Build(*device, mipmapDescription);
+}
+
 void ResourceManager::Initialize(RenderDevice* inDevice, size_t bufferedFrames)
 {
 	VGScopedCPUStat("Resource Manager Initialize");
@@ -202,6 +215,7 @@ void ResourceManager::Initialize(RenderDevice* inDevice, size_t bufferedFrames)
 
 	frameBuffers.resize(frameCount);
 	frameTextures.resize(frameCount);
+	frameDescriptors.resize(frameCount);
 
 	constexpr auto uploadResourceSize = 1024 * 1024 * 512;
 
@@ -250,6 +264,8 @@ void ResourceManager::Initialize(RenderDevice* inDevice, size_t bufferedFrames)
 
 		NameResource(uploadResources[i], VGText("Upload heap"));
 	}
+
+	CreateMipmapTools();
 }
 
 const BufferHandle ResourceManager::Create(const BufferDescription& description, const std::wstring_view name)
@@ -287,18 +303,11 @@ const BufferHandle ResourceManager::Create(const BufferDescription& description,
 	allocationDesc.HeapType = description.updateRate == ResourceFrequency::Static ? D3D12_HEAP_TYPE_DEFAULT : D3D12_HEAP_TYPE_UPLOAD;
 	allocationDesc.Flags = D3D12MA::ALLOCATION_FLAG_NONE;
 
-	// #TODO: Do we need these flags if we specify vertex/constant buffer or index buffer?
-	auto resourceState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+	auto resourceState = D3D12_RESOURCE_STATE_COPY_DEST;
 
 	if (description.updateRate == ResourceFrequency::Dynamic)
 	{
 		resourceState = D3D12_RESOURCE_STATE_GENERIC_READ;
-	}
-
-	else
-	{
-		if (description.bindFlags & BindFlag::ConstantBuffer) resourceState |= D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
-		if (description.bindFlags & BindFlag::IndexBuffer) resourceState |= D3D12_RESOURCE_STATE_INDEX_BUFFER;
 	}
 
 	ID3D12Resource* rawResource = nullptr;
@@ -344,8 +353,8 @@ const TextureHandle ResourceManager::Create(const TextureDescription& descriptio
 	resourceDesc.Height = description.height;
 	resourceDesc.DepthOrArraySize = description.depth;
 	resourceDesc.Format = description.format;
-	resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;  // Prefer to let the adapter choose the most efficient layout. See: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ne-d3d12-d3d12_texture_layout
-	resourceDesc.MipLevels = 1;
+	resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_UNKNOWN;  // Prefer to let the adapter choose the most efficient layout, see: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ne-d3d12-d3d12_texture_layout
+	resourceDesc.MipLevels = description.mipMapping ? 0 : 1;  // Automatically determine mip levels if we're mipmapping this texture.
 	resourceDesc.SampleDesc.Count = 1;
 	resourceDesc.SampleDesc.Quality = 0;
 	resourceDesc.Flags = D3D12_RESOURCE_FLAG_NONE;
@@ -373,7 +382,8 @@ const TextureHandle ResourceManager::Create(const TextureDescription& descriptio
 		}
 	}
 
-	if (description.bindFlags & BindFlag::UnorderedAccess)
+	// Mipmapping requires a UAV.
+	if (description.bindFlags & BindFlag::UnorderedAccess || description.mipMapping)
 	{
 		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	}
@@ -388,7 +398,7 @@ const TextureHandle ResourceManager::Create(const TextureDescription& descriptio
 		allocationDesc.Flags |= D3D12MA::ALLOCATION_FLAG_COMMITTED;
 	}
 
-	auto resourceState = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+	auto resourceState = D3D12_RESOURCE_STATE_COPY_DEST;
 
 	if (description.bindFlags & BindFlag::DepthStencil)
 	{
@@ -551,8 +561,7 @@ void ResourceManager::Write(TextureHandle target, const std::vector<uint8_t>& so
 	auto& component = Get(target);
 
 	VGAssert(component.description.accessFlags & AccessFlag::CPUWrite, "Failed to write to texture, no CPU write access.");
-	// #TODO: Doesn't account for the size of the format.
-	VGAssert(component.description.width * component.description.height * component.description.depth <= source.size(), "Failed to write to texture, source is larger than target.");
+	VGAssert(component.description.width * component.description.height * component.description.depth * GetResourceFormatSize(component.description.format) / 8 <= source.size(), "Failed to write to texture, source is larger than target.");
 
 	const auto frameIndex = device->GetFrameIndex();
 
@@ -600,6 +609,89 @@ void ResourceManager::Write(TextureHandle target, const std::vector<uint8_t>& so
 	uploadOffsets[frameIndex] += requiredCopySize;
 }
 
+void ResourceManager::GenerateMipmaps(TextureHandle texture)
+{
+	// Run mipmapping on the direct queue, no need for async compute.
+	auto& list = device->GetDirectList();
+
+	// Transition to UAV state.
+	list.TransitionBarrier(texture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	list.FlushBarriers();
+
+	auto& textureComponent = Get(texture);
+	VGAssert(textureComponent.description.mipMapping, "Textures must have mipmapping enabled in order to generate mipmaps.");
+
+	const auto mipLevels = textureComponent.allocation->GetResource()->GetDesc().MipLevels;
+	const auto mipDispatches = static_cast<uint32_t>(std::ceil(mipLevels / 4.f));
+
+	std::vector<DescriptorHandle> uavDescriptors;
+	uavDescriptors.reserve(mipLevels - 1);
+
+	for (int i = 0; i < mipDispatches; ++i)
+	{
+		const auto baseMipWidth = NextPowerOf2(textureComponent.description.width) >> i * 4;
+		const auto baseMipHeight = NextPowerOf2(textureComponent.description.height) >> i * 4;
+
+		struct MipmapData
+		{
+			uint32_t mipBase;
+			uint32_t mipCount;
+			XMFLOAT2 texelSize;
+			// Boundary
+			uint32_t outputTextureIndices[4];
+			// Boundary
+			uint32_t inputTextureIndex;
+			uint32_t sRGB;
+			XMFLOAT2 padding;
+		} mipmapData;
+
+		mipmapData.mipBase = i * 4;  // Starting mip.
+		mipmapData.mipCount = std::min(mipLevels - mipmapData.mipBase - 1, 4u);  // How many mips to generate (0, 4].
+		mipmapData.sRGB = IsResourceFormatSRGB(textureComponent.description.format);
+		mipmapData.texelSize = { 2.f / baseMipWidth, 2.f / baseMipHeight };
+		mipmapData.inputTextureIndex = textureComponent.SRV->bindlessIndex;
+
+		// Allocate UAVs.
+		for (int j = 0; j < mipmapData.mipCount; ++j)
+		{
+			auto descriptor = device->AllocateDescriptor(DescriptorType::Default);
+
+			D3D12_UNORDERED_ACCESS_VIEW_DESC viewDesc{};
+			viewDesc.Format = ConvertResourceFormatToLinear(textureComponent.description.format);
+			viewDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+			viewDesc.Texture2D.MipSlice = i * 4 + j + 1;
+			viewDesc.Texture2D.PlaneSlice = 0;
+
+			device->Native()->CreateUnorderedAccessView(textureComponent.allocation->GetResource(), nullptr, &viewDesc, descriptor);
+
+			mipmapData.outputTextureIndices[j] = descriptor.bindlessIndex;
+
+			uavDescriptors.emplace_back(std::move(descriptor));
+		}
+
+		std::vector<uint32_t> constantData;
+		constantData.resize(12);
+		std::memcpy(constantData.data(), &mipmapData, constantData.size() * sizeof(uint32_t));
+
+		list.BindPipelineState(mipmapPipeline);
+		list.BindDescriptorAllocator(device->GetDescriptorAllocator());
+		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
+		list.BindResourceTable("texturesRW", device->GetDescriptorAllocator().GetBindlessHeap());
+		list.BindConstants("mipmapData", constantData);
+
+		// Dispatch the compute shader.
+		list.Native()->Dispatch(std::max((uint32_t)std::ceil(baseMipWidth / (2.f * 8.f)), 1u), std::max((uint32_t)std::ceil(baseMipHeight / (2.f * 8.f)), 1u), 1);
+
+		list.UAVBarrier(texture);
+		list.FlushBarriers();
+	}
+
+	for (auto&& descriptor : uavDescriptors)
+	{
+		AddFrameDescriptor(device->GetFrameIndex(), std::move(descriptor));
+	}
+}
+
 void ResourceManager::CleanupFrameResources(size_t frame)
 {
 	VGScopedCPUStat("Cleanup Frame Resources");
@@ -621,4 +713,11 @@ void ResourceManager::CleanupFrameResources(size_t frame)
 	}
 
 	frameTextures[frameIndex].clear();
+
+	for (auto& descriptor : frameDescriptors[frameIndex])
+	{
+		descriptor.Free();
+	}
+
+	frameDescriptors[frameIndex].clear();
 }

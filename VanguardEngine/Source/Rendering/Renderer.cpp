@@ -67,7 +67,7 @@ void Renderer::UpdateCameraBuffer(const entt::registry& registry)
 
 void Renderer::CreatePipelines()
 {
-	PipelineStateDescription prepassStateDesc;
+	GraphicsPipelineStateDescription prepassStateDesc;
 
 	prepassStateDesc.shaderPath = Config::shadersPath / "Prepass";
 
@@ -109,7 +109,7 @@ void Renderer::CreatePipelines()
 
 	pipelines.AddGraphicsState(device.get(), "Prepass", prepassStateDesc, false);
 
-	PipelineStateDescription forwardStateDesc;
+	GraphicsPipelineStateDescription forwardStateDesc;
 
 	forwardStateDesc.shaderPath = Config::shadersPath / "Default";
 
@@ -177,7 +177,7 @@ void Renderer::CreatePipelines()
 
 	pipelines.AddGraphicsState(device.get(), "ForwardTransparent", forwardStateDesc, false);
 
-	PipelineStateDescription postProcessStateDesc;
+	GraphicsPipelineStateDescription postProcessStateDesc;
 
 	postProcessStateDesc.shaderPath = Config::shadersPath / "PostProcess";
 

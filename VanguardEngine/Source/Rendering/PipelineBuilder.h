@@ -13,7 +13,7 @@ private:
 	std::unordered_map<std::string, PipelineState> pipelines;
 
 public:
-	void AddGraphicsState(RenderDevice* device, const std::string& name, const PipelineStateDescription& description, bool backBufferOutput)
+	void AddGraphicsState(RenderDevice* device, const std::string& name, const GraphicsPipelineStateDescription& description, bool backBufferOutput)
 	{
 		VGAssert(!pipelines.contains(name), "Duplicate pipeline name.");
 

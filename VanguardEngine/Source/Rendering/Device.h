@@ -20,11 +20,6 @@
 #include <vector>
 #include <limits>
 
-enum class SyncType
-{
-	Direct,
-};
-
 class RenderDevice
 {
 	friend class ResourceManager;
@@ -105,6 +100,7 @@ public:
 	auto* GetDirectQueue() const noexcept { return directCommandQueue.Get(); }
 	auto* GetDirectContext() const noexcept { return directContext; }
 	auto& GetDirectList() noexcept { return directCommandList[GetFrameIndex()]; }
+
 	auto* GetSwapChain() const noexcept { return swapChain.Get(); }
 	auto GetBackBuffer() const noexcept { return backBufferTextures[swapChain->GetCurrentBackBufferIndex()]; }  // Resizing affects the buffer index, so use the swap chain's index.
 	auto& GetDescriptorAllocator() noexcept { return descriptorManager; }

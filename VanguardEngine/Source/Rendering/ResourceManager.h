@@ -4,6 +4,7 @@
 
 #include <Rendering/Base.h>
 #include <Rendering/Resource.h>
+#include <Rendering/PipelineState.h>
 
 #include <D3D12MemAlloc.h>
 
@@ -28,10 +29,15 @@ private:
 	// Frame-temporary resources. Only persist for a single GPU frame.
 	std::vector<std::vector<TextureHandle>> frameTextures;
 	std::vector<std::vector<BufferHandle>> frameBuffers;
+	std::vector<std::vector<DescriptorHandle>> frameDescriptors;
 
 	void CreateResourceViews(BufferComponent& target);
 	void CreateResourceViews(TextureComponent& target);
 	void NameResource(ResourcePtr<D3D12MA::Allocation>& target, const std::wstring_view name);
+
+	PipelineState mipmapPipeline;
+
+	void CreateMipmapTools();
 
 public:
 	ResourceManager() = default;
@@ -62,8 +68,11 @@ public:
 	void Destroy(BufferHandle handle);
 	void Destroy(TextureHandle handle);
 
+	void GenerateMipmaps(TextureHandle texture);
+
 	void AddFrameResource(size_t frameIndex, const BufferHandle handle);
 	void AddFrameResource(size_t frameIndex, const TextureHandle handle);
+	void AddFrameDescriptor(size_t frameIndex, DescriptorHandle handle);
 
 	void CleanupFrameResources(size_t frame);
 };
@@ -124,4 +133,9 @@ inline void ResourceManager::AddFrameResource(size_t frameIndex, const BufferHan
 inline void ResourceManager::AddFrameResource(size_t frameIndex, const TextureHandle handle)
 {
 	frameTextures[frameIndex].emplace_back(handle);
+}
+
+inline void ResourceManager::AddFrameDescriptor(size_t frameIndex, DescriptorHandle handle)
+{
+	frameDescriptors[frameIndex].emplace_back(std::move(handle));
 }

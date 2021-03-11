@@ -146,10 +146,12 @@ namespace AssetLoader
 					textureDescription.width = baseColorTexture.width;
 					textureDescription.height = baseColorTexture.height;
 					textureDescription.format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+					textureDescription.mipMapping = true;
 
 					// #TODO: Derive name from asset name + texture type.
 					auto textureResource = device.GetResourceManager().Create(textureDescription, VGText("Base color asset texture"));
 					device.GetResourceManager().Write(textureResource, baseColorTexture.image);
+					device.GetResourceManager().GenerateMipmaps(textureResource);
 					device.GetDirectList().TransitionBarrier(textureResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 					const auto& textureComponent = device.GetResourceManager().Get(textureResource);
@@ -171,10 +173,12 @@ namespace AssetLoader
 					textureDescription.width = metallicRoughnessTexture.width;
 					textureDescription.height = metallicRoughnessTexture.height;
 					textureDescription.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+					textureDescription.mipMapping = true;
 
 					// #TODO: Derive name from asset name + texture type.
 					auto textureResource = device.GetResourceManager().Create(textureDescription, VGText("Metallic roughness asset texture"));
 					device.GetResourceManager().Write(textureResource, metallicRoughnessTexture.image);
+					device.GetResourceManager().GenerateMipmaps(textureResource);
 					device.GetDirectList().TransitionBarrier(textureResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 					const auto& textureComponent = device.GetResourceManager().Get(textureResource);
@@ -196,10 +200,12 @@ namespace AssetLoader
 					textureDescription.width = normalTexture.width;
 					textureDescription.height = normalTexture.height;
 					textureDescription.format = DXGI_FORMAT_R8G8B8A8_UNORM;
+					textureDescription.mipMapping = true;
 
 					// #TODO: Derive name from asset name + texture type.
 					auto textureResource = device.GetResourceManager().Create(textureDescription, VGText("Normal asset texture"));
 					device.GetResourceManager().Write(textureResource, normalTexture.image);
+					device.GetResourceManager().GenerateMipmaps(textureResource);
 					device.GetDirectList().TransitionBarrier(textureResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
 					const auto& textureComponent = device.GetResourceManager().Get(textureResource);
@@ -221,6 +227,7 @@ namespace AssetLoader
 					textureDescription.width = occlusionTexture.width;
 					textureDescription.height = occlusionTexture.height;
 					textureDescription.format = DXGI_FORMAT_R8_UNORM;
+					textureDescription.mipMapping = false;
 
 					// #TODO: Derive name from asset name + texture type.
 					auto textureResource = device.GetResourceManager().Create(textureDescription, VGText("Occlusion asset texture"));
@@ -246,6 +253,7 @@ namespace AssetLoader
 					textureDescription.width = emissiveTexture.width;
 					textureDescription.height = emissiveTexture.height;
 					textureDescription.format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;  // #TODO: Is this the correct format?
+					textureDescription.mipMapping = false;
 
 					// #TODO: Derive name from asset name + texture type.
 					auto textureResource = device.GetResourceManager().Create(textureDescription, VGText("Emissive asset texture"));

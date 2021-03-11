@@ -55,6 +55,7 @@ struct TextureDescription
 	uint32_t height = 1;
 	uint32_t depth = 1;
 	DXGI_FORMAT format;
+	bool mipMapping = false;  // Enables support for multiple mip levels, does not automatically generate mips.
 };
 
 struct BufferComponent
