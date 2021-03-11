@@ -39,18 +39,13 @@ Output main(Input input)
 	Texture2D baseColorMap = textures[material.baseColor];
 
 	float4 baseColor = baseColorMap.Sample(defaultSampler, input.uv);
+	
+    clip(baseColor.a < alphaTestThreshold ? -1 : 1);
+	
 	float2 metallicRoughness = { 0.0, 0.0 };
 	float3 normal = input.normal;
 	float ambientOcclusion = 1.0;
 	float3 emissive = { 0.0, 0.0, 0.0 };
-
-	// Alpha test.
-	if (baseColor.a < alphaTestThreshold)
-	{
-		Output output;
-		output.color = float4(0.0, 0.0, 0.0, 0.0);
-		return output;
-	}
 
 	if (material.metallicRoughness > 0)
 	{
