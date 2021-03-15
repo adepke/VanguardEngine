@@ -341,7 +341,7 @@ void Renderer::Render(entt::registry& registry)
 	// Update the camera buffer immediately.
 	UpdateCameraBuffer(registry);
 
-	RenderGraph graph{};
+	RenderGraph graph{ &renderGraphResources };
 	
 	const auto [instanceBuffer, instanceOffset] = CreateInstanceBuffer(registry);
 	const auto lightBuffer = CreateLightBuffer(registry);
@@ -537,4 +537,9 @@ void Renderer::Render(entt::registry& registry)
 	device->GetSwapChain()->Present(device->vSync, 0);
 
 	device->AdvanceGPU();
+}
+
+void Renderer::DiscardRenderData()
+{
+	renderGraphResources.DiscardTransients(device.get());
 }

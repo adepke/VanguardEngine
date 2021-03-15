@@ -10,6 +10,7 @@
 #include <Rendering/Material.h>
 #include <Rendering/UserInterface.h>
 #include <Rendering/DescriptorAllocator.h>
+#include <Rendering/RenderGraphResourceManager.h>
 
 #include <entt/entt.hpp>
 
@@ -25,6 +26,8 @@ public:
 	std::unique_ptr<RenderDevice> device;  // Destruct the device after all other resources.
 
 private:
+	RenderGraphResourceManager renderGraphResources;
+
 	PipelineBuilder pipelines;  // Manages all the pipelines.
 
 	BufferHandle cameraBuffer;
@@ -47,6 +50,8 @@ public:
 
 	// Entity data is safe to write to immediately after this function returns. Do not attempt to write before Render() returns.
 	void Render(entt::registry& registry);
+
+	void DiscardRenderData();
 
 	void SubmitFrameTime(uint32_t timeUs);
 };

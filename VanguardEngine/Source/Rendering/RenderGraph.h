@@ -38,7 +38,7 @@ private:
 
 	std::unordered_map<ResourceTag, RenderResource> taggedResources;
 
-	RenderGraphResourceManager resourceManager;
+	RenderGraphResourceManager* resourceManager = nullptr;
 
 private:
 	void BuildAdjacencyList();
@@ -52,6 +52,8 @@ public:
 	std::pair<uint32_t, uint32_t> GetBackBufferResolution(RenderDevice* device);
 
 public:
+	RenderGraph(RenderGraphResourceManager* resources) : resourceManager(resources) {};
+
 	const RenderResource Import(const BufferHandle resource);
 	const RenderResource Import(const TextureHandle resource);
 
@@ -65,12 +67,12 @@ public:
 
 inline const RenderResource RenderGraph::Import(const BufferHandle resource)
 {
-	return resourceManager.AddResource(resource);
+	return resourceManager->AddResource(resource);
 }
 
 inline const RenderResource RenderGraph::Import(const TextureHandle resource)
 {
-	return resourceManager.AddResource(resource);
+	return resourceManager->AddResource(resource);
 }
 
 inline void RenderGraph::Tag(const RenderResource resource, ResourceTag tag)

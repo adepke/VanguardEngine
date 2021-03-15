@@ -6,10 +6,26 @@
 #include <Rendering/RenderGraphResource.h>
 
 #include <unordered_map>
+#include <utility>
+#include <list>
 #include <optional>
 
 class RenderDevice;
 class RenderGraph;
+
+struct TransientBuffer
+{
+	RenderResource resource;
+	uint8_t counter = 1;
+	TransientBufferDescription description;
+};
+
+struct TransientTexture
+{
+	RenderResource resource;
+	uint8_t counter = 1;
+	TransientTextureDescription description;
+};
 
 class RenderGraphResourceManager
 {
@@ -19,8 +35,13 @@ private:
 	std::unordered_map<RenderResource, BufferHandle> bufferResources;
 	std::unordered_map<RenderResource, TextureHandle> textureResources;
 
+	// Resources in staging, not yet created.
 	std::unordered_map<RenderResource, std::pair<TransientBufferDescription, std::wstring>> transientBufferResources;
 	std::unordered_map<RenderResource, std::pair<TransientTextureDescription, std::wstring>> transientTextureResources;
+
+	// Resources created transiently, can be reused across frames.
+	std::list<TransientBuffer> transientBuffers;
+	std::list<TransientTexture> transientTextures;
 
 public:
 	const RenderResource AddResource(const BufferHandle resource);
@@ -29,6 +50,7 @@ public:
 	const RenderResource AddResource(const TransientTextureDescription& description, const std::wstring& name);
 
 	void BuildTransients(RenderDevice* device, RenderGraph* graph);
+	void DiscardTransients(RenderDevice* device);
 
 public:
 	const BufferHandle GetBuffer(const RenderResource resource);

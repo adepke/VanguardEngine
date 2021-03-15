@@ -37,6 +37,7 @@ void OnSizeChanged(uint32_t width, uint32_t height, bool fullscreen)
 	VGLog(Window) << "Window size changed (" << width << ", " << height << ").";
 
 	Renderer::Get().device->SetResolution(width, height, fullscreen);
+	Renderer::Get().DiscardRenderData();
 }
 
 void EngineBoot()

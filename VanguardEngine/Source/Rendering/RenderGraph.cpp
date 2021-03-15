@@ -92,8 +92,8 @@ void RenderGraph::InjectStateBarriers()
 
 		for (const auto resource : pass->reads)
 		{
-			auto buffer = resourceManager.GetOptionalBuffer(resource);
-			auto texture = resourceManager.GetOptionalTexture(resource);
+			auto buffer = resourceManager->GetOptionalBuffer(resource);
+			auto texture = resourceManager->GetOptionalTexture(resource);
 
 			const auto Transition = [&](D3D12_RESOURCE_STATES state)
 			{
@@ -119,8 +119,8 @@ void RenderGraph::InjectStateBarriers()
 
 		for (const auto resource : pass->writes)
 		{
-			auto buffer = resourceManager.GetOptionalBuffer(resource);
-			auto texture = resourceManager.GetOptionalTexture(resource);
+			auto buffer = resourceManager->GetOptionalBuffer(resource);
+			auto texture = resourceManager->GetOptionalTexture(resource);
 
 			const auto Transition = [&](D3D12_RESOURCE_STATES state)
 			{
@@ -164,14 +164,14 @@ std::pair<uint32_t, uint32_t> RenderGraph::GetBackBufferResolution(RenderDevice*
 {
 	VGAssert(taggedResources.contains(ResourceTag::BackBuffer), "Render graph doesn't have tagged back buffer resource.");
 
-	const auto backBuffer = resourceManager.GetTexture(taggedResources[ResourceTag::BackBuffer]);
+	const auto backBuffer = resourceManager->GetTexture(taggedResources[ResourceTag::BackBuffer]);
 	const auto& buffer = device->GetResourceManager().Get(backBuffer);
 	return std::make_pair(buffer.description.width, buffer.description.height);
 }
 
 RenderPass& RenderGraph::AddPass(std::string_view stableName, ExecutionQueue execution)
 {
-	return *passes.emplace_back(std::make_unique<RenderPass>(&resourceManager, stableName));
+	return *passes.emplace_back(std::make_unique<RenderPass>(resourceManager, stableName));
 }
 
 void RenderGraph::Build()
@@ -187,7 +187,7 @@ void RenderGraph::Build()
 
 void RenderGraph::Execute(RenderDevice* device)
 {
-	resourceManager.BuildTransients(device, this);
+	resourceManager->BuildTransients(device, this);
 
 	passLists.reserve(passes.size());
 
@@ -237,7 +237,7 @@ void RenderGraph::Execute(RenderDevice* device)
 
 		for (const auto& [resource, info] : pass->outputBindInfo)
 		{
-			const auto texture = resourceManager.GetTexture(resource);
+			const auto texture = resourceManager->GetTexture(resource);
 			auto& component = device->GetResourceManager().Get(texture);
 
 			if (info.first == OutputBind::RTV)
@@ -259,7 +259,7 @@ void RenderGraph::Execute(RenderDevice* device)
 			{
 				if (bind == ResourceBind::DSV)
 				{
-					const auto texture = resourceManager.GetTexture(resource);
+					const auto texture = resourceManager->GetTexture(resource);
 					auto& component = device->GetResourceManager().Get(texture);
 
 					hasDepthStencil = true;
@@ -280,7 +280,7 @@ void RenderGraph::Execute(RenderDevice* device)
 		{
 			if (info.second)
 			{
-				const auto texture = resourceManager.GetTexture(resource);
+				const auto texture = resourceManager->GetTexture(resource);
 				auto& component = device->GetResourceManager().Get(texture);
 
 				if (info.first == OutputBind::RTV)
@@ -299,13 +299,13 @@ void RenderGraph::Execute(RenderDevice* device)
 
 		list->Native()->OMSetStencilRef(0);
 
-		pass->Execute(*list, resourceManager);
+		pass->Execute(*list, *resourceManager);
 
 		// #TODO: End render pass.
 	}
 
 	// Present the back buffer. #TODO: Implement as a present pass.
-	const auto backBuffer = resourceManager.GetTexture(taggedResources[ResourceTag::BackBuffer]);
+	const auto backBuffer = resourceManager->GetTexture(taggedResources[ResourceTag::BackBuffer]);
 	passLists[passLists.size() - 1]->TransitionBarrier(backBuffer, D3D12_RESOURCE_STATE_PRESENT);
 
 	// Close and submit the command lists.
