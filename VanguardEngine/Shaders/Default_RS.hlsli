@@ -14,7 +14,7 @@
 	"StaticSampler(" \
 		"s0," \
 		"space = 0," \
-		"filter = FILTER_MIN_MAG_MIP_LINEAR," \
+		"filter = FILTER_ANISOTROPIC," \
 		"addressU = TEXTURE_ADDRESS_WRAP," \
 		"addressV = TEXTURE_ADDRESS_WRAP," \
 		"addressW = TEXTURE_ADDRESS_WRAP," \
