@@ -1,5 +1,8 @@
 // Copyright (c) 2019-2021 Andrew Depke
 
+#ifndef __CAMERA_HLSLI__
+#define __CAMERA_HLSLI__
+
 #pragma pack_matrix(row_major)
 
 struct CameraData
@@ -25,3 +28,5 @@ float LinearizeDepth(float hyperbolicDepth)
 
 	return (2.f * farPlane) / (nearPlane + farPlane - (1.f - hyperbolicDepth) * (nearPlane - farPlane));
 }
+
+#endif  // __CAMERA_HLSLI__

@@ -1,5 +1,8 @@
 // Copyright (c) 2019-2021 Andrew Depke
 
+#ifndef __TONEMAPPING_HLSLI__
+#define __TONEMAPPING_HLSLI__
+
 float LinearToLuminance(float3 linearColor)
 {
 	return dot(linearColor, float3(0.2126, 0.7152, 0.0722));
@@ -59,3 +62,5 @@ float3 ToneMap(float3 color)
 {
 	return ACESHillToneMap(color);
 }
+
+#endif  // __TONEMAPPING_HLSLI__

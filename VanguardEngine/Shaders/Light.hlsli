@@ -1,5 +1,8 @@
 // Copyright (c) 2019-2021 Andrew Depke
 
+#ifndef __LIGHT_HLSLI__
+#define __LIGHT_HLSLI__
+
 #include "BRDF.hlsli"
 #include "Material.hlsli"
 #include "Camera.hlsli"
@@ -38,3 +41,5 @@ LightSample SampleLight(Light light, Material material, Camera camera, float3 vi
 	
     return output;
 }
+
+#endif  // __LIGHT_HLSLI__

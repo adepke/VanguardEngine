@@ -1,5 +1,8 @@
 // Copyright (c) 2019-2021 Andrew Depke
 
+#ifndef __BRDF_HLSLI__
+#define __BRDF_HLSLI__
+
 #include "Constants.hlsli"
 
 // Implementation of Cook-Torrance BRDF.
@@ -60,3 +63,5 @@ float3 BRDF(float3 normal, float3 view, float3 halfway, float3 light, float3 bas
 
 	return (diffuseFactor * LambertianDiffuse(baseColor) + CookTorranceSpecular(normal, view, halfway, light, roughness, specularFactor)) * weightedRadiance;
 }
+
+#endif  // __BRDF_HLSLI__

@@ -1,5 +1,8 @@
 // Copyright (c) 2019-2021 Andrew Depke
 
+#ifndef __MATERIAL_HLSLI__
+#define __MATERIAL_HLSLI__
+
 struct MaterialData
 {
     uint baseColor;
@@ -24,3 +27,5 @@ struct Material
     float occlusion;
     float3 padding;
 };
+
+#endif  // __MATERIAL_HLSLI__

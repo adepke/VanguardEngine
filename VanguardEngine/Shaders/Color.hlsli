@@ -1,5 +1,8 @@
 // Copyright (c) 2019-2021 Andrew Depke
 
+#ifndef __COLOR_HLSLI__
+#define __COLOR_HLSLI__
+
 // Color space conversions credit: https://chilliant.blogspot.com/2012/08/srgb-approximations-for-hlsl.html
 
 float3 LinearToSRGB(float3 linearColor)
@@ -14,3 +17,5 @@ float3 SRGBToLinear(float3 sRGBColor)
 {
 	return sRGBColor * (sRGBColor * (sRGBColor * 0.305306011f + 0.682171111f) + 0.012522878f);
 }
+
+#endif  // __COLOR_HLSLI__
