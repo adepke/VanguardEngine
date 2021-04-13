@@ -271,7 +271,7 @@ void UserInterfaceManager::NewFrame()
 	Renderer::Get().window->UpdateCursor();
 }
 
-void UserInterfaceManager::Render(CommandList& list)
+void UserInterfaceManager::Render(CommandList& list, BufferHandle cameraBuffer)
 {
 	VGScopedCPUStat("UI Render");
 
@@ -359,6 +359,8 @@ void UserInterfaceManager::Render(CommandList& list)
 	// Setup desired DX state
 	SetupRenderState(drawData, list, resources);
 
+	list.BindResource("camera", cameraBuffer);
+
 	// Render command lists
 	// (Because we merged all buffers into a single one, we maintain our own offset into them)
 	int global_vtx_offset = 0;
@@ -385,7 +387,7 @@ void UserInterfaceManager::Render(CommandList& list)
 				const D3D12_RECT r = { (LONG)(pcmd->ClipRect.x - clip_off.x), (LONG)(pcmd->ClipRect.y - clip_off.y), (LONG)(pcmd->ClipRect.z - clip_off.x), (LONG)(pcmd->ClipRect.w - clip_off.y) };
 				list.BindConstants("bindlessTexture", { *(uint32_t*)&pcmd->TextureId });
 				list.Native()->RSSetScissorRects(1, &r);
-				list.Native()->SetGraphicsRootShaderResourceView(3, resources->vertexBuffer->GetGPUVirtualAddress() + (pcmd->VtxOffset + global_vtx_offset) * sizeof(ImDrawVert));
+				list.Native()->SetGraphicsRootShaderResourceView(4, resources->vertexBuffer->GetGPUVirtualAddress() + (pcmd->VtxOffset + global_vtx_offset) * sizeof(ImDrawVert));
 				list.Native()->DrawIndexedInstanced(pcmd->ElemCount, 1, pcmd->IdxOffset + global_idx_offset, 0, 0);
 			}
 		}

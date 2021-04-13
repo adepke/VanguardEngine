@@ -5,7 +5,7 @@
 #include "Camera.hlsli"
 
 ConstantBuffer<PerObject> perObject : register(b0);
-ConstantBuffer<CameraData> cameraBuffer : register(b1);
+ConstantBuffer<Camera> camera : register(b1);
 
 struct Vertex
 {
@@ -36,8 +36,8 @@ Output main(Input input)
 	Output output;
 	output.positionCS = float4(vertex.position, 1.f);
 	output.positionCS = mul(output.positionCS, perObject.worldMatrix);
-	output.positionCS = mul(output.positionCS, cameraBuffer.viewMatrix);
-	output.positionCS = mul(output.positionCS, cameraBuffer.projectionMatrix);
+	output.positionCS = mul(output.positionCS, camera.view);
+	output.positionCS = mul(output.positionCS, camera.projection);
 
 	return output;
 }

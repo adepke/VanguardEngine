@@ -7,7 +7,7 @@
 SamplerState defaultSampler : register(s0);
 
 ConstantBuffer<MaterialData> material : register(b0);
-ConstantBuffer<CameraData> cameraBuffer : register(b1);
+ConstantBuffer<Camera> camera : register(b1);
 
 // We can't use GetDimensions() on a root SRV, so instead pass the light count separately.
 struct LightCount
@@ -80,7 +80,7 @@ Output main(Input input)
 	output.color.rgb = float3(0.0, 0.0, 0.0);
 	output.color.a = baseColor.a;
 
-	float3 viewDirection = normalize(cameraBuffer.position - input.position);
+	float3 viewDirection = normalize(camera.position.xyz - input.position);
 	float3 normalDirection = normal;
 	
     Material materialSample;
@@ -90,9 +90,6 @@ Output main(Input input)
     materialSample.normal = normal;
     materialSample.occlusion = ambientOcclusion;
     materialSample.emissive = emissive;
-	
-    Camera camera;
-    camera.position = cameraBuffer.position;
 	
     for (uint i = 0; i < lightCount.count; ++i)
     {

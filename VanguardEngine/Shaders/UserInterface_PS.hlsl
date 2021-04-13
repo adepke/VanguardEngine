@@ -20,6 +20,7 @@ struct DrawData
 };
 
 ConstantBuffer<DrawData> drawData : register(b1);
+ConstantBuffer<Camera> camera : register(b2);
 
 struct Input
 {
@@ -37,7 +38,7 @@ float4 main(Input input) : SV_Target
 	// If we're rendering a depth texture, we may want to linearize it.
 	if (drawData.depthLinearization)
 	{
-		output.xyz = 1.f - LinearizeDepth(output.x);
+		output.xyz = 1.f - LinearizeDepth(camera, output.x);
 		output.w = 1.f;
 
 		// Counteract the gamma correction on depth textures during presentation.

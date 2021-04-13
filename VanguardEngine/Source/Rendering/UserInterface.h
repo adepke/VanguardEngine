@@ -3,6 +3,7 @@
 #pragma once
 
 #include <Rendering/Base.h>
+#include <Rendering/Resource.h>
 
 #include <Core/Windows/DirectX12Minimal.h>
 
@@ -34,5 +35,5 @@ public:
 	~UserInterfaceManager();
 
 	void NewFrame();
-	void Render(CommandList& list);
+	void Render(CommandList& list, BufferHandle cameraBuffer);
 };

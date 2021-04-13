@@ -5,26 +5,27 @@
 
 #pragma pack_matrix(row_major)
 
-struct CameraData
-{
-	matrix viewMatrix;
-	matrix projectionMatrix;
-	float3 position;
-	float padding;
-};
-
 // #TODO: Near and far plane, FOV.
 struct Camera
 {
-    float3 position;  // World space.
-    float padding;
+    float4 position;  // World space.
+    // Boundary
+    matrix view;
+    matrix projection;
+    matrix inverseView;
+    matrix inverseProjection;
+    // Boundary
+    float nearPlane;
+    float farPlane;
+    float fieldOfView;  // Horizontal, radians.
+    float aspectRatio;
 };
 
-float LinearizeDepth(float hyperbolicDepth)
+float LinearizeDepth(Camera camera, float hyperbolicDepth)
 {
-	// #TODO: Pass the plane values to the shader dynamically.
-	float nearPlane = 5000.f;
-	float farPlane = 1.f;
+	// Reversed planes for the inverse depth buffer.
+	float nearPlane = camera.farPlane;
+	float farPlane = camera.nearPlane;
 
 	return (2.f * farPlane) / (nearPlane + farPlane - (1.f - hyperbolicDepth) * (nearPlane - farPlane));
 }

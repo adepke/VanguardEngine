@@ -26,12 +26,17 @@ struct EntityInstance
 	XMMATRIX worldMatrix;
 };
 
-struct CameraBuffer
+struct Camera
 {
-	XMMATRIX viewMatrix;
-	XMMATRIX projectionMatrix;
-	XMFLOAT3 position;
-	uint32_t padding;
+	XMFLOAT4 position;  // World space.
+	XMMATRIX view;
+	XMMATRIX projection;
+	XMMATRIX inverseView;
+	XMMATRIX inverseProjection;
+	float nearPlane;
+	float farPlane;
+	float fieldOfView;  // Horizontal, radians.
+	float aspectRatio;
 };
 
 struct Light
@@ -47,19 +52,33 @@ void Renderer::UpdateCameraBuffer(const entt::registry& registry)
 	VGScopedCPUStat("Update Camera Buffer");
 
 	XMFLOAT3 translation;
-	registry.view<const TransformComponent, const CameraComponent>().each([&](auto entity, const auto& transform, const auto&)
+	float nearPlane;
+	float farPlane;
+	float fieldOfView;
+	registry.view<const TransformComponent, const CameraComponent>().each([&](auto entity, const auto& transform, const auto& camera)
 	{
 		// #TODO: Support more than one camera.
 		translation = transform.translation;
+		nearPlane = camera.nearPlane;
+		farPlane = camera.farPlane;
+		fieldOfView = camera.fieldOfView;
 	});
 
-	CameraBuffer bufferData;
-	bufferData.viewMatrix = globalViewMatrix;
-	bufferData.projectionMatrix = globalProjectionMatrix;
-	bufferData.position = translation;
+	auto& backBuffer = device->GetResourceManager().Get(device->GetBackBuffer());
+
+	Camera bufferData;
+	bufferData.position = XMFLOAT4{ translation.x, translation.y, translation.z, 0.f };
+	bufferData.view = globalViewMatrix;
+	bufferData.projection = globalProjectionMatrix;
+	bufferData.inverseView = XMMatrixInverse(nullptr, bufferData.view);
+	bufferData.inverseProjection = XMMatrixInverse(nullptr, bufferData.projection);
+	bufferData.nearPlane = nearPlane;
+	bufferData.farPlane = farPlane;
+	bufferData.fieldOfView = fieldOfView;
+	bufferData.aspectRatio = static_cast<float>(backBuffer.description.width) / static_cast<float>(backBuffer.description.height);
 
 	std::vector<uint8_t> byteData;
-	byteData.resize(sizeof(CameraBuffer));
+	byteData.resize(sizeof(Camera));
 	std::memcpy(byteData.data(), &bufferData, sizeof(bufferData));
 
 	device->GetResourceManager().Write(cameraBuffer, byteData);
@@ -176,6 +195,48 @@ void Renderer::CreatePipelines()
 	forwardStateDesc.depthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_GREATER;
 
 	pipelines.AddGraphicsState(device.get(), "ForwardTransparent", forwardStateDesc, false);
+
+	GraphicsPipelineStateDescription atmosphereStateDesc;
+
+	atmosphereStateDesc.shaderPath = Config::shadersPath / "Atmosphere";
+
+	atmosphereStateDesc.blendDescription.AlphaToCoverageEnable = false;
+	atmosphereStateDesc.blendDescription.IndependentBlendEnable = false;
+	atmosphereStateDesc.blendDescription.RenderTarget[0].BlendEnable = false;
+	atmosphereStateDesc.blendDescription.RenderTarget[0].LogicOpEnable = false;
+	atmosphereStateDesc.blendDescription.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
+	atmosphereStateDesc.blendDescription.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;
+	atmosphereStateDesc.blendDescription.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+	atmosphereStateDesc.blendDescription.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+	atmosphereStateDesc.blendDescription.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+	atmosphereStateDesc.blendDescription.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	atmosphereStateDesc.blendDescription.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;
+	atmosphereStateDesc.blendDescription.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+
+	atmosphereStateDesc.rasterizerDescription.FillMode = D3D12_FILL_MODE_SOLID;
+	atmosphereStateDesc.rasterizerDescription.CullMode = D3D12_CULL_MODE_BACK;
+	atmosphereStateDesc.rasterizerDescription.FrontCounterClockwise = false;
+	atmosphereStateDesc.rasterizerDescription.DepthBias = 0;
+	atmosphereStateDesc.rasterizerDescription.DepthBiasClamp = 0.f;
+	atmosphereStateDesc.rasterizerDescription.SlopeScaledDepthBias = 0.f;
+	atmosphereStateDesc.rasterizerDescription.DepthClipEnable = true;
+	atmosphereStateDesc.rasterizerDescription.MultisampleEnable = false;
+	atmosphereStateDesc.rasterizerDescription.AntialiasedLineEnable = false;
+	atmosphereStateDesc.rasterizerDescription.ForcedSampleCount = 0;
+	atmosphereStateDesc.rasterizerDescription.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+
+	atmosphereStateDesc.depthStencilDescription.DepthEnable = true;
+	atmosphereStateDesc.depthStencilDescription.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+	atmosphereStateDesc.depthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL;  // Draw where the depth buffer is at the clear value.
+	atmosphereStateDesc.depthStencilDescription.StencilEnable = false;
+	atmosphereStateDesc.depthStencilDescription.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
+	atmosphereStateDesc.depthStencilDescription.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
+	atmosphereStateDesc.depthStencilDescription.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
+	atmosphereStateDesc.depthStencilDescription.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
+
+	atmosphereStateDesc.topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+
+	pipelines.AddGraphicsState(device.get(), "Atmosphere", atmosphereStateDesc, false);
 
 	GraphicsPipelineStateDescription postProcessStateDesc;
 
@@ -316,7 +377,7 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 	cameraBufferDesc.bindFlags = BindFlag::ConstantBuffer;
 	cameraBufferDesc.accessFlags = AccessFlag::CPUWrite;
 	cameraBufferDesc.size = 1;  // #TODO: Support multiple cameras.
-	cameraBufferDesc.stride = sizeof(CameraBuffer);
+	cameraBufferDesc.stride = sizeof(Camera);
 
 	cameraBuffer = device->GetResourceManager().Create(cameraBufferDesc, VGText("Camera buffer"));
 
@@ -360,7 +421,7 @@ void Renderer::Render(entt::registry& registry)
 	prePass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
 	{
 		list.BindPipelineState(pipelines["Prepass"]);
-		list.BindResource("cameraBuffer", resources.GetBuffer(cameraBufferTag));
+		list.BindResource("camera", resources.GetBuffer(cameraBufferTag));
 
 		size_t entityIndex = 0;
 		registry.view<const TransformComponent, const MeshComponent>().each([&](auto entity, const auto&, const auto& mesh)
@@ -405,7 +466,7 @@ void Renderer::Render(entt::registry& registry)
 
 		list.BindPipelineState(pipelines["ForwardOpaque"]);
 		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
-		list.BindResource("cameraBuffer", resources.GetBuffer(cameraBufferTag));
+		list.BindResource("camera", resources.GetBuffer(cameraBufferTag));
 		list.BindConstants("lightCount", { (uint32_t)device->GetResourceManager().Get(lightBuffer).description.size });
 		list.BindResource("lights", lightBuffer);
 
@@ -452,7 +513,7 @@ void Renderer::Render(entt::registry& registry)
 
 		list.BindPipelineState(pipelines["ForwardTransparent"]);
 		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
-		list.BindResource("cameraBuffer", resources.GetBuffer(cameraBufferTag));
+		list.BindResource("camera", resources.GetBuffer(cameraBufferTag));
 		list.BindConstants("lightCount", { (uint32_t)device->GetResourceManager().Get(lightBuffer).description.size });
 		list.BindResource("lights", lightBuffer);
 
@@ -519,6 +580,7 @@ void Renderer::Render(entt::registry& registry)
 
 #if ENABLE_EDITOR
 	auto& editorPass = graph.AddPass("Editor Pass", ExecutionQueue::Graphics);
+	editorPass.Read(cameraBufferTag, ResourceBind::CBV);
 	editorPass.Read(depthStencilTag, ResourceBind::SRV);
 	editorPass.Read(outputLDRTag, ResourceBind::SRV);
 	editorPass.Output(backBufferTag, OutputBind::RTV, false);
@@ -526,7 +588,7 @@ void Renderer::Render(entt::registry& registry)
 	{
 		userInterface->NewFrame();
 		EditorRenderer::Render(device.get(), registry, lastFrameTime, resources.GetTexture(depthStencilTag), resources.GetTexture(outputLDRTag));
-		userInterface->Render(list);
+		userInterface->Render(list, resources.GetBuffer(cameraBufferTag));
 	});
 #endif
 
