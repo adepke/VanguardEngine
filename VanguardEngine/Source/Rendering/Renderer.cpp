@@ -70,8 +70,8 @@ void Renderer::UpdateCameraBuffer(const entt::registry& registry)
 	bufferData.position = XMFLOAT4{ translation.x, translation.y, translation.z, 0.f };
 	bufferData.view = globalViewMatrix;
 	bufferData.projection = globalProjectionMatrix;
-	bufferData.inverseView = XMMatrixInverse(nullptr, bufferData.view);
-	bufferData.inverseProjection = XMMatrixInverse(nullptr, bufferData.projection);
+	bufferData.inverseView = XMMatrixTranspose(XMMatrixInverse(nullptr, bufferData.view));
+	bufferData.inverseProjection = XMMatrixTranspose(XMMatrixInverse(nullptr, bufferData.projection));
 	bufferData.nearPlane = nearPlane;
 	bufferData.farPlane = farPlane;
 	bufferData.fieldOfView = fieldOfView;
@@ -556,6 +556,18 @@ void Renderer::Render(entt::registry& registry)
 				++entityIndex;
 			});
 		}
+	});
+
+	auto& atmospherePass = graph.AddPass("Atmosphere Pass", ExecutionQueue::Graphics);
+	atmospherePass.Read(cameraBufferTag, ResourceBind::CBV);
+	atmospherePass.Read(depthStencilTag, ResourceBind::DSV);
+	atmospherePass.Output(outputHDRTag, OutputBind::RTV, false);
+	atmospherePass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
+	{
+		list.BindPipelineState(pipelines["Atmosphere"]);
+		list.BindResource("camera", resources.GetBuffer(cameraBufferTag));
+
+		list.DrawFullscreenQuad();
 	});
 
 	auto& postProcessPass = graph.AddPass("Post Process Pass", ExecutionQueue::Graphics);
