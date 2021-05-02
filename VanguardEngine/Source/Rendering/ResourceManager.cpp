@@ -406,6 +406,12 @@ const TextureHandle ResourceManager::Create(const TextureDescription& descriptio
 		resourceState = (description.accessFlags & AccessFlag::GPUWrite) ? D3D12_RESOURCE_STATE_DEPTH_WRITE : D3D12_RESOURCE_STATE_DEPTH_READ;
 	}
 
+	else if (description.bindFlags & BindFlag::UnorderedAccess)
+	{
+		// If we have unordered access, we'll probably write to the texture initially via a UAV.
+		resourceState = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+	}
+
 	ID3D12Resource* rawResource = nullptr;
 	D3D12MA::Allocation* allocationHandle = nullptr;
 
