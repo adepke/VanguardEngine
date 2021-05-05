@@ -7,6 +7,7 @@
 
 #include <filesystem>
 #include <map>
+#include <utility>
 
 #include <Core/Windows/DirectX12Minimal.h>
 
@@ -14,7 +15,8 @@ class RenderDevice;
 
 struct GraphicsPipelineStateDescription
 {
-	std::filesystem::path shaderPath;
+	std::pair<std::filesystem::path, std::string> vertexShader;
+	std::pair<std::filesystem::path, std::string> pixelShader;
 	D3D12_BLEND_DESC blendDescription;
 	D3D12_RASTERIZER_DESC rasterizerDescription;
 	D3D12_DEPTH_STENCIL_DESC depthStencilDescription;
@@ -23,7 +25,7 @@ struct GraphicsPipelineStateDescription
 
 struct ComputePipelineStateDescription
 {
-	std::filesystem::path shaderPath;
+	std::pair<std::filesystem::path, std::string> shader;
 };
 
 struct PipelineStateReflection
@@ -59,16 +61,13 @@ private:
 
 	void ReflectRootSignature();
 
-	void CreateShaders(RenderDevice& device, const std::filesystem::path& shaderPath);
+	void CreateShaders(RenderDevice& device);
 	void CreateRootSignature(RenderDevice& device);
 
 public:
 	ResourcePtr<ID3D12RootSignature> rootSignature;
 	std::unique_ptr<Shader> vertexShader;
 	std::unique_ptr<Shader> pixelShader;
-	std::unique_ptr<Shader> hullShader;
-	std::unique_ptr<Shader> domainShader;
-	std::unique_ptr<Shader> geometryShader;
 	std::unique_ptr<Shader> computeShader;
 
 	auto* Native() const noexcept { return pipeline.Get(); }

@@ -88,7 +88,7 @@ void Renderer::CreatePipelines()
 {
 	GraphicsPipelineStateDescription prepassStateDesc;
 
-	prepassStateDesc.shaderPath = Config::shadersPath / "Prepass";
+	prepassStateDesc.vertexShader = { "Prepass_VS", "main" };
 
 	prepassStateDesc.blendDescription.AlphaToCoverageEnable = false;
 	prepassStateDesc.blendDescription.IndependentBlendEnable = false;
@@ -130,7 +130,8 @@ void Renderer::CreatePipelines()
 
 	GraphicsPipelineStateDescription forwardStateDesc;
 
-	forwardStateDesc.shaderPath = Config::shadersPath / "Default";
+	forwardStateDesc.vertexShader = { "Default_VS", "main" };
+	forwardStateDesc.pixelShader = { "Default_PS", "main" };
 
 	forwardStateDesc.blendDescription.AlphaToCoverageEnable = false;
 	forwardStateDesc.blendDescription.IndependentBlendEnable = false;
@@ -171,8 +172,6 @@ void Renderer::CreatePipelines()
 
 	pipelines.AddGraphicsState(device.get(), "ForwardOpaque", forwardStateDesc, false);
 
-	forwardStateDesc.shaderPath = Config::shadersPath / "Default";
-
 	// Disable back face culling.
 	forwardStateDesc.rasterizerDescription.CullMode = D3D12_CULL_MODE_NONE;
 
@@ -198,7 +197,8 @@ void Renderer::CreatePipelines()
 
 	GraphicsPipelineStateDescription atmosphereStateDesc;
 
-	atmosphereStateDesc.shaderPath = Config::shadersPath / "Atmosphere";
+	atmosphereStateDesc.vertexShader = { "Atmosphere_VS", "main" };
+	atmosphereStateDesc.pixelShader = { "Atmosphere_PS", "main" };
 
 	atmosphereStateDesc.blendDescription.AlphaToCoverageEnable = false;
 	atmosphereStateDesc.blendDescription.IndependentBlendEnable = false;
@@ -240,7 +240,8 @@ void Renderer::CreatePipelines()
 
 	GraphicsPipelineStateDescription postProcessStateDesc;
 
-	postProcessStateDesc.shaderPath = Config::shadersPath / "PostProcess";
+	postProcessStateDesc.vertexShader = { "PostProcess_VS", "main" };
+	postProcessStateDesc.pixelShader = { "PostProcess_PS", "main" };
 
 	postProcessStateDesc.blendDescription.AlphaToCoverageEnable = false;
 	postProcessStateDesc.blendDescription.IndependentBlendEnable = false;
@@ -393,6 +394,8 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 	device->Native()->CreateShaderResourceView(nullptr, &nullViewDesc, nullDescriptor);
 
 	CreatePipelines();
+
+	atmosphere.Initialize(device.get());
 }
 
 void Renderer::Render(entt::registry& registry)
@@ -558,17 +561,8 @@ void Renderer::Render(entt::registry& registry)
 		}
 	});
 
-	auto& atmospherePass = graph.AddPass("Atmosphere Pass", ExecutionQueue::Graphics);
-	atmospherePass.Read(cameraBufferTag, ResourceBind::CBV);
-	atmospherePass.Read(depthStencilTag, ResourceBind::DSV);
-	atmospherePass.Output(outputHDRTag, OutputBind::RTV, false);
-	atmospherePass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
-	{
-		list.BindPipelineState(pipelines["Atmosphere"]);
-		list.BindResource("camera", resources.GetBuffer(cameraBufferTag));
-
-		list.DrawFullscreenQuad();
-	});
+	// #TODO: Don't have this here.
+	atmosphere.Render(graph, pipelines, cameraBufferTag, depthStencilTag, outputHDRTag);
 
 	auto& postProcessPass = graph.AddPass("Post Process Pass", ExecutionQueue::Graphics);
 	const auto outputLDRTag = postProcessPass.Create(TransientTextureDescription{

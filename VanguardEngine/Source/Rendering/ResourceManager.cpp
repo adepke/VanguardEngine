@@ -197,7 +197,7 @@ void ResourceManager::NameResource(ResourcePtr<D3D12MA::Allocation>& target, con
 void ResourceManager::CreateMipmapTools()
 {
 	ComputePipelineStateDescription mipmapDescription;
-	mipmapDescription.shaderPath = Config::shadersPath / "GenerateMipmaps";
+	mipmapDescription.shader = { "GenerateMipmaps_CS", "main" };
 	
 	mipmapPipeline.Build(*device, mipmapDescription);
 }

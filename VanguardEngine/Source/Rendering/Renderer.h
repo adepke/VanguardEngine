@@ -11,6 +11,7 @@
 #include <Rendering/UserInterface.h>
 #include <Rendering/DescriptorAllocator.h>
 #include <Rendering/RenderGraphResourceManager.h>
+#include <Rendering/Atmosphere.h>
 
 #include <entt/entt.hpp>
 
@@ -36,6 +37,8 @@ private:
 	DescriptorHandle nullDescriptor;
 
 	float lastFrameTime = -1.f;
+
+	Atmosphere atmosphere;
 
 private:
 	void UpdateCameraBuffer(const entt::registry& registry);

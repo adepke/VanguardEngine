@@ -20,7 +20,12 @@ public:
 		pipelines[name].Build(*device, description, backBufferOutput);
 	}
 
-	//void AddComputeState();  // #TODO: Implement compute pipelines.
+	void AddComputeState(RenderDevice* device, const std::string& name, const ComputePipelineStateDescription& description)
+	{
+		VGAssert(!pipelines.contains(name), "Duplicate pipeline name.");
+
+		pipelines[name].Build(*device, description);
+	}
 
 	const PipelineState& operator[](const std::string& name);
 };

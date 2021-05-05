@@ -68,7 +68,7 @@ void ReflectShader(std::unique_ptr<Shader>& inShader, ID3D12ShaderReflection* re
 	inShader->reflection.instructionCount = shaderDesc.InstructionCount;
 }
 
-std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderType type)
+std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderType type, std::string_view entry)
 {
 	VGScopedCPUStat("Compile Shader");
 
@@ -107,14 +107,18 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderT
 	{
 	case ShaderType::Vertex: compileTarget = VGText("vs_6_0"); break;
 	case ShaderType::Pixel: compileTarget = VGText("ps_6_0"); break;
-	case ShaderType::Hull: compileTarget = VGText("hs_6_0"); break;
-	case ShaderType::Domain: compileTarget = VGText("ds_6_0"); break;
-	case ShaderType::Geometry: compileTarget = VGText("gs_6_0"); break;
 	case ShaderType::Compute: compileTarget = VGText("cs_6_0"); break;
 	}
 
+	auto pathModified = path;
+
+	if (!path.has_extension())
+	{
+		pathModified.replace_extension(".hlsl");
+	}
+
 	ResourcePtr<IDxcBlobEncoding> sourceBlob;
-	auto result = shaderUtils->LoadFile(path.c_str(), nullptr, sourceBlob.Indirect());
+	auto result = shaderUtils->LoadFile(pathModified.c_str(), nullptr, sourceBlob.Indirect());
 	if (FAILED(result))
 	{
 		VGLogError(Rendering) << "Failed to create shader blob at '" << path.generic_wstring() << "': " << result;
@@ -131,15 +135,17 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderT
 	includeSearchDirectory.remove_filename();
 
 	// Stable names so we don't have to worry about c_str() being overwritten.
-	const auto stableShaderName = path.filename().generic_wstring();
+	const auto stableShaderName = pathModified.filename().generic_wstring();
 	const auto stableShaderIncludePath = includeSearchDirectory.generic_wstring();
+
+	const auto entryWide = std::wstring{ entry.begin(), entry.end() };
 
 	// See https://github.com/microsoft/DirectXShaderCompiler/blob/master/include/dxc/Support/HLSLOptions.td for compiler arguments.
 
 	std::vector<const wchar_t*> compileArguments;
 	compileArguments.emplace_back(stableShaderName.data());
 	compileArguments.emplace_back(VGText("-E"));
-	compileArguments.emplace_back(VGText("main"));
+	compileArguments.emplace_back(entryWide.data());
 	compileArguments.emplace_back(VGText("-T"));
 	compileArguments.emplace_back(compileTarget);
 	compileArguments.emplace_back(VGText("-I"));

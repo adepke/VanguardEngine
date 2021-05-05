@@ -2,6 +2,7 @@
 
 #include <Rendering/PipelineState.h>
 #include <Rendering/Device.h>
+#include <Core/Config.h>
 
 #include <algorithm>
 #include <cctype>
@@ -131,22 +132,10 @@ void PipelineState::ReflectRootSignature()
 		case D3D12_SHADER_VISIBILITY_ALL:
 			MatchShaderBindings(vertexShader);
 			MatchShaderBindings(pixelShader);
-			MatchShaderBindings(hullShader);
-			MatchShaderBindings(domainShader);
-			MatchShaderBindings(geometryShader);
 			MatchShaderBindings(computeShader);
 			break;
 		case D3D12_SHADER_VISIBILITY_VERTEX:
 			MatchShaderBindings(vertexShader);
-			break;
-		case D3D12_SHADER_VISIBILITY_HULL:
-			MatchShaderBindings(hullShader);
-			break;
-		case D3D12_SHADER_VISIBILITY_DOMAIN:
-			MatchShaderBindings(domainShader);
-			break;
-		case D3D12_SHADER_VISIBILITY_GEOMETRY:
-			MatchShaderBindings(geometryShader);
 			break;
 		case D3D12_SHADER_VISIBILITY_PIXEL:
 			MatchShaderBindings(pixelShader);
@@ -155,88 +144,21 @@ void PipelineState::ReflectRootSignature()
 	}
 }
 
-void PipelineState::CreateShaders(RenderDevice& device, const std::filesystem::path& shaderPath)
+void PipelineState::CreateShaders(RenderDevice& device)
 {
 	VGScopedCPUStat("Create Shaders");
 
-	for (auto& entry : std::filesystem::directory_iterator{ shaderPath.parent_path() })
+	const auto& shadersPath = Config::shadersPath;
+
+	if (computeDescription.shader.first.empty())
 	{
-		auto entryName = entry.path().filename().replace_extension("").generic_wstring();
-		entryName = entryName.substr(0, entryName.size() - 3);  // Remove the shader type extension.
+		if (!graphicsDescription.vertexShader.first.empty()) vertexShader = std::move(CompileShader(shadersPath / graphicsDescription.vertexShader.first, ShaderType::Vertex, graphicsDescription.vertexShader.second));
+		if (!graphicsDescription.pixelShader.first.empty()) pixelShader = std::move(CompileShader(shadersPath / graphicsDescription.pixelShader.first, ShaderType::Pixel, graphicsDescription.pixelShader.second));
+	}
 
-		if (entryName == shaderPath.filename())
-		{
-			const auto filename = entry.path().filename().generic_wstring();
-
-			std::optional<ShaderType> type{};
-
-			constexpr auto findType = [&filename](const auto* typeString) { return filename.find(typeString) != std::wstring::npos; };
-
-			if (findType(VGText("_VS")))
-			{
-				type = ShaderType::Vertex;
-			}
-
-			else if (findType(VGText("_PS")))
-			{
-				type = ShaderType::Pixel;
-			}
-
-			else if (findType(VGText("_HS")))
-			{
-				type = ShaderType::Hull;
-			}
-
-			else if (findType(VGText("_DS")))
-			{
-				type = ShaderType::Domain;
-			}
-
-			else if (findType(VGText("_GS")))
-			{
-				type = ShaderType::Geometry;
-			}
-
-			else if (findType(VGText("_CS")))
-			{
-				type = ShaderType::Compute;
-			}
-
-			else if (findType(VGText("_RS")))
-			{
-				type = std::nullopt;  // Root signature, we don't need to do anything.
-			}
-
-			else
-			{
-				VGLogError(Rendering) << "Failed to determine shader type for shader " << entry.path().filename().generic_wstring() << ".";
-			}
-
-			if (type)
-			{
-				auto compiledShader = std::move(CompileShader(entry.path(), type.value()));
-				switch (type.value())
-				{
-				case ShaderType::Vertex:
-					vertexShader = std::move(compiledShader);
-					break;
-				case ShaderType::Pixel:
-					pixelShader = std::move(compiledShader);
-					break;
-				case ShaderType::Hull:
-					hullShader = std::move(compiledShader);
-					break;
-				case ShaderType::Domain:
-					domainShader = std::move(compiledShader);
-					break;
-				case ShaderType::Geometry:
-					geometryShader = std::move(compiledShader);
-					break;
-				case ShaderType::Compute:
-					computeShader = std::move(compiledShader);
-				}
-			}
-		}
+	else
+	{
+		computeShader = std::move(CompileShader(shadersPath / computeDescription.shader.first, ShaderType::Compute, computeDescription.shader.second));
 	}
 }
 
@@ -261,16 +183,7 @@ void PipelineState::Build(RenderDevice& device, const GraphicsPipelineStateDescr
 
 	graphicsDescription = inDescription;
 
-	VGLog(Rendering) << "Building graphics pipeline for shader '" << graphicsDescription.shaderPath.filename().generic_wstring() << "'.";
-
-	const auto& filename = graphicsDescription.shaderPath.filename().generic_wstring();
-
-	if (graphicsDescription.shaderPath.has_extension())
-	{
-		VGLogWarning(Rendering) << "Improper shader path '" << graphicsDescription.shaderPath.filename().generic_wstring() << "', do not include extension.";
-	}
-
-	CreateShaders(device, graphicsDescription.shaderPath);
+	CreateShaders(device);
 
 	if (!vertexShader)
 	{
@@ -285,9 +198,6 @@ void PipelineState::Build(RenderDevice& device, const GraphicsPipelineStateDescr
 	graphicsDesc.pRootSignature = rootSignature.Get();
 	graphicsDesc.VS = { vertexShader->bytecode.data(), vertexShader->bytecode.size() };
 	graphicsDesc.PS = { pixelShader ? pixelShader->bytecode.data() : nullptr, pixelShader ? pixelShader->bytecode.size() : 0 };
-	graphicsDesc.DS = { domainShader ? domainShader->bytecode.data() : nullptr, domainShader ? domainShader->bytecode.size() : 0 };
-	graphicsDesc.HS = { hullShader ? hullShader->bytecode.data() : nullptr, hullShader ? hullShader->bytecode.size() : 0 };
-	graphicsDesc.GS = { geometryShader ? geometryShader->bytecode.data() : nullptr, geometryShader ? geometryShader->bytecode.size() : 0 };
 	graphicsDesc.StreamOutput = { nullptr, 0, nullptr, 0, 0 };  // Don't support GPU out streaming.
 	graphicsDesc.BlendState = graphicsDescription.blendDescription;
 	graphicsDesc.SampleMask = std::numeric_limits<UINT>::max();
@@ -325,16 +235,7 @@ void PipelineState::Build(RenderDevice& device, const ComputePipelineStateDescri
 
 	computeDescription = inDescription;
 
-	VGLog(Rendering) << "Building compute pipeline for shader '" << computeDescription.shaderPath.filename().generic_wstring() << "'.";
-
-	const auto& filename = computeDescription.shaderPath.filename().generic_wstring();
-
-	if (computeDescription.shaderPath.has_extension())
-	{
-		VGLogWarning(Rendering) << "Improper shader path '" << computeDescription.shaderPath.filename().generic_wstring() << "', do not include extension.";
-	}
-
-	CreateShaders(device, computeDescription.shaderPath);
+	CreateShaders(device);
 	CreateRootSignature(device);
 
 	D3D12_COMPUTE_PIPELINE_STATE_DESC computeDesc{};

@@ -7,6 +7,7 @@
 #include <vector>
 #include <memory>
 #include <filesystem>
+#include <string_view>
 
 struct ShaderReflection
 {
@@ -42,9 +43,6 @@ enum class ShaderType
 {
 	Vertex,
 	Pixel,
-	Hull,
-	Domain,
-	Geometry,
 	Compute,
 };
 
@@ -54,4 +52,4 @@ struct Shader
 	ShaderReflection reflection;
 };
 
-std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderType type);
+std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderType type, std::string_view entry);

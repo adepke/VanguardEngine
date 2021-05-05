@@ -147,7 +147,8 @@ void UserInterfaceManager::CreateDeviceObjects()
 	pipeline = std::make_unique<PipelineState>();
 
 	GraphicsPipelineStateDescription description{};
-	description.shaderPath = Config::shadersPath / "UserInterface";
+	description.vertexShader = { "UserInterface_VS", "main" };
+	description.pixelShader = { "UserInterface_PS", "main" };
 	description.blendDescription.AlphaToCoverageEnable = false;
 	description.blendDescription.RenderTarget[0].BlendEnable = true;
 	description.blendDescription.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;

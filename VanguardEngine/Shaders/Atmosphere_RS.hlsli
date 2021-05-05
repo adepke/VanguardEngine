@@ -2,7 +2,14 @@
 
 #define RS \
 	"RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT)," \
+	"RootConstants(b1, num32BitConstants = 56)," \
 	"CBV(b0, visibility = SHADER_VISIBILITY_PIXEL)," \
+	"DescriptorTable(" \
+		"SRV(t0, space = 0, numDescriptors = unbounded, flags = DESCRIPTORS_VOLATILE)," \
+		"visibility = SHADER_VISIBILITY_PIXEL)," \
+	"DescriptorTable(" \
+		"SRV(t0, space = 1, numDescriptors = unbounded, flags = DESCRIPTORS_VOLATILE)," \
+		"visibility = SHADER_VISIBILITY_PIXEL)," \
 	"StaticSampler(" \
 		"s0," \
 		"space = 0," \
