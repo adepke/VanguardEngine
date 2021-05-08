@@ -5,7 +5,6 @@
 
 #pragma pack_matrix(row_major)
 
-// #TODO: Near and far plane, FOV.
 struct Camera
 {
     float4 position;  // World space.
