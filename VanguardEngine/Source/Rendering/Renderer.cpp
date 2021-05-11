@@ -593,7 +593,7 @@ void Renderer::Render(entt::registry& registry)
 	editorPass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
 	{
 		userInterface->NewFrame();
-		EditorRenderer::Render(device.get(), registry, lastFrameTime, resources.GetTexture(depthStencilTag), resources.GetTexture(outputLDRTag));
+		EditorRenderer::Render(device.get(), registry, lastFrameTime, resources.GetTexture(depthStencilTag), resources.GetTexture(outputLDRTag), atmosphere);
 		userInterface->Render(list, resources.GetBuffer(cameraBufferTag));
 	});
 #endif

@@ -52,10 +52,12 @@ struct AtmosphereData
 
 class Atmosphere
 {
+public:
+	AtmosphereData model;
+
 private:
 	RenderDevice* device = nullptr;
 
-	AtmosphereData model;
 	bool dirty = true;  // Needs to recompute LUTs.
 	TextureHandle transmittanceTexture;
 	TextureHandle scatteringTexture;
@@ -79,4 +81,5 @@ public:
 	~Atmosphere();
 	void Initialize(RenderDevice* inDevice);
 	void Render(RenderGraph& graph, PipelineBuilder& pipeline, RenderResource cameraBuffer, RenderResource depthStencil, RenderResource outputHDRs);
+	void MarkModelDirty() { dirty = true; }
 };

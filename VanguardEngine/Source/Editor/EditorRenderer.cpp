@@ -5,7 +5,7 @@
 
 namespace EditorRenderer
 {
-	void Render(RenderDevice* device, entt::registry& registry, float frameTimeMs, TextureHandle depthStencilTexture, TextureHandle sceneTexture)
+	void Render(RenderDevice* device, entt::registry& registry, float frameTimeMs, TextureHandle depthStencilTexture, TextureHandle sceneTexture, Atmosphere& atmosphere)
 	{
 		EditorUI::Get().DrawLayout();
 		EditorUI::Get().DrawDemoWindow();
@@ -14,5 +14,6 @@ namespace EditorRenderer
 		EditorUI::Get().DrawEntityPropertyViewer(registry);
 		EditorUI::Get().DrawPerformanceMetrics(frameTimeMs);
 		EditorUI::Get().DrawRenderGraph(device, depthStencilTexture, sceneTexture);
+		EditorUI::Get().DrawAtmosphereControls(atmosphere);
 	}
 }

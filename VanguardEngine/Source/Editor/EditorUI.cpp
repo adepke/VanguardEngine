@@ -6,6 +6,7 @@
 #include <Rendering/RenderComponents.h>
 #include <Editor/EntityReflection.h>
 #include <Editor/ImGuiExtensions.h>
+#include <Rendering/Atmosphere.h>
 
 #include <imgui.h>
 #include <imgui_internal.h>
@@ -23,6 +24,7 @@ void EditorUI::DrawMenu()
 			ImGui::MenuItem("Entity Properties", nullptr, &entityPropertyViewerOpen);
 			ImGui::MenuItem("Performance Metrics", nullptr, &performanceMetricsOpen);
 			ImGui::MenuItem("Render Graph", nullptr, &renderGraphOpen);
+			ImGui::MenuItem("Atmosphere Controls", nullptr, &atmosphereControlsOpen);
 
 			ImGui::EndMenu();
 		}
@@ -318,6 +320,32 @@ void EditorUI::DrawRenderGraph(RenderDevice* device, TextureHandle depthStencil,
 			}
 
 			ImGui::Image(device, scene, { 0.25f, 0.25f });
+		}
+
+		ImGui::End();
+	}
+}
+
+void EditorUI::DrawAtmosphereControls(Atmosphere& atmosphere)
+{
+	if (atmosphereControlsOpen)
+	{
+		if (ImGui::Begin("Atmosphere", &atmosphereControlsOpen))
+		{
+			bool dirty = false;
+			dirty |= ImGui::DragFloat("Bottom radius", &atmosphere.model.radiusBottom, 0.2f, 1.f, atmosphere.model.radiusTop, "%.3f");
+			dirty |= ImGui::DragFloat("Top radius", &atmosphere.model.radiusTop, 0.2f, atmosphere.model.radiusBottom, 10000.f, "%.3f");
+			dirty |= ImGui::DragFloat3("Rayleigh scattering", (float*)&atmosphere.model.rayleighScattering, 0.001f, 0.f, 1.f, "%.6f");
+			dirty |= ImGui::DragFloat3("Mie scattering", (float*)&atmosphere.model.mieScattering, 0.001f, 0.f, 1.f, "%.6f");
+			dirty |= ImGui::DragFloat3("Mie extinction", (float*)&atmosphere.model.mieExtinction, 0.001f, 0.f, 1.f, "%.6f");
+			dirty |= ImGui::DragFloat3("Absorption extinction", (float*)&atmosphere.model.absorptionExtinction, 0.001f, 0.f, 1.f, "%.6f");
+			dirty |= ImGui::DragFloat3("Surface color", (float*)&atmosphere.model.surfaceColor, 0.01f, 0.f, 1.f, "%.3f");
+			dirty |= ImGui::DragFloat3("Solar irradiance", (float*)&atmosphere.model.solarIrradiance, 0.01f, 0.f, 100.f, "%.4f");
+			
+			if (dirty)
+			{
+				atmosphere.MarkModelDirty();
+			}
 		}
 
 		ImGui::End();

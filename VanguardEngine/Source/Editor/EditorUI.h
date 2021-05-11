@@ -9,6 +9,8 @@
 
 #include <deque>
 
+class Atmosphere;
+
 class EditorUI : public Singleton<EditorUI>
 {
 private:
@@ -20,6 +22,7 @@ private:
 	bool entityPropertyViewerOpen = true;
 	bool performanceMetricsOpen = true;
 	bool renderGraphOpen = true;
+	bool atmosphereControlsOpen = true;
 
 	// Focus states.
 	bool entityPropertyViewerFocus = false;
@@ -39,4 +42,5 @@ public:
 	void DrawEntityPropertyViewer(entt::registry& registry);
 	void DrawPerformanceMetrics(float frameTimeMs);
 	void DrawRenderGraph(RenderDevice* device, TextureHandle depthStencil, TextureHandle scene);
+	void DrawAtmosphereControls(Atmosphere& atmosphere);
 };
