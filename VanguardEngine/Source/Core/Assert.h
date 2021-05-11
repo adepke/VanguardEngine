@@ -4,9 +4,9 @@
 
 #include <Core/Misc.h>
 
-#include <iostream>
 #include <exception>
 #include <cstdlib>
+#include <cassert>
 
 // MSVC doesn't yet support __VA_OPT__, see https://en.cppreference.com/w/cpp/compiler_support
 #ifdef _MSC_VER
@@ -15,8 +15,7 @@
 	{ \
 		if (!(condition)) VGUnlikely \
 		{ \
-			std::cerr << "Assertion \"" << #condition << "\" failed in " << __FILE__ << ", line " << __LINE__ << ": " << __VA_ARGS__; \
-			VGBreak(); \
+			assert((__VA_ARGS__, condition)); \
 			std::abort(); \
 		} \
 	} \
@@ -27,8 +26,7 @@
 	{ \
 		if (!(condition)) VGUnlikely \
 		{ \
-			std::cerr << "Assertion \"" << #condition << "\" failed in " << __FILE__ << ", line " << __LINE__ __VA_OPT__(<< ": " << __VA_ARGS__); \
-			VGBreak(); \
+			assert((__VA_OPT__(__VA_ARGS__,) condition)); \
 			std::abort(); \
 		} \
 	} \
