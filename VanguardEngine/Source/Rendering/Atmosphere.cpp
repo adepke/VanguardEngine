@@ -426,13 +426,14 @@ void Atmosphere::Render(RenderGraph& graph, PipelineBuilder& pipelines, RenderRe
 			uint32_t transmissionTexture;
 			uint32_t scatteringTexture;
 			uint32_t irradianceTexture;
-			float padding;
+			float solarZenithAngle;
 		} bindData;
 		
 		bindData.atmosphere = model;
 		bindData.transmissionTexture = device->GetResourceManager().Get(transmittanceTexture).SRV->bindlessIndex;
 		bindData.scatteringTexture = device->GetResourceManager().Get(scatteringTexture).SRV->bindlessIndex;
 		bindData.irradianceTexture = device->GetResourceManager().Get(irradianceTexture).SRV->bindlessIndex;
+		bindData.solarZenithAngle = solarZenithAngle;
 
 		std::vector<uint32_t> bindConstants;
 		bindConstants.resize(sizeof(BindData) / 4);

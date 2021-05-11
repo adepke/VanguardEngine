@@ -332,6 +332,11 @@ void EditorUI::DrawAtmosphereControls(Atmosphere& atmosphere)
 	{
 		if (ImGui::Begin("Atmosphere", &atmosphereControlsOpen))
 		{
+			constexpr float maxZenithAngle = 3.14159f;
+			ImGui::DragFloat("Solar zenith angle", &atmosphere.solarZenithAngle, 0.01f, -maxZenithAngle, maxZenithAngle, "%.3f");
+
+			ImGui::Separator();
+
 			bool dirty = false;
 			dirty |= ImGui::DragFloat("Bottom radius", &atmosphere.model.radiusBottom, 0.2f, 1.f, atmosphere.model.radiusTop, "%.3f");
 			dirty |= ImGui::DragFloat("Top radius", &atmosphere.model.radiusTop, 0.2f, atmosphere.model.radiusBottom, 10000.f, "%.3f");

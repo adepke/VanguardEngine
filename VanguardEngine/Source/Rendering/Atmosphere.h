@@ -54,6 +54,7 @@ class Atmosphere
 {
 public:
 	AtmosphereData model;
+	float solarZenithAngle = 0.f;
 
 private:
 	RenderDevice* device = nullptr;

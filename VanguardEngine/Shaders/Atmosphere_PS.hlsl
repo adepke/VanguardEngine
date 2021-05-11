@@ -16,7 +16,7 @@ struct AtmosphereBindData
     uint transmissionTexture;
     uint scatteringTexture;
     uint irradianceTexture;
-    float padding;
+    float solarZenithAngle;
 };
 
 ConstantBuffer<AtmosphereBindData> bindData : register(b1);
@@ -65,7 +65,7 @@ float4 GetPlanetSurfaceRadiance(float3 planetCenter, float3 cameraPosition, floa
 Output main(Input input)
 {   
     float3 cameraPosition = camera.position.xyz / 1000.f;  // Atmosphere distances work in terms of kilometers due to floating point precision, so convert.
-    float3 sunDirection = normalize(float3(1.f, 0.f, 3.f));
+    float3 sunDirection = float3(sin(bindData.solarZenithAngle), 0.f, cos(bindData.solarZenithAngle));
     float3 planetCenter = float3(0.f, 0.f, -bindData.atmosphere.radiusBottom);  // World origin is planet surface.
     
     float3 rayDirection = ComputeRayDirection(camera, input.uv);
