@@ -55,7 +55,7 @@ void EngineBoot()
 	constexpr uint32_t defaultWindowSizeX = 1200;
 	constexpr uint32_t defaultWindowSizeY = 900;
 
-	auto window = std::make_unique<WindowFrame>(VGText("Vanguard Engine"), defaultWindowSizeX, defaultWindowSizeY);
+	auto window = std::make_unique<WindowFrame>(VGText("Vanguard"), defaultWindowSizeX, defaultWindowSizeY);
 	window->onFocusChanged = &OnFocusChanged;
 	window->onSizeChanged = &OnSizeChanged;
 
