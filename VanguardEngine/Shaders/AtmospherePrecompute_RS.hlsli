@@ -2,7 +2,7 @@
 
 #define RS \
 	"RootFlags(0)," \
-	"RootConstants(b0, num32BitConstants = 56)," \
+	"RootConstants(b0, num32BitConstants = 60)," \
 	"DescriptorTable(" \
 		"SRV(t0, space = 0, numDescriptors = unbounded, flags = DESCRIPTORS_VOLATILE))," \
 	"DescriptorTable(" \

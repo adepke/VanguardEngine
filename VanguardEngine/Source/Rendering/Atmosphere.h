@@ -25,8 +25,9 @@ struct DensityLayer
 
 struct AtmosphereData
 {
-	float radius;  // Planet center to the start of the atmosphere.
-	XMFLOAT3 padding0;
+	float radiusBottom;  // Planet center to the start of the atmosphere.
+	float radiusTop;
+	XMFLOAT2 padding0;
 
 	DensityLayer rayleighDensity;
 	XMFLOAT3 rayleighScattering;  // Air molecule scattering, absorption is considered negligible.
@@ -60,8 +61,17 @@ private:
 	TextureHandle scatteringTexture;
 	TextureHandle irradianceTexture;
 
+	TextureHandle deltaRayleighTexture;
+	TextureHandle deltaMieTexture;
+	TextureHandle deltaScatteringDensityTexture;
+	TextureHandle deltaIrradianceTexture;
+
 	PipelineState transmissionPrecompute;
-	PipelineState scatteringPrecompute;
+	PipelineState directIrradiancePrecompute;
+	PipelineState singleScatteringPrecompute;
+	PipelineState scatteringDensityPrecompute;
+	PipelineState indirectIrradiancePrecompute;
+	PipelineState multipleScatteringPrecompute;
 
 	void Precompute(CommandList& list);
 
