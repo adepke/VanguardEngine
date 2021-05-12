@@ -5,12 +5,34 @@
 #include <Rendering/Material.h>
 #include <Core/Config.h>
 #include <Utility/AlignedSize.h>
+#include <Rendering/DREDHelper.h>
 
 #include <algorithm>
 
 #if !BUILD_RELEASE
 #include <dxgidebug.h>
 #endif
+
+void OnDeviceRemoved(void* context, uint8_t)
+{
+	auto* device = static_cast<ID3D12Device5*>(context);
+	auto removedReason = device->GetDeviceRemovedReason();
+
+	VGLogError(Rendering) << "Device removed, reason: " << removedReason;
+
+	ResourcePtr<ID3D12DeviceRemovedExtendedData1> dred;
+	auto result = device->QueryInterface(IID_PPV_ARGS(dred.Indirect()));
+	if (FAILED(result))
+	{
+		VGLogError(Rendering) << "Failed to get DRED interface: " << result;
+	}
+
+	else
+	{
+		VGLog(Rendering) << GetDredInfo(device, dred.Get()).str();
+		VGBreak();
+	}
+}
 
 void RenderDevice::SetNames()
 {
@@ -113,6 +135,21 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 			infoQueue->SetBreakOnSeverity(DXGI_DEBUG_ALL, DXGI_INFO_QUEUE_MESSAGE_SEVERITY_ERROR, true);
 			infoQueue->SetBreakOnSeverity(DXGI_DEBUG_ALL, DXGI_INFO_QUEUE_MESSAGE_SEVERITY_CORRUPTION, true);
 		}
+
+		ResourcePtr<ID3D12DeviceRemovedExtendedDataSettings1> dredSettings;
+
+		result = D3D12GetDebugInterface(IID_PPV_ARGS(dredSettings.Indirect()));
+		if (FAILED(result))
+		{
+			VGLogError(Rendering) << "Failed to get D3D12 DRED interface: " << result;
+		}
+
+		else
+		{
+			dredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+			dredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+			dredSettings->SetBreadcrumbContextEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+		}
 	}
 #endif
 
@@ -132,7 +169,7 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 
 	renderAdapter.Initialize(factory, targetFeatureLevel, software);
 
-	Microsoft::WRL::ComPtr<ID3D12Device3> deviceCom;
+	Microsoft::WRL::ComPtr<ID3D12Device5> deviceCom;
 
 	result = D3D12CreateDevice(renderAdapter.Native(), targetFeatureLevel, IID_PPV_ARGS(deviceCom.GetAddressOf()));
 	if (FAILED(result))
@@ -258,6 +295,24 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 		VGLogFatal(Rendering) << "Failed to create sync event: " << GetPlatformError();
 	}
 
+	// Setup callbacks.
+#if !BUILD_RELEASE
+	result = device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(deviceRemovedFence.Indirect()));
+	if (FAILED(result))
+	{
+		VGLogFatal(Rendering) << "Failed to create device removed fence: " << result;
+	}
+
+	deviceRemovedEvent = ::CreateEvent(nullptr, false, false, VGText("On device removed"));
+	result = deviceRemovedFence->SetEventOnCompletion(UINT64_MAX, deviceRemovedEvent);
+	if (FAILED(result))
+	{
+		VGLogError(Rendering) << "Failed to set device removed completion event: " << result;
+	}
+
+	RegisterWaitForSingleObject(&deviceRemovedHandle, deviceRemovedEvent, &OnDeviceRemoved, device.Get(), INFINITE, 0);
+#endif
+
 	constexpr auto frameBufferSize = 1024 * 64;
 
 	// Allocate frame buffers.
@@ -285,6 +340,8 @@ RenderDevice::~RenderDevice()
 	Synchronize();
 
 	::CloseHandle(syncEvent);
+	::CloseHandle(deviceRemovedEvent);
+	::CloseHandle(deviceRemovedHandle);
 
 #if !BUILD_RELEASE
 	if (debugging)

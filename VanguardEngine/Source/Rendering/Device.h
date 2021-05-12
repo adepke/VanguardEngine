@@ -38,7 +38,7 @@ private:
 	const D3D_SHADER_MODEL targetShaderModel = D3D_SHADER_MODEL_6_3;
 
 	// #NOTE: Ordering of these variables is significant for proper destruction!
-	ResourcePtr<ID3D12Device3> device;
+	ResourcePtr<ID3D12Device5> device;
 	Adapter renderAdapter;
 
 	ResourcePtr<ID3D12CommandQueue> directCommandQueue;
@@ -58,6 +58,11 @@ private:
 	DescriptorAllocator descriptorManager;
 
 	std::array<TextureHandle, frameCount> backBufferTextures;  // Render targets bound to the swap chain.
+
+	// Callbacks.
+	ResourcePtr<ID3D12Fence> deviceRemovedFence;
+	HANDLE deviceRemovedEvent;
+	HANDLE deviceRemovedHandle;
 
 	std::array<BufferHandle, frameCount> frameBuffers;  // Per-frame shared dynamic heap.
 	std::array<size_t, frameCount> frameBufferOffsets = {};
