@@ -2,6 +2,9 @@
 
 #pragma once
 
+#include <Rendering/RenderGraphResource.h>
+#include <Rendering/RenderGraphResourceManager.h>
+
 #include <set>
 #include <functional>
 #include <optional>
