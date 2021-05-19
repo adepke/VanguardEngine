@@ -48,15 +48,15 @@ void ClusteredLightCulling::ComputeClusterGrid(CommandList& list, const entt::re
 	} clusterData;
 
 	clusterData.gridDimensionsX = subdivisionsX;
-	clusterData.gridDimensionsZ = subdivisionsY;
-	clusterData.gridDimensionsY = subdivisionsZ;
+	clusterData.gridDimensionsY = subdivisionsY;
+	clusterData.gridDimensionsZ = subdivisionsZ;
 	clusterData.nearK = depthFactor;
 	clusterData.resolutionX = backBufferComponent.description.width;
 	clusterData.resolutionY = backBufferComponent.description.height;
 
 	std::vector<uint32_t> clusterConstants;
 	clusterConstants.resize(sizeof(ClusterData) / 4);
-	std::memcpy(clusterConstants.data(), &clusterData, clusterConstants.size());
+	std::memcpy(clusterConstants.data(), &clusterData, clusterConstants.size() * sizeof(uint32_t));
 
 	uint32_t dispatchX = static_cast<uint32_t>(std::ceil(subdivisionsX / (float)groupSize));
 	uint32_t dispatchY = static_cast<uint32_t>(std::ceil(subdivisionsY / (float)groupSize));
