@@ -42,7 +42,10 @@ void ComputeClusterFrustumsMain(uint3 dispatchId : SV_DispatchThreadID)
     frustum.planes[3] = ComputePlane(origin, frustumVertices[3], frustumVertices[2]);  // Bottom.
     
     uint index = dispatchId.x + dispatchId.y * clusterData.gridDimensions.x;
-    clusterFrustums[index] = frustum;
+    if (index < clusterData.gridDimensions.x * clusterData.gridDimensions.y)
+    {
+        clusterFrustums[index] = frustum;
+    }
 }
 
 // Computes the AABB for each froxel.
@@ -69,6 +72,9 @@ void ComputeClusterBoundsMain(uint3 dispatchId : SV_DispatchThreadID)
     float3 maxBound = max(minNear, max(maxNear, max(minFar, maxFar)));
     
     AABB box = { float4(minBound, 1.f), float4(maxBound, 1.f) };
-    uint index = dispatchId.x + dispatchId.y * clusterData.gridDimensions.x + dispatchId.z * clusterData.gridDimensions.y;
-    clusterAABBs[index] = box;
+    uint index = dispatchId.x + dispatchId.y * clusterData.gridDimensions.x + dispatchId.z * clusterData.gridDimensions.y;   
+    if (index < clusterData.gridDimensions.x * clusterData.gridDimensions.y * clusterData.gridDimensions.z)
+    {
+        clusterAABBs[index] = box;
+    }
 }

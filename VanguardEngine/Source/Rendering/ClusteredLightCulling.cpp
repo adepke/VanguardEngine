@@ -91,11 +91,15 @@ void ClusteredLightCulling::Initialize(RenderDevice* inDevice)
 {
 	device = inDevice;
 
+	constexpr auto maxDivisionsX = 80;
+	constexpr auto maxDivisionsY = 60;
+	constexpr auto maxDivisionsZ = 160;
+
 	BufferDescription clusterFrustumsDesc{};
 	clusterFrustumsDesc.updateRate = ResourceFrequency::Static;
 	clusterFrustumsDesc.bindFlags = BindFlag::UnorderedAccess;
 	clusterFrustumsDesc.accessFlags = AccessFlag::GPUWrite;
-	clusterFrustumsDesc.size = 1000;  // #TEMP
+	clusterFrustumsDesc.size = maxDivisionsX * maxDivisionsY;
 	clusterFrustumsDesc.stride = 64;
 
 	clusterFrustums = device->GetResourceManager().Create(clusterFrustumsDesc, VGText("Cluster frustums"));
@@ -104,7 +108,7 @@ void ClusteredLightCulling::Initialize(RenderDevice* inDevice)
 	clusterAABBsDesc.updateRate = ResourceFrequency::Static;
 	clusterAABBsDesc.bindFlags = BindFlag::UnorderedAccess | BindFlag::ShaderResource;
 	clusterAABBsDesc.accessFlags = AccessFlag::GPUWrite;
-	clusterAABBsDesc.size = 1000;  // #TEMP
+	clusterAABBsDesc.size = maxDivisionsX * maxDivisionsY * maxDivisionsZ;
 	clusterAABBsDesc.stride = 32;
 
 	clusterAABBs = device->GetResourceManager().Create(clusterAABBsDesc, VGText("Cluster AABBs"));
@@ -134,6 +138,6 @@ void ClusteredLightCulling::Render(RenderGraph& graph, const entt::registry& reg
 			ComputeClusterGrid(list, registry, resources.GetBuffer(cameraBuffer));
 		});
 
-		//dirty = false;
+		dirty = false;
 	}
 }
