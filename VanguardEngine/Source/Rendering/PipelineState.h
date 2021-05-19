@@ -2,14 +2,12 @@
 
 #pragma once
 
-#include <Rendering/Resource.h>
+#include <Rendering/Base.h>
 #include <Rendering/Shader.h>
 
 #include <filesystem>
 #include <map>
 #include <utility>
-
-#include <Core/Windows/DirectX12Minimal.h>
 
 class RenderDevice;
 

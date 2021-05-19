@@ -3,7 +3,7 @@
 #pragma once
 
 #include <Rendering/Base.h>
-#include <Rendering/Resource.h>
+#include <Rendering/ResourceHandle.h>
 
 #include <Core/Windows/DirectX12Minimal.h>
 

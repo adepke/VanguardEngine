@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include <Rendering/Resource.h>
+#include <Rendering/ResourceHandle.h>
 
 struct Material
 {

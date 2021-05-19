@@ -2,10 +2,9 @@
 
 #pragma once
 
-#include <Rendering/Resource.h>
+#include <Rendering/ResourceHandle.h>
 
 #include <filesystem>
-#include <memory>
 
 class RenderDevice;
 

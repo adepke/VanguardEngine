@@ -2,6 +2,7 @@
 
 #include <Rendering/DescriptorHeap.h>
 #include <Rendering/Device.h>
+#include <Rendering/Resource.h>
 
 void DescriptorHeapBase::Create(RenderDevice* device, DescriptorType type, size_t descriptors, bool visible)
 {
@@ -42,7 +43,7 @@ DescriptorHandle FreeQueueDescriptorHeap::Allocate()
 	// If we have readily available space in the heap, use that first.
 	if (allocatedDescriptors < totalDescriptors)
 	{
-		allocatedDescriptors++;
+		++allocatedDescriptors;
 
 		const auto offset = (allocatedDescriptors - 1) * descriptorSize;
 

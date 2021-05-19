@@ -2,13 +2,14 @@
 
 #pragma once
 
-#include <Rendering/Resource.h>
+#include <Rendering/ResourceHandle.h>
 #include <Utility/Singleton.h>
 
 #include <entt/entt.hpp>
 
 #include <deque>
 
+class RenderDevice;
 class Atmosphere;
 
 class EditorUI : public Singleton<EditorUI>

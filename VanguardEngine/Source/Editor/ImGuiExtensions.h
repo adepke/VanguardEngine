@@ -3,7 +3,7 @@
 #pragma once
 
 #include <Rendering/Device.h>
-#include <Rendering/Resource.h>
+#include <Rendering/ResourceHandle.h>
 #include <Rendering/ResourceManager.h>
 
 #include <imgui.h>

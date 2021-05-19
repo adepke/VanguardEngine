@@ -20,6 +20,21 @@ struct Camera
     float aspectRatio;
 };
 
+float4 UvToClipSpace(float2 uv)
+{
+    uv = float2(uv.x, 1.f - uv.y);  // Reverse the y axis.
+    uv = uv * 2.f - 1.f;  // Remap to [-1, 1].
+    
+    return float4(uv, 0.f, 1.f);  // Clip space Z of 0 due to the inverse depth buffer.
+}
+
+float4 ClipToViewSpace(Camera camera, float4 clipSpace)
+{
+    float4 viewSpace = mul(camera.inverseProjection, clipSpace);
+    
+    return viewSpace / viewSpace.w;  // Perspective division.
+}
+
 float LinearizeDepth(Camera camera, float hyperbolicDepth)
 {
 	// Reversed planes for the inverse depth buffer.
@@ -31,11 +46,8 @@ float LinearizeDepth(Camera camera, float hyperbolicDepth)
 
 float3 ComputeRayDirection(Camera camera, float2 uv)
 {
-    uv = float2(uv.x, 1.f - uv.y);  // Reverse the y axis.
-    uv = uv * 2.f - 1.f;  // Remap to [-1, 1].
-    
-    float4 positionClipSpace = float4(uv, 0.f, 1.f);  // Clip space Z of 0 due to the inverse depth buffer.
-    float4 positionViewSpace = float4(mul(camera.inverseProjection, positionClipSpace).xyz, 0.f);
+    float4 positionClipSpace = UvToClipSpace(uv);
+    float4 positionViewSpace = float4(mul(camera.inverseProjection, positionClipSpace).xyz, 0.f);  // No perspective division.
     float4 positionWorldSpace = mul(camera.inverseView, positionViewSpace);
     
     return normalize(positionWorldSpace.xyz);

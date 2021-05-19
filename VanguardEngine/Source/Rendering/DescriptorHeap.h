@@ -4,13 +4,10 @@
 
 #include <Rendering/Base.h>
 
-#include <Core/Windows/DirectX12Minimal.h>
-
 #include <memory>
 #include <queue>
 
 class RenderDevice;
-class FreeQueueDescriptorHeap;
 
 enum class DescriptorType
 {
@@ -22,7 +19,7 @@ enum class DescriptorType
 
 struct DescriptorHandle
 {
-	friend class LinearDescriptorHeap;
+	friend class DescriptorHeapBase;
 	friend class FreeQueueDescriptorHeap;
 
 private:

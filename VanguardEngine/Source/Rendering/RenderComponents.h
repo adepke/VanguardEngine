@@ -5,6 +5,7 @@
 #include <Rendering/Material.h>
 #include <Rendering/Device.h>
 #include <Rendering/Resource.h>
+#include <Rendering/ResourceHandle.h>
 
 #include <memory>
 #include <vector>

@@ -10,7 +10,7 @@
 #include <Rendering/Material.h>
 
 // #TODO: Fix Windows.h leaking.
-#include <Rendering/Resource.h>
+#include <Rendering/ResourceHandle.h>
 #include <Rendering/Adapter.h>  // #TODO: Including this before D3D12MemAlloc.h causes an array of errors, this needs to be fixed.
 
 #include <memory>

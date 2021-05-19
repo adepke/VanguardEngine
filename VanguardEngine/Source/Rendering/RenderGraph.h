@@ -3,6 +3,7 @@
 #pragma once
 
 #include <Rendering/Base.h>
+#include <Rendering/ResourceHandle.h>
 #include <Rendering/RenderGraphResourceManager.h>
 
 #include <vector>

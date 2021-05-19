@@ -4,6 +4,7 @@
 
 #include <Rendering/Base.h>
 #include <Rendering/Resource.h>
+#include <Rendering/ResourceHandle.h>
 #include <Rendering/PipelineState.h>
 
 #include <D3D12MemAlloc.h>

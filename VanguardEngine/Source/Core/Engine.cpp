@@ -21,6 +21,8 @@
 #include <Asset/AssetLoader.h>
 //
 
+entt::registry registry;
+
 void OnFocusChanged(bool focus)
 {
 	VGScopedCPUStat("Focus Changed");
@@ -37,7 +39,7 @@ void OnSizeChanged(uint32_t width, uint32_t height, bool fullscreen)
 	VGLog(Window) << "Window size changed (" << width << ", " << height << ").";
 
 	Renderer::Get().device->SetResolution(width, height, fullscreen);
-	Renderer::Get().DiscardRenderData();
+	Renderer::Get().OnBackBufferSizeChanged(registry);
 }
 
 void EngineBoot()
@@ -76,27 +78,25 @@ void EngineBoot()
 
 void EngineLoop()
 {
-	entt::registry tempReg;
-
 	TransformComponent spectatorTransform{};
 	spectatorTransform.translation.x = -10.f;
 	spectatorTransform.translation.y = 0.f;
 	spectatorTransform.translation.z = 1.f;
 
-	const auto spectator = tempReg.create();
-	tempReg.emplace<NameComponent>(spectator, "Spectator");
-	tempReg.emplace<TransformComponent>(spectator, std::move(spectatorTransform));
-	tempReg.emplace<CameraComponent>(spectator);
-	tempReg.emplace<ControlComponent>(spectator);  // #TEMP
+	const auto spectator = registry.create();
+	registry.emplace<NameComponent>(spectator, "Spectator");
+	registry.emplace<TransformComponent>(spectator, std::move(spectatorTransform));
+	registry.emplace<CameraComponent>(spectator);
+	registry.emplace<ControlComponent>(spectator);  // #TEMP
 
 	TransformComponent sponzaTransform{};
 	sponzaTransform.translation = { 1200.f, -50.f, -120.f };
 	sponzaTransform.rotation = { -1.57079633f, 0.f, 0.f };  // Rotate the sponza into our coordinate space.
 
-	const auto sponza = tempReg.create();
-	tempReg.emplace<NameComponent>(sponza, "Sponza");
-	tempReg.emplace<TransformComponent>(sponza, std::move(sponzaTransform));
-	tempReg.emplace<MeshComponent>(sponza, AssetLoader::LoadMesh(*Renderer::Get().device, Config::shadersPath / "../Assets/Models/Sponza/glTF/Sponza.gltf"));
+	const auto sponza = registry.create();
+	registry.emplace<NameComponent>(sponza, "Sponza");
+	registry.emplace<TransformComponent>(sponza, std::move(sponzaTransform));
+	registry.emplace<MeshComponent>(sponza, AssetLoader::LoadMesh(*Renderer::Get().device, Config::shadersPath / "../Assets/Models/Sponza/glTF/Sponza.gltf"));
 
 	LightComponent pointLight1{};
 	pointLight1.color = { 1.f, 1.f, 1.f };
@@ -112,20 +112,20 @@ void EngineLoop()
 	TransformComponent light3Transform{};
 	light3Transform.translation = { 1600.f, 0.f, 70.f };
 
-	const auto light1 = tempReg.create();
-	tempReg.emplace<NameComponent>(light1, "Light1");
-	tempReg.emplace<TransformComponent>(light1, std::move(light1Transform));
-	tempReg.emplace<LightComponent>(light1, pointLight1);
+	const auto light1 = registry.create();
+	registry.emplace<NameComponent>(light1, "Light1");
+	registry.emplace<TransformComponent>(light1, std::move(light1Transform));
+	registry.emplace<LightComponent>(light1, pointLight1);
 	
-	const auto light2 = tempReg.create();
-	tempReg.emplace<NameComponent>(light2, "Light2");
-	tempReg.emplace<TransformComponent>(light2, std::move(light2Transform));
-	tempReg.emplace<LightComponent>(light2, pointLight2);
+	const auto light2 = registry.create();
+	registry.emplace<NameComponent>(light2, "Light2");
+	registry.emplace<TransformComponent>(light2, std::move(light2Transform));
+	registry.emplace<LightComponent>(light2, pointLight2);
 
-	const auto light3 = tempReg.create();
-	tempReg.emplace<NameComponent>(light3, "Light3");
-	tempReg.emplace<TransformComponent>(light3, std::move(light3Transform));
-	tempReg.emplace<LightComponent>(light3, pointLight3);
+	const auto light3 = registry.create();
+	registry.emplace<NameComponent>(light3, "Light3");
+	registry.emplace<TransformComponent>(light3, std::move(light3Transform));
+	registry.emplace<LightComponent>(light3, pointLight3);
 
 	auto frameBegin = std::chrono::high_resolution_clock::now();
 	float lastDeltaTime = 0.f;
@@ -148,11 +148,11 @@ void EngineLoop()
 			}
 		}
 
-		ControlSystem::Update(tempReg);
+		ControlSystem::Update(registry);
 
-		CameraSystem::Update(tempReg, lastDeltaTime);
+		CameraSystem::Update(registry, lastDeltaTime);
 
-		Renderer::Get().Render(tempReg);
+		Renderer::Get().Render(registry);
 
 		Renderer::Get().device->AdvanceCPU();
 

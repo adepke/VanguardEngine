@@ -2,6 +2,7 @@
 
 #pragma once
 
+#include <Rendering/Base.h>
 #include <Rendering/Resource.h>
 
 #include <functional>

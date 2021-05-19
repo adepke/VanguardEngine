@@ -7,8 +7,6 @@
 
 #include <optional>
 
-#include <entt/entt.hpp>
-
 // #TODO: Fix Windows.h leaking.
 #include <D3D12MemAlloc.h>
 
@@ -87,16 +85,4 @@ struct TextureComponent
 
 	// #TODO: Remove.
 	ID3D12Resource* Native() { return allocation->GetResource(); }
-};
-
-// Lightweight type safe generational handles for render resources.
-
-struct BufferHandle
-{
-	entt::entity handle = entt::null;
-};
-
-struct TextureHandle
-{
-	entt::entity handle = entt::null;
 };

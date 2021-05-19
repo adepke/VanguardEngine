@@ -17,6 +17,7 @@
 #include <vector>
 #include <utility>
 #include <cstring>
+#include <cmath>
 
 // Per-entity data.
 struct EntityInstance
@@ -396,6 +397,7 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 	CreatePipelines();
 
 	atmosphere.Initialize(device.get());
+	clusteredCulling.Initialize(device.get());
 }
 
 void Renderer::Render(entt::registry& registry)
@@ -455,6 +457,9 @@ void Renderer::Render(entt::registry& registry)
 			++entityIndex;
 		});
 	});
+
+	// #TODO: Don't have this here.
+	clusteredCulling.Render(graph, registry, cameraBufferTag);
 	
 	auto& forwardPass = graph.AddPass("Forward Pass", ExecutionQueue::Graphics);
 	const auto outputHDRTag = forwardPass.Create(TransientTextureDescription{
@@ -607,7 +612,8 @@ void Renderer::Render(entt::registry& registry)
 	device->AdvanceGPU();
 }
 
-void Renderer::DiscardRenderData()
+void Renderer::OnBackBufferSizeChanged(const entt::registry& registry)
 {
 	renderGraphResources.DiscardTransients(device.get());
+	clusteredCulling.MarkDirty();
 }

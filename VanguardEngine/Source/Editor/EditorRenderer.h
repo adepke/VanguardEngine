@@ -2,8 +2,7 @@
 
 #pragma once
 
-#include <Rendering/Resource.h>
-#include <Rendering/Viewport.h>
+#include <Rendering/ResourceHandle.h>
 
 #include <entt/entt.hpp>
 
