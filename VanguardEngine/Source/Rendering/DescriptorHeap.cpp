@@ -4,6 +4,8 @@
 #include <Rendering/Device.h>
 #include <Rendering/Resource.h>
 
+#include <limits>
+
 void DescriptorHeapBase::Create(RenderDevice* device, DescriptorType type, size_t descriptors, bool visible)
 {
 	VGScopedCPUStat("Descriptor Heap Create");
@@ -31,9 +33,14 @@ void DescriptorHeapBase::Create(RenderDevice* device, DescriptorType type, size_
 	}
 
 	cpuHeapStart = heap->GetCPUDescriptorHandleForHeapStart().ptr;
-	gpuHeapStart = heap->GetGPUDescriptorHandleForHeapStart().ptr;
+	gpuHeapStart = std::numeric_limits<size_t>::max();  // Non-visible heaps cannot call GetGPUDescriptorHandleForHeapStart().
 	descriptorSize = device->Native()->GetDescriptorHandleIncrementSize(heapType);
 	totalDescriptors = descriptors;
+
+	if (visible)
+	{
+		gpuHeapStart = heap->GetGPUDescriptorHandleForHeapStart().ptr;
+	}
 }
 
 DescriptorHandle FreeQueueDescriptorHeap::Allocate()
