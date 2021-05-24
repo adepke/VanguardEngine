@@ -144,7 +144,7 @@ void PipelineState::ReflectRootSignature()
 	}
 }
 
-void PipelineState::CreateShaders(RenderDevice& device)
+void PipelineState::CreateShaders(RenderDevice& device, const std::vector<ShaderMacro>& macros)
 {
 	VGScopedCPUStat("Create Shaders");
 
@@ -152,13 +152,13 @@ void PipelineState::CreateShaders(RenderDevice& device)
 
 	if (computeDescription.shader.first.empty())
 	{
-		if (!graphicsDescription.vertexShader.first.empty()) vertexShader = std::move(CompileShader(shadersPath / graphicsDescription.vertexShader.first, ShaderType::Vertex, graphicsDescription.vertexShader.second));
-		if (!graphicsDescription.pixelShader.first.empty()) pixelShader = std::move(CompileShader(shadersPath / graphicsDescription.pixelShader.first, ShaderType::Pixel, graphicsDescription.pixelShader.second));
+		if (!graphicsDescription.vertexShader.first.empty()) vertexShader = std::move(CompileShader(shadersPath / graphicsDescription.vertexShader.first, ShaderType::Vertex, graphicsDescription.vertexShader.second, macros));
+		if (!graphicsDescription.pixelShader.first.empty()) pixelShader = std::move(CompileShader(shadersPath / graphicsDescription.pixelShader.first, ShaderType::Pixel, graphicsDescription.pixelShader.second, macros));
 	}
 
 	else
 	{
-		computeShader = std::move(CompileShader(shadersPath / computeDescription.shader.first, ShaderType::Compute, computeDescription.shader.second));
+		computeShader = std::move(CompileShader(shadersPath / computeDescription.shader.first, ShaderType::Compute, computeDescription.shader.second, macros));
 	}
 }
 
@@ -183,7 +183,7 @@ void PipelineState::Build(RenderDevice& device, const GraphicsPipelineStateDescr
 
 	graphicsDescription = inDescription;
 
-	CreateShaders(device);
+	CreateShaders(device, inDescription.macros);
 
 	if (!vertexShader)
 	{
@@ -235,7 +235,7 @@ void PipelineState::Build(RenderDevice& device, const ComputePipelineStateDescri
 
 	computeDescription = inDescription;
 
-	CreateShaders(device);
+	CreateShaders(device, inDescription.macros);
 	CreateRootSignature(device);
 
 	D3D12_COMPUTE_PIPELINE_STATE_DESC computeDesc{};

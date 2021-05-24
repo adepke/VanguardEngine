@@ -69,7 +69,7 @@ void ReflectShader(std::unique_ptr<Shader>& inShader, ID3D12ShaderReflection* re
 	inShader->reflection.instructionCount = shaderDesc.InstructionCount;
 }
 
-std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderType type, std::string_view entry)
+std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderType type, std::string_view entry, const std::vector<ShaderMacro>& macros)
 {
 	VGScopedCPUStat("Compile Shader");
 
@@ -165,6 +165,19 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderT
 #if BUILD_RELEASE
 	compileArguments.emplace_back(DXC_ARG_OPTIMIZATION_LEVEL3);  // Maximum optimization.
 #endif
+
+	// Shader macros.
+	std::vector<std::wstring> macrosWide;  // Keep the wide string copies alive until compilation finishes.
+	for (const auto& macro : macros)
+	{
+		macrosWide.emplace_back(std::wstring{ macro.macro.begin(), macro.macro.end() });
+	}
+
+	for (const auto& macro : macrosWide)
+	{
+		compileArguments.emplace_back(VGText("-D"));
+		compileArguments.emplace_back(macro.data());
+	}
 
 	ResourcePtr<IDxcResult> compileResult;
 	shaderCompiler->Compile(

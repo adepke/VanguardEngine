@@ -3,11 +3,13 @@
 #pragma once
 
 #include <Rendering/Base.h>
+#include <Rendering/ShaderMacro.h>
 
 #include <vector>
 #include <memory>
 #include <filesystem>
 #include <string_view>
+#include <vector>
 
 struct ShaderReflection
 {
@@ -52,4 +54,4 @@ struct Shader
 	ShaderReflection reflection;
 };
 
-std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderType type, std::string_view entry);
+std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderType type, std::string_view entry, const std::vector<ShaderMacro>& macros);
