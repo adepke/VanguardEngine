@@ -280,7 +280,7 @@ const BufferHandle ResourceManager::Create(const BufferDescription& description,
 	resourceDesc.Width = description.size * description.stride;
 	resourceDesc.Height = 1;
 	resourceDesc.DepthOrArraySize = 1;
-	resourceDesc.Format = description.format ? *description.format : DXGI_FORMAT_UNKNOWN;
+	resourceDesc.Format = DXGI_FORMAT_UNKNOWN;  // Buffers must have unknown format, see: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_resource_desc#buffers
 	resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 	resourceDesc.MipLevels = 1;
 	resourceDesc.SampleDesc.Count = 1;
