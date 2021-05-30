@@ -32,13 +32,34 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 			// Fallback to creating a new buffer.
 			VGLog(Rendering) << "Did not find a suitable buffer for transient reuse, creating a new buffer.";
 
+			bool hasConstantBuffer = false;
+			bool hasShaderResource = false;
+			bool hasUnorderedAccess = false;
+
+			for (const auto& pass : graph->passes)
+			{
+				if (pass->bindInfo.contains(resource))
+				{
+					switch (pass->bindInfo[resource])
+					{
+					case ResourceBind::CBV: hasConstantBuffer = true; break;
+					case ResourceBind::SRV: hasShaderResource = true; break;
+					case ResourceBind::UAV: hasUnorderedAccess = true; break;
+					}
+				}
+			}
+
 			BufferDescription description{};
 			description.updateRate = info.first.updateRate;
-			description.bindFlags = BindFlag::ConstantBuffer | BindFlag::ShaderResource | BindFlag::UnorderedAccess;
+			description.bindFlags = 0;
 			description.accessFlags = AccessFlag::CPURead | AccessFlag::CPUWrite | AccessFlag::GPUWrite;
 			description.size = info.first.size;
 			description.stride = info.first.stride;
 			description.format = info.first.format;
+
+			if (hasConstantBuffer) description.bindFlags |= BindFlag::ConstantBuffer;
+			if (hasShaderResource) description.bindFlags |= BindFlag::ShaderResource;
+			if (hasUnorderedAccess) description.bindFlags |= BindFlag::UnorderedAccess;
 
 			const auto buffer = device->GetResourceManager().Create(description, info.second);
 			bufferResources[resource] = buffer;
