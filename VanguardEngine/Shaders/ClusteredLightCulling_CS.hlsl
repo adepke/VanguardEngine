@@ -3,8 +3,7 @@
 #include "ClusteredLightCulling_RS.hlsli"
 #include "Geometry.hlsli"
 #include "Camera.hlsli"
-
-static const int froxelSize = 32;
+#include "Clusters.hlsli"
 
 struct ClusterData
 {
@@ -25,13 +24,13 @@ RWStructuredBuffer<AABB> clusterAABBs : register(u1);
 [numthreads(8, 8, 1)]
 void ComputeClusterFrustumsMain(uint3 dispatchId : SV_DispatchThreadID)
 {
-    float4 a = UvToClipSpace(((dispatchId.xy + float2(0.f, 0.f)) * froxelSize) / clusterData.resolution);
+    float4 a = UvToClipSpace(((dispatchId.xy + float2(0.f, 0.f)) * FROXEL_SIZE) / clusterData.resolution);
     
     float3 frustumVertices[4];
-    frustumVertices[0] = ClipToViewSpace(camera, UvToClipSpace(((dispatchId.xy + float2(0.f, 0.f)) * froxelSize) / clusterData.resolution)).xyz;  // Top left.
-    frustumVertices[1] = ClipToViewSpace(camera, UvToClipSpace(((dispatchId.xy + float2(1.f, 0.f)) * froxelSize) / clusterData.resolution)).xyz;  // Top right.
-    frustumVertices[2] = ClipToViewSpace(camera, UvToClipSpace(((dispatchId.xy + float2(0.f, 1.f)) * froxelSize) / clusterData.resolution)).xyz;  // Bottom left.
-    frustumVertices[3] = ClipToViewSpace(camera, UvToClipSpace(((dispatchId.xy + float2(1.f, 1.f)) * froxelSize) / clusterData.resolution)).xyz;  // Bottom right.
+    frustumVertices[0] = ClipToViewSpace(camera, UvToClipSpace(((dispatchId.xy + float2(0.f, 0.f)) * FROXEL_SIZE) / clusterData.resolution)).xyz;  // Top left.
+    frustumVertices[1] = ClipToViewSpace(camera, UvToClipSpace(((dispatchId.xy + float2(1.f, 0.f)) * FROXEL_SIZE) / clusterData.resolution)).xyz;  // Top right.
+    frustumVertices[2] = ClipToViewSpace(camera, UvToClipSpace(((dispatchId.xy + float2(0.f, 1.f)) * FROXEL_SIZE) / clusterData.resolution)).xyz;  // Bottom left.
+    frustumVertices[3] = ClipToViewSpace(camera, UvToClipSpace(((dispatchId.xy + float2(1.f, 1.f)) * FROXEL_SIZE) / clusterData.resolution)).xyz;  // Bottom right.
     
     float3 origin = float3(0.f, 0.f, 0.f);
     
@@ -41,7 +40,7 @@ void ComputeClusterFrustumsMain(uint3 dispatchId : SV_DispatchThreadID)
     frustum.planes[2] = ComputePlane(origin, frustumVertices[0], frustumVertices[1]);  // Top.
     frustum.planes[3] = ComputePlane(origin, frustumVertices[3], frustumVertices[2]);  // Bottom.
     
-    uint index = dispatchId.x + dispatchId.y * clusterData.gridDimensions.x;
+    uint index = DispatchToClusterIndex(clusterData.gridDimensions, dispatchId);
     if (index < clusterData.gridDimensions.x * clusterData.gridDimensions.y)
     {
         clusterFrustums[index] = frustum;
@@ -53,8 +52,8 @@ void ComputeClusterFrustumsMain(uint3 dispatchId : SV_DispatchThreadID)
 [numthreads(8, 8, 1)]
 void ComputeClusterBoundsMain(uint3 dispatchId : SV_DispatchThreadID)
 {
-    float3 topLeft = ClipToViewSpace(camera, UvToClipSpace((dispatchId.xy * froxelSize) / clusterData.resolution)).xyz;
-    float3 bottomRight = ClipToViewSpace(camera, UvToClipSpace(((dispatchId.xy + 1) * froxelSize) / clusterData.resolution)).xyz;
+    float3 topLeft = ClipToViewSpace(camera, UvToClipSpace((dispatchId.xy * FROXEL_SIZE) / clusterData.resolution)).xyz;
+    float3 bottomRight = ClipToViewSpace(camera, UvToClipSpace(((dispatchId.xy + 1) * FROXEL_SIZE) / clusterData.resolution)).xyz;
     
     Plane near = { 0.f, 0.f, 1.f, -camera.nearPlane * pow(abs(clusterData.nearK), dispatchId.z) };
     Plane far = { 0.f, 0.f, 1.f, -camera.nearPlane * pow(abs(clusterData.nearK), dispatchId.z + 1) };
@@ -72,7 +71,7 @@ void ComputeClusterBoundsMain(uint3 dispatchId : SV_DispatchThreadID)
     float3 maxBound = max(minNear, max(maxNear, max(minFar, maxFar)));
     
     AABB box = { float4(minBound, 1.f), float4(maxBound, 1.f) };
-    uint index = dispatchId.x + dispatchId.y * clusterData.gridDimensions.x + dispatchId.z * clusterData.gridDimensions.y;   
+    uint index = DispatchToClusterIndex(clusterData.gridDimensions, dispatchId);
     if (index < clusterData.gridDimensions.x * clusterData.gridDimensions.y * clusterData.gridDimensions.z)
     {
         clusterAABBs[index] = box;
