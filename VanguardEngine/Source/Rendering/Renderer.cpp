@@ -8,6 +8,7 @@
 #include <Rendering/CommandList.h>
 #include <Rendering/RenderGraph.h>
 #include <Rendering/RenderPass.h>
+#include <Rendering/ShaderStructs.h>
 #include <Core/Config.h>
 
 #if ENABLE_EDITOR
@@ -18,35 +19,6 @@
 #include <utility>
 #include <cstring>
 #include <cmath>
-
-// Per-entity data.
-struct EntityInstance
-{
-	// #TODO: Create from some form of shader interop.
-
-	XMMATRIX worldMatrix;
-};
-
-struct Camera
-{
-	XMFLOAT4 position;  // World space.
-	XMMATRIX view;
-	XMMATRIX projection;
-	XMMATRIX inverseView;
-	XMMATRIX inverseProjection;
-	float nearPlane;
-	float farPlane;
-	float fieldOfView;  // Horizontal, radians.
-	float aspectRatio;
-};
-
-struct Light
-{
-	XMFLOAT3 position;
-	uint32_t type;
-	XMFLOAT3 color;
-	uint32_t padding;
-};
 
 void Renderer::UpdateCameraBuffer(const entt::registry& registry)
 {
@@ -459,7 +431,7 @@ void Renderer::Render(entt::registry& registry)
 	});
 
 	// #TODO: Don't have this here.
-	clusteredCulling.Render(graph, registry, cameraBufferTag);
+	clusteredCulling.Render(graph, registry, cameraBufferTag, depthStencilTag, instanceBuffer, instanceOffset);
 	
 	auto& forwardPass = graph.AddPass("Forward Pass", ExecutionQueue::Graphics);
 	const auto outputHDRTag = forwardPass.Create(TransientTextureDescription{
