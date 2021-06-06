@@ -8,6 +8,7 @@ void DescriptorAllocator::Initialize(RenderDevice* inDevice, size_t shaderDescri
 	VGScopedCPUStat("Descriptor Allocator Initialize");
 
 	defaultHeap.Create(inDevice, DescriptorType::Default, shaderDescriptors, true);
+	defaultNonVisibleHeap.Create(inDevice, DescriptorType::Default, shaderDescriptors, false);
 	renderTargetHeap.Create(inDevice, DescriptorType::RenderTarget, renderTargetDescriptors, false);
 	depthStencilHeap.Create(inDevice, DescriptorType::DepthStencil, depthStencilDescriptors, false);
 }
@@ -26,6 +27,11 @@ DescriptorHandle DescriptorAllocator::Allocate(DescriptorType type)
 	}
 
 	return {};
+}
+
+DescriptorHandle DescriptorAllocator::AllocateNonVisible()
+{
+	return defaultNonVisibleHeap.Allocate();
 }
 
 void DescriptorAllocator::FrameStep(size_t frameIndex)
