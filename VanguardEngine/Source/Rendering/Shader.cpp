@@ -58,9 +58,12 @@ void ReflectShader(std::unique_ptr<Shader>& inShader, ID3D12ShaderReflection* re
 		case D3D_SIT_CBUFFER: type = ShaderReflection::ResourceBindType::ConstantBuffer; break;
 		case D3D_SIT_TBUFFER: type = ShaderReflection::ResourceBindType::ShaderResource; break;
 		case D3D_SIT_TEXTURE: type = ShaderReflection::ResourceBindType::ShaderResource; break;
+		case D3D_SIT_SAMPLER: break;  // Ignore samplers for now.
 		case D3D_SIT_UAV_RWTYPED: type = ShaderReflection::ResourceBindType::UnorderedAccess; break;
 		case D3D_SIT_STRUCTURED: type = ShaderReflection::ResourceBindType::ShaderResource; break;
 		case D3D_SIT_UAV_RWSTRUCTURED: type = ShaderReflection::ResourceBindType::UnorderedAccess; break;
+		case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER: type = ShaderReflection::ResourceBindType::UnorderedAccess; break;
+		default: VGLogError(Rendering) << "Shader reflection for '" << name << "' failed internally: " << "Unknown resource bind type '" << bindDesc.Type << "'.";
 		}
 
 		inShader->reflection.resourceBindings.push_back({ bindDesc.Name, bindDesc.BindPoint, bindDesc.BindCount, bindDesc.Space, type });
@@ -214,7 +217,7 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderT
 		return {};
 	}
 
-	auto resultShader{ std::make_unique<Shader>() };
+	auto resultShader = std::make_unique<Shader>();
 	resultShader->bytecode.resize(compiledShader->GetBufferSize());
 
 	std::memcpy(resultShader->bytecode.data(), compiledShader->GetBufferPointer(), compiledShader->GetBufferSize());
