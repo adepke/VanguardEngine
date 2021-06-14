@@ -170,7 +170,7 @@ void ClusteredLightCulling::Initialize(RenderDevice* inDevice)
 	depthCullState.Build(*device, depthCullStateDesc, false);
 
 	ComputePipelineStateDescription compactionStateDesc;
-	compactionStateDesc.shader = { "ClusterCompaction.hlsl", "ComputeDenseClusterList" };
+	compactionStateDesc.shader = { "ClusterCompaction.hlsl", "ComputeDenseClusterListMain" };
 	compactionState.Build(*device, compactionStateDesc);
 }
 

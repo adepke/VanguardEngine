@@ -19,7 +19,7 @@ RWStructuredBuffer<uint> denseClusterList : register(u0);
 
 [RootSignature(RS)]
 [numthreads(64, 1, 1)]
-void ComputeDenseClusterList(uint3 dispatchId : SV_DispatchThreadID)
+void ComputeDenseClusterListMain(uint3 dispatchId : SV_DispatchThreadID)
 {
     // #TODO: Consider using LDS (groupshared) for atomic counting, then update the result buffer at the end.
     
