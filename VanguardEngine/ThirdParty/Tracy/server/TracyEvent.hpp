@@ -9,6 +9,7 @@
 
 #include "TracyCharUtil.hpp"
 #include "TracyShortPtr.hpp"
+#include "TracySortedVector.hpp"
 #include "TracyVector.hpp"
 #include "tracy_robin_hood.h"
 #include "../common/TracyForceInline.hpp"
@@ -457,7 +458,7 @@ struct ContextSwitchCpu
 {
     tracy_force_inline int64_t Start() const { return int64_t( _start_thread ) >> 16; }
     tracy_force_inline void SetStart( int64_t start ) { assert( start < (int64_t)( 1ull << 47 ) ); memcpy( ((char*)&_start_thread)+2, &start, 4 ); memcpy( ((char*)&_start_thread)+6, ((char*)&start)+4, 2 ); }
-    tracy_force_inline int64_t End() const { return _end.Val(); }
+    tracy_force_inline int64_t End() const { int64_t v; memcpy( &v, ((char*)&_end)-2, 8 ); return v >> 16; }
     tracy_force_inline void SetEnd( int64_t end ) { assert( end < (int64_t)( 1ull << 47 ) ); _end.SetVal( end ); }
     tracy_force_inline bool IsEndValid() const { return _end.IsNonNegative(); }
     tracy_force_inline uint16_t Thread() const { return uint16_t( _start_thread ); }
@@ -580,6 +581,7 @@ struct GpuCtxData
     int64_t calibratedGpuTime;
     int64_t calibratedCpuTime;
     double calibrationMod;
+    StringIdx name;
     unordered_flat_map<uint64_t, GpuCtxThreadData> threadData;
     short_ptr<GpuEvent> query[64*1024];
 };
@@ -635,12 +637,12 @@ enum class PlotValueFormatting : uint8_t
 
 struct PlotData
 {
+    struct PlotItemSort { bool operator()( const PlotItem& lhs, const PlotItem& rhs ) { return lhs.time.Val() < rhs.time.Val(); }; };
+
     uint64_t name;
     double min;
     double max;
-    Vector<PlotItem> data;
-    Vector<PlotItem> postpone;
-    uint64_t postponeTime;
+    SortedVector<PlotItem, PlotItemSort> data;
     PlotType type;
     PlotValueFormatting format;
 };

@@ -12,8 +12,10 @@
 #include "TracyBadVersion.hpp"
 #include "TracyBuzzAnim.hpp"
 #include "TracyDecayValue.hpp"
+#include "TracyFileWrite.hpp"
 #include "TracyImGui.hpp"
 #include "TracyShortPtr.hpp"
+#include "TracySourceContents.hpp"
 #include "TracyTexture.hpp"
 #include "TracyUserData.hpp"
 #include "TracyVector.hpp"
@@ -28,10 +30,8 @@ namespace tracy
 {
 
 struct MemoryPage;
-struct QueueItem;
 class FileRead;
 class SourceView;
-struct ZoneTimeData;
 
 class View
 {
@@ -195,6 +195,7 @@ private:
     void DrawSampleParents();
     void DrawRanges();
     void DrawRangeEntry( Range& range, const char* label, uint32_t color, const char* popupLabel, int id );
+    void DrawSourceTooltip( const char* filename, uint32_t line, int before = 3, int after = 3, bool separateTooltip = true );
 
     void ListMemData( std::vector<const MemEvent*>& vec, std::function<void(const MemEvent*)> DrawAddress, const char* id = nullptr, int64_t startTime = -1, uint64_t pool = 0 );
 
@@ -243,7 +244,6 @@ private:
     void CallstackTooltip( uint32_t idx );
     void CrashTooltip();
 
-    int GetZoneDepth( const ZoneEvent& zone, uint64_t tid ) const;
     const ZoneEvent* GetZoneParent( const ZoneEvent& zone ) const;
     const ZoneEvent* GetZoneParent( const ZoneEvent& zone, uint64_t tid ) const;
     const GpuEvent* GetZoneParent( const GpuEvent& zone ) const;
@@ -283,6 +283,7 @@ private:
     void CalcZoneTimeDataImpl( const V& children, const ContextSwitch* ctx, unordered_flat_map<int16_t, ZoneTimeData>& data, int64_t& ztime, const ZoneEvent& zone );
 
     void SetPlaybackFrame( uint32_t idx );
+    bool Save( const char* fn, FileWrite::Compression comp, int zlevel, bool buildDict );
 
     unordered_flat_map<const void*, VisData> m_visData;
     unordered_flat_map<uint64_t, bool> m_visibleMsgThread;
@@ -324,7 +325,7 @@ private:
     void AdjustThreadHeight( View::VisData& vis, int oldOffset, int& offset );
 
     Worker m_worker;
-    std::string m_filename;
+    std::string m_filename, m_filenameStaging;
     bool m_staticView;
     ViewMode m_viewMode;
     bool m_viewModeHeuristicTry = false;
@@ -417,12 +418,14 @@ private:
     Vector<const ZoneEvent*> m_zoneInfoStack;
     Vector<const GpuEvent*> m_gpuInfoStack;
 
+    SourceContents m_srcHintCache;
     std::unique_ptr<SourceView> m_sourceView;
     const char* m_sourceViewFile;
     bool m_uarchSet = false;
 
     ImFont* m_smallFont;
     ImFont* m_bigFont;
+    ImFont* m_fixedFont;
 
     float m_rootWidth, m_rootHeight;
     SetTitleCallback m_stcb;

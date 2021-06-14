@@ -6,6 +6,7 @@
 #define TracyVkContext(x,y,z,w) nullptr
 #define TracyVkContextCalibrated(x,y,z,w,a,b) nullptr
 #define TracyVkDestroy(x)
+#define TracyVkContextName(c,x,y)
 #define TracyVkNamedZone(c,x,y,z,w)
 #define TracyVkNamedZoneC(c,x,y,z,w,a)
 #define TracyVkZone(c,x,y)
@@ -64,10 +65,15 @@ public:
             if( num > 4 ) num = 4;
             VkTimeDomainEXT data[4];
             _vkGetPhysicalDeviceCalibrateableTimeDomainsEXT( physdev, &num, data );
+            VkTimeDomainEXT supportedDomain = VK_TIME_DOMAIN_MAX_ENUM_EXT;
+#if defined _WIN32 || defined __CYGWIN__
+            supportedDomain = VK_TIME_DOMAIN_QUERY_PERFORMANCE_COUNTER_EXT;
+#elif defined __linux__ && defined CLOCK_MONOTONIC_RAW
+            supportedDomain = VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_EXT;
+#endif
             for( uint32_t i=0; i<num; i++ )
             {
-                // TODO VK_TIME_DOMAIN_CLOCK_MONOTONIC_RAW_EXT
-                if( data[i] == VK_TIME_DOMAIN_QUERY_PERFORMANCE_COUNTER_EXT )
+                if( data[i] == supportedDomain )
                 {
                     m_timeDomain = data[i];
                     break;
@@ -146,7 +152,9 @@ public:
             }
             m_deviation = minDeviation * 3 / 2;
 
+#if defined _WIN32 || defined __CYGWIN__
             m_qpcToNs = int64_t( 1000000000. / GetFrequencyQpc() );
+#endif
 
             Calibrate( device, m_prevCalibration, tgpu );
             tcpu = Profiler::GetTime();
@@ -179,6 +187,22 @@ public:
         vkDestroyQueryPool( m_device, m_query, nullptr );
     }
 
+    void Name( const char* name, uint16_t len )
+    {
+        auto ptr = (char*)tracy_malloc( len );
+        memcpy( ptr, name, len );
+
+        auto item = Profiler::QueueSerial();
+        MemWrite( &item->hdr.type, QueueType::GpuContextName );
+        MemWrite( &item->gpuContextNameFat.context, m_context );
+        MemWrite( &item->gpuContextNameFat.ptr, (uint64_t)ptr );
+        MemWrite( &item->gpuContextNameFat.size, len );
+#ifdef TRACY_ON_DEMAND
+        GetProfiler().DeferItem( *item );
+#endif
+        Profiler::QueueSerialFinish();
+    }
+
     void Collect( VkCommandBuffer cmdbuf )
     {
         ZoneScopedC( Color::Red4 );
@@ -189,7 +213,7 @@ public:
         if( !GetProfiler().IsConnected() )
         {
             vkCmdResetQueryPool( cmdbuf, m_query, 0, m_queryCount );
-            m_head = m_tail = 0;
+            m_head = m_tail = m_oldCnt = 0;
             int64_t tgpu;
             if( m_timeDomain != VK_TIME_DOMAIN_DEVICE_EXT ) Calibrate( m_device, m_prevCalibration, tgpu );
             return;
@@ -280,6 +304,9 @@ private:
 #if defined _WIN32 || defined __CYGWIN__
         tGpu = ts[0];
         tCpu = ts[1] * m_qpcToNs;
+#elif defined __linux__ && defined CLOCK_MONOTONIC_RAW
+        tGpu = ts[0];
+        tCpu = ts[1];
 #else
         assert( false );
 #endif
@@ -448,6 +475,7 @@ using TracyVkCtx = tracy::VkCtx*;
 #define TracyVkContext( physdev, device, queue, cmdbuf ) tracy::CreateVkContext( physdev, device, queue, cmdbuf, nullptr, nullptr );
 #define TracyVkContextCalibrated( physdev, device, queue, cmdbuf, gpdctd, gct ) tracy::CreateVkContext( physdev, device, queue, cmdbuf, gpdctd, gct );
 #define TracyVkDestroy( ctx ) tracy::DestroyVkContext( ctx );
+#define TracyVkContextName( ctx, name, size ) ctx->Name( name, size );
 #if defined TRACY_HAS_CALLSTACK && defined TRACY_CALLSTACK
 #  define TracyVkNamedZone( ctx, varname, cmdbuf, name, active ) static constexpr tracy::SourceLocationData TracyConcat(__tracy_gpu_source_location,__LINE__) { name, __FUNCTION__,  __FILE__, (uint32_t)__LINE__, 0 }; tracy::VkCtxScope varname( ctx, &TracyConcat(__tracy_gpu_source_location,__LINE__), cmdbuf, TRACY_CALLSTACK, active );
 #  define TracyVkNamedZoneC( ctx, varname, cmdbuf, name, color, active ) static constexpr tracy::SourceLocationData TracyConcat(__tracy_gpu_source_location,__LINE__) { name, __FUNCTION__,  __FILE__, (uint32_t)__LINE__, color }; tracy::VkCtxScope varname( ctx, &TracyConcat(__tracy_gpu_source_location,__LINE__), cmdbuf, TRACY_CALLSTACK, active );

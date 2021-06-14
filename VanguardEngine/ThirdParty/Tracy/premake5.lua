@@ -65,7 +65,7 @@ project "TracyServer"
 		"/Oi"  -- Enable intrinsic functions
 	}
 	
-	includedirs { "profiler/libs/gl3w", "imgui", "vcpkg/vcpkg/installed/x64-windows-static/include" }
+	includedirs { "profiler/libs/gl3w", "imgui", "vcpkg/vcpkg/installed/x64-windows-static/include", "vcpkg/vcpkg/installed/x64-windows-static/include/capstone" }
 	libdirs "vcpkg/vcpkg/installed/x64-windows-static/lib"
 	
 	defines {
@@ -94,8 +94,8 @@ project "TracyServer"
 		"profiler/src/*.hpp",
 		"profiler/src/*.cpp",
 		"profiler/libs/gl3w/**.*",
-		"zstd/*.h",
-		"zstd/*.c"
+		"zstd/**.h",
+		"zstd/**.c"
 	}
 	
 	filter { "system:windows" }
