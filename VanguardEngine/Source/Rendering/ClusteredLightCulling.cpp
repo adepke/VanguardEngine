@@ -168,6 +168,10 @@ void ClusteredLightCulling::Initialize(RenderDevice* inDevice)
 	depthCullStateDesc.depthStencilDescription.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
 	depthCullStateDesc.depthStencilDescription.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
 	depthCullState.Build(*device, depthCullStateDesc, false);
+
+	ComputePipelineStateDescription compactionStateDesc;
+	compactionStateDesc.shader = { "ClusterCompaction.hlsl", "ComputeDenseClusterList" };
+	compactionState.Build(*device, compactionStateDesc);
 }
 
 void ClusteredLightCulling::Render(RenderGraph& graph, const entt::registry& registry, RenderResource cameraBuffer, RenderResource depthStencil, BufferHandle instanceBuffer, size_t instanceOffset)
@@ -183,7 +187,7 @@ void ClusteredLightCulling::Render(RenderGraph& graph, const entt::registry& reg
 		auto clusterFrustumsTag = graph.Import(clusterFrustums);
 		auto clusterAABBsTag = graph.Import(clusterAABBs);
 
-		auto& computeClusterGridPass = graph.AddPass("Compute Cluster Grid Pass", ExecutionQueue::Compute);
+		auto& computeClusterGridPass = graph.AddPass("Compute Cluster Grid", ExecutionQueue::Compute);
 		computeClusterGridPass.Read(cameraBuffer, ResourceBind::CBV);
 		computeClusterGridPass.Write(clusterFrustumsTag, ResourceBind::UAV);
 		computeClusterGridPass.Write(clusterAABBsTag, ResourceBind::UAV);
@@ -255,5 +259,43 @@ void ClusteredLightCulling::Render(RenderGraph& graph, const entt::registry& reg
 
 			++entityIndex;
 		});
+	});
+
+	auto& clusterCompaction = graph.AddPass("Visible Cluster Compaction", ExecutionQueue::Compute);
+	const auto denseClustersTag = clusterCompaction.Create(TransientBufferDescription{
+		.updateRate = ResourceFrequency::Static,  // UAVs.
+		.size = dimensions.x * dimensions.y * dimensions.z,  // Worst case.
+		.stride = sizeof(uint32_t)
+	}, VGText("Compacted cluster list"));
+	clusterCompaction.Read(clusterVisibilityTag, ResourceBind::SRV);
+	clusterCompaction.Write(denseClustersTag, ResourceBind::UAV);
+	clusterCompaction.Bind([&, dimensions, clusterVisibilityTag, denseClustersTag](CommandList& list, RenderGraphResourceManager& resources)
+	{
+		auto& denseClustersComponent = device->GetResourceManager().Get(resources.GetBuffer(denseClustersTag));
+
+		list.BindPipelineState(compactionState);
+		list.BindResource("clusterVisibility", resources.GetBuffer(clusterVisibilityTag));
+		list.BindResourceTable("denseClusterList", *denseClustersComponent.UAV);
+
+		struct ClusterData
+		{
+			int32_t gridDimensionsX;
+			int32_t gridDimensionsY;
+			int32_t gridDimensionsZ;
+			float padding;
+		} clusterData;
+
+		clusterData.gridDimensionsX = dimensions.x;
+		clusterData.gridDimensionsY = dimensions.y;
+		clusterData.gridDimensionsZ = dimensions.z;
+
+		std::vector<uint32_t> clusterConstants;
+		clusterConstants.resize(sizeof(ClusterData) / 4);
+		std::memcpy(clusterConstants.data(), &clusterData, clusterConstants.size() * sizeof(uint32_t));
+
+		list.BindConstants("clusterData", clusterConstants);
+
+		uint32_t dispatch = std::ceil(dimensions.x * dimensions.y * dimensions.z / 64.f);
+		list.Native()->Dispatch(dispatch, 1, 1);
 	});
 }

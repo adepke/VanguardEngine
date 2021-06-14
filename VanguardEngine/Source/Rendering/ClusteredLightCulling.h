@@ -36,6 +36,7 @@ private:
 	PipelineState viewFrustumsState;
 	PipelineState boundsState;
 	PipelineState depthCullState;
+	PipelineState compactionState;
 
 	ClusterGridInfo ComputeGridInfo(const entt::registry& registry) const;
 	// Needs to be called every time the camera resolution or FOV changes.
