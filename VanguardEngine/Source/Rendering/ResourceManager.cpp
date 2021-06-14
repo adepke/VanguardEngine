@@ -54,12 +54,29 @@ void ResourceManager::CreateResourceViews(BufferComponent& target)
 		viewDesc.Buffer.FirstElement = 0;
 		viewDesc.Buffer.NumElements = static_cast<UINT>(target.description.size);
 		viewDesc.Buffer.StructureByteStride = !target.description.format || *target.description.format == DXGI_FORMAT_UNKNOWN ? static_cast<UINT>(target.description.stride) : 0;  // Structured buffers must have a stride.
-		viewDesc.Buffer.CounterOffsetInBytes = 0;  // #TODO: Counter offset.
+		viewDesc.Buffer.CounterOffsetInBytes = 0;
 		viewDesc.Buffer.Flags = target.description.format == DXGI_FORMAT_R32_TYPELESS ? D3D12_BUFFER_UAV_FLAG_RAW : D3D12_BUFFER_UAV_FLAG_NONE;  // Byte address buffers (32 bit typeless) need the raw flag.
 
-		// #TODO: Support counter buffers.
+		ID3D12Resource* uavCounter = nullptr;
 
-		device->Native()->CreateUnorderedAccessView(target.Native(), nullptr, &viewDesc, *target.UAV);
+		if (target.description.uavCounter)
+		{
+			BufferDescription uavDesc{
+				.updateRate = ResourceFrequency::Static,
+				.bindFlags = 0,
+				.accessFlags = AccessFlag::GPUWrite,
+				.size = 1,
+				.stride = 0,
+				.uavCounter = false,
+				.format = DXGI_FORMAT_R32_TYPELESS
+			};
+
+			target.counterBuffer = Create(uavDesc, VGText("UAV counter buffer"));
+			const auto& component = Get(target.counterBuffer);
+			uavCounter = component.allocation->GetResource();
+		}
+
+		device->Native()->CreateUnorderedAccessView(target.Native(), uavCounter, &viewDesc, *target.UAV);
 	}
 }
 

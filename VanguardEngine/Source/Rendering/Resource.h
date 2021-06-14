@@ -4,6 +4,7 @@
 
 #include <Rendering/Base.h>
 #include <Rendering/DescriptorHeap.h>
+#include <Rendering/ResourceHandle.h>
 
 #include <optional>
 
@@ -42,6 +43,7 @@ struct BufferDescription
 	uint32_t accessFlags = 0;
 	size_t size;  // Element count. Size * Stride = Byte count.
 	size_t stride;
+	bool uavCounter = false;
 	std::optional<DXGI_FORMAT> format;
 };
 
@@ -66,6 +68,8 @@ struct BufferComponent
 	std::optional<DescriptorHandle> CBV;
 	std::optional<DescriptorHandle> SRV;
 	std::optional<DescriptorHandle> UAV;
+
+	BufferHandle counterBuffer;
 
 	// #TODO: Remove.
 	ID3D12Resource* Native() { return allocation->GetResource(); }

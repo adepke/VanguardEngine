@@ -110,6 +110,7 @@ inline void ResourceManager::Destroy(BufferHandle handle)
 	if (component.CBV) component.CBV->Free();
 	if (component.SRV) component.SRV->Free();
 	if (component.UAV) component.UAV->Free();
+	if (registry.valid(component.counterBuffer.handle)) Destroy(component.counterBuffer);
 
 	registry.destroy(handle.handle);
 }
