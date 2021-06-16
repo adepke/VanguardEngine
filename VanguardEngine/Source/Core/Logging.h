@@ -5,6 +5,7 @@
 #include <Core/Pragma.h>
 #include <Core/Misc.h>
 #include <Utility/Singleton.h>
+#include <Core/CrashHandler.h>
 
 #if ENABLE_PROFILING
 #include <Tracy.hpp>
@@ -145,7 +146,7 @@ VGWarningPop
 
 		if (record.severity == Detail::LogSeverity::Fatal) VGUnlikely
 		{
-			VGBreak();
+			RequestCrash(record.messageStream.str());
 		}
 #endif
 	}
@@ -153,7 +154,7 @@ VGWarningPop
 
 #if !ENABLE_LOGGING
 #define _Detail_VGLogBranch if constexpr (true) { do {} while (0); } else
-#define _Detail_VGLogBranchFatal if constexpr (true) { VGBreak(); } else
+#define _Detail_VGLogBranchFatal if constexpr (true) { RequestCrash(VGText("Enable logging for more information.")); } else
 #else
 #define _Detail_VGLogBranch
 #define _Detail_VGLogBranchFatal

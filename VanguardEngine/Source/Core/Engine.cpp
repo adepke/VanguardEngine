@@ -9,6 +9,7 @@
 #include <Core/Input.h>
 #include <Core/CoreComponents.h>
 #include <Core/CoreSystems.h>
+#include <Core/CrashHandler.h>
 
 #include <string>
 #include <memory>
@@ -175,10 +176,10 @@ void EngineShutdown()
 
 int32_t EngineMain()
 {
+	RegisterCrashHandlers();
+
 	EngineBoot();
-
 	EngineLoop();
-
 	EngineShutdown();
 
 	return 0;

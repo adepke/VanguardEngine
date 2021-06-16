@@ -3,7 +3,7 @@
 #pragma once
 
 #ifndef _MSC_VER
-#include <signal.h>
+#include <csignal>
 #endif
 
 #define VGText(literal) L##literal

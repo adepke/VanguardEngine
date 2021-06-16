@@ -3,38 +3,44 @@
 #pragma once
 
 #include <Core/Misc.h>
+#include <Core/CrashHandler.h>
 
-#include <exception>
-#include <cstdlib>
-#include <cassert>
+#include <cstdio>
+#include <sstream>
 
-// MSVC doesn't yet support __VA_OPT__, see https://en.cppreference.com/w/cpp/compiler_support
 #ifdef _MSC_VER
-#define VGEnsure(condition, ...) \
+// Not sure why MSVC doesn't require the __VA_OPT__, oh well.
+#define VGEnsure(condition, format, ...) \
 	do \
 	{ \
 		if (!(condition)) VGUnlikely \
 		{ \
-			assert((__VA_ARGS__, condition)); \
-			std::abort(); \
+			char buffer[256]; \
+			std::snprintf(buffer, std::size(buffer), format, __VA_ARGS__); \
+			std::wstringstream stream; \
+			stream << "Assertion failed in " << __FILE__ << ":" << __LINE__ << "\nCondition: " << #condition << "\nMessage: " << buffer; \
+			RequestCrash(stream.str(), true); \
 		} \
 	} \
 	while (0)
 #else
-#define VGEnsure(condition, ...) \
+#define VGEnsure(condition, format, ...) \
 	do \
 	{ \
 		if (!(condition)) VGUnlikely \
 		{ \
-			assert((__VA_OPT__(__VA_ARGS__,) condition)); \
-			std::abort(); \
+			char buffer[256]; \
+			std::snprintf(buffer, std::size(buffer), format __VA_OPT__(,) __VA_ARGS__); \
+			std::wstringstream stream; \
+			stream << "Assertion failed in " << __FILE__ << ":" << __LINE__ << "\nCondition: " << #condition << "\nMessage: " << buffer; \
+			RequestCrash(stream.str(), true); \
 		} \
 	} \
 	while (0)
 #endif
 
 #if !BUILD_RELEASE
-#define VGAssert(condition, ...) VGEnsure(condition, __VA_ARGS__)
+#define VGAssert(condition, format, ...) VGEnsure(condition, format, __VA_ARGS__)
 #else
-#define VGAssert(condition, ...) do {} while (0)
+#define VGAssert(condition, format, ...) do {} while (0)
 #endif

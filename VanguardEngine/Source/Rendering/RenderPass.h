@@ -118,12 +118,12 @@ inline void RenderPass::Validate() const
 	// Check that no resources are read and written in this pass. A write implies a read.
 	std::vector<RenderResource> overlap;
 	std::set_intersection(reads.cbegin(), reads.cend(), writes.cbegin(), writes.cend(), std::back_inserter(overlap));
-	VGAssert(overlap.size() == 0, "Pass validation failed in '%s': Cannot read and write to a single resource.", stableName);
+	VGAssert(overlap.size() == 0, "Pass validation failed in '%s': Cannot read and write to a single resource.", stableName.data());
 	overlap.clear();
 
 	// Check that no created resources are read in this pass.
 	std::set_intersection(reads.cbegin(), reads.cend(), creates.cbegin(), creates.cend(), std::back_inserter(overlap));
-	VGAssert(overlap.size() == 0, "Pass validation failed in '%s': Cannot read resources created in the same pass.", stableName);
+	VGAssert(overlap.size() == 0, "Pass validation failed in '%s': Cannot read resources created in the same pass.", stableName.data());
 
 	// Check that created resources that are written are not outputs, and that created resources without being written are outputs.
 
@@ -131,12 +131,12 @@ inline void RenderPass::Validate() const
 	{
 		if (bindInfo.contains(resource))
 		{
-			VGAssert(!outputs.contains(resource), "Pass validation failed in '%s': Resources created and written in this pass cannot be outputs.", stableName);
+			VGAssert(!outputs.contains(resource), "Pass validation failed in '%s': Resources created and written in this pass cannot be outputs.", stableName.data());
 		}
 
 		else
 		{
-			VGAssert(outputs.contains(resource), "Pass validation failed in '%s': Resources created and not written in this pass must be outputs.", stableName);
+			VGAssert(outputs.contains(resource), "Pass validation failed in '%s': Resources created and not written in this pass must be outputs.", stableName.data());
 		}
 	}
 
@@ -159,8 +159,8 @@ inline void RenderPass::Validate() const
 		}
 	}
 
-	VGAssert(renderTargetCount <= D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT, "Pass validation failed in '%s': Attempted to output to more render targets than supported.", stableName);
-	VGAssert(depthStencilCount <= 1, "Pass validation failed in '%s': Cannot have more than one depth stencil output.", stableName);
+	VGAssert(renderTargetCount <= D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT, "Pass validation failed in '%s': Attempted to output to more render targets than supported.", stableName.data());
+	VGAssert(depthStencilCount <= 1, "Pass validation failed in '%s': Cannot have more than one depth stencil output.", stableName.data());
 #endif
 }
 
