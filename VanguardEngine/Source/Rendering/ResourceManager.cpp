@@ -13,6 +13,11 @@
 #include <algorithm>
 #include <cmath>
 
+size_t ResourceManager::ComputeBufferWidth(const BufferDescription& description) const
+{
+	return description.size * (description.stride > 0 ? description.stride : GetResourceFormatSize(*description.format) / 8);
+}
+
 void ResourceManager::CreateResourceViews(BufferComponent& target)
 {
 	VGScopedCPUStat("Create Buffer Views");
@@ -23,7 +28,7 @@ void ResourceManager::CreateResourceViews(BufferComponent& target)
 
 		D3D12_CONSTANT_BUFFER_VIEW_DESC viewDesc{};
 		viewDesc.BufferLocation = target.Native()->GetGPUVirtualAddress();
-		viewDesc.SizeInBytes = static_cast<UINT>(AlignedSize(target.description.size * target.description.stride, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT));  // Constant buffers require alignment.
+		viewDesc.SizeInBytes = static_cast<UINT>(AlignedSize(ComputeBufferWidth(target.description), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT));  // Constant buffers require alignment.
 
 		device->Native()->CreateConstantBufferView(&viewDesc, *target.CBV);
 	}
@@ -64,7 +69,7 @@ void ResourceManager::CreateResourceViews(BufferComponent& target)
 			BufferDescription uavDesc{
 				.updateRate = ResourceFrequency::Static,
 				.bindFlags = 0,
-				.accessFlags = AccessFlag::GPUWrite,
+				.accessFlags = AccessFlag::GPUWrite | AccessFlag::CPUWrite,  // CPU write for counter resetting.
 				.size = 1,
 				.stride = 0,
 				.uavCounter = false,
@@ -294,7 +299,7 @@ const BufferHandle ResourceManager::Create(const BufferDescription& description,
 	D3D12_RESOURCE_DESC resourceDesc{};
 	resourceDesc.Alignment = 0;  // Let the device determine the alignment, see: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_resource_desc#alignment
 	resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-	resourceDesc.Width = description.size * (description.stride > 0 ? description.stride : GetResourceFormatSize(*description.format) / 8);
+	resourceDesc.Width = ComputeBufferWidth(description);
 	resourceDesc.Height = 1;
 	resourceDesc.DepthOrArraySize = 1;
 	resourceDesc.Format = DXGI_FORMAT_UNKNOWN;  // Buffers must have unknown format, see: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_resource_desc#buffers
@@ -533,7 +538,8 @@ void ResourceManager::Write(BufferHandle target, const std::vector<uint8_t>& sou
 		VGScopedCPUStat("Buffer Write Static");
 
 		VGAssert(component.description.accessFlags & AccessFlag::CPUWrite, "Failed to write to static buffer, no CPU write access.");
-		VGAssert((component.description.size * component.description.stride) - targetOffset >= source.size(), "Failed to write to static buffer, source buffer is larger than target.");
+		VGAssert(ComputeBufferWidth(component.description) - targetOffset >= source.size(),
+			"Failed to write to static buffer, source buffer is larger than target. Buffer width: %ull, source size: %ull, offset: %ull", ComputeBufferWidth(component.description), source.size(), targetOffset);
 
 		const auto frameIndex = device->GetFrameIndex();
 
@@ -560,7 +566,8 @@ void ResourceManager::Write(BufferHandle target, const std::vector<uint8_t>& sou
 
 		VGAssert(component.state == D3D12_RESOURCE_STATE_GENERIC_READ, "Dynamic buffers must always be in the generic read state.");
 		VGAssert(component.description.accessFlags & AccessFlag::CPUWrite, "Failed to write to dynamic buffer, no CPU write access.");
-		VGAssert((component.description.size * component.description.stride) - targetOffset >= source.size(), "Failed to write to dynamic buffer, source is larger than target.");
+		VGAssert(ComputeBufferWidth(component.description) - targetOffset >= source.size(),
+			"Failed to write to dynamic buffer, source is larger than target. Buffer width: %ull, source size: %ull, offset: %ull", ComputeBufferWidth(component.description), source.size(), targetOffset);
 
 		void* mappedPtr = nullptr;
 

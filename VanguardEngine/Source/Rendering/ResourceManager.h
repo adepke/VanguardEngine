@@ -32,6 +32,8 @@ private:
 	std::vector<std::vector<BufferHandle>> frameBuffers;
 	std::vector<std::vector<DescriptorHandle>> frameDescriptors;
 
+	size_t ComputeBufferWidth(const BufferDescription& description) const;
+
 	void CreateResourceViews(BufferComponent& target);
 	void CreateResourceViews(TextureComponent& target);
 	void SetResourceName(ResourcePtr<D3D12MA::Allocation>& target, const std::wstring_view name);
