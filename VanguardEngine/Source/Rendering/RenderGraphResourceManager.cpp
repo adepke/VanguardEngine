@@ -8,8 +8,9 @@
 void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGraph* graph)
 {
 	VGScopedCPUStat("Render Graph Build Transients");
+	VGScopedGPUStat("Render Graph Build Transients", device->GetDirectContext(), device->GetDirectList().Native());
 
-	// #TODO: For now just create resources in the most generic state. This should be refined to create a resource with a minimal state.
+	// #TODO: Don't brute force search all passes to determine bind flags. Use a better approach.
 
 	for (const auto& [resource, info] : transientBufferResources)
 	{
@@ -23,6 +24,13 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 				foundReusable = true;
 				--transientBuffer.counter;
 				bufferResources[resource] = bufferResources[transientBuffer.resource];  // Duplicate the resource handle.
+
+				// If we have a UAV counter, we need to reset it.
+				if (transientBuffer.description.uavCounter)
+				{
+					auto& bufferComponent = device->GetResourceManager().Get(bufferResources[resource]);
+					device->GetResourceManager().Write(bufferComponent.counterBuffer, { 0, 0, 0, 0 });  // #TODO: Use CopyBufferRegion with a clear buffer created once at startup.
+				}
 
 				device->GetResourceManager().NameResource(bufferResources[resource], info.second);
 
@@ -74,7 +82,7 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 
 	transientBufferResources.clear();
 
-	// Built all buffer textures, destroy unused transients and reset state.
+	// Built all transient buffers, destroy unused transients and reset state.
 	auto i = transientBuffers.begin();
 	while (i != transientBuffers.end())
 	{
