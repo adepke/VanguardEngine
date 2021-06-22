@@ -42,6 +42,7 @@ struct TransientBufferDescription
 	ResourceFrequency updateRate = ResourceFrequency::Dynamic;
 	size_t size;  // Element count. size * stride = bytes.
 	size_t stride = 0;
+	bool uavCounter = false;
 	std::optional<DXGI_FORMAT> format;
 
 	bool operator==(const TransientBufferDescription& other) const noexcept

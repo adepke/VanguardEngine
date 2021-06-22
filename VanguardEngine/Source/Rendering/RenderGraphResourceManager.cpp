@@ -23,6 +23,9 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 				foundReusable = true;
 				--transientBuffer.counter;
 				bufferResources[resource] = bufferResources[transientBuffer.resource];  // Duplicate the resource handle.
+
+				device->GetResourceManager().NameResource(bufferResources[resource], info.second);
+
 				break;
 			}
 		}
@@ -55,6 +58,7 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 			description.accessFlags = AccessFlag::CPURead | AccessFlag::CPUWrite | AccessFlag::GPUWrite;
 			description.size = info.first.size;
 			description.stride = info.first.stride;
+			description.uavCounter = info.first.uavCounter;
 			description.format = info.first.format;
 
 			if (hasConstantBuffer) description.bindFlags |= BindFlag::ConstantBuffer;
@@ -102,6 +106,9 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 				foundReusable = true;
 				--transientTexture.counter;
 				textureResources[resource] = textureResources[transientTexture.resource];  // Duplicate the resource handle.
+
+				device->GetResourceManager().NameResource(textureResources[resource], info.second);
+
 				break;
 			}
 		}

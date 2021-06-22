@@ -198,7 +198,7 @@ void ResourceManager::CreateResourceViews(TextureComponent& target)
 	}
 }
 
-void ResourceManager::NameResource(ResourcePtr<D3D12MA::Allocation>& target, const std::wstring_view name)
+void ResourceManager::SetResourceName(ResourcePtr<D3D12MA::Allocation>& target, const std::wstring_view name)
 {
 #if !BUILD_RELEASE
 	target->SetName(name.data());  // Set the name in the allocator.
@@ -278,7 +278,7 @@ void ResourceManager::Initialize(RenderDevice* inDevice, size_t bufferedFrames)
 
 		uploadResources[i] = std::move(ResourcePtr<D3D12MA::Allocation>{ allocationHandle });
 
-		NameResource(uploadResources[i], VGText("Upload heap"));
+		SetResourceName(uploadResources[i], VGText("Upload heap"));
 	}
 
 	CreateMipmapTools();
@@ -294,7 +294,7 @@ const BufferHandle ResourceManager::Create(const BufferDescription& description,
 	D3D12_RESOURCE_DESC resourceDesc{};
 	resourceDesc.Alignment = 0;  // Let the device determine the alignment, see: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_resource_desc#alignment
 	resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-	resourceDesc.Width = description.size * description.stride;
+	resourceDesc.Width = description.size * (description.stride > 0 ? description.stride : GetResourceFormatSize(*description.format) / 8);
 	resourceDesc.Height = 1;
 	resourceDesc.DepthOrArraySize = 1;
 	resourceDesc.Format = DXGI_FORMAT_UNKNOWN;  // Buffers must have unknown format, see: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_resource_desc#buffers
@@ -311,6 +311,12 @@ const BufferHandle ResourceManager::Create(const BufferDescription& description,
 	}
 
 	if (description.bindFlags & BindFlag::UnorderedAccess)
+	{
+		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+	}
+
+	// Counter resources need UAV access allowed.
+	else if (description.size == 1 && description.stride == 0 && description.format == DXGI_FORMAT_R32_TYPELESS && !description.uavCounter)
 	{
 		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	}
@@ -350,7 +356,7 @@ const BufferHandle ResourceManager::Create(const BufferDescription& description,
 	auto& component = Get(handle);
 
 	CreateResourceViews(component);
-	NameResource(component.allocation, name);
+	NameResource(handle, name);
 
 	return handle;
 }
@@ -483,7 +489,7 @@ const TextureHandle ResourceManager::Create(const TextureDescription& descriptio
 	auto& component = Get(handle);
 
 	CreateResourceViews(component);
-	NameResource(component.allocation, name);
+	NameResource(handle, name);
 
 	return handle;
 }
@@ -513,7 +519,7 @@ const TextureHandle ResourceManager::CreateFromSwapChain(void* surface, const st
 	component.allocation->CreateManual(static_cast<ID3D12Resource*>(surface), device->allocator->m_Pimpl);
 
 	CreateResourceViews(component);
-	NameResource(component.allocation, name);
+	NameResource(handle, name);
 
 	return handle;
 }
