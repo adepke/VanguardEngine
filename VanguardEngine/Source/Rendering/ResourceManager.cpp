@@ -67,7 +67,7 @@ void ResourceManager::CreateResourceViews(BufferComponent& target)
 		if (target.description.uavCounter)
 		{
 			BufferDescription uavDesc{
-				.updateRate = ResourceFrequency::Static,
+				.updateRate = ResourceFrequency::Static,  // Must be default heap for UAV access.
 				.bindFlags = 0,
 				.accessFlags = AccessFlag::GPUWrite | AccessFlag::CPUWrite,  // CPU write for counter resetting.
 				.size = 1,
@@ -295,6 +295,10 @@ const BufferHandle ResourceManager::Create(const BufferDescription& description,
 
 	// Early validation.
 	VGAssert(description.size > 0, "Failed to create buffer, must have non-zero size.");
+	if (description.uavCounter)
+	{
+		VGAssert(description.bindFlags & BindFlag::UnorderedAccess, "Buffer cannot have a UAV counter without also having the unordered access bind flag.");
+	}
 
 	D3D12_RESOURCE_DESC resourceDesc{};
 	resourceDesc.Alignment = 0;  // Let the device determine the alignment, see: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_resource_desc#alignment

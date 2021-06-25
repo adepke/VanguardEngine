@@ -47,7 +47,7 @@ struct TransientBufferDescription
 
 	bool operator==(const TransientBufferDescription& other) const noexcept
 	{
-		return updateRate == other.updateRate && size == other.size && stride == other.stride && format == other.format;
+		return updateRate == other.updateRate && size == other.size && stride == other.stride && uavCounter == other.uavCounter && format == other.format;
 	}
 };
 

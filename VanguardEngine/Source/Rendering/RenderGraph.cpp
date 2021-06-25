@@ -83,7 +83,7 @@ void RenderGraph::BuildDepthMap()
 	}
 }
 
-void RenderGraph::InjectStateBarriers()
+void RenderGraph::InjectStateBarriers(RenderDevice* device)
 {
 	for (int i = 0; i < passes.size(); ++i)
 	{
@@ -127,6 +127,16 @@ void RenderGraph::InjectStateBarriers()
 				if (buffer)
 				{
 					list->TransitionBarrier(*buffer, state);
+
+					if (state == D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+					{
+						// If we have a counter buffer, we need to make sure it's in the proper state.
+						auto& bufferComponent = device->GetResourceManager().Get(*buffer);
+						if (bufferComponent.description.uavCounter)
+						{
+							list->TransitionBarrier(bufferComponent.counterBuffer, state);
+						}
+					}
 				}
 
 				else if (texture)
@@ -196,7 +206,7 @@ void RenderGraph::Execute(RenderDevice* device)
 		passLists.emplace_back(std::move(device->AllocateFrameCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT)));
 	}
 
-	InjectStateBarriers();
+	InjectStateBarriers(device);
 
 	for (int i = 0; i < passLists.size(); ++i)
 	{
