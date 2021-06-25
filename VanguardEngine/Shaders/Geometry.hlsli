@@ -44,4 +44,18 @@ bool LinePlaneIntersection(float3 a, float3 b, Plane plane, out float3 q)
     return false;
 }
 
+// Real-time rendering fourth edition.
+bool SphereAABBIntersection(float3 center, float radius, AABB aabb)
+{
+    float3 e = max(aabb.min.xyz - center, 0);
+    e += max(center - aabb.max.xyz, 0);
+    float d = dot(e, e);
+    if (d > radius * radius)
+    {
+        return false;
+    }
+    
+    return true;
+}
+
 #endif  // __GEOMETRY_HLSLI__
