@@ -112,7 +112,7 @@ void PipelineState::ReflectRootSignature()
 					{
 						const auto otherSignatureIndex = reflection.resourceIndexMap[binding.name].signatureIndex;
 
-						VGAssert(otherSignatureIndex == i, "Multiple unique bind candidates found for '%s' during root signature reflection. Candidates: %i, %i", binding.name, otherSignatureIndex, i);
+						VGAssert(otherSignatureIndex == i, "Multiple unique bind candidates found for '%s' during root signature reflection. Candidates: %i, %i", binding.name.c_str(), otherSignatureIndex, i);
 					}
 
 					else
