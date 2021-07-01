@@ -155,6 +155,8 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderT
 	compileArguments.emplace_back(VGText("-I"));
 	compileArguments.emplace_back(stableShaderIncludePath.data());
 	//compileArguments.emplace_back(DXC_ARG_PACK_MATRIX_ROW_MAJOR);  // Row major matrices. #TODO: Use uniform packing, ImGui uses column major currently.
+	compileArguments.emplace_back(VGText("-HV"));  // HLSL version 2018.
+	compileArguments.emplace_back(VGText("2018"));
 #if BUILD_DEBUG || BUILD_DEVELOPMENT
 	compileArguments.emplace_back(DXC_ARG_DEBUG);  // Enable debug information.
 	compileArguments.emplace_back(VGText("-Qembed_debug"));  // Embed the PDB.
