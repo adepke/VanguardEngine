@@ -24,8 +24,6 @@ RWStructuredBuffer<AABB> clusterAABBs : register(u1);
 [numthreads(8, 8, 1)]
 void ComputeClusterFrustumsMain(uint3 dispatchId : SV_DispatchThreadID)
 {
-    float4 a = UvToClipSpace(((dispatchId.xy + float2(0.f, 0.f)) * FROXEL_SIZE) / clusterData.resolution);
-    
     float3 frustumVertices[4];
     frustumVertices[0] = ClipToViewSpace(camera, UvToClipSpace(((dispatchId.xy + float2(0.f, 0.f)) * FROXEL_SIZE) / clusterData.resolution)).xyz;  // Top left.
     frustumVertices[1] = ClipToViewSpace(camera, UvToClipSpace(((dispatchId.xy + float2(1.f, 0.f)) * FROXEL_SIZE) / clusterData.resolution)).xyz;  // Top right.
