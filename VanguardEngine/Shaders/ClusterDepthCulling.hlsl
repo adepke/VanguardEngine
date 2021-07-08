@@ -37,6 +37,7 @@ RWStructuredBuffer<bool> clusterVisibility : register(u0);  // Root descriptor U
 struct VSOutput
 {
     float4 positionCS : SV_POSITION;  // Clip space.
+    float depthVS : DEPTH;  // View space.
 };
 
 [RootSignature(RS)]
@@ -48,6 +49,7 @@ VSOutput VSMain(uint vertexId : SV_VertexID)
     output.positionCS = float4(vertex.position, 1.f);
     output.positionCS = mul(output.positionCS, perObject.worldMatrix);
     output.positionCS = mul(output.positionCS, camera.view);
+    output.depthVS = output.positionCS.z;
     output.positionCS = mul(output.positionCS, camera.projection);
     
     return output;
@@ -58,6 +60,6 @@ VSOutput VSMain(uint vertexId : SV_VertexID)
 void PSMain(VSOutput input)
 {
     // Fully depth culled clusters will have their visibility flag set to false.
-    uint3 clusterIndex = DrawToClusterIndex3D(FROXEL_SIZE, clusterData.logY, camera, input.positionCS.xy, ClipToViewSpace(camera, input.positionCS).z);
+    uint3 clusterIndex = DrawToClusterIndex3D(FROXEL_SIZE, clusterData.logY, camera, input.positionCS.xy, input.depthVS);
     clusterVisibility[DispatchToClusterIndex(clusterData.gridDimensions, clusterIndex)] = true;
 }
