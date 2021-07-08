@@ -11,10 +11,9 @@ uint DispatchToClusterIndex(uint3 dimensions, uint3 dispatchId)
     return dispatchId.x + (dimensions.x * (dispatchId.y + dimensions.y * dispatchId.z));
 }
 
-uint3 DrawToClusterIndex3D(uint froxelSize, float logY, Camera camera, float2 positionSS, float z)
+uint3 DrawToClusterIndex3D(uint froxelSize, float logY, Camera camera, float2 positionSS, float depthViewSpace)
 {
-    // Far plane due to inverse depth buffer.
-    return uint3(positionSS.x / froxelSize, positionSS.y / froxelSize, log(-z / camera.farPlane) * logY);
+    return uint3(positionSS.x / froxelSize, positionSS.y / froxelSize, log(-depthViewSpace / camera.nearPlane) * logY);
 }
 
 #endif  // __CLUSTERS_HLSLI__
