@@ -30,5 +30,5 @@ struct Light
 	XMFLOAT3 position;
 	uint32_t type;
 	XMFLOAT3 color;
-	uint32_t padding;
+	float luminance;
 };

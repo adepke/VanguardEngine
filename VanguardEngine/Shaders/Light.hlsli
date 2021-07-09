@@ -17,8 +17,14 @@ struct Light
     uint type;
     // Boundary
     float3 color;  // Combined diffuse and specular.
-    float padding;
+    float luminance;
 };
+
+float ComputeLightRadius(Light light)
+{
+    // #TEMP
+    return 1000.f;
+}
 
 struct LightSample
 {

@@ -23,8 +23,9 @@ struct ClusterGridInfo
 
 class ClusteredLightCulling
 {
-private:
-	static constexpr int froxelSize = 32;
+public:
+	static constexpr int froxelSize = 64;
+	static constexpr int maxLightsPerFroxel = 32;  // Can realistically reduce this to save memory.
 
 private:
 	RenderDevice* device;
@@ -37,16 +38,17 @@ private:
 	PipelineState boundsState;
 	PipelineState depthCullState;
 	PipelineState compactionState;
+	PipelineState binningState;
 
 	ClusterGridInfo ComputeGridInfo(const entt::registry& registry) const;
 	// Needs to be called every time the camera resolution or FOV changes.
-	void ComputeClusterGrid(CommandList& list, const ClusterGridInfo& dimensions, BufferHandle cameraBuffer);
+	void ComputeClusterGrid(CommandList& list, const ClusterGridInfo& dimensions, BufferHandle cameraBuffer, BufferHandle clusterFrustumsBuffer, BufferHandle clusterAABBsBuffer);
 
 public:
 	~ClusteredLightCulling();
 
 	void Initialize(RenderDevice* inDevice);
-	void Render(RenderGraph& graph, const entt::registry& registry, RenderResource cameraBuffer, RenderResource depthStencil, BufferHandle instanceBuffer, size_t instanceOffset);
+	std::pair<RenderResource, RenderResource> Render(RenderGraph& graph, const entt::registry& registry, RenderResource cameraBuffer, RenderResource depthStencil, BufferHandle instanceBuffer, size_t instanceOffset, BufferHandle lights);
 
 	void MarkDirty() { dirty = true; };
 };

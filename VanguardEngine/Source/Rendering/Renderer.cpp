@@ -10,6 +10,7 @@
 #include <Rendering/RenderPass.h>
 #include <Rendering/ShaderStructs.h>
 #include <Core/Config.h>
+#include <Rendering/RenderUtils.h>
 
 #if ENABLE_EDITOR
 #include <Editor/EditorRenderer.h>
@@ -105,6 +106,7 @@ void Renderer::CreatePipelines()
 
 	forwardStateDesc.vertexShader = { "Default_VS", "main" };
 	forwardStateDesc.pixelShader = { "Default_PS", "main" };
+	forwardStateDesc.macros.emplace_back("FROXEL_SIZE", clusteredCulling.froxelSize);
 
 	forwardStateDesc.blendDescription.AlphaToCoverageEnable = false;
 	forwardStateDesc.blendDescription.IndependentBlendEnable = false;
@@ -314,7 +316,8 @@ BufferHandle Renderer::CreateLightBuffer(const entt::registry& registry)
 		Light instance{
 			.position = transform.translation,
 			.type = 0,
-			.color = light.color
+			.color = light.color,
+			.luminance = 1.f  // #TEMP
 		};
 
 		std::vector<uint8_t> instanceData{};
@@ -367,6 +370,8 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 	device->Native()->CreateShaderResourceView(nullptr, &nullViewDesc, nullDescriptor);
 
 	CreatePipelines();
+
+	RenderUtils::Get().Initialize(device.get());
 
 	atmosphere.Initialize(device.get());
 	clusteredCulling.Initialize(device.get());
@@ -431,7 +436,7 @@ void Renderer::Render(entt::registry& registry)
 	});
 
 	// #TODO: Don't have this here.
-	clusteredCulling.Render(graph, registry, cameraBufferTag, depthStencilTag, instanceBuffer, instanceOffset);
+	const auto [clusteredLightListTag, clusteredLightInfoTag] = clusteredCulling.Render(graph, registry, cameraBufferTag, depthStencilTag, instanceBuffer, instanceOffset, lightBuffer);
 	
 	auto& forwardPass = graph.AddPass("Forward Pass", ExecutionQueue::Graphics);
 	const auto outputHDRTag = forwardPass.Create(TransientTextureDescription{
@@ -439,6 +444,8 @@ void Renderer::Render(entt::registry& registry)
 	}, VGText("Output HDR sRGB"));
 	forwardPass.Read(depthStencilTag, ResourceBind::DSV);
 	forwardPass.Read(cameraBufferTag, ResourceBind::CBV);
+	forwardPass.Read(clusteredLightListTag, ResourceBind::SRV);
+	forwardPass.Read(clusteredLightInfoTag, ResourceBind::SRV);
 	forwardPass.Output(outputHDRTag, OutputBind::RTV, true);
 	forwardPass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
 	{
@@ -447,8 +454,27 @@ void Renderer::Render(entt::registry& registry)
 		list.BindPipelineState(pipelines["ForwardOpaque"]);
 		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
 		list.BindResource("camera", resources.GetBuffer(cameraBufferTag));
-		list.BindConstants("lightCount", { (uint32_t)device->GetResourceManager().Get(lightBuffer).description.size });
 		list.BindResource("lights", lightBuffer);
+		list.BindResource("clusteredLightList", resources.GetBuffer(clusteredLightListTag));
+		list.BindResource("clusteredLightInfo", resources.GetBuffer(clusteredLightInfoTag));
+
+		struct ClusterData
+		{
+			uint32_t dimensionsX;
+			uint32_t dimensionsY;
+			uint32_t dimensionsZ;
+			float logY;
+		} clusterData;
+
+		clusterData.dimensionsX = 20;
+		clusterData.dimensionsY = 11;
+		clusterData.dimensionsZ = 50;
+		clusterData.logY = 1.f / std::log(1.181818f);
+
+		std::vector<uint32_t> clusterBufferData;
+		clusterBufferData.resize(sizeof(clusterData) / 4);
+		std::memcpy(clusterBufferData.data(), &clusterData, clusterBufferData.size() * sizeof(uint32_t));
+		list.BindConstants("clusterData", clusterBufferData);
 
 		{
 			VGScopedGPUStat("Opaque", device->GetDirectContext(), list.Native());
@@ -494,8 +520,10 @@ void Renderer::Render(entt::registry& registry)
 		list.BindPipelineState(pipelines["ForwardTransparent"]);
 		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
 		list.BindResource("camera", resources.GetBuffer(cameraBufferTag));
-		list.BindConstants("lightCount", { (uint32_t)device->GetResourceManager().Get(lightBuffer).description.size });
 		list.BindResource("lights", lightBuffer);
+		list.BindResource("clusteredLightList", resources.GetBuffer(clusteredLightListTag));
+		list.BindResource("clusteredLightInfo", resources.GetBuffer(clusteredLightInfoTag));
+		list.BindConstants("clusterData", clusterBufferData);
 
 		{
 			VGScopedGPUStat("Transparent", device->GetDirectContext(), list.Native());

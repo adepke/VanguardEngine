@@ -10,6 +10,7 @@
 #include <Rendering/ShaderStructs.h>
 #include <Rendering/RenderComponents.h>
 #include <Core/CoreComponents.h>
+#include <Rendering/RenderUtils.h>
 
 ClusterGridInfo ClusteredLightCulling::ComputeGridInfo(const entt::registry& registry) const
 {
@@ -39,7 +40,7 @@ ClusterGridInfo ClusteredLightCulling::ComputeGridInfo(const entt::registry& reg
 	return { x, y, z, depthFactor };
 }
 
-void ClusteredLightCulling::ComputeClusterGrid(CommandList& list, const ClusterGridInfo& dimensions, BufferHandle cameraBuffer)
+void ClusteredLightCulling::ComputeClusterGrid(CommandList& list, const ClusterGridInfo& dimensions, BufferHandle cameraBuffer, BufferHandle clusterFrustumsBuffer, BufferHandle clusterAABBsBuffer)
 {
 	constexpr auto groupSize = 8;
 
@@ -74,7 +75,7 @@ void ClusteredLightCulling::ComputeClusterGrid(CommandList& list, const ClusterG
 
 	list.BindPipelineState(viewFrustumsState);
 	list.BindConstants("clusterData", clusterConstants);
-	list.BindResource("clusterFrustums", clusterFrustums);
+	list.BindResource("clusterFrustums", clusterFrustumsBuffer);
 	list.BindResource("camera", cameraBuffer);
 	list.Native()->Dispatch(dispatchX, dispatchY, 1);
 
@@ -82,12 +83,12 @@ void ClusteredLightCulling::ComputeClusterGrid(CommandList& list, const ClusterG
 
 	list.BindPipelineState(boundsState);
 	list.BindConstants("clusterData", clusterConstants);
-	list.BindResource("clusterAABBs", clusterAABBs);
+	list.BindResource("clusterAABBs", clusterAABBsBuffer);
 	list.BindResource("camera", cameraBuffer);
-	list.Native()->Dispatch(dispatchX, dispatchY, dimensions.z);
+	list.Native()->Dispatch(std::ceil(dimensions.x * dimensions.y * dimensions.z / 64.f), 1, 1);
 
-	list.UAVBarrier(clusterFrustums);
-	list.UAVBarrier(clusterAABBs);
+	list.UAVBarrier(clusterFrustumsBuffer);
+	list.UAVBarrier(clusterAABBsBuffer);
 }
 
 ClusteredLightCulling::~ClusteredLightCulling()
@@ -161,7 +162,7 @@ void ClusteredLightCulling::Initialize(RenderDevice* inDevice)
 	depthCullStateDesc.rasterizerDescription.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
 	depthCullStateDesc.depthStencilDescription.DepthEnable = true;
 	depthCullStateDesc.depthStencilDescription.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-	depthCullStateDesc.depthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_GREATER;  // Transparents receive lighting, so they cannot be culled.
+	depthCullStateDesc.depthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL;  // Opaque and transparents receive lighting, so they cannot be culled.
 	depthCullStateDesc.depthStencilDescription.StencilEnable = false;
 	depthCullStateDesc.depthStencilDescription.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
 	depthCullStateDesc.depthStencilDescription.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
@@ -172,31 +173,40 @@ void ClusteredLightCulling::Initialize(RenderDevice* inDevice)
 	ComputePipelineStateDescription compactionStateDesc;
 	compactionStateDesc.shader = { "ClusterCompaction.hlsl", "ComputeDenseClusterListMain" };
 	compactionState.Build(*device, compactionStateDesc);
+
+	ComputePipelineStateDescription binningStateDesc;
+	binningStateDesc.shader = { "ClusterLightBinning.hlsl", "ComputeLightBinsMain" };
+	binningStateDesc.macros.emplace_back("MAX_LIGHTS_PER_FROXEL", maxLightsPerFroxel);
+	binningState.Build(*device, binningStateDesc);
 }
 
-void ClusteredLightCulling::Render(RenderGraph& graph, const entt::registry& registry, RenderResource cameraBuffer, RenderResource depthStencil, BufferHandle instanceBuffer, size_t instanceOffset)
+std::pair<RenderResource, RenderResource> ClusteredLightCulling::Render(RenderGraph& graph, const entt::registry& registry, RenderResource cameraBuffer, RenderResource depthStencil, BufferHandle instanceBuffer, size_t instanceOffset, BufferHandle lights)
 {
+	VGScopedCPUStat("Clustered Light Culling");
+	VGScopedGPUStat("Clustered Light Culling", device->GetDirectContext(), device->GetDirectList().Native());
+
 	ClusterGridInfo dimensions = ComputeGridInfo(registry);
 	if (dimensions.x == 0 || dimensions.y == 0 || dimensions.z == 0)
 	{
-		return;
+		return {};
 	}
+
+	const auto clusterAABBsTag = graph.Import(clusterAABBs);
 
 	if (dirty)
 	{
 		auto clusterFrustumsTag = graph.Import(clusterFrustums);
-		auto clusterAABBsTag = graph.Import(clusterAABBs);
 
 		auto& computeClusterGridPass = graph.AddPass("Compute Cluster Grid", ExecutionQueue::Compute);
 		computeClusterGridPass.Read(cameraBuffer, ResourceBind::CBV);
 		computeClusterGridPass.Write(clusterFrustumsTag, ResourceBind::UAV);
 		computeClusterGridPass.Write(clusterAABBsTag, ResourceBind::UAV);
-		computeClusterGridPass.Bind([&, dimensions, cameraBuffer](CommandList& list, RenderGraphResourceManager& resources)
+		computeClusterGridPass.Bind([&, dimensions, cameraBuffer, clusterFrustumsTag, clusterAABBsTag](CommandList& list, RenderGraphResourceManager& resources)
 		{
-			ComputeClusterGrid(list, dimensions, resources.GetBuffer(cameraBuffer));
+			ComputeClusterGrid(list, dimensions, resources.GetBuffer(cameraBuffer), resources.GetBuffer(clusterFrustumsTag), resources.GetBuffer(clusterAABBsTag));
 		});
 
-		dirty = false;
+		//dirty = false;
 	}
 
 	auto& clusterDepthCullingPass = graph.AddPass("Cluster Depth Culling", ExecutionQueue::Graphics);
@@ -210,7 +220,10 @@ void ClusteredLightCulling::Render(RenderGraph& graph, const entt::registry& reg
 	clusterDepthCullingPass.Write(clusterVisibilityTag, ResourceBind::UAV);
 	clusterDepthCullingPass.Bind([&, dimensions, cameraBuffer, clusterVisibilityTag, instanceBuffer, instanceOffset](CommandList& list, RenderGraphResourceManager& resources)
 	{
-		// #TODO: Use ClearUnorderedAccessView when Cluster Visibility becomes a normal buffer, instead of a structured buffer.
+		RenderUtils::Get().ClearUAV(list, resources.GetBuffer(clusterVisibilityTag));
+
+		list.UAVBarrier(resources.GetBuffer(clusterVisibilityTag));
+		list.FlushBarriers();
 
 		list.BindPipelineState(depthCullState);
 		list.BindResource("camera", resources.GetBuffer(cameraBuffer));
@@ -265,7 +278,8 @@ void ClusteredLightCulling::Render(RenderGraph& graph, const entt::registry& reg
 	const auto denseClustersTag = clusterCompaction.Create(TransientBufferDescription{
 		.updateRate = ResourceFrequency::Static,  // UAVs.
 		.size = dimensions.x * dimensions.y * dimensions.z,  // Worst case.
-		.stride = sizeof(uint32_t)
+		.stride = sizeof(uint32_t),
+		.uavCounter = true
 	}, VGText("Compacted cluster list"));
 	clusterCompaction.Read(clusterVisibilityTag, ResourceBind::SRV);
 	clusterCompaction.Write(denseClustersTag, ResourceBind::UAV);
@@ -295,7 +309,65 @@ void ClusteredLightCulling::Render(RenderGraph& graph, const entt::registry& reg
 
 		list.BindConstants("clusterData", clusterConstants);
 
-		uint32_t dispatch = std::ceil(dimensions.x * dimensions.y * dimensions.z / 64.f);
-		list.Native()->Dispatch(dispatch, 1, 1);
+		uint32_t dispatchSize = static_cast<uint32_t>(std::ceil(dimensions.x * dimensions.y * dimensions.z / 64.f));
+		list.Native()->Dispatch(dispatchSize, 1, 1);
 	});
+
+	auto& lightsBufferComponent = device->GetResourceManager().Get(lights);
+
+	auto& binningPass = graph.AddPass("Light Binning", ExecutionQueue::Compute);
+	binningPass.Read(denseClustersTag, ResourceBind::SRV);
+	binningPass.Read(clusterAABBsTag, ResourceBind::SRV);
+	//binningPass.Read(lightsBuffer, ResourceBind::SRV);
+	const auto lightCounterTag = binningPass.Create(TransientBufferDescription{
+		.updateRate = ResourceFrequency::Static,
+		.size = 1,
+		.stride = sizeof(uint32_t)
+	}, VGText("Cluster binning light counter"));
+	binningPass.Write(lightCounterTag, ResourceBind::UAV);
+	const auto lightListTag = binningPass.Create(TransientBufferDescription{
+		.updateRate = ResourceFrequency::Static,
+		.size = dimensions.x * dimensions.y * dimensions.z * maxLightsPerFroxel,
+		.stride = sizeof(uint32_t)
+	}, VGText("Cluster binning light list"));
+	binningPass.Write(lightListTag, ResourceBind::UAV);
+	const auto lightInfoTag = binningPass.Create(TransientBufferDescription{
+		.updateRate = ResourceFrequency::Static,
+		.size = dimensions.x * dimensions.y * dimensions.z,
+		.stride = sizeof(uint32_t) * 2
+	}, VGText("Cluster grid light info"));
+	// #TEMP
+	binningPass.Read(cameraBuffer, ResourceBind::CBV);
+	binningPass.Write(lightInfoTag, ResourceBind::UAV);
+	binningPass.Bind([&, dimensions, denseClustersTag, lightCounterTag,
+		lightListTag, lightInfoTag, lights, cameraBuffer](CommandList& list, RenderGraphResourceManager& resources)
+	{
+		RenderUtils::Get().ClearUAV(list, resources.GetBuffer(lightCounterTag));
+		RenderUtils::Get().ClearUAV(list, resources.GetBuffer(lightInfoTag));
+
+		list.UAVBarrier(resources.GetBuffer(lightCounterTag));
+		list.UAVBarrier(resources.GetBuffer(lightInfoTag));
+		list.FlushBarriers();
+
+		list.BindPipelineState(binningState);
+		list.BindResource("denseClusterList", resources.GetBuffer(denseClustersTag));
+		list.BindResource("clusterAABBs", clusterAABBs);
+		list.BindResource("lights", lights);
+		list.BindResource("lightCounter", resources.GetBuffer(lightCounterTag));
+		list.BindResource("lightList", resources.GetBuffer(lightListTag));
+		list.BindResource("clusterLightInfo", resources.GetBuffer(lightInfoTag));
+
+		// #TEMP: Testing
+		auto& b = device->GetResourceManager().Get(resources.GetBuffer(denseClustersTag));
+		list.BindResource("testing", b.counterBuffer);
+		list.BindResource("camera", resources.GetBuffer(cameraBuffer));
+
+		auto& lightComponent = device->GetResourceManager().Get(lights);
+		list.BindConstants("lightCount", { (uint32_t)lightComponent.description.size });
+
+		// #TODO: Indirect dispatch, send only as many thread groups as the number of non-culled clusters.
+		list.Native()->Dispatch(dimensions.x * dimensions.y * dimensions.z, 1, 1);
+	});
+
+	return { lightListTag, lightInfoTag };
 }

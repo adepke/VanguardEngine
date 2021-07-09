@@ -47,14 +47,16 @@ void ComputeClusterFrustumsMain(uint3 dispatchId : SV_DispatchThreadID)
 
 // Computes the AABB for each froxel.
 [RootSignature(RS)]
-[numthreads(8, 8, 1)]
+[numthreads(64, 1, 1)]
 void ComputeClusterBoundsMain(uint3 dispatchId : SV_DispatchThreadID)
 {
-    float3 topLeft = ClipToViewSpace(camera, UvToClipSpace((dispatchId.xy * FROXEL_SIZE) / clusterData.resolution)).xyz;
-    float3 bottomRight = ClipToViewSpace(camera, UvToClipSpace(((dispatchId.xy + 1) * FROXEL_SIZE) / clusterData.resolution)).xyz;
+    uint3 clusterIndex = uint3(dispatchId.x % clusterData.gridDimensions.x, dispatchId.x % (clusterData.gridDimensions.x * clusterData.gridDimensions.y) / clusterData.gridDimensions.x, dispatchId.x / (clusterData.gridDimensions.x * clusterData.gridDimensions.y));
     
-    Plane near = { 0.f, 0.f, 1.f, -camera.nearPlane * pow(abs(clusterData.nearK), dispatchId.z) };
-    Plane far = { 0.f, 0.f, 1.f, -camera.nearPlane * pow(abs(clusterData.nearK), dispatchId.z + 1) };
+    float3 topLeft = ClipToViewSpace(camera, UvToClipSpace((clusterIndex.xy * FROXEL_SIZE) / (float2)clusterData.resolution)).xyz;
+    float3 bottomRight = ClipToViewSpace(camera, UvToClipSpace(((clusterIndex.xy + 1) * FROXEL_SIZE) / (float2)clusterData.resolution)).xyz;
+    
+    Plane near = { 0.f, 0.f, 1.f, -camera.nearPlane * pow(abs(clusterData.nearK), clusterIndex.z) };
+    Plane far = { 0.f, 0.f, 1.f, -camera.nearPlane * pow(abs(clusterData.nearK), clusterIndex.z + 1) };
     
     float3 origin = float3(0.f, 0.f, 0.f);
     
@@ -69,9 +71,8 @@ void ComputeClusterBoundsMain(uint3 dispatchId : SV_DispatchThreadID)
     float3 maxBound = max(minNear, max(maxNear, max(minFar, maxFar)));
     
     AABB box = { float4(minBound, 1.f), float4(maxBound, 1.f) };
-    uint index = DispatchToClusterIndex(clusterData.gridDimensions, dispatchId);
-    if (index < clusterData.gridDimensions.x * clusterData.gridDimensions.y * clusterData.gridDimensions.z)
+    if (dispatchId.x < clusterData.gridDimensions.x * clusterData.gridDimensions.y * clusterData.gridDimensions.z)
     {
-        clusterAABBs[index] = box;
+        clusterAABBs[dispatchId.x] = box;
     }
 }

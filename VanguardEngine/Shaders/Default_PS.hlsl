@@ -3,20 +3,22 @@
 #include "Default_RS.hlsli"
 #include "Base.hlsli"
 #include "Light.hlsli"
+#include "Clusters.hlsli"
 
 SamplerState defaultSampler : register(s0);
 
-ConstantBuffer<MaterialData> material : register(b0);
-ConstantBuffer<Camera> camera : register(b1);
-
-// We can't use GetDimensions() on a root SRV, so instead pass the light count separately.
-struct LightCount
+struct ClusterData
 {
-    uint count;
+    uint3 dimensions;
+    float logY;
 };
 
-ConstantBuffer<LightCount> lightCount : register(b2);
+ConstantBuffer<ClusterData> clusterData : register(b0);
+ConstantBuffer<MaterialData> material : register(b1);
+ConstantBuffer<Camera> camera : register(b2);
 StructuredBuffer<Light> lights : register(t0, space1);
+StructuredBuffer<uint> clusteredLightList : register(t1, space1);
+StructuredBuffer<uint2> clusteredLightInfo : register(t2, space1);
 
 struct Input
 {
@@ -91,9 +93,14 @@ Output main(Input input)
     materialSample.occlusion = ambientOcclusion;
     materialSample.emissive = emissive;
 	
-    for (uint i = 0; i < lightCount.count; ++i)
+    float4 positionVS = mul(camera.view, float4(input.position, 1.f));
+    uint3 clusterIndex = DrawToClusterIndex3D(FROXEL_SIZE, clusterData.logY, camera, input.positionSS.xy, positionVS.z);
+    uint2 lightInfo = clusteredLightInfo[DispatchToClusterIndex(clusterData.dimensions, clusterIndex)];
+	
+    for (uint i = 0; i < lightInfo.y; ++i)
     {
-        LightSample sample = SampleLight(lights[i], materialSample, camera, viewDirection, input.position, normalDirection);
+        uint lightIndex = clusteredLightList[lightInfo.x + i];
+        LightSample sample = SampleLight(lights[lightIndex], materialSample, camera, viewDirection, input.position, normalDirection);
         output.color.rgb += sample.diffuse.rgb;
     }
 
