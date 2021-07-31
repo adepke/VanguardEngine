@@ -30,7 +30,7 @@ float4 UvToClipSpace(float2 uv)
 
 float4 ClipToViewSpace(Camera camera, float4 clipSpace)
 {
-    float4 viewSpace = mul(camera.inverseProjection, clipSpace);
+    float4 viewSpace = mul(clipSpace, camera.inverseProjection);
     
     return viewSpace / viewSpace.w;  // Perspective division.
 }
@@ -47,8 +47,8 @@ float LinearizeDepth(Camera camera, float hyperbolicDepth)
 float3 ComputeRayDirection(Camera camera, float2 uv)
 {
     float4 positionClipSpace = UvToClipSpace(uv);
-    float4 positionViewSpace = float4(mul(camera.inverseProjection, positionClipSpace).xyz, 0.f);  // No perspective division.
-    float4 positionWorldSpace = mul(camera.inverseView, positionViewSpace);
+    float4 positionViewSpace = float4(mul(positionClipSpace, camera.inverseProjection).xyz, 0.f);  // No perspective division.
+    float4 positionWorldSpace = mul(positionViewSpace, camera.inverseView);
     
     return normalize(positionWorldSpace.xyz);
 }

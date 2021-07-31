@@ -37,7 +37,7 @@ Output main(Input input)
 	Vertex vertex = vertexBuffer[input.vertexID];
 
 	Output output;
-	output.position = mul(projections.projectionMatrix, float4(vertex.position.xy, 0.f, 1.f));
+    output.position = mul(projections.projectionMatrix, float4(vertex.position.xy, 0.f, 1.f));  // Post-multiply due to column major.
 	output.color.r = float((vertex.color >> 0) & 0xFF) / 255.f;
 	output.color.g = float((vertex.color >> 8) & 0xFF) / 255.f;
 	output.color.b = float((vertex.color >> 16) & 0xFF) / 255.f;

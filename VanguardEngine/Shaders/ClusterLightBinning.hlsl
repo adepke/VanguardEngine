@@ -41,8 +41,8 @@ groupshared uint globalLightListOffset;
 
 bool LightInFroxel(Light light, AABB aabb)
 {
-    // #TEMP: So much redundant work, do not ship this.
-    float4 viewSpace = mul(camera.view, float4(light.position, 1.f));
+    // #TODO: Precompute view space position of each light in a separate pass to prevent redundant work.
+    float4 viewSpace = mul(float4(light.position, 1.f), camera.view);
     
     return SphereAABBIntersection(viewSpace.xyz, ComputeLightRadius(light), aabb);
 }
