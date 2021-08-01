@@ -16,7 +16,6 @@
 #include <chrono>
 
 // #TEMP
-#include <thread>
 #include <Rendering/RenderComponents.h>
 #include <Rendering/RenderSystems.h>
 #include <Asset/AssetLoader.h>
@@ -55,7 +54,7 @@ void EngineBoot()
 
 	Input::EnableDPIAwareness();
 
-	constexpr uint32_t defaultWindowSizeX = 1200;
+	constexpr uint32_t defaultWindowSizeX = 1600;
 	constexpr uint32_t defaultWindowSizeY = 900;
 
 	auto window = std::make_unique<WindowFrame>(VGText("Vanguard"), defaultWindowSizeX, defaultWindowSizeY);
@@ -80,9 +79,7 @@ void EngineBoot()
 void EngineLoop()
 {
 	TransformComponent spectatorTransform{};
-	spectatorTransform.translation.x = -10.f;
-	spectatorTransform.translation.y = 0.f;
-	spectatorTransform.translation.z = 1.f;
+	spectatorTransform.translation = { -120.f, 4.f, 20.f };
 
 	const auto spectator = registry.create();
 	registry.emplace<NameComponent>(spectator, "Spectator");
@@ -91,8 +88,9 @@ void EngineLoop()
 	registry.emplace<ControlComponent>(spectator);  // #TEMP
 
 	TransformComponent sponzaTransform{};
-	sponzaTransform.translation = { 1200.f, -50.f, -120.f };
-	sponzaTransform.rotation = { -1.57079633f, 0.f, 0.f };  // Rotate the sponza into our coordinate space.
+	sponzaTransform.translation = { 0.f, 0.f, 0.f };
+	sponzaTransform.rotation = { -90.f * 3.14159f / 180.f, 0.f, 0.f };  // Rotate the sponza into our coordinate space.
+	sponzaTransform.scale = { 0.1f, 0.1f, 0.1f };
 
 	const auto sponza = registry.create();
 	registry.emplace<NameComponent>(sponza, "Sponza");
@@ -107,11 +105,11 @@ void EngineLoop()
 	pointLight3.color = { 1.f, 1.f, 1.f };
 
 	TransformComponent light1Transform{};
-	light1Transform.translation = { 800.f, 0.f, 70.f };
+	light1Transform.translation = { -60, 4.f, 10.f };
 	TransformComponent light2Transform{};
-	light2Transform.translation = { 1200.f, 0.f, 70.f };
+	light2Transform.translation = { 0.f, 4.f, 10.f };
 	TransformComponent light3Transform{};
-	light3Transform.translation = { 1600.f, 0.f, 70.f };
+	light3Transform.translation = { 60.f, 4.f, 10.f };
 
 	const auto light1 = registry.create();
 	registry.emplace<NameComponent>(light1, "Light1");
