@@ -44,8 +44,8 @@ void Renderer::UpdateCameraBuffer(const entt::registry& registry)
 	bufferData.position = XMFLOAT4{ translation.x, translation.y, translation.z, 0.f };
 	bufferData.view = globalViewMatrix;
 	bufferData.projection = globalProjectionMatrix;
-	bufferData.inverseView = XMMatrixTranspose(XMMatrixInverse(nullptr, bufferData.view));
-	bufferData.inverseProjection = XMMatrixTranspose(XMMatrixInverse(nullptr, bufferData.projection));
+	bufferData.inverseView = XMMatrixInverse(nullptr, bufferData.view);
+	bufferData.inverseProjection = XMMatrixInverse(nullptr, bufferData.projection);
 	bufferData.nearPlane = nearPlane;
 	bufferData.farPlane = farPlane;
 	bufferData.fieldOfView = fieldOfView;
@@ -262,14 +262,13 @@ std::pair<BufferHandle, size_t> Renderer::CreateInstanceBuffer(const entt::regis
 	VGScopedCPUStat("Create Instance Buffer");
 
 	const auto instanceView = registry.view<const TransformComponent, const MeshComponent>();
-	const auto viewSize = instanceView.size();
+	const auto viewSize = instanceView.size_hint();
 	const auto [bufferHandle, bufferOffset] = device->FrameAllocate(sizeof(EntityInstance) * viewSize);
 
 	size_t index = 0;
 	instanceView.each([&](auto entity, const auto& transform, const auto&)
 	{
 		const auto scaling = XMVectorSet(transform.scale.x, transform.scale.y, transform.scale.z, 0.f);
-		const auto rotation = XMVectorSet(transform.rotation.x, transform.rotation.y, transform.rotation.z, 0.f);
 		const auto translation = XMVectorSet(transform.translation.x, transform.translation.y, transform.translation.z, 0.f);
 
 		const auto scalingMat = XMMatrixScalingFromVector(scaling);
@@ -298,7 +297,7 @@ BufferHandle Renderer::CreateLightBuffer(const entt::registry& registry)
 	VGScopedCPUStat("Create Light Buffer");
 
 	const auto lightView = registry.view<const TransformComponent, const LightComponent>();
-	const auto viewSize = lightView.size();
+	const auto viewSize = lightView.size_hint();
 
 	BufferDescription lightBufferDescription;
 	lightBufferDescription.updateRate = ResourceFrequency::Dynamic;
@@ -466,10 +465,12 @@ void Renderer::Render(entt::registry& registry)
 			float logY;
 		} clusterData;
 
-		clusterData.dimensionsX = 20;
-		clusterData.dimensionsY = 11;
-		clusterData.dimensionsZ = 50;
-		clusterData.logY = 1.f / std::log(1.181818f);
+		auto& gridInfo = clusteredCulling.GetGridInfo();
+
+		clusterData.dimensionsX = gridInfo.x;
+		clusterData.dimensionsY = gridInfo.y;
+		clusterData.dimensionsZ = gridInfo.z;
+		clusterData.logY = 1.f / std::log(gridInfo.depthFactor);
 
 		std::vector<uint32_t> clusterBufferData;
 		clusterBufferData.resize(sizeof(clusterData) / 4);
