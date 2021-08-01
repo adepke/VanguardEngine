@@ -28,6 +28,7 @@ struct Input
 	float2 uv : UV;
 	float3 tangent : TANGENT;  // World space.
 	float3 bitangent : BITANGENT;  // World space.
+    float depthVS : DEPTH;  // View space.
 };
 
 struct Output
@@ -93,10 +94,8 @@ Output main(Input input)
     materialSample.occlusion = ambientOcclusion;
     materialSample.emissive = emissive;
 	
-    float4 positionVS = mul(camera.view, float4(input.position, 1.f));
-    uint3 clusterIndex = DrawToClusterIndex3D(FROXEL_SIZE, clusterData.logY, camera, input.positionSS.xy, positionVS.z);
+    uint3 clusterIndex = DrawToClusterIndex3D(FROXEL_SIZE, clusterData.logY, camera, input.positionSS.xy, input.depthVS);
     uint2 lightInfo = clusteredLightInfo[DispatchToClusterIndex(clusterData.dimensions, clusterIndex)];
-	
     for (uint i = 0; i < lightInfo.y; ++i)
     {
         uint lightIndex = clusteredLightList[lightInfo.x + i];
