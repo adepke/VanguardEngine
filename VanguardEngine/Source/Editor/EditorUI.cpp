@@ -158,7 +158,7 @@ void EditorUI::DrawScene(RenderDevice* device, entt::registry& registry, Texture
 			// #TODO: Grant control to only the camera that the viewport is linked to, not every camera-owning entity.
 			registry.view<const CameraComponent>().each([&](auto entity, const auto&)
 			{
-				if (!registry.has<ControlComponent>(entity))
+				if (!registry.all_of<ControlComponent>(entity))
 				{
 					registry.emplace<ControlComponent>(entity);
 				}
@@ -193,7 +193,7 @@ void EditorUI::DrawEntityHierarchy(entt::registry& registry)
 
 				ImGui::PushID(static_cast<int32_t>(entity));  // Use the entity as the ID.
 
-				if (registry.has<NameComponent>(entity))
+				if (registry.all_of<NameComponent>(entity))
 				{
 					nodeOpen = ImGui::TreeNodeEx("EntityTreeNode", nodeFlags, registry.get<NameComponent>(entity).name.c_str());
 				}
