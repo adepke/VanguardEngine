@@ -41,7 +41,7 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 		if (!foundReusable)
 		{
 			// Fallback to creating a new buffer.
-			VGLog(Rendering) << "Did not find a suitable buffer for transient reuse, creating a new buffer.";
+			VGLog(Rendering) << "Did not find a suitable buffer for transient reuse, creating a new buffer for '" << info.second << "'.";
 
 			bool hasConstantBuffer = false;
 			bool hasShaderResource = false;
@@ -124,7 +124,7 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 		if (!foundReusable)
 		{
 			// Fallback to creating a new texture.
-			VGLog(Rendering) << "Did not find a suitable texture for transient reuse, creating a new texture.";
+			VGLog(Rendering) << "Did not find a suitable texture for transient reuse, creating a new texture for '" << info.second << "'.";
 
 			// We can't have both depth stencil and render target, so brute force search all passes to determine
 			// which binding we need.
