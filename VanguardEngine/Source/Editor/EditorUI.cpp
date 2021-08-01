@@ -253,7 +253,7 @@ void EditorUI::DrawEntityPropertyViewer(entt::registry& registry)
 			{
 				uint32_t componentCount = 0;
 
-				for (auto& [metaID, renderFunction] : EntityReflection::componentMap)
+				for (auto& [metaID, renderFunction] : EntityReflection::componentList)
 				{
 					entt::id_type metaList[] = { metaID };
 

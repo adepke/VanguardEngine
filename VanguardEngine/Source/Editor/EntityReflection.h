@@ -6,14 +6,15 @@
 
 #include <entt/entt.hpp>
 
-#include <map>
+#include <vector>
+#include <utility>
 #include <functional>
 
 namespace EntityReflection
 {
 	// #TODO: Look into std::reflect for automated component discovery and reflection.
 
-	inline const std::map<entt::id_type, std::function<void(entt::registry&, entt::entity)>> componentMap = {
+	inline const std::vector<std::pair<entt::id_type, std::function<void(entt::registry&, entt::entity)>>> componentList = {
 		{ entt::type_id<NameComponent>().hash(), &ComponentProperties::RenderNameComponent },
 		{ entt::type_id<TransformComponent>().hash(), &ComponentProperties::RenderTransformComponent },
 		{ entt::type_id<ControlComponent>().hash(), &ComponentProperties::RenderControlComponent },
