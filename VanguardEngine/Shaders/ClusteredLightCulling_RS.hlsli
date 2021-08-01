@@ -4,5 +4,4 @@
 	"RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT)," \
 	"RootConstants(b0, num32BitConstants = 8)," \
 	"CBV(b1)," \
-	"UAV(u0)," \
-	"UAV(u1)"
+	"UAV(u0)"

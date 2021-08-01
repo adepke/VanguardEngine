@@ -25,7 +25,7 @@ RWStructuredBuffer<uint> testing : register(u3);
 ConstantBuffer<Camera> camera : register(b1);
 
 StructuredBuffer<uint> denseClusterList : register(t0);
-StructuredBuffer<AABB> clusterAABBs : register(t1);
+StructuredBuffer<AABB> clusterBounds : register(t1);
 ConstantBuffer<LightCount> lightCount : register(b0);
 StructuredBuffer<Light> lights : register(t2);
 RWStructuredBuffer<uint> lightCounter : register(u0);
@@ -64,7 +64,7 @@ void ComputeLightBinsMain(uint3 dispatchId : SV_DispatchThreadID, uint3 groupId 
         localLightCount = 0;
         
         // The dense cluster list contains cluster indices of active froxels. Assuming 1-dimensional dispatch.
-        froxelBounds = clusterAABBs[denseClusterList[groupId.x]];
+        froxelBounds = clusterBounds[denseClusterList[groupId.x]];
     }
     
     GroupMemoryBarrierWithGroupSync();

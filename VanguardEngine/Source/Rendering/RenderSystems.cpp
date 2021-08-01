@@ -18,7 +18,7 @@ XMMATRIX SpectatorCameraView(TransformComponent& transform, const CameraComponen
 {
 	VGScopedCPUStat("Spectator Camera View");
 
-	const auto movementSpeed = 250.f * (moveSprint ? 3.f : 1.f) * deltaTime;
+	const auto movementSpeed = 25.f * (moveSprint ? 3.f : 1.f) * deltaTime;
 	constexpr auto rotationSpeed = 0.4f;
 
 	transform.rotation.y += deltaPitch * rotationSpeed * -1.f;
@@ -29,8 +29,8 @@ XMMATRIX SpectatorCameraView(TransformComponent& transform, const CameraComponen
 
 	const auto rotationMatrix = XMMatrixRotationX(-transform.rotation.x) * XMMatrixRotationY(-transform.rotation.y) * XMMatrixRotationZ(-transform.rotation.z);
 
-	const auto forward = XMVector3TransformCoord(XMVectorSet(1.f, 0.f, 0.f, 0.f), rotationMatrix);
-	const auto upward = XMVector3TransformCoord(XMVectorSet(0.f, 0.f, 1.f, 0.f), rotationMatrix);
+	const auto forward = XMVector4Transform(XMVectorSet(1.f, 0.f, 0.f, 0.f), rotationMatrix);
+	const auto upward = XMVector4Transform(XMVectorSet(0.f, 0.f, 1.f, 0.f), rotationMatrix);
 	const auto across = XMVector3Cross(upward, forward);
 
 	const auto forwardMovement = (moveForward ? 1.f : 0.f) - (moveBackward ? 1.f : 0.f);
@@ -44,10 +44,7 @@ XMMATRIX SpectatorCameraView(TransformComponent& transform, const CameraComponen
 
 	XMStoreFloat3(&transform.translation, eyePosition);
 
-	const auto focusDirection = XMVector3Normalize(XMVector3TransformCoord(XMVectorSet(1.f, 0.f, 0.f, 0.f), rotationMatrix));
-	const auto focusPosition = eyePosition + focusDirection;
-
-	return XMMatrixLookAtRH(eyePosition, focusPosition, upward);
+	return XMMatrixLookAtRH(eyePosition, eyePosition + forward, upward);
 }
 
 void CameraSystem::Update(entt::registry& registry, float deltaTime)
