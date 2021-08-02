@@ -88,6 +88,7 @@ void ComputeLightBinsMain(uint3 dispatchId : SV_DispatchThreadID, uint3 groupId 
     // Allocate a chunk from the global light list to copy our local list into and set the offset/count into the global list for the froxel.
     if (groupIndex == 0)
     {
+        localLightCount = min(localLightCount, MAX_LIGHTS_PER_FROXEL);  // Prevent overflowing light bins.
         InterlockedAdd(lightCounter[0], localLightCount, globalLightListOffset);
         clusterLightInfo[denseClusterList[groupId.x]] = uint2(globalLightListOffset, localLightCount);
     }
