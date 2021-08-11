@@ -309,6 +309,9 @@ BufferHandle Renderer::CreateLightBuffer(const entt::registry& registry)
 	const auto bufferHandle = device->GetResourceManager().Create(lightBufferDescription, VGText("Light buffer"));
 	device->GetResourceManager().AddFrameResource(device->GetFrameIndex(), bufferHandle);
 
+	std::vector<uint8_t> instanceData{};
+	instanceData.resize(viewSize * sizeof(Light));
+
 	size_t index = 0;
 	lightView.each([&](auto entity, const auto& transform, const auto& light)
 	{
@@ -319,14 +322,12 @@ BufferHandle Renderer::CreateLightBuffer(const entt::registry& registry)
 			.luminance = 1.f  // #TEMP
 		};
 
-		std::vector<uint8_t> instanceData{};
-		instanceData.resize(sizeof(Light));
-		std::memcpy(instanceData.data(), &instance, instanceData.size());
-
-		device->GetResourceManager().Write(bufferHandle, instanceData, index * sizeof(Light));
+		std::memcpy(instanceData.data() + index * sizeof(instance), &instance, sizeof(instance));
 
 		++index;
 	});
+
+	device->GetResourceManager().Write(bufferHandle, instanceData);
 
 	VGAssert(viewSize == index, "Mismatched entity count during buffer creation.");
 
