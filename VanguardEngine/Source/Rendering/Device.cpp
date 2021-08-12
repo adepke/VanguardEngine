@@ -531,6 +531,13 @@ void RenderDevice::Synchronize()
 	++syncValues[GetFrameIndex()];
 }
 
+void RenderDevice::Present()
+{
+	VGScopedCPUStat("Present");
+
+	swapChain->Present(vSync, 0);
+}
+
 void RenderDevice::AdvanceCPU()
 {
 	VGScopedCPUStat("CPU Frame Advance");

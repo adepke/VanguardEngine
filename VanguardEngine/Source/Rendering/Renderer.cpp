@@ -609,7 +609,7 @@ void Renderer::Render(entt::registry& registry)
 	graph.Execute(device.get());
 
 	// #TODO: Move to a present pass.
-	device->GetSwapChain()->Present(device->vSync, 0);
+	device->Present();
 
 	device->AdvanceGPU();
 }

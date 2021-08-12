@@ -98,6 +98,8 @@ public:
 	// Fully sync the GPU, flushes all commands.
 	void Synchronize();
 
+	void Present();
+
 	void AdvanceCPU();  // Steps the CPU frame counter, blocking sync with GPU.
 	void AdvanceGPU();  // Steps the GPU frame counter.
 	size_t GetFrameIndex() const noexcept { return frame % RenderDevice::frameCount; }
