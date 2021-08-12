@@ -103,7 +103,7 @@ void ClusteredLightCulling::Initialize(RenderDevice* inDevice)
 	clusterBounds = device->GetResourceManager().Create(clusterBoundsDesc, VGText("Cluster bounds"));
 
 	ComputePipelineStateDescription boundsStateDesc;
-	boundsStateDesc.shader = { "ClusteredLightCulling_CS.hlsl", "ComputeClusterBoundsMain" };
+	boundsStateDesc.shader = { "ClusterBounds.hlsl", "ComputeClusterBoundsMain" };
 	boundsStateDesc.macros.emplace_back("FROXEL_SIZE", froxelSize);
 	boundsState.Build(*device, boundsStateDesc);
 
