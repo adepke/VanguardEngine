@@ -5,13 +5,17 @@
 
 #include "Camera.hlsli"
 
-// Assumes that one dispatch thread is assigned to each cluster.
-uint DispatchToClusterIndex(uint3 dimensions, uint3 dispatchId)
+uint ClusterId2Index(uint3 dimensions, uint3 id)
 {
-    return dispatchId.x + (dimensions.x * (dispatchId.y + dimensions.y * dispatchId.z));
+    return id.x + (dimensions.x * (id.y + dimensions.y * id.z));
 }
 
-uint3 DrawToClusterIndex3D(uint froxelSize, float logY, Camera camera, float2 positionSS, float depthViewSpace)
+uint3 ClusterIndex2Id(uint3 dimensions, uint index)
+{
+    return uint3(index % dimensions.x, index % (dimensions.x * dimensions.y) / dimensions.x, index / (dimensions.x * dimensions.y));
+}
+
+uint3 DrawToClusterId(uint froxelSize, float logY, Camera camera, float2 positionSS, float depthViewSpace)
 {
     return uint3(positionSS.x / froxelSize, positionSS.y / froxelSize, log(-depthViewSpace / camera.nearPlane) * logY);
 }

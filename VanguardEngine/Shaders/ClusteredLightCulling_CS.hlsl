@@ -23,13 +23,13 @@ RWStructuredBuffer<AABB> clusterBounds : register(u0);
 [numthreads(64, 1, 1)]
 void ComputeClusterBoundsMain(uint3 dispatchId : SV_DispatchThreadID)
 {
-    uint3 clusterIndex = uint3(dispatchId.x % clusterData.gridDimensions.x, dispatchId.x % (clusterData.gridDimensions.x * clusterData.gridDimensions.y) / clusterData.gridDimensions.x, dispatchId.x / (clusterData.gridDimensions.x * clusterData.gridDimensions.y));
+    uint3 clusterId = ClusterIndex2Id(clusterData.gridDimensions, dispatchId.x);
     
-    float3 topLeft = ClipToViewSpace(camera, UvToClipSpace((clusterIndex.xy * FROXEL_SIZE) / (float2)clusterData.resolution)).xyz;
-    float3 bottomRight = ClipToViewSpace(camera, UvToClipSpace(((clusterIndex.xy + 1) * FROXEL_SIZE) / (float2)clusterData.resolution)).xyz;
+    float3 topLeft = ClipToViewSpace(camera, UvToClipSpace((clusterId.xy * FROXEL_SIZE) / (float2)clusterData.resolution)).xyz;
+    float3 bottomRight = ClipToViewSpace(camera, UvToClipSpace(((clusterId.xy + 1) * FROXEL_SIZE) / (float2)clusterData.resolution)).xyz;
     
-    Plane near = { 0.f, 0.f, 1.f, -camera.nearPlane * pow(abs(clusterData.nearK), clusterIndex.z) };
-    Plane far = { 0.f, 0.f, 1.f, -camera.nearPlane * pow(abs(clusterData.nearK), clusterIndex.z + 1) };
+    Plane near = { 0.f, 0.f, 1.f, -camera.nearPlane * pow(abs(clusterData.nearK), clusterId.z) };
+    Plane far = { 0.f, 0.f, 1.f, -camera.nearPlane * pow(abs(clusterData.nearK), clusterId.z + 1) };
     
     float3 origin = float3(0.f, 0.f, 0.f);
     

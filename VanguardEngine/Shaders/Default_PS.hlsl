@@ -94,8 +94,8 @@ Output main(Input input)
     materialSample.occlusion = ambientOcclusion;
     materialSample.emissive = emissive;
 	
-    uint3 clusterIndex = DrawToClusterIndex3D(FROXEL_SIZE, clusterData.logY, camera, input.positionSS.xy, input.depthVS);
-    uint2 lightInfo = clusteredLightInfo[DispatchToClusterIndex(clusterData.dimensions, clusterIndex)];
+    uint3 clusterId = DrawToClusterId(FROXEL_SIZE, clusterData.logY, camera, input.positionSS.xy, input.depthVS);
+    uint2 lightInfo = clusteredLightInfo[ClusterId2Index(clusterData.dimensions, clusterId)];
     for (uint i = 0; i < lightInfo.y; ++i)
     {
         uint lightIndex = clusteredLightList[lightInfo.x + i];

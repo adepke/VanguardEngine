@@ -60,6 +60,6 @@ VSOutput VSMain(uint vertexId : SV_VertexID)
 void PSMain(VSOutput input)
 {
     // Fully depth culled clusters will have their visibility flag set to false.
-    uint3 clusterIndex = DrawToClusterIndex3D(FROXEL_SIZE, clusterData.logY, camera, input.positionCS.xy, input.depthVS);
-    clusterVisibility[DispatchToClusterIndex(clusterData.gridDimensions, clusterIndex)] = true;
+    uint3 clusterId = DrawToClusterId(FROXEL_SIZE, clusterData.logY, camera, input.positionCS.xy, input.depthVS);
+    clusterVisibility[ClusterId2Index(clusterData.gridDimensions, clusterId)] = true;
 }
