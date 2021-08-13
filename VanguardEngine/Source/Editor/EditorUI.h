@@ -3,16 +3,22 @@
 #pragma once
 
 #include <Rendering/ResourceHandle.h>
-#include <Utility/Singleton.h>
 
 #include <entt/entt.hpp>
+#include <imgui.h>
 
 #include <deque>
+
+enum class RenderOverlay
+{
+	None,
+	Clusters
+};
 
 class RenderDevice;
 class Atmosphere;
 
-class EditorUI : public Singleton<EditorUI>
+class EditorUI
 {
 private:
 	entt::entity hierarchySelectedEntity = entt::null;
@@ -24,12 +30,25 @@ private:
 	bool performanceMetricsOpen = true;
 	bool renderGraphOpen = true;
 	bool atmosphereControlsOpen = true;
+	bool renderVisualizerOpen = true;
 
 	// Focus states.
 	bool entityPropertyViewerFocus = false;
 
 	std::deque<float> frameTimes;
 	size_t frameTimeHistoryCount = 0;
+
+	// Scene drawing information.
+	float sceneWidthUV;
+	float sceneHeightUV;
+	ImVec2 sceneViewportMin;
+	ImVec2 sceneViewportMax;
+
+	bool renderOverlayOnScene = false;
+
+public:
+	// Debug/visualization overlay state.
+	RenderOverlay activeOverlay = RenderOverlay::None;
 
 private:
 	void DrawMenu();
@@ -44,4 +63,5 @@ public:
 	void DrawPerformanceMetrics(float frameTimeMs);
 	void DrawRenderGraph(RenderDevice* device, TextureHandle depthStencil, TextureHandle scene);
 	void DrawAtmosphereControls(Atmosphere& atmosphere);
+	void DrawRenderVisualizer(RenderDevice* device, TextureHandle overlay);
 };

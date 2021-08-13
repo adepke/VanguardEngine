@@ -189,7 +189,6 @@ VGWarningPop
 
 VGDeclareLogSubsystem(Asset);
 VGDeclareLogSubsystem(Core);
-VGDeclareLogSubsystem(Editor);
 VGDeclareLogSubsystem(Rendering);
 VGDeclareLogSubsystem(Threading);
 VGDeclareLogSubsystem(Utility);

@@ -8,7 +8,6 @@
 #include <Editor/ImGuiExtensions.h>
 #include <Rendering/Atmosphere.h>
 
-#include <imgui.h>
 #include <imgui_internal.h>
 
 #include <algorithm>
@@ -25,6 +24,7 @@ void EditorUI::DrawMenu()
 			ImGui::MenuItem("Performance Metrics", nullptr, &performanceMetricsOpen);
 			ImGui::MenuItem("Render Graph", nullptr, &renderGraphOpen);
 			ImGui::MenuItem("Atmosphere Controls", nullptr, &atmosphereControlsOpen);
+			ImGui::MenuItem("Render Visualizer", nullptr, &renderVisualizerOpen);
 
 			ImGui::EndMenu();
 		}
@@ -150,6 +150,11 @@ void EditorUI::DrawScene(RenderDevice* device, entt::registry& registry, Texture
 		const auto widthUV = (1.f - (viewportSize.x / sceneDescription.width)) * 0.5f;
 		const auto heightUV = (1.f - (viewportSize.y / sceneDescription.height)) * 0.5f;
 
+		sceneWidthUV = widthUV;
+		sceneHeightUV = heightUV;
+		sceneViewportMin = ImGui::GetWindowPos() + ImGui::GetWindowContentRegionMin();
+		sceneViewportMax = ImGui::GetWindowPos() + ImGui::GetWindowContentRegionMax();
+
 		ImGui::Image(device, sceneTexture, { 1.f, 1.f }, { widthUV, heightUV }, { 1.f + widthUV, 1.f + heightUV });
 
 		// Double clicking the viewport grants control.
@@ -163,6 +168,21 @@ void EditorUI::DrawScene(RenderDevice* device, entt::registry& registry, Texture
 					registry.emplace<ControlComponent>(entity);
 				}
 			});
+		}
+
+		// Use a dummy object to get proper drag drop bounds.
+		const float padding = 4.f;
+		ImGui::SetCursorPos(ImGui::GetWindowContentRegionMin() + ImVec2{ padding, padding });
+		ImGui::Dummy(ImGui::GetWindowContentRegionMax() - ImGui::GetWindowContentRegionMin() - ImVec2{ padding * 2.f, padding * 2.f });
+
+		if (ImGui::BeginDragDropTarget())
+		{
+			if (const auto* payload = ImGui::AcceptDragDropPayload("RenderOverlay", ImGuiDragDropFlags_None))
+			{
+				renderOverlayOnScene = true;
+			}
+
+			ImGui::EndDragDropTarget();
 		}
 	}
 
@@ -350,6 +370,111 @@ void EditorUI::DrawAtmosphereControls(Atmosphere& atmosphere)
 			if (dirty)
 			{
 				atmosphere.MarkModelDirty();
+			}
+		}
+
+		ImGui::End();
+	}
+}
+
+void EditorUI::DrawRenderVisualizer(RenderDevice* device, TextureHandle overlay)
+{
+	if (renderVisualizerOpen)
+	{
+		if (ImGui::Begin("Render Visualizer", &renderVisualizerOpen))
+		{
+			ImGui::Combo("Active overlay", (int*)&activeOverlay, [](void*, int index, const char** output)
+			{
+				auto overlay = (RenderOverlay)index;
+
+				switch (overlay)
+				{
+				case RenderOverlay::None: *output = "None"; break;
+				case RenderOverlay::Clusters: *output = "Clusters"; break;
+				default: return false;
+				}
+
+				return true;
+			}, nullptr, 2);  // Note: Make sure to update the hardcoded count when new overlays are added.
+
+			ImGui::Separator();
+
+			if (activeOverlay != RenderOverlay::None)
+			{
+				if (!renderOverlayOnScene)
+				{
+					ImGui::ImageButton(device, overlay, { 0.25f, 0.25f });
+
+					if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
+					{
+						ImGui::SetDragDropPayload("RenderOverlay", nullptr, 0);
+
+						ImGui::ImageButton(device, overlay, { 0.1f, 0.1f }, { 0.f, 0.f }, { 1.f, 1.f }, { 1.f, 1.f, 1.f, 0.5f });
+
+						ImGui::EndDragDropSource();
+					}
+				}
+
+				else
+				{
+					ImGui::Text("Overlay enabled.");
+				}
+			}
+
+			else
+			{
+				ImGui::Text("No active overlay.");
+			}
+		}
+
+		ImGui::End();
+	}
+
+	// Don't bound scene overlay rendering by the visibility of the render visualization window.
+	if (activeOverlay != RenderOverlay::None && renderOverlayOnScene)
+	{
+		const auto proxyWindowFlags =
+			ImGuiWindowFlags_NoDecoration |
+			ImGuiWindowFlags_NoScrollWithMouse |
+			ImGuiWindowFlags_NoBackground |
+			ImGuiWindowFlags_NoSavedSettings |
+			ImGuiWindowFlags_NoFocusOnAppearing |
+			ImGuiWindowFlags_NoNav |
+			ImGuiWindowFlags_NoInputs |
+			ImGuiWindowFlags_NoDocking;
+
+		ImGui::SetNextWindowPos(sceneViewportMin);
+		ImGui::SetNextWindowSize(sceneViewportMax - sceneViewportMin);
+		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 0.f, 0.f });
+		if (ImGui::Begin("Render Overlay Proxy", nullptr, proxyWindowFlags))
+		{
+			ImGui::Image(device, overlay, { 1.f, 1.f }, { sceneWidthUV, sceneHeightUV }, { 1.f + sceneWidthUV, 1.f + sceneHeightUV }, { 1.f, 1.f, 1.f, 0.25f });
+		}
+
+		ImGui::End();
+
+		ImGui::PopStyleVar();
+
+		// The overlay proxy has no input, so we need a secondary window to remove the overlay from the scene.
+		const auto overlayToolsFlags =
+			ImGuiWindowFlags_NoDecoration |
+			ImGuiWindowFlags_NoScrollWithMouse |
+			ImGuiWindowFlags_NoSavedSettings |
+			ImGuiWindowFlags_NoFocusOnAppearing |
+			ImGuiWindowFlags_NoDocking;
+
+		const char* buttonText = "Remove render overlay";
+		const auto padding = ImGui::GetStyle().WindowPadding + ImGui::GetStyle().FramePadding;
+		const auto overlayToolsWindowSize = ImGui::CalcTextSize(buttonText) + padding * 2.f;
+
+		ImGui::SetNextWindowPos(sceneViewportMax - overlayToolsWindowSize - ImVec2{ 20, 20 });
+		ImGui::SetNextWindowSize(overlayToolsWindowSize);
+		ImGui::SetNextWindowBgAlpha(0.8f);
+		if (ImGui::Begin("Render Overlay Tools", nullptr, overlayToolsFlags))
+		{
+			if (ImGui::Button(buttonText))
+			{
+				renderOverlayOnScene = false;
 			}
 		}
 

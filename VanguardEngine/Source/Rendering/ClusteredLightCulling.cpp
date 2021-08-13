@@ -153,9 +153,50 @@ void ClusteredLightCulling::Initialize(RenderDevice* inDevice)
 	binningStateDesc.shader = { "ClusterLightBinning.hlsl", "ComputeLightBinsMain" };
 	binningStateDesc.macros.emplace_back("MAX_LIGHTS_PER_FROXEL", maxLightsPerFroxel);
 	binningState.Build(*device, binningStateDesc);
+
+#if ENABLE_EDITOR
+	GraphicsPipelineStateDescription debugOverlayStateDesc{};
+	debugOverlayStateDesc.vertexShader = { "ClusterDebugOverlay.hlsl", "VSMain" };
+	debugOverlayStateDesc.pixelShader = { "ClusterDebugOverlay.hlsl", "PSMain" };
+	debugOverlayStateDesc.macros.emplace_back("FROXEL_SIZE", froxelSize);
+	debugOverlayStateDesc.macros.emplace_back("MAX_LIGHTS_PER_FROXEL", maxLightsPerFroxel);
+	debugOverlayStateDesc.blendDescription.AlphaToCoverageEnable = false;
+	debugOverlayStateDesc.blendDescription.IndependentBlendEnable = false;
+	debugOverlayStateDesc.blendDescription.RenderTarget[0].BlendEnable = false;
+	debugOverlayStateDesc.blendDescription.RenderTarget[0].LogicOpEnable = false;
+	debugOverlayStateDesc.blendDescription.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
+	debugOverlayStateDesc.blendDescription.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;
+	debugOverlayStateDesc.blendDescription.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
+	debugOverlayStateDesc.blendDescription.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
+	debugOverlayStateDesc.blendDescription.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
+	debugOverlayStateDesc.blendDescription.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
+	debugOverlayStateDesc.blendDescription.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;
+	debugOverlayStateDesc.blendDescription.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
+	debugOverlayStateDesc.rasterizerDescription.FillMode = D3D12_FILL_MODE_SOLID;
+	debugOverlayStateDesc.rasterizerDescription.CullMode = D3D12_CULL_MODE_BACK;
+	debugOverlayStateDesc.rasterizerDescription.FrontCounterClockwise = false;
+	debugOverlayStateDesc.rasterizerDescription.DepthBias = 0;
+	debugOverlayStateDesc.rasterizerDescription.DepthBiasClamp = 0.f;
+	debugOverlayStateDesc.rasterizerDescription.SlopeScaledDepthBias = 0.f;
+	debugOverlayStateDesc.rasterizerDescription.DepthClipEnable = true;
+	debugOverlayStateDesc.rasterizerDescription.MultisampleEnable = false;
+	debugOverlayStateDesc.rasterizerDescription.AntialiasedLineEnable = false;
+	debugOverlayStateDesc.rasterizerDescription.ForcedSampleCount = 0;
+	debugOverlayStateDesc.rasterizerDescription.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
+	debugOverlayStateDesc.depthStencilDescription.DepthEnable = false;
+	debugOverlayStateDesc.depthStencilDescription.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
+	debugOverlayStateDesc.depthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_NEVER;  // Opaque and transparents receive lighting, so they cannot be culled.
+	debugOverlayStateDesc.depthStencilDescription.StencilEnable = false;
+	debugOverlayStateDesc.depthStencilDescription.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
+	debugOverlayStateDesc.depthStencilDescription.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
+	debugOverlayStateDesc.depthStencilDescription.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
+	debugOverlayStateDesc.depthStencilDescription.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
+	debugOverlayStateDesc.topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+	debugOverlayState.Build(*device, debugOverlayStateDesc, false);
+#endif
 }
 
-std::pair<RenderResource, RenderResource> ClusteredLightCulling::Render(RenderGraph& graph, const entt::registry& registry, RenderResource cameraBuffer, RenderResource depthStencil, BufferHandle instanceBuffer, size_t instanceOffset, BufferHandle lights)
+ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::registry& registry, RenderResource cameraBuffer, RenderResource depthStencil, BufferHandle instanceBuffer, size_t instanceOffset, BufferHandle lights)
 {
 	VGScopedCPUStat("Clustered Light Culling");
 	VGScopedGPUStat("Clustered Light Culling", device->GetDirectContext(), device->GetDirectList().Native());
@@ -341,5 +382,45 @@ std::pair<RenderResource, RenderResource> ClusteredLightCulling::Render(RenderGr
 		list.Native()->Dispatch(gridInfo.x * gridInfo.y * gridInfo.z, 1, 1);
 	});
 
-	return { lightListTag, lightInfoTag };
+	return { lightListTag, lightInfoTag, clusterVisibilityTag };
+}
+
+RenderResource ClusteredLightCulling::RenderDebugOverlay(RenderGraph& graph, RenderResource lightInfoBuffer, RenderResource clusterVisibilityBuffer)
+{
+	auto& overlayPass = graph.AddPass("Cluster Debug Overlay", ExecutionQueue::Graphics);
+	overlayPass.Read(lightInfoBuffer, ResourceBind::SRV);
+	overlayPass.Read(clusterVisibilityBuffer, ResourceBind::SRV);
+	const auto clusterDebugOverlayTag = overlayPass.Create(TransientTextureDescription{
+		.format = DXGI_FORMAT_R16G16B16A16_FLOAT
+	}, VGText("Cluster debug overlay"));
+	overlayPass.Output(clusterDebugOverlayTag, OutputBind::RTV, false);
+	overlayPass.Bind([&, lightInfoBuffer, clusterVisibilityBuffer](CommandList& list, RenderGraphResourceManager& resources)
+	{
+		list.BindPipelineState(debugOverlayState);
+		list.BindResource("clusterLightInfo", resources.GetBuffer(lightInfoBuffer));
+		list.BindResource("clusterVisibility", resources.GetBuffer(clusterVisibilityBuffer));
+
+		struct ClusterData
+		{
+			int32_t gridDimensionsX;
+			int32_t gridDimensionsY;
+			int32_t gridDimensionsZ;
+			float logY;
+		} clusterData;
+
+		clusterData.gridDimensionsX = gridInfo.x;
+		clusterData.gridDimensionsY = gridInfo.y;
+		clusterData.gridDimensionsZ = gridInfo.z;
+		clusterData.logY = 1.f / std::log(gridInfo.depthFactor);
+
+		std::vector<uint32_t> clusterConstants;
+		clusterConstants.resize(sizeof(ClusterData) / 4);
+		std::memcpy(clusterConstants.data(), &clusterData, clusterConstants.size() * sizeof(uint32_t));
+
+		list.BindConstants("clusterData", clusterConstants);
+
+		list.DrawFullscreenQuad();
+	});
+
+	return clusterDebugOverlayTag;
 }

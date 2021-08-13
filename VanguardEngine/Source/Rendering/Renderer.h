@@ -31,12 +31,14 @@ private:
 	PipelineBuilder pipelines;  // Manages all the pipelines.
 
 	BufferHandle cameraBuffer;
-	std::unique_ptr<UserInterfaceManager> userInterface;
 
 	DescriptorHandle nullDescriptor;
 
+public:
 	float lastFrameTime = -1.f;
 
+public:
+	std::unique_ptr<UserInterfaceManager> userInterface;
 	Atmosphere atmosphere;
 	ClusteredLightCulling clusteredCulling;
 

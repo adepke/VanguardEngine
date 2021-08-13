@@ -11,10 +11,7 @@
 #include <Rendering/ShaderStructs.h>
 #include <Core/Config.h>
 #include <Rendering/RenderUtils.h>
-
-#if ENABLE_EDITOR
-#include <Editor/EditorRenderer.h>
-#endif
+#include <Editor/Editor.h>
 
 #include <vector>
 #include <utility>
@@ -436,7 +433,7 @@ void Renderer::Render(entt::registry& registry)
 	});
 
 	// #TODO: Don't have this here.
-	const auto [clusteredLightListTag, clusteredLightInfoTag] = clusteredCulling.Render(graph, registry, cameraBufferTag, depthStencilTag, instanceBuffer, instanceOffset, lightBuffer);
+	const auto clusterResources = clusteredCulling.Render(graph, registry, cameraBufferTag, depthStencilTag, instanceBuffer, instanceOffset, lightBuffer);
 	
 	auto& forwardPass = graph.AddPass("Forward Pass", ExecutionQueue::Graphics);
 	const auto outputHDRTag = forwardPass.Create(TransientTextureDescription{
@@ -444,8 +441,8 @@ void Renderer::Render(entt::registry& registry)
 	}, VGText("Output HDR sRGB"));
 	forwardPass.Read(depthStencilTag, ResourceBind::DSV);
 	forwardPass.Read(cameraBufferTag, ResourceBind::CBV);
-	forwardPass.Read(clusteredLightListTag, ResourceBind::SRV);
-	forwardPass.Read(clusteredLightInfoTag, ResourceBind::SRV);
+	forwardPass.Read(clusterResources.lightList, ResourceBind::SRV);
+	forwardPass.Read(clusterResources.lightInfo, ResourceBind::SRV);
 	forwardPass.Output(outputHDRTag, OutputBind::RTV, true);
 	forwardPass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
 	{
@@ -455,8 +452,8 @@ void Renderer::Render(entt::registry& registry)
 		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
 		list.BindResource("camera", resources.GetBuffer(cameraBufferTag));
 		list.BindResource("lights", lightBuffer);
-		list.BindResource("clusteredLightList", resources.GetBuffer(clusteredLightListTag));
-		list.BindResource("clusteredLightInfo", resources.GetBuffer(clusteredLightInfoTag));
+		list.BindResource("clusteredLightList", resources.GetBuffer(clusterResources.lightList));
+		list.BindResource("clusteredLightInfo", resources.GetBuffer(clusterResources.lightInfo));
 
 		struct ClusterData
 		{
@@ -523,8 +520,8 @@ void Renderer::Render(entt::registry& registry)
 		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
 		list.BindResource("camera", resources.GetBuffer(cameraBufferTag));
 		list.BindResource("lights", lightBuffer);
-		list.BindResource("clusteredLightList", resources.GetBuffer(clusteredLightListTag));
-		list.BindResource("clusteredLightInfo", resources.GetBuffer(clusteredLightInfoTag));
+		list.BindResource("clusteredLightList", resources.GetBuffer(clusterResources.lightList));
+		list.BindResource("clusteredLightInfo", resources.GetBuffer(clusterResources.lightInfo));
 		list.BindConstants("clusterData", clusterBufferData);
 
 		{
@@ -591,19 +588,8 @@ void Renderer::Render(entt::registry& registry)
 		list.DrawFullscreenQuad();
 	});
 
-#if ENABLE_EDITOR
-	auto& editorPass = graph.AddPass("Editor Pass", ExecutionQueue::Graphics);
-	editorPass.Read(cameraBufferTag, ResourceBind::CBV);
-	editorPass.Read(depthStencilTag, ResourceBind::SRV);
-	editorPass.Read(outputLDRTag, ResourceBind::SRV);
-	editorPass.Output(backBufferTag, OutputBind::RTV, false);
-	editorPass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
-	{
-		userInterface->NewFrame();
-		EditorRenderer::Render(device.get(), registry, lastFrameTime, resources.GetTexture(depthStencilTag), resources.GetTexture(outputLDRTag), atmosphere);
-		userInterface->Render(list, resources.GetBuffer(cameraBufferTag));
-	});
-#endif
+	// #TODO: Don't have this here.
+	Editor::Get().Render(graph, *device, *this, registry, cameraBufferTag, depthStencilTag, outputLDRTag, backBufferTag, clusterResources);
 
 	graph.Build();
 	graph.Execute(device.get());
