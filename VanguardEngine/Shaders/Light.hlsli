@@ -23,7 +23,17 @@ struct Light
 float ComputeLightRadius(Light light)
 {
     // #TEMP
-    return 1000.f;
+    return 15.f;
+}
+
+float ComputeLightAttenuation(Light light, float distance)
+{
+    // Physically correct attenuation for light in a vaccum (does not play well with clustered light culling).
+    //return 1.f / (distance * distance);
+    
+    // Note that this is not physically correct, it's used for improved behavior with clustered light culling.
+    float range = ComputeLightRadius(light);
+    return 1.f - smoothstep(range * 0.75f, range, distance);
 }
 
 struct LightSample
@@ -38,8 +48,8 @@ LightSample SampleLight(Light light, Material material, Camera camera, float3 vi
     float3 lightDirection = normalize(light.position - surfacePosition);
     float3 halfwayDirection = normalize(viewDirection + lightDirection);
 
-    float distance = length(light.position - surfacePosition) * 0.002;
-    float attenuation = 1.0 / (distance * distance);
+    float distance = length(light.position - surfacePosition);
+    float attenuation = ComputeLightAttenuation(light, distance);
     float3 radiance = light.color * attenuation;
 
     output.diffuse.rgb = BRDF(surfaceNormal, viewDirection, halfwayDirection, lightDirection, material.baseColor.rgb, material.metalness, material.roughness, radiance);
