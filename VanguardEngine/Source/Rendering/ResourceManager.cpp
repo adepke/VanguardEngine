@@ -2,7 +2,6 @@
 
 #include <Rendering/ResourceManager.h>
 #include <Rendering/Device.h>
-#include <Rendering/Resource.h>
 #include <Utility/AlignedSize.h>
 #include <Rendering/ResourceFormat.h>
 #include <Core/Config.h>
@@ -14,6 +13,11 @@
 #include <algorithm>
 #include <cmath>
 
+size_t ResourceManager::ComputeBufferWidth(const BufferDescription& description) const
+{
+	return description.size * (description.stride > 0 ? description.stride : GetResourceFormatSize(*description.format) / 8);
+}
+
 void ResourceManager::CreateResourceViews(BufferComponent& target)
 {
 	VGScopedCPUStat("Create Buffer Views");
@@ -24,7 +28,7 @@ void ResourceManager::CreateResourceViews(BufferComponent& target)
 
 		D3D12_CONSTANT_BUFFER_VIEW_DESC viewDesc{};
 		viewDesc.BufferLocation = target.Native()->GetGPUVirtualAddress();
-		viewDesc.SizeInBytes = static_cast<UINT>(AlignedSize(target.description.size * target.description.stride, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT));  // Constant buffers require alignment.
+		viewDesc.SizeInBytes = static_cast<UINT>(AlignedSize(ComputeBufferWidth(target.description), D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT));  // Constant buffers require alignment.
 
 		device->Native()->CreateConstantBufferView(&viewDesc, *target.CBV);
 	}
@@ -55,12 +59,29 @@ void ResourceManager::CreateResourceViews(BufferComponent& target)
 		viewDesc.Buffer.FirstElement = 0;
 		viewDesc.Buffer.NumElements = static_cast<UINT>(target.description.size);
 		viewDesc.Buffer.StructureByteStride = !target.description.format || *target.description.format == DXGI_FORMAT_UNKNOWN ? static_cast<UINT>(target.description.stride) : 0;  // Structured buffers must have a stride.
-		viewDesc.Buffer.CounterOffsetInBytes = 0;  // #TODO: Counter offset.
+		viewDesc.Buffer.CounterOffsetInBytes = 0;
 		viewDesc.Buffer.Flags = target.description.format == DXGI_FORMAT_R32_TYPELESS ? D3D12_BUFFER_UAV_FLAG_RAW : D3D12_BUFFER_UAV_FLAG_NONE;  // Byte address buffers (32 bit typeless) need the raw flag.
 
-		// #TODO: Support counter buffers.
+		ID3D12Resource* uavCounter = nullptr;
 
-		device->Native()->CreateUnorderedAccessView(target.Native(), nullptr, &viewDesc, *target.UAV);
+		if (target.description.uavCounter)
+		{
+			BufferDescription uavDesc{
+				.updateRate = ResourceFrequency::Static,  // Must be default heap for UAV access.
+				.bindFlags = 0,
+				.accessFlags = AccessFlag::GPUWrite | AccessFlag::CPUWrite,  // CPU write for counter resetting.
+				.size = 1,
+				.stride = 0,
+				.uavCounter = false,
+				.format = DXGI_FORMAT_R32_TYPELESS
+			};
+
+			target.counterBuffer = Create(uavDesc, VGText("UAV counter buffer"));
+			const auto& component = Get(target.counterBuffer);
+			uavCounter = component.allocation->GetResource();
+		}
+
+		device->Native()->CreateUnorderedAccessView(target.Native(), uavCounter, &viewDesc, *target.UAV);
 	}
 }
 
@@ -182,7 +203,7 @@ void ResourceManager::CreateResourceViews(TextureComponent& target)
 	}
 }
 
-void ResourceManager::NameResource(ResourcePtr<D3D12MA::Allocation>& target, const std::wstring_view name)
+void ResourceManager::SetResourceName(ResourcePtr<D3D12MA::Allocation>& target, const std::wstring_view name)
 {
 #if !BUILD_RELEASE
 	target->SetName(name.data());  // Set the name in the allocator.
@@ -262,7 +283,7 @@ void ResourceManager::Initialize(RenderDevice* inDevice, size_t bufferedFrames)
 
 		uploadResources[i] = std::move(ResourcePtr<D3D12MA::Allocation>{ allocationHandle });
 
-		NameResource(uploadResources[i], VGText("Upload heap"));
+		SetResourceName(uploadResources[i], VGText("Upload heap"));
 	}
 
 	CreateMipmapTools();
@@ -274,14 +295,18 @@ const BufferHandle ResourceManager::Create(const BufferDescription& description,
 
 	// Early validation.
 	VGAssert(description.size > 0, "Failed to create buffer, must have non-zero size.");
+	if (description.uavCounter)
+	{
+		VGAssert(description.bindFlags & BindFlag::UnorderedAccess, "Buffer cannot have a UAV counter without also having the unordered access bind flag.");
+	}
 
 	D3D12_RESOURCE_DESC resourceDesc{};
 	resourceDesc.Alignment = 0;  // Let the device determine the alignment, see: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_resource_desc#alignment
 	resourceDesc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-	resourceDesc.Width = description.size * description.stride;
+	resourceDesc.Width = ComputeBufferWidth(description);
 	resourceDesc.Height = 1;
 	resourceDesc.DepthOrArraySize = 1;
-	resourceDesc.Format = description.format ? *description.format : DXGI_FORMAT_UNKNOWN;
+	resourceDesc.Format = DXGI_FORMAT_UNKNOWN;  // Buffers must have unknown format, see: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_resource_desc#buffers
 	resourceDesc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
 	resourceDesc.MipLevels = 1;
 	resourceDesc.SampleDesc.Count = 1;
@@ -295,6 +320,12 @@ const BufferHandle ResourceManager::Create(const BufferDescription& description,
 	}
 
 	if (description.bindFlags & BindFlag::UnorderedAccess)
+	{
+		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+	}
+
+	// Counter resources need UAV access allowed.
+	else if (description.size == 1 && description.stride == 0 && description.format == DXGI_FORMAT_R32_TYPELESS && !description.uavCounter)
 	{
 		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	}
@@ -334,7 +365,7 @@ const BufferHandle ResourceManager::Create(const BufferDescription& description,
 	auto& component = Get(handle);
 
 	CreateResourceViews(component);
-	NameResource(component.allocation, name);
+	NameResource(handle, name);
 
 	return handle;
 }
@@ -467,7 +498,7 @@ const TextureHandle ResourceManager::Create(const TextureDescription& descriptio
 	auto& component = Get(handle);
 
 	CreateResourceViews(component);
-	NameResource(component.allocation, name);
+	NameResource(handle, name);
 
 	return handle;
 }
@@ -497,7 +528,7 @@ const TextureHandle ResourceManager::CreateFromSwapChain(void* surface, const st
 	component.allocation->CreateManual(static_cast<ID3D12Resource*>(surface), device->allocator->m_Pimpl);
 
 	CreateResourceViews(component);
-	NameResource(component.allocation, name);
+	NameResource(handle, name);
 
 	return handle;
 }
@@ -511,7 +542,8 @@ void ResourceManager::Write(BufferHandle target, const std::vector<uint8_t>& sou
 		VGScopedCPUStat("Buffer Write Static");
 
 		VGAssert(component.description.accessFlags & AccessFlag::CPUWrite, "Failed to write to static buffer, no CPU write access.");
-		VGAssert((component.description.size * component.description.stride) - targetOffset >= source.size(), "Failed to write to static buffer, source buffer is larger than target.");
+		VGAssert(ComputeBufferWidth(component.description) - targetOffset >= source.size(),
+			"Failed to write to static buffer, source buffer is larger than target. Buffer width: %ull, source size: %ull, offset: %ull", ComputeBufferWidth(component.description), source.size(), targetOffset);
 
 		const auto frameIndex = device->GetFrameIndex();
 
@@ -538,7 +570,8 @@ void ResourceManager::Write(BufferHandle target, const std::vector<uint8_t>& sou
 
 		VGAssert(component.state == D3D12_RESOURCE_STATE_GENERIC_READ, "Dynamic buffers must always be in the generic read state.");
 		VGAssert(component.description.accessFlags & AccessFlag::CPUWrite, "Failed to write to dynamic buffer, no CPU write access.");
-		VGAssert((component.description.size * component.description.stride) - targetOffset >= source.size(), "Failed to write to dynamic buffer, source is larger than target.");
+		VGAssert(ComputeBufferWidth(component.description) - targetOffset >= source.size(),
+			"Failed to write to dynamic buffer, source is larger than target. Buffer width: %ull, source size: %ull, offset: %ull", ComputeBufferWidth(component.description), source.size(), targetOffset);
 
 		void* mappedPtr = nullptr;
 

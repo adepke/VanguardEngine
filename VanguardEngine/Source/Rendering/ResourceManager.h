@@ -4,6 +4,7 @@
 
 #include <Rendering/Base.h>
 #include <Rendering/Resource.h>
+#include <Rendering/ResourceHandle.h>
 #include <Rendering/PipelineState.h>
 
 #include <D3D12MemAlloc.h>
@@ -31,9 +32,11 @@ private:
 	std::vector<std::vector<BufferHandle>> frameBuffers;
 	std::vector<std::vector<DescriptorHandle>> frameDescriptors;
 
+	size_t ComputeBufferWidth(const BufferDescription& description) const;
+
 	void CreateResourceViews(BufferComponent& target);
 	void CreateResourceViews(TextureComponent& target);
-	void NameResource(ResourcePtr<D3D12MA::Allocation>& target, const std::wstring_view name);
+	void SetResourceName(ResourcePtr<D3D12MA::Allocation>& target, const std::wstring_view name);
 
 	PipelineState mipmapPipeline;
 
@@ -54,6 +57,9 @@ public:
 	
 	// Creates a texture from the swap chain surface.
 	const TextureHandle CreateFromSwapChain(void* surface, const std::wstring_view name);
+
+	void NameResource(const BufferHandle handle, const std::wstring_view name);
+	void NameResource(const TextureHandle handle, const std::wstring_view name);
 
 	bool Valid(const BufferHandle handle) const;
 	bool Valid(const TextureHandle handle) const;
@@ -76,6 +82,16 @@ public:
 
 	void CleanupFrameResources(size_t frame);
 };
+
+inline void ResourceManager::NameResource(const BufferHandle handle, const std::wstring_view name)
+{
+	SetResourceName(Get(handle).allocation, name);
+}
+
+inline void ResourceManager::NameResource(const TextureHandle handle, const std::wstring_view name)
+{
+	SetResourceName(Get(handle).allocation, name);
+}
 
 inline bool ResourceManager::Valid(const BufferHandle handle) const
 {
@@ -109,6 +125,7 @@ inline void ResourceManager::Destroy(BufferHandle handle)
 	if (component.CBV) component.CBV->Free();
 	if (component.SRV) component.SRV->Free();
 	if (component.UAV) component.UAV->Free();
+	if (registry.valid(component.counterBuffer.handle)) Destroy(component.counterBuffer);
 
 	registry.destroy(handle.handle);
 }

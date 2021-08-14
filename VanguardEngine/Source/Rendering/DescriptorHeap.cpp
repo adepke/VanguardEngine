@@ -2,6 +2,9 @@
 
 #include <Rendering/DescriptorHeap.h>
 #include <Rendering/Device.h>
+#include <Rendering/Resource.h>
+
+#include <limits>
 
 void DescriptorHeapBase::Create(RenderDevice* device, DescriptorType type, size_t descriptors, bool visible)
 {
@@ -30,9 +33,14 @@ void DescriptorHeapBase::Create(RenderDevice* device, DescriptorType type, size_
 	}
 
 	cpuHeapStart = heap->GetCPUDescriptorHandleForHeapStart().ptr;
-	gpuHeapStart = heap->GetGPUDescriptorHandleForHeapStart().ptr;
+	gpuHeapStart = std::numeric_limits<size_t>::max();  // Non-visible heaps cannot call GetGPUDescriptorHandleForHeapStart().
 	descriptorSize = device->Native()->GetDescriptorHandleIncrementSize(heapType);
 	totalDescriptors = descriptors;
+
+	if (visible)
+	{
+		gpuHeapStart = heap->GetGPUDescriptorHandleForHeapStart().ptr;
+	}
 }
 
 DescriptorHandle FreeQueueDescriptorHeap::Allocate()
@@ -42,7 +50,7 @@ DescriptorHandle FreeQueueDescriptorHeap::Allocate()
 	// If we have readily available space in the heap, use that first.
 	if (allocatedDescriptors < totalDescriptors)
 	{
-		allocatedDescriptors++;
+		++allocatedDescriptors;
 
 		const auto offset = (allocatedDescriptors - 1) * descriptorSize;
 

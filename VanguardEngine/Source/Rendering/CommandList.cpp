@@ -138,7 +138,7 @@ void CommandList::BindDescriptorAllocator(DescriptorAllocator& allocator)
 void CommandList::BindConstants(const std::string& bindName, const std::vector<uint32_t>& data, size_t offset)
 {
 	VGAssert(boundPipeline, "Attempted to bind resource without first binding a pipeline.");
-	VGAssert(boundPipeline->GetReflectionData()->resourceIndexMap.contains(bindName), "Shader does not contain constant bind '%s'", bindName);
+	VGAssert(boundPipeline->GetReflectionData()->resourceIndexMap.contains(bindName), "Shader does not contain constant bind '%s'", bindName.c_str());
 
 	const auto& bindMetadata = boundPipeline->GetReflectionData()->resourceIndexMap.at(bindName);  // Can't use operator[] due to lack of const-ness.
 	switch (bindMetadata.type)
@@ -156,7 +156,7 @@ void CommandList::BindConstants(const std::string& bindName, const std::vector<u
 
 		break;
 	default:
-		VGAssert(false, "Invalid binding, attempting to bind constants to binding '%s', where the bind type is '%i'.", bindName, bindMetadata.type);
+		VGAssert(false, "Invalid binding, attempting to bind constants to binding '%s', where the bind type is '%i'.", bindName.c_str(), bindMetadata.type);
 		break;
 	}
 }
@@ -164,7 +164,7 @@ void CommandList::BindConstants(const std::string& bindName, const std::vector<u
 void CommandList::BindResource(const std::string& bindName, BufferHandle handle, size_t offset)
 {
 	VGAssert(boundPipeline, "Attempted to bind resource without first binding a pipeline.");
-	VGAssert(boundPipeline->GetReflectionData()->resourceIndexMap.contains(bindName), "Shader does not contain resource bind '%s'", bindName);
+	VGAssert(boundPipeline->GetReflectionData()->resourceIndexMap.contains(bindName), "Shader does not contain resource bind '%s'", bindName.c_str());
 
 	auto& bufferComponent = device->GetResourceManager().Get(handle);
 
@@ -208,7 +208,7 @@ void CommandList::BindResource(const std::string& bindName, BufferHandle handle,
 
 		break;
 	default:
-		VGAssert(false, "Invalid binding, attempting to bind buffer to binding '%s', where the bind type is '%i'.", bindName, bindMetadata.type);
+		VGAssert(false, "Invalid binding, attempting to bind buffer to binding '%s', where the bind type is '%i'.", bindName.c_str(), bindMetadata.type);
 		break;
 	}
 }
@@ -216,7 +216,7 @@ void CommandList::BindResource(const std::string& bindName, BufferHandle handle,
 void CommandList::BindResourceTable(const std::string& bindName, D3D12_GPU_DESCRIPTOR_HANDLE descriptor)
 {
 	VGAssert(boundPipeline, "Attempted to bind resource without first binding a pipeline.");
-	VGAssert(boundPipeline->GetReflectionData()->resourceIndexMap.contains(bindName), "Shader does not contain resource table bind '%s'", bindName);
+	VGAssert(boundPipeline->GetReflectionData()->resourceIndexMap.contains(bindName), "Shader does not contain resource table bind '%s'", bindName.c_str());
 
 	const auto& bindMetadata = boundPipeline->GetReflectionData()->resourceIndexMap.at(bindName);  // Can't use operator[] due to lack of const-ness.
 

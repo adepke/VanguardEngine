@@ -4,6 +4,8 @@
 #include <Rendering/Device.h>
 #include <Rendering/Resource.h>
 
+#include <vector>
+
 #define STB_IMAGE_IMPLEMENTATION
 #include <stb_image.h>
 

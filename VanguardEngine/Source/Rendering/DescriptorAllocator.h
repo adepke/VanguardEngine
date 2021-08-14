@@ -17,6 +17,7 @@ private:
 	RenderDevice* device;
 
 	FreeQueueDescriptorHeap defaultHeap;
+	FreeQueueDescriptorHeap defaultNonVisibleHeap;
 	FreeQueueDescriptorHeap renderTargetHeap;
 	FreeQueueDescriptorHeap depthStencilHeap;
 
@@ -24,6 +25,7 @@ public:
 	void Initialize(RenderDevice* inDevice, size_t shaderDescriptors, size_t renderTargetDescriptors, size_t depthStencilDescriptors);
 
 	DescriptorHandle Allocate(DescriptorType type);
+	DescriptorHandle AllocateNonVisible();  // Used to obtain a default descriptor in a non-visible heap.
 
 	D3D12_GPU_DESCRIPTOR_HANDLE GetBindlessHeap() const;
 	

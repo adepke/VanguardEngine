@@ -16,6 +16,10 @@ mono_crash.*
 # Build results
 Build/
 
+# Vcpkg installed libs, but keep the Tracy scripts
+vcpkg/
+!install_vcpkg_dependencies.bat
+
 # Visual Studio cache/options directory
 .vs/
 

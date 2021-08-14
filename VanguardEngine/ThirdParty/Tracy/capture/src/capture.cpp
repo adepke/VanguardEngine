@@ -19,7 +19,10 @@
 #include "../../server/TracyPrint.hpp"
 #include "../../server/TracyStackFrames.hpp"
 #include "../../server/TracyWorker.hpp"
-#include "../../getopt/getopt.h"
+
+#ifdef _WIN32
+#  include "../../getopt/getopt.h"
+#endif
 
 
 bool disconnect = false;
@@ -245,7 +248,7 @@ int main( int argc, char** argv )
     auto f = std::unique_ptr<tracy::FileWrite>( tracy::FileWrite::Open( output ) );
     if( f )
     {
-        worker.Write( *f );
+        worker.Write( *f, false );
         printf( " \033[32;1mdone!\033[0m\n" );
         f->Finish();
         const auto stats = f->GetCompressionStatistics();

@@ -2,14 +2,14 @@
 
 #pragma once
 
-#include <Rendering/Resource.h>
+#include <Rendering/Base.h>
 #include <Rendering/Shader.h>
+#include <Rendering/ShaderMacro.h>
 
 #include <filesystem>
 #include <map>
 #include <utility>
-
-#include <Core/Windows/DirectX12Minimal.h>
+#include <vector>
 
 class RenderDevice;
 
@@ -17,6 +17,7 @@ struct GraphicsPipelineStateDescription
 {
 	std::pair<std::filesystem::path, std::string> vertexShader;
 	std::pair<std::filesystem::path, std::string> pixelShader;
+	std::vector<ShaderMacro> macros;
 	D3D12_BLEND_DESC blendDescription;
 	D3D12_RASTERIZER_DESC rasterizerDescription;
 	D3D12_DEPTH_STENCIL_DESC depthStencilDescription;
@@ -26,6 +27,7 @@ struct GraphicsPipelineStateDescription
 struct ComputePipelineStateDescription
 {
 	std::pair<std::filesystem::path, std::string> shader;
+	std::vector<ShaderMacro> macros;
 };
 
 struct PipelineStateReflection
@@ -61,7 +63,7 @@ private:
 
 	void ReflectRootSignature();
 
-	void CreateShaders(RenderDevice& device);
+	void CreateShaders(RenderDevice& device, const std::vector<ShaderMacro>& macros);
 	void CreateRootSignature(RenderDevice& device);
 
 public:

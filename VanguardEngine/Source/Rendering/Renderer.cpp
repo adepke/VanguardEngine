@@ -8,44 +8,15 @@
 #include <Rendering/CommandList.h>
 #include <Rendering/RenderGraph.h>
 #include <Rendering/RenderPass.h>
+#include <Rendering/ShaderStructs.h>
 #include <Core/Config.h>
-
-#if ENABLE_EDITOR
-#include <Editor/EditorRenderer.h>
-#endif
+#include <Rendering/RenderUtils.h>
+#include <Editor/Editor.h>
 
 #include <vector>
 #include <utility>
 #include <cstring>
-
-// Per-entity data.
-struct EntityInstance
-{
-	// #TODO: Create from some form of shader interop.
-
-	XMMATRIX worldMatrix;
-};
-
-struct Camera
-{
-	XMFLOAT4 position;  // World space.
-	XMMATRIX view;
-	XMMATRIX projection;
-	XMMATRIX inverseView;
-	XMMATRIX inverseProjection;
-	float nearPlane;
-	float farPlane;
-	float fieldOfView;  // Horizontal, radians.
-	float aspectRatio;
-};
-
-struct Light
-{
-	XMFLOAT3 position;
-	uint32_t type;
-	XMFLOAT3 color;
-	uint32_t padding;
-};
+#include <cmath>
 
 void Renderer::UpdateCameraBuffer(const entt::registry& registry)
 {
@@ -70,8 +41,8 @@ void Renderer::UpdateCameraBuffer(const entt::registry& registry)
 	bufferData.position = XMFLOAT4{ translation.x, translation.y, translation.z, 0.f };
 	bufferData.view = globalViewMatrix;
 	bufferData.projection = globalProjectionMatrix;
-	bufferData.inverseView = XMMatrixTranspose(XMMatrixInverse(nullptr, bufferData.view));
-	bufferData.inverseProjection = XMMatrixTranspose(XMMatrixInverse(nullptr, bufferData.projection));
+	bufferData.inverseView = XMMatrixInverse(nullptr, bufferData.view);
+	bufferData.inverseProjection = XMMatrixInverse(nullptr, bufferData.projection);
 	bufferData.nearPlane = nearPlane;
 	bufferData.farPlane = farPlane;
 	bufferData.fieldOfView = fieldOfView;
@@ -132,6 +103,7 @@ void Renderer::CreatePipelines()
 
 	forwardStateDesc.vertexShader = { "Default_VS", "main" };
 	forwardStateDesc.pixelShader = { "Default_PS", "main" };
+	forwardStateDesc.macros.emplace_back("FROXEL_SIZE", clusteredCulling.froxelSize);
 
 	forwardStateDesc.blendDescription.AlphaToCoverageEnable = false;
 	forwardStateDesc.blendDescription.IndependentBlendEnable = false;
@@ -287,14 +259,13 @@ std::pair<BufferHandle, size_t> Renderer::CreateInstanceBuffer(const entt::regis
 	VGScopedCPUStat("Create Instance Buffer");
 
 	const auto instanceView = registry.view<const TransformComponent, const MeshComponent>();
-	const auto viewSize = instanceView.size();
+	const auto viewSize = instanceView.size_hint();
 	const auto [bufferHandle, bufferOffset] = device->FrameAllocate(sizeof(EntityInstance) * viewSize);
 
 	size_t index = 0;
 	instanceView.each([&](auto entity, const auto& transform, const auto&)
 	{
 		const auto scaling = XMVectorSet(transform.scale.x, transform.scale.y, transform.scale.z, 0.f);
-		const auto rotation = XMVectorSet(transform.rotation.x, transform.rotation.y, transform.rotation.z, 0.f);
 		const auto translation = XMVectorSet(transform.translation.x, transform.translation.y, transform.translation.z, 0.f);
 
 		const auto scalingMat = XMMatrixScalingFromVector(scaling);
@@ -323,7 +294,7 @@ BufferHandle Renderer::CreateLightBuffer(const entt::registry& registry)
 	VGScopedCPUStat("Create Light Buffer");
 
 	const auto lightView = registry.view<const TransformComponent, const LightComponent>();
-	const auto viewSize = lightView.size();
+	const auto viewSize = lightView.size_hint();
 
 	BufferDescription lightBufferDescription;
 	lightBufferDescription.updateRate = ResourceFrequency::Dynamic;
@@ -335,23 +306,25 @@ BufferHandle Renderer::CreateLightBuffer(const entt::registry& registry)
 	const auto bufferHandle = device->GetResourceManager().Create(lightBufferDescription, VGText("Light buffer"));
 	device->GetResourceManager().AddFrameResource(device->GetFrameIndex(), bufferHandle);
 
+	std::vector<uint8_t> instanceData{};
+	instanceData.resize(viewSize * sizeof(Light));
+
 	size_t index = 0;
 	lightView.each([&](auto entity, const auto& transform, const auto& light)
 	{
 		Light instance{
 			.position = transform.translation,
 			.type = 0,
-			.color = light.color
+			.color = light.color,
+			.luminance = 1.f  // #TEMP
 		};
 
-		std::vector<uint8_t> instanceData{};
-		instanceData.resize(sizeof(Light));
-		std::memcpy(instanceData.data(), &instance, instanceData.size());
-
-		device->GetResourceManager().Write(bufferHandle, instanceData, index * sizeof(Light));
+		std::memcpy(instanceData.data() + index * sizeof(instance), &instance, sizeof(instance));
 
 		++index;
 	});
+
+	device->GetResourceManager().Write(bufferHandle, instanceData);
 
 	VGAssert(viewSize == index, "Mismatched entity count during buffer creation.");
 
@@ -395,7 +368,10 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 
 	CreatePipelines();
 
+	RenderUtils::Get().Initialize(device.get());
+
 	atmosphere.Initialize(device.get());
+	clusteredCulling.Initialize(device.get());
 }
 
 void Renderer::Render(entt::registry& registry)
@@ -455,6 +431,9 @@ void Renderer::Render(entt::registry& registry)
 			++entityIndex;
 		});
 	});
+
+	// #TODO: Don't have this here.
+	const auto clusterResources = clusteredCulling.Render(graph, registry, cameraBufferTag, depthStencilTag, instanceBuffer, instanceOffset, lightBuffer);
 	
 	auto& forwardPass = graph.AddPass("Forward Pass", ExecutionQueue::Graphics);
 	const auto outputHDRTag = forwardPass.Create(TransientTextureDescription{
@@ -462,6 +441,8 @@ void Renderer::Render(entt::registry& registry)
 	}, VGText("Output HDR sRGB"));
 	forwardPass.Read(depthStencilTag, ResourceBind::DSV);
 	forwardPass.Read(cameraBufferTag, ResourceBind::CBV);
+	forwardPass.Read(clusterResources.lightList, ResourceBind::SRV);
+	forwardPass.Read(clusterResources.lightInfo, ResourceBind::SRV);
 	forwardPass.Output(outputHDRTag, OutputBind::RTV, true);
 	forwardPass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
 	{
@@ -470,8 +451,29 @@ void Renderer::Render(entt::registry& registry)
 		list.BindPipelineState(pipelines["ForwardOpaque"]);
 		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
 		list.BindResource("camera", resources.GetBuffer(cameraBufferTag));
-		list.BindConstants("lightCount", { (uint32_t)device->GetResourceManager().Get(lightBuffer).description.size });
 		list.BindResource("lights", lightBuffer);
+		list.BindResource("clusteredLightList", resources.GetBuffer(clusterResources.lightList));
+		list.BindResource("clusteredLightInfo", resources.GetBuffer(clusterResources.lightInfo));
+
+		struct ClusterData
+		{
+			uint32_t dimensionsX;
+			uint32_t dimensionsY;
+			uint32_t dimensionsZ;
+			float logY;
+		} clusterData;
+
+		auto& gridInfo = clusteredCulling.GetGridInfo();
+
+		clusterData.dimensionsX = gridInfo.x;
+		clusterData.dimensionsY = gridInfo.y;
+		clusterData.dimensionsZ = gridInfo.z;
+		clusterData.logY = 1.f / std::log(gridInfo.depthFactor);
+
+		std::vector<uint32_t> clusterBufferData;
+		clusterBufferData.resize(sizeof(clusterData) / 4);
+		std::memcpy(clusterBufferData.data(), &clusterData, clusterBufferData.size() * sizeof(uint32_t));
+		list.BindConstants("clusterData", clusterBufferData);
 
 		{
 			VGScopedGPUStat("Opaque", device->GetDirectContext(), list.Native());
@@ -517,8 +519,10 @@ void Renderer::Render(entt::registry& registry)
 		list.BindPipelineState(pipelines["ForwardTransparent"]);
 		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
 		list.BindResource("camera", resources.GetBuffer(cameraBufferTag));
-		list.BindConstants("lightCount", { (uint32_t)device->GetResourceManager().Get(lightBuffer).description.size });
 		list.BindResource("lights", lightBuffer);
+		list.BindResource("clusteredLightList", resources.GetBuffer(clusterResources.lightList));
+		list.BindResource("clusteredLightInfo", resources.GetBuffer(clusterResources.lightInfo));
+		list.BindConstants("clusterData", clusterBufferData);
 
 		{
 			VGScopedGPUStat("Transparent", device->GetDirectContext(), list.Native());
@@ -584,30 +588,20 @@ void Renderer::Render(entt::registry& registry)
 		list.DrawFullscreenQuad();
 	});
 
-#if ENABLE_EDITOR
-	auto& editorPass = graph.AddPass("Editor Pass", ExecutionQueue::Graphics);
-	editorPass.Read(cameraBufferTag, ResourceBind::CBV);
-	editorPass.Read(depthStencilTag, ResourceBind::SRV);
-	editorPass.Read(outputLDRTag, ResourceBind::SRV);
-	editorPass.Output(backBufferTag, OutputBind::RTV, false);
-	editorPass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
-	{
-		userInterface->NewFrame();
-		EditorRenderer::Render(device.get(), registry, lastFrameTime, resources.GetTexture(depthStencilTag), resources.GetTexture(outputLDRTag), atmosphere);
-		userInterface->Render(list, resources.GetBuffer(cameraBufferTag));
-	});
-#endif
+	// #TODO: Don't have this here.
+	Editor::Get().Render(graph, *device, *this, registry, cameraBufferTag, depthStencilTag, outputLDRTag, backBufferTag, clusterResources);
 
 	graph.Build();
 	graph.Execute(device.get());
 
 	// #TODO: Move to a present pass.
-	device->GetSwapChain()->Present(device->vSync, 0);
+	device->Present();
 
 	device->AdvanceGPU();
 }
 
-void Renderer::DiscardRenderData()
+void Renderer::OnBackBufferSizeChanged(const entt::registry& registry)
 {
 	renderGraphResources.DiscardTransients(device.get());
+	clusteredCulling.MarkDirty();
 }

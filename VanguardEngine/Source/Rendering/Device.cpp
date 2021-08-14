@@ -340,8 +340,11 @@ RenderDevice::~RenderDevice()
 	Synchronize();
 
 	::CloseHandle(syncEvent);
+
+#if !BUILD_RELEASE
 	::CloseHandle(deviceRemovedEvent);
-	::CloseHandle(deviceRemovedHandle);
+	//::CloseHandle(deviceRemovedHandle);  // This handle should not be closed? An invalid handle error is thrown when attempting to close it.
+#endif
 
 #if !BUILD_RELEASE
 	if (debugging)
@@ -526,6 +529,13 @@ void RenderDevice::Synchronize()
 	WaitForSingleObject(syncEvent, INFINITE);
 
 	++syncValues[GetFrameIndex()];
+}
+
+void RenderDevice::Present()
+{
+	VGScopedCPUStat("Present");
+
+	swapChain->Present(vSync, 0);
 }
 
 void RenderDevice::AdvanceCPU()

@@ -4,8 +4,8 @@
 #include "Object.hlsli"
 #include "Camera.hlsli"
 
-ConstantBuffer<PerObject> perObject : register(b0);
-ConstantBuffer<Camera> camera : register(b1);
+ConstantBuffer<PerObject> perObject : register(b1);
+ConstantBuffer<Camera> camera : register(b2);
 
 struct Vertex
 {
@@ -31,6 +31,7 @@ struct Output
 	float2 uv : UV;
 	float3 tangent : TANGENT;  // World space.
 	float3 bitangent : BITANGENT;  // World space.
+    float depthVS : DEPTH;  // View space.
 };
 
 [RootSignature(RS)]
@@ -42,6 +43,7 @@ Output main(Input input)
 	output.positionCS = float4(vertex.position, 1.f);
 	output.positionCS = mul(output.positionCS, perObject.worldMatrix);
 	output.positionCS = mul(output.positionCS, camera.view);
+    output.depthVS = output.positionCS.z;
 	output.positionCS = mul(output.positionCS, camera.projection);
 	output.position = mul(float4(vertex.position, 1.f), perObject.worldMatrix).xyz;
 	output.normal = normalize(mul(float4(vertex.normal, 0.f), perObject.worldMatrix)).xyz;

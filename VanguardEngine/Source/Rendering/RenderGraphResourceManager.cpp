@@ -8,8 +8,9 @@
 void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGraph* graph)
 {
 	VGScopedCPUStat("Render Graph Build Transients");
+	VGScopedGPUStat("Render Graph Build Transients", device->GetDirectContext(), device->GetDirectList().Native());
 
-	// #TODO: For now just create resources in the most generic state. This should be refined to create a resource with a minimal state.
+	// #TODO: Don't brute force search all passes to determine bind flags. Use a better approach.
 
 	for (const auto& [resource, info] : transientBufferResources)
 	{
@@ -23,6 +24,16 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 				foundReusable = true;
 				--transientBuffer.counter;
 				bufferResources[resource] = bufferResources[transientBuffer.resource];  // Duplicate the resource handle.
+
+				// If we have a UAV counter, we need to reset it.
+				if (transientBuffer.description.uavCounter)
+				{
+					auto& bufferComponent = device->GetResourceManager().Get(bufferResources[resource]);
+					device->GetResourceManager().Write(bufferComponent.counterBuffer, { 0, 0, 0, 0 });  // #TODO: Use CopyBufferRegion with a clear buffer created once at startup.
+				}
+
+				device->GetResourceManager().NameResource(bufferResources[resource], info.second);
+
 				break;
 			}
 		}
@@ -30,15 +41,37 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 		if (!foundReusable)
 		{
 			// Fallback to creating a new buffer.
-			VGLog(Rendering) << "Did not find a suitable buffer for transient reuse, creating a new buffer.";
+			VGLog(Rendering) << "Did not find a suitable buffer for transient reuse, creating a new buffer for '" << info.second << "'.";
+
+			bool hasConstantBuffer = false;
+			bool hasShaderResource = false;
+			bool hasUnorderedAccess = false;
+
+			for (const auto& pass : graph->passes)
+			{
+				if (pass->bindInfo.contains(resource))
+				{
+					switch (pass->bindInfo[resource])
+					{
+					case ResourceBind::CBV: hasConstantBuffer = true; break;
+					case ResourceBind::SRV: hasShaderResource = true; break;
+					case ResourceBind::UAV: hasUnorderedAccess = true; break;
+					}
+				}
+			}
 
 			BufferDescription description{};
 			description.updateRate = info.first.updateRate;
-			description.bindFlags = BindFlag::ConstantBuffer | BindFlag::ShaderResource | BindFlag::UnorderedAccess;
+			description.bindFlags = 0;
 			description.accessFlags = AccessFlag::CPURead | AccessFlag::CPUWrite | AccessFlag::GPUWrite;
 			description.size = info.first.size;
 			description.stride = info.first.stride;
+			description.uavCounter = info.first.uavCounter;
 			description.format = info.first.format;
+
+			if (hasConstantBuffer) description.bindFlags |= BindFlag::ConstantBuffer;
+			if (hasShaderResource) description.bindFlags |= BindFlag::ShaderResource;
+			if (hasUnorderedAccess) description.bindFlags |= BindFlag::UnorderedAccess;
 
 			const auto buffer = device->GetResourceManager().Create(description, info.second);
 			bufferResources[resource] = buffer;
@@ -49,7 +82,7 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 
 	transientBufferResources.clear();
 
-	// Built all buffer textures, destroy unused transients and reset state.
+	// Built all transient buffers, destroy unused transients and reset state.
 	auto i = transientBuffers.begin();
 	while (i != transientBuffers.end())
 	{
@@ -81,6 +114,9 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 				foundReusable = true;
 				--transientTexture.counter;
 				textureResources[resource] = textureResources[transientTexture.resource];  // Duplicate the resource handle.
+
+				device->GetResourceManager().NameResource(textureResources[resource], info.second);
+
 				break;
 			}
 		}
@@ -88,7 +124,7 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 		if (!foundReusable)
 		{
 			// Fallback to creating a new texture.
-			VGLog(Rendering) << "Did not find a suitable texture for transient reuse, creating a new texture.";
+			VGLog(Rendering) << "Did not find a suitable texture for transient reuse, creating a new texture for '" << info.second << "'.";
 
 			// We can't have both depth stencil and render target, so brute force search all passes to determine
 			// which binding we need.

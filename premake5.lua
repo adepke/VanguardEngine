@@ -221,7 +221,8 @@ project "Engine"
 	postbuildcommands {
 		"{COPY} ../../VanguardEngine/ThirdParty/DirectXShaderCompiler/*.dll ../Bin/%{cfg.platform}_%{cfg.buildcfg}/",
 		"{COPY} ../ThirdParty/TracyClient/Bin/%{cfg.platform}_%{cfg.buildcfg}/*.dll ../Bin/%{cfg.platform}_%{cfg.buildcfg}/",
-		"{COPY} ../../VanguardEngine/ThirdParty/PIX/*.dll ../Bin/%{cfg.platform}_%{cfg.buildcfg}/"
+		"{COPY} ../../VanguardEngine/ThirdParty/PIX/*.dll ../Bin/%{cfg.platform}_%{cfg.buildcfg}/",
+		"{COPY} ../../VanguardEngine/ThirdParty/DirectXAgility/Bin/x64/*.* ../Bin/%{cfg.platform}_%{cfg.buildcfg}/D3D12/"
 	}
 	
 	-- Third Party Links

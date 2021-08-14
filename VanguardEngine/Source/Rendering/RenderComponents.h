@@ -5,6 +5,7 @@
 #include <Rendering/Material.h>
 #include <Rendering/Device.h>
 #include <Rendering/Resource.h>
+#include <Rendering/ResourceHandle.h>
 
 #include <memory>
 #include <vector>
@@ -32,8 +33,8 @@ struct MeshComponent
 
 struct CameraComponent
 {
-	float nearPlane = 1.f;
-	float farPlane = 5000.f;
+	float nearPlane = 0.1f;
+	float farPlane = 1000.f;
 	float fieldOfView = 1.57079633f;  // 90 Degrees.
 };
 

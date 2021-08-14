@@ -2,21 +2,20 @@
 
 #pragma once
 
-#include <Core/Base.h>
+#include <Rendering/Base.h>
 #include <Utility/Singleton.h>
 #include <Window/WindowFrame.h>
 #include <Rendering/Device.h>
+#include <Rendering/ResourceHandle.h>
 #include <Rendering/PipelineBuilder.h>
 #include <Rendering/Material.h>
 #include <Rendering/UserInterface.h>
 #include <Rendering/DescriptorAllocator.h>
 #include <Rendering/RenderGraphResourceManager.h>
 #include <Rendering/Atmosphere.h>
+#include <Rendering/ClusteredLightCulling.h>
 
 #include <entt/entt.hpp>
-
-// #TODO: Fix Windows.h leaking.
-#include <Rendering/Resource.h>
 
 class CommandList;
 
@@ -32,13 +31,16 @@ private:
 	PipelineBuilder pipelines;  // Manages all the pipelines.
 
 	BufferHandle cameraBuffer;
-	std::unique_ptr<UserInterfaceManager> userInterface;
 
 	DescriptorHandle nullDescriptor;
 
+public:
 	float lastFrameTime = -1.f;
 
+public:
+	std::unique_ptr<UserInterfaceManager> userInterface;
 	Atmosphere atmosphere;
+	ClusteredLightCulling clusteredCulling;
 
 private:
 	void UpdateCameraBuffer(const entt::registry& registry);
@@ -54,7 +56,7 @@ public:
 	// Entity data is safe to write to immediately after this function returns. Do not attempt to write before Render() returns.
 	void Render(entt::registry& registry);
 
-	void DiscardRenderData();
+	void OnBackBufferSizeChanged(const entt::registry& registry);
 
 	void SubmitFrameTime(uint32_t timeUs);
 };

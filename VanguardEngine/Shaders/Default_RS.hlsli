@@ -2,12 +2,14 @@
 
 #define RS \
 	"RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT)," \
-	"CBV(b0, visibility = SHADER_VISIBILITY_VERTEX)," \
+	"RootConstants(b0, num32BitConstants = 4)," \
+	"CBV(b1, visibility = SHADER_VISIBILITY_VERTEX)," \
 	"SRV(t0, visibility = SHADER_VISIBILITY_VERTEX)," \
-	"CBV(b1, visibility = SHADER_VISIBILITY_ALL)," \
-	"CBV(b0, visibility = SHADER_VISIBILITY_PIXEL)," \
-	"RootConstants(b2, num32BitConstants = 1, visibility = SHADER_VISIBILITY_PIXEL)," \
+	"CBV(b2, visibility = SHADER_VISIBILITY_ALL)," \
+	"CBV(b1, visibility = SHADER_VISIBILITY_PIXEL)," \
 	"SRV(t0, space = 1, visibility = SHADER_VISIBILITY_PIXEL)," \
+	"SRV(t1, space = 1, visibility = SHADER_VISIBILITY_PIXEL)," \
+	"SRV(t2, space = 1, visibility = SHADER_VISIBILITY_PIXEL)," \
 	"DescriptorTable(" \
 		"SRV(t0, space = 0, numDescriptors = unbounded, flags = DESCRIPTORS_VOLATILE)," \
 		"visibility = SHADER_VISIBILITY_PIXEL)," \

@@ -32,7 +32,7 @@ public:
 
 inline const PipelineState& PipelineBuilder::operator[](const std::string& name)
 {
-	VGAssert(pipelines.contains(name), "Attempted to use unregistered pipeline: '%s'", name);
+	VGAssert(pipelines.contains(name), "Attempted to use unregistered pipeline: '%s'", name.data());
 
 	return pipelines[name];
 }

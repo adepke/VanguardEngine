@@ -3,19 +3,27 @@
 #pragma once
 
 #include <Rendering/Device.h>
-#include <Rendering/Resource.h>
+#include <Rendering/ResourceHandle.h>
 #include <Rendering/ResourceManager.h>
 
 #include <imgui.h>
 
 namespace ImGui
 {
-	inline void Image(RenderDevice* device, TextureHandle handle, const ImVec2& scale = { 1.f, 1.f }, const ImVec2& uv0 = { 0.f, 0.f }, const ImVec2& uv1 = { 1.f, 1.f })
+	inline void Image(RenderDevice* device, TextureHandle handle, const ImVec2& scale = { 1.f, 1.f }, const ImVec2& uv0 = { 0.f, 0.f }, const ImVec2& uv1 = { 1.f, 1.f }, const ImVec4& tint = { 1.f, 1.f, 1.f, 1.f })
 	{
 		if (!device->GetResourceManager().Valid(handle)) return;
 
 		const auto& textureComponent = device->GetResourceManager().Get(handle);
-		ImGui::Image((ImTextureID)textureComponent.SRV->bindlessIndex, { (float)textureComponent.description.width * scale.x, (float)textureComponent.description.height * scale.y }, uv0, uv1);
+		ImGui::Image((ImTextureID)textureComponent.SRV->bindlessIndex, { (float)textureComponent.description.width * scale.x, (float)textureComponent.description.height * scale.y }, uv0, uv1, tint);
+	}
+
+	inline void ImageButton(RenderDevice* device, TextureHandle handle, const ImVec2& scale = { 1.f, 1.f }, const ImVec2& uv0 = { 0.f, 0.f }, const ImVec2& uv1 = { 1.f, 1.f }, const ImVec4& tint = { 1.f, 1.f, 1.f, 1.f })
+	{
+		if (!device->GetResourceManager().Valid(handle)) return;
+
+		const auto& textureComponent = device->GetResourceManager().Get(handle);
+		ImGui::ImageButton((ImTextureID)textureComponent.SRV->bindlessIndex, { (float)textureComponent.description.width * scale.x, (float)textureComponent.description.height * scale.y }, uv0, uv1, -1, { 0.f, 0.f, 0.f, 0.f }, tint);
 	}
 
 	inline void StyleColorsVanguard(ImGuiStyle* dst = nullptr)

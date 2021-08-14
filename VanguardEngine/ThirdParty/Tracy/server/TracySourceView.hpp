@@ -8,6 +8,8 @@
 #include "tracy_robin_hood.h"
 #include "TracyCharUtil.hpp"
 #include "TracyDecayValue.hpp"
+#include "TracySourceContents.hpp"
+#include "TracySourceTokenizer.hpp"
 #include "../common/TracyProtocol.hpp"
 
 struct ImFont;
@@ -34,34 +36,6 @@ public:
     };
 
 private:
-    enum class TokenColor : uint8_t
-    {
-        Default,
-        Comment,
-        Preprocessor,
-        String,
-        CharacterLiteral,
-        Keyword,
-        Number,
-        Punctuation,
-        Type,
-        Special
-    };
-
-    struct Token
-    {
-        const char* begin;
-        const char* end;
-        TokenColor color;
-    };
-
-    struct Line
-    {
-        const char* begin;
-        const char* end;
-        std::vector<Token> tokens;
-    };
-
     struct AsmOpParams
     {
         uint8_t type;
@@ -126,11 +100,23 @@ private:
         DisplayMixed
     };
 
+    struct AddrStat
+    {
+        uint32_t local;
+        uint32_t ext;
+
+        AddrStat& operator+=( const AddrStat& other )
+        {
+            local += other.local;
+            ext += other.ext;
+            return *this;
+        }
+    };
+
 public:
     using GetWindowCallback = void*(*)();
 
     SourceView( ImFont* font, GetWindowCallback gwcb );
-    ~SourceView();
 
     void SetCpuId( uint32_t cpuid );
 
@@ -150,23 +136,21 @@ private:
     void RenderSimpleSourceView();
     void RenderSymbolView( const Worker& worker, View& view );
 
-    void RenderSymbolSourceView( uint32_t iptotal, unordered_flat_map<uint64_t, uint32_t> ipcount, unordered_flat_map<uint64_t, uint32_t> ipcountAsm, uint32_t ipmax, const Worker& worker, const View& view );
-    uint64_t RenderSymbolAsmView( uint32_t iptotal, unordered_flat_map<uint64_t, uint32_t> ipcount, uint32_t ipmax, const Worker& worker, View& view );
+    void RenderSymbolSourceView( const AddrStat& iptotal, const unordered_flat_map<uint64_t, AddrStat>& ipcount, const unordered_flat_map<uint64_t, AddrStat>& ipcountAsm, const AddrStat& ipmax, const Worker& worker, const View& view );
+    uint64_t RenderSymbolAsmView( const AddrStat& iptotal, const unordered_flat_map<uint64_t, AddrStat>& ipcount, const AddrStat& ipmax, const Worker& worker, View& view );
 
-    void RenderLine( const Line& line, int lineNum, uint32_t ipcnt, uint32_t iptotal, uint32_t ipmax, const Worker* worker );
-    void RenderAsmLine( AsmLine& line, uint32_t ipcnt, uint32_t iptotal, uint32_t ipmax, const Worker& worker, uint64_t& jumpOut, int maxAddrLen, View& view );
+    void RenderLine( const Tokenizer::Line& line, int lineNum, const AddrStat& ipcnt, const AddrStat& iptotal, const AddrStat& ipmax, const Worker* worker );
+    void RenderAsmLine( AsmLine& line, const AddrStat& ipcnt, const AddrStat& iptotal, const AddrStat& ipmax, const Worker& worker, uint64_t& jumpOut, int maxAddrLen, View& view );
 
     void SelectLine( uint32_t line, const Worker* worker, bool changeAsmLine = true, uint64_t targetAddr = 0 );
     void SelectAsmLines( uint32_t file, uint32_t line, const Worker& worker, bool changeAsmLine = true, uint64_t targetAddr = 0 );
     void SelectAsmLinesHover( uint32_t file, uint32_t line, const Worker& worker );
 
-    void GatherIpStats( uint64_t addr, uint32_t& iptotalSrc, uint32_t& iptotalAsm, unordered_flat_map<uint64_t, uint32_t>& ipcountSrc, unordered_flat_map<uint64_t, uint32_t>& ipcountAsm, uint32_t& ipmaxSrc, uint32_t& ipmaxAsm, const Worker& worker, bool limitView, const View& view );
-    uint32_t CountAsmIpStats( uint64_t addr, const Worker& worker, bool limitView, const View& view );
+    void GatherIpStats( uint64_t baseAddr, AddrStat& iptotalSrc, AddrStat& iptotalAsm, unordered_flat_map<uint64_t, AddrStat>& ipcountSrc, unordered_flat_map<uint64_t, AddrStat>& ipcountAsm, AddrStat& ipmaxSrc, AddrStat& ipmaxAsm, const Worker& worker, bool limitView, const View& view );
+    void GatherAdditionalIpStats( uint64_t baseAddr, AddrStat& iptotalSrc, AddrStat& iptotalAsm, unordered_flat_map<uint64_t, AddrStat>& ipcountSrc, unordered_flat_map<uint64_t, AddrStat>& ipcountAsm, AddrStat& ipmaxSrc, AddrStat& ipmaxAsm, const Worker& worker, bool limitView, const View& view );
+    uint32_t CountAsmIpStats( uint64_t baseAddr, const Worker& worker, bool limitView, const View& view );
 
     void SelectMicroArchitecture( const char* moniker );
-
-    TokenColor IdentifyToken( const char*& begin, const char* end );
-    std::vector<Token> Tokenize( const char* begin, const char* end );
 
     void ResetAsm();
     void FollowRead( size_t line, RegsX86 reg, size_t limit );
@@ -178,27 +162,10 @@ private:
     void Save( const Worker& worker, size_t start = 0, size_t stop = std::numeric_limits<size_t>::max() );
 #endif
 
-    struct TokenizerState
-    {
-        void Reset()
-        {
-            isInComment = false;
-            isInPreprocessor = false;
-        }
-
-        bool isInComment;
-        bool isInPreprocessor;
-    };
-
     ImFont* m_font;
-    const char* m_file;
-    uint32_t m_fileStringIdx;
     uint64_t m_symAddr;
     uint64_t m_baseAddr;
     uint64_t m_targetAddr;
-    const char* m_data;
-    char* m_dataBuf;
-    size_t m_dataSize;
     int m_targetLine;
     int m_selectedLine;
     int m_asmSelected;
@@ -216,8 +183,10 @@ private:
     uint8_t m_maxAsmBytes;
     bool m_atnt;
     uint64_t m_jumpPopupAddr;
+    bool m_childCalls;
 
-    std::vector<Line> m_lines;
+    SourceContents m_source;
+    SourceContents m_sourceTooltip;
     std::vector<AsmLine> m_asm;
 
     unordered_flat_map<uint64_t, uint32_t> m_locMap;
@@ -232,8 +201,6 @@ private:
 
     uint32_t m_maxLine;
     int m_maxMnemonicLen;
-
-    TokenizerState m_tokenizer;
 
     unordered_flat_map<const char*, int, charutil::Hasher, charutil::Comparator> m_microArchOpMap;
     CpuArchitecture m_cpuArch;
@@ -250,6 +217,7 @@ private:
     float m_asmWidth;
 
     GetWindowCallback m_gwcb;
+    Tokenizer m_tokenizer;
 };
 
 }

@@ -3,6 +3,7 @@
 #pragma once
 
 #include <Rendering/Base.h>
+#include <Rendering/ResourceHandle.h>
 #include <Rendering/RenderGraphResourceManager.h>
 
 #include <vector>
@@ -46,7 +47,7 @@ private:
 	void TopologicalSort();
 	void BuildDepthMap();
 
-	void InjectStateBarriers();
+	void InjectStateBarriers(RenderDevice* device);
 
 public:
 	std::pair<uint32_t, uint32_t> GetBackBufferResolution(RenderDevice* device);

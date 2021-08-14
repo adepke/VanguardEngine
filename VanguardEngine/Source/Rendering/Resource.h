@@ -4,10 +4,9 @@
 
 #include <Rendering/Base.h>
 #include <Rendering/DescriptorHeap.h>
+#include <Rendering/ResourceHandle.h>
 
 #include <optional>
-
-#include <entt/entt.hpp>
 
 // #TODO: Fix Windows.h leaking.
 #include <D3D12MemAlloc.h>
@@ -44,6 +43,7 @@ struct BufferDescription
 	uint32_t accessFlags = 0;
 	size_t size;  // Element count. Size * Stride = Byte count.
 	size_t stride;
+	bool uavCounter = false;
 	std::optional<DXGI_FORMAT> format;
 };
 
@@ -69,6 +69,8 @@ struct BufferComponent
 	std::optional<DescriptorHandle> SRV;
 	std::optional<DescriptorHandle> UAV;
 
+	BufferHandle counterBuffer;
+
 	// #TODO: Remove.
 	ID3D12Resource* Native() { return allocation->GetResource(); }
 };
@@ -87,16 +89,4 @@ struct TextureComponent
 
 	// #TODO: Remove.
 	ID3D12Resource* Native() { return allocation->GetResource(); }
-};
-
-// Lightweight type safe generational handles for render resources.
-
-struct BufferHandle
-{
-	entt::entity handle = entt::null;
-};
-
-struct TextureHandle
-{
-	entt::entity handle = entt::null;
 };

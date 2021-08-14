@@ -58,8 +58,12 @@ void ReflectShader(std::unique_ptr<Shader>& inShader, ID3D12ShaderReflection* re
 		case D3D_SIT_CBUFFER: type = ShaderReflection::ResourceBindType::ConstantBuffer; break;
 		case D3D_SIT_TBUFFER: type = ShaderReflection::ResourceBindType::ShaderResource; break;
 		case D3D_SIT_TEXTURE: type = ShaderReflection::ResourceBindType::ShaderResource; break;
+		case D3D_SIT_SAMPLER: break;  // Ignore samplers for now.
 		case D3D_SIT_UAV_RWTYPED: type = ShaderReflection::ResourceBindType::UnorderedAccess; break;
 		case D3D_SIT_STRUCTURED: type = ShaderReflection::ResourceBindType::ShaderResource; break;
+		case D3D_SIT_UAV_RWSTRUCTURED: type = ShaderReflection::ResourceBindType::UnorderedAccess; break;
+		case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER: type = ShaderReflection::ResourceBindType::UnorderedAccess; break;
+		default: VGLogError(Rendering) << "Shader reflection for '" << name << "' failed internally: " << "Unknown resource bind type '" << bindDesc.Type << "'.";
 		}
 
 		inShader->reflection.resourceBindings.push_back({ bindDesc.Name, bindDesc.BindPoint, bindDesc.BindCount, bindDesc.Space, type });
@@ -68,7 +72,7 @@ void ReflectShader(std::unique_ptr<Shader>& inShader, ID3D12ShaderReflection* re
 	inShader->reflection.instructionCount = shaderDesc.InstructionCount;
 }
 
-std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderType type, std::string_view entry)
+std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderType type, std::string_view entry, const std::vector<ShaderMacro>& macros)
 {
 	VGScopedCPUStat("Compile Shader");
 
@@ -151,6 +155,8 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderT
 	compileArguments.emplace_back(VGText("-I"));
 	compileArguments.emplace_back(stableShaderIncludePath.data());
 	//compileArguments.emplace_back(DXC_ARG_PACK_MATRIX_ROW_MAJOR);  // Row major matrices. #TODO: Use uniform packing, ImGui uses column major currently.
+	compileArguments.emplace_back(VGText("-HV"));  // HLSL version 2018.
+	compileArguments.emplace_back(VGText("2018"));
 #if BUILD_DEBUG || BUILD_DEVELOPMENT
 	compileArguments.emplace_back(DXC_ARG_DEBUG);  // Enable debug information.
 	compileArguments.emplace_back(VGText("-Qembed_debug"));  // Embed the PDB.
@@ -164,6 +170,19 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderT
 #if BUILD_RELEASE
 	compileArguments.emplace_back(DXC_ARG_OPTIMIZATION_LEVEL3);  // Maximum optimization.
 #endif
+
+	// Shader macros.
+	std::vector<std::wstring> macrosWide;  // Keep the wide string copies alive until compilation finishes.
+	for (const auto& macro : macros)
+	{
+		macrosWide.emplace_back(std::wstring{ macro.macro.begin(), macro.macro.end() });
+	}
+
+	for (const auto& macro : macrosWide)
+	{
+		compileArguments.emplace_back(VGText("-D"));
+		compileArguments.emplace_back(macro.data());
+	}
 
 	ResourcePtr<IDxcResult> compileResult;
 	shaderCompiler->Compile(
@@ -200,7 +219,7 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderT
 		return {};
 	}
 
-	auto resultShader{ std::make_unique<Shader>() };
+	auto resultShader = std::make_unique<Shader>();
 	resultShader->bytecode.resize(compiledShader->GetBufferSize());
 
 	std::memcpy(resultShader->bytecode.data(), compiledShader->GetBufferPointer(), compiledShader->GetBufferSize());

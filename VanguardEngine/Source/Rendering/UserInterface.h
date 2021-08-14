@@ -3,7 +3,8 @@
 #pragma once
 
 #include <Rendering/Base.h>
-#include <Rendering/Resource.h>
+#include <Rendering/ResourceHandle.h>
+#include <Rendering/PipelineState.h>
 
 #include <Core/Windows/DirectX12Minimal.h>
 
@@ -13,7 +14,6 @@ class RenderDevice;
 struct ImDrawData;
 class CommandList;
 struct FrameResources;
-class PipelineState;
 
 class UserInterfaceManager
 {
