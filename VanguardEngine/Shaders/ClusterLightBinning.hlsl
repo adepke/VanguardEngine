@@ -21,7 +21,6 @@ struct LightCount
 };
 
 // #TEMP
-RWStructuredBuffer<uint> testing : register(u3);
 ConstantBuffer<Camera> camera : register(b1);
 
 StructuredBuffer<uint> denseClusterList : register(t0);
@@ -51,13 +50,7 @@ bool LightInFroxel(Light light, AABB aabb)
 [RootSignature(RS)]
 [numthreads(threadGroupSize, 1, 1)]
 void ComputeLightBinsMain(uint3 dispatchId : SV_DispatchThreadID, uint3 groupId : SV_GroupID, uint groupIndex : SV_GroupIndex)
-{
-    // testing
-    if (groupId.x >= testing[0])
-    {
-        return;
-    }
-    
+{ 
     // Only one thread in the group needs to initialize group variables and find the froxel bounds.
     if (groupIndex == 0)
     {

@@ -45,11 +45,14 @@ private:
 	PipelineState depthCullState;
 	PipelineState compactionState;
 	PipelineState binningState;
+	PipelineState indirectGenerationState;
 
 #if ENABLE_EDITOR
 	// Debugging visualizations.
 	PipelineState debugOverlayState;
 #endif
+
+	ResourcePtr<ID3D12CommandSignature> binningIndirectSignature;
 
 	ClusterGridInfo ComputeGridInfo(const entt::registry& registry) const;
 	// Needs to be called every time the camera resolution or FOV changes.

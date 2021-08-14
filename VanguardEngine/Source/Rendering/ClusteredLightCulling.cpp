@@ -154,6 +154,10 @@ void ClusteredLightCulling::Initialize(RenderDevice* inDevice)
 	binningStateDesc.macros.emplace_back("MAX_LIGHTS_PER_FROXEL", maxLightsPerFroxel);
 	binningState.Build(*device, binningStateDesc);
 
+	ComputePipelineStateDescription indirectGenerationStateDesc;
+	indirectGenerationStateDesc.shader = { "ClusterIndirectBufferGeneration.hlsl", "BufferGenerationMain" };
+	indirectGenerationState.Build(*device, indirectGenerationStateDesc);
+
 #if ENABLE_EDITOR
 	GraphicsPipelineStateDescription debugOverlayStateDesc{};
 	debugOverlayStateDesc.vertexShader = { "ClusterDebugOverlay.hlsl", "VSMain" };
@@ -194,6 +198,23 @@ void ClusteredLightCulling::Initialize(RenderDevice* inDevice)
 	debugOverlayStateDesc.topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 	debugOverlayState.Build(*device, debugOverlayStateDesc, false);
 #endif
+
+	std::vector<D3D12_INDIRECT_ARGUMENT_DESC> binningIndirectArgDescs;
+	binningIndirectArgDescs.emplace_back(D3D12_INDIRECT_ARGUMENT_DESC{
+		.Type = D3D12_INDIRECT_ARGUMENT_TYPE_DISPATCH
+	});
+
+	D3D12_COMMAND_SIGNATURE_DESC binningIndirectSignatureDesc{};
+	binningIndirectSignatureDesc.ByteStride = sizeof(D3D12_DISPATCH_ARGUMENTS);
+	binningIndirectSignatureDesc.NumArgumentDescs = binningIndirectArgDescs.size();
+	binningIndirectSignatureDesc.pArgumentDescs = binningIndirectArgDescs.data();
+	binningIndirectSignatureDesc.NodeMask = 0;
+
+	const auto result = device->Native()->CreateCommandSignature(&binningIndirectSignatureDesc, nullptr, IID_PPV_ARGS(binningIndirectSignature.Indirect()));
+	if (FAILED(result))
+	{
+		VGLogError(Rendering) << "Failed to create cluster light binning indirect command signature: " << result;
+	}
 }
 
 ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::registry& registry, RenderResource cameraBuffer, RenderResource depthStencil, BufferHandle instanceBuffer, size_t instanceOffset, BufferHandle lights)
@@ -288,15 +309,21 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 	});
 
 	auto& clusterCompaction = graph.AddPass("Visible Cluster Compaction", ExecutionQueue::Compute);
+	clusterCompaction.Read(clusterVisibilityTag, ResourceBind::SRV);
 	const auto denseClustersTag = clusterCompaction.Create(TransientBufferDescription{
 		.updateRate = ResourceFrequency::Static,  // UAVs.
 		.size = gridInfo.x * gridInfo.y * gridInfo.z,  // Worst case.
 		.stride = sizeof(uint32_t),
 		.uavCounter = true
 	}, VGText("Compacted cluster list"));
-	clusterCompaction.Read(clusterVisibilityTag, ResourceBind::SRV);
 	clusterCompaction.Write(denseClustersTag, ResourceBind::UAV);
-	clusterCompaction.Bind([&, clusterVisibilityTag, denseClustersTag](CommandList& list, RenderGraphResourceManager& resources)
+	const auto indirectBufferTag = clusterCompaction.Create(TransientBufferDescription{
+		.updateRate = ResourceFrequency::Static,  // UAVs.
+		.size = 1,
+		.stride = sizeof(D3D12_DISPATCH_ARGUMENTS)
+	}, VGText("Cluster binning indirect argument buffer"));
+	clusterCompaction.Write(indirectBufferTag, ResourceBind::UAV);
+	clusterCompaction.Bind([&, clusterVisibilityTag, denseClustersTag, indirectBufferTag](CommandList& list, RenderGraphResourceManager& resources)
 	{
 		auto& denseClustersComponent = device->GetResourceManager().Get(resources.GetBuffer(denseClustersTag));
 
@@ -324,6 +351,16 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 
 		uint32_t dispatchSize = static_cast<uint32_t>(std::ceil(gridInfo.x * gridInfo.y * gridInfo.z / 64.f));
 		list.Native()->Dispatch(dispatchSize, 1, 1);
+
+		// Ensure that the compaction has finished.
+		list.UAVBarrier(resources.GetBuffer(denseClustersTag));
+		list.FlushBarriers();
+
+		// Generate the indirect argument buffer.
+		list.BindPipelineState(indirectGenerationState);
+		list.BindResourceTable("denseClusterList", *denseClustersComponent.UAV);
+		list.BindResource("indirectBuffer", resources.GetBuffer(indirectBufferTag));
+		list.Native()->Dispatch(1, 1, 1);
 	});
 
 	auto& lightsBufferComponent = device->GetResourceManager().Get(lights);
@@ -349,11 +386,12 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 		.size = gridInfo.x * gridInfo.y * gridInfo.z,
 		.stride = sizeof(uint32_t) * 2
 	}, VGText("Cluster grid light info"));
+	binningPass.Write(lightInfoTag, ResourceBind::UAV);
+	binningPass.Read(indirectBufferTag, ResourceBind::Indirect);
 	// #TEMP
 	binningPass.Read(cameraBuffer, ResourceBind::CBV);
-	binningPass.Write(lightInfoTag, ResourceBind::UAV);
 	binningPass.Bind([&, denseClustersTag, lightCounterTag,
-		lightListTag, lightInfoTag, lights, cameraBuffer](CommandList& list, RenderGraphResourceManager& resources)
+		lightListTag, lightInfoTag, lights, indirectBufferTag, cameraBuffer](CommandList& list, RenderGraphResourceManager& resources)
 	{
 		RenderUtils::Get().ClearUAV(list, resources.GetBuffer(lightCounterTag));
 		RenderUtils::Get().ClearUAV(list, resources.GetBuffer(lightInfoTag));
@@ -370,16 +408,14 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 		list.BindResource("lightList", resources.GetBuffer(lightListTag));
 		list.BindResource("clusterLightInfo", resources.GetBuffer(lightInfoTag));
 
-		// #TEMP: Testing
-		auto& b = device->GetResourceManager().Get(resources.GetBuffer(denseClustersTag));
-		list.BindResource("testing", b.counterBuffer);
+		// #TEMP
 		list.BindResource("camera", resources.GetBuffer(cameraBuffer));
 
 		auto& lightComponent = device->GetResourceManager().Get(lights);
 		list.BindConstants("lightCount", { (uint32_t)lightComponent.description.size });
 
-		// #TODO: Indirect dispatch, send only as many thread groups as the number of non-culled clusters.
-		list.Native()->Dispatch(gridInfo.x * gridInfo.y * gridInfo.z, 1, 1);
+		auto& indirectComponent = device->GetResourceManager().Get(resources.GetBuffer(indirectBufferTag));
+		list.Native()->ExecuteIndirect(binningIndirectSignature.Get(), 1, indirectComponent.allocation->GetResource(), 0, nullptr, 0);
 	});
 
 	return { lightListTag, lightInfoTag, clusterVisibilityTag };

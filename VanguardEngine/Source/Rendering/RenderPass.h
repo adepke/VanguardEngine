@@ -15,7 +15,8 @@ enum class ResourceBind
 	CBV,
 	SRV,
 	UAV,
-	DSV
+	DSV,
+	Indirect
 };
 
 enum class OutputBind

@@ -114,6 +114,7 @@ void RenderGraph::InjectStateBarriers(RenderDevice* device)
 			case ResourceBind::SRV: Transition(D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE); break;
 			case ResourceBind::UAV: Transition(D3D12_RESOURCE_STATE_UNORDERED_ACCESS); break;
 			case ResourceBind::DSV: Transition(D3D12_RESOURCE_STATE_DEPTH_READ); break;
+			case ResourceBind::Indirect: Transition(D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT); break;
 			}
 		}
 
