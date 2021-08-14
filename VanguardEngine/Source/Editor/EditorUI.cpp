@@ -7,6 +7,7 @@
 #include <Editor/EntityReflection.h>
 #include <Editor/ImGuiExtensions.h>
 #include <Rendering/Atmosphere.h>
+#include <Rendering/ClusteredLightCulling.h>
 
 #include <imgui_internal.h>
 
@@ -377,7 +378,7 @@ void EditorUI::DrawAtmosphereControls(Atmosphere& atmosphere)
 	}
 }
 
-void EditorUI::DrawRenderVisualizer(RenderDevice* device, TextureHandle overlay)
+void EditorUI::DrawRenderVisualizer(RenderDevice* device, ClusteredLightCulling& clusteredCulling, TextureHandle overlay)
 {
 	if (renderVisualizerOpen)
 	{
@@ -449,6 +450,50 @@ void EditorUI::DrawRenderVisualizer(RenderDevice* device, TextureHandle overlay)
 		if (ImGui::Begin("Render Overlay Proxy", nullptr, proxyWindowFlags))
 		{
 			ImGui::Image(device, overlay, { 1.f, 1.f }, { sceneWidthUV, sceneHeightUV }, { 1.f + sceneWidthUV, 1.f + sceneHeightUV }, { 1.f, 1.f, 1.f, 0.25f });
+
+			// Any additional overlay-specific tooling.
+			switch (activeOverlay)
+			{
+			case RenderOverlay::Clusters:
+			{
+				// Render a color scale.
+
+				const auto sceneViewportSize = sceneViewportMax - sceneViewportMin;
+				const auto colorScaleSize = ImVec2{ sceneViewportSize.x * 0.35f, 20.f };
+				const auto colorScalePosMin = ImVec2{ sceneViewportMin.x + sceneViewportSize.x * 0.5f - colorScaleSize.x * 0.5f, sceneViewportMax.y - colorScaleSize.y - 40.f };
+				auto* drawList = ImGui::GetForegroundDrawList();
+				drawList->AddRectFilledMultiColor(colorScalePosMin, colorScalePosMin + colorScaleSize, IM_COL32(0, 255, 0, 255), IM_COL32(255, 0, 0, 255), IM_COL32(255, 0, 0, 255), IM_COL32(0, 255, 0, 255));
+				
+				const auto frameThickness = 4.f;
+				const auto padding = ImVec2{ frameThickness - 1.f, frameThickness - 1.f };
+				ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, frameThickness);
+				ImGui::RenderFrameBorder(colorScalePosMin - padding, colorScalePosMin + colorScaleSize + padding);
+				ImGui::PopStyleVar();
+
+				const char* titleText = "Cluster froxel bins light count";
+				const char* leftText = "0";
+				char rightText[8];
+				ImFormatString(rightText, std::size(rightText), "%i", clusteredCulling.maxLightsPerFroxel);
+
+				const auto titleSize = ImGui::CalcTextSize(titleText);
+				const auto leftSize = ImGui::CalcTextSize(leftText);
+				const auto rightSize = ImGui::CalcTextSize(rightText);
+
+				const float textPadding = 8.f;
+				ImGui::SetCursorScreenPos({ sceneViewportMin.x + sceneViewportSize.x * 0.5f - titleSize.x * 0.5f, colorScalePosMin.y - titleSize.y * 0.5f - textPadding - 6.f });
+				ImGui::Text(titleText);
+
+				ImGui::SetCursorScreenPos({ sceneViewportMin.x + sceneViewportSize.x * 0.5f - colorScaleSize.x * 0.5f - leftSize.x - textPadding, colorScalePosMin.y + colorScaleSize.y * 0.5f - leftSize.y * 0.5f });
+				ImGui::Text(leftText);
+
+				ImGui::SetCursorScreenPos({ sceneViewportMin.x + sceneViewportSize.x * 0.5f + colorScaleSize.x * 0.5f + textPadding, colorScalePosMin.y + colorScaleSize.y * 0.5f - rightSize.y * 0.5f });
+				ImGui::Text(rightText);
+
+				break;
+			}
+
+			default: break;
+			}
 		}
 
 		ImGui::End();

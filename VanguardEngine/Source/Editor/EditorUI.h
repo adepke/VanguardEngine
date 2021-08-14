@@ -17,6 +17,7 @@ enum class RenderOverlay
 
 class RenderDevice;
 class Atmosphere;
+class ClusteredLightCulling;
 
 class EditorUI
 {
@@ -63,5 +64,5 @@ public:
 	void DrawPerformanceMetrics(float frameTimeMs);
 	void DrawRenderGraph(RenderDevice* device, TextureHandle depthStencil, TextureHandle scene);
 	void DrawAtmosphereControls(Atmosphere& atmosphere);
-	void DrawRenderVisualizer(RenderDevice* device, TextureHandle overlay);
+	void DrawRenderVisualizer(RenderDevice* device, ClusteredLightCulling& clusteredCulling, TextureHandle overlay);
 };
