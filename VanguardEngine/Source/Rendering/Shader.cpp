@@ -109,9 +109,9 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderT
 
 	switch (type)
 	{
-	case ShaderType::Vertex: compileTarget = VGText("vs_6_0"); break;
-	case ShaderType::Pixel: compileTarget = VGText("ps_6_0"); break;
-	case ShaderType::Compute: compileTarget = VGText("cs_6_0"); break;
+	case ShaderType::Vertex: compileTarget = VGText("vs_6_6"); break;
+	case ShaderType::Pixel: compileTarget = VGText("ps_6_6"); break;
+	case ShaderType::Compute: compileTarget = VGText("cs_6_6"); break;
 	}
 
 	auto pathModified = path;

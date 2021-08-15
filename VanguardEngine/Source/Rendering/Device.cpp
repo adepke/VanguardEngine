@@ -422,7 +422,7 @@ void RenderDevice::CheckFeatureSupport()
 		}
 	}
 
-	D3D12_FEATURE_DATA_SHADER_MODEL shaderModel{ D3D_SHADER_MODEL_6_5 };  // Highest shader model available.
+	D3D12_FEATURE_DATA_SHADER_MODEL shaderModel{ D3D_SHADER_MODEL_6_6 };  // Highest shader model available.
 	result = device->CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModel, sizeof(shaderModel));
 	if (FAILED(result))
 	{
@@ -440,10 +440,11 @@ void RenderDevice::CheckFeatureSupport()
 		case D3D_SHADER_MODEL_6_3: VGLog(Rendering) << "Device supports shader model 6.3."; break;
 		case D3D_SHADER_MODEL_6_4: VGLog(Rendering) << "Device supports shader model 6.4."; break;
 		case D3D_SHADER_MODEL_6_5: VGLog(Rendering) << "Device supports shader model 6.5."; break;
+		case D3D_SHADER_MODEL_6_6: VGLog(Rendering) << "Device supports shader model 6.6."; break;
 		default:
-			if (shaderModel.HighestShaderModel > D3D_SHADER_MODEL_6_5)
+			if (shaderModel.HighestShaderModel > D3D_SHADER_MODEL_6_6)
 			{
-				VGLog(Rendering) << "Device supports shader model newer than 6.5.";
+				VGLog(Rendering) << "Device supports shader model newer than 6.6.";
 			}
 
 			else
