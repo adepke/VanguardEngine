@@ -74,7 +74,7 @@ Output main(Input input)
     Texture3D scatteringLut = textures3D[bindData.scatteringTexture];
     Texture2D irradianceLut = textures[bindData.irradianceTexture];
     
-    float transmittance;
+    float3 transmittance;
     float3 radiance = GetSkyRadiance(bindData.atmosphere, transmittanceLut, scatteringLut, lutSampler, cameraPosition - planetCenter, rayDirection, 0.f, sunDirection, transmittance);
     
     // If the ray intersects the sun, add solar radiance.
