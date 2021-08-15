@@ -64,12 +64,8 @@ void ClusteredLightCulling::ComputeClusterGrid(CommandList& list, BufferHandle c
 	clusterData.resolutionX = backBufferComponent.description.width;
 	clusterData.resolutionY = backBufferComponent.description.height;
 
-	std::vector<uint32_t> clusterConstants;
-	clusterConstants.resize(sizeof(ClusterData) / 4);
-	std::memcpy(clusterConstants.data(), &clusterData, clusterConstants.size() * sizeof(uint32_t));
-
 	list.BindPipelineState(boundsState);
-	list.BindConstants("clusterData", clusterConstants);
+	list.BindConstants("clusterData", clusterData);
 	list.BindResource("clusterBounds", clusterBoundsBuffer);
 	list.BindResource("camera", cameraBuffer);
 	list.Native()->Dispatch(std::ceil(gridInfo.x * gridInfo.y * gridInfo.z / 64.f), 1, 1);
@@ -276,11 +272,7 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 		clusterData.gridDimensionsZ = gridInfo.z;
 		clusterData.logY = 1.f / std::log(gridInfo.depthFactor);
 
-		std::vector<uint32_t> clusterConstants;
-		clusterConstants.resize(sizeof(ClusterData) / 4);
-		std::memcpy(clusterConstants.data(), &clusterData, clusterConstants.size() * sizeof(uint32_t));
-
-		list.BindConstants("clusterData", clusterConstants);
+		list.BindConstants("clusterData", clusterData);
 
 		size_t entityIndex = 0;
 		registry.view<const TransformComponent, const MeshComponent>().each([&](auto entity, const auto&, const auto& mesh)
@@ -343,11 +335,7 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 		clusterData.gridDimensionsY = gridInfo.y;
 		clusterData.gridDimensionsZ = gridInfo.z;
 
-		std::vector<uint32_t> clusterConstants;
-		clusterConstants.resize(sizeof(ClusterData) / 4);
-		std::memcpy(clusterConstants.data(), &clusterData, clusterConstants.size() * sizeof(uint32_t));
-
-		list.BindConstants("clusterData", clusterConstants);
+		list.BindConstants("clusterData", clusterData);
 
 		uint32_t dispatchSize = static_cast<uint32_t>(std::ceil(gridInfo.x * gridInfo.y * gridInfo.z / 64.f));
 		list.Native()->Dispatch(dispatchSize, 1, 1);
@@ -449,11 +437,7 @@ RenderResource ClusteredLightCulling::RenderDebugOverlay(RenderGraph& graph, Ren
 		clusterData.gridDimensionsZ = gridInfo.z;
 		clusterData.logY = 1.f / std::log(gridInfo.depthFactor);
 
-		std::vector<uint32_t> clusterConstants;
-		clusterConstants.resize(sizeof(ClusterData) / 4);
-		std::memcpy(clusterConstants.data(), &clusterData, clusterConstants.size() * sizeof(uint32_t));
-
-		list.BindConstants("clusterData", clusterConstants);
+		list.BindConstants("clusterData", clusterData);
 
 		list.DrawFullscreenQuad();
 	});

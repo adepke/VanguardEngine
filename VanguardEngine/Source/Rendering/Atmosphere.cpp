@@ -92,9 +92,6 @@ void Atmosphere::Precompute(CommandList& list)
 	uavDesc.Texture2D.PlaneSlice = 0;
 	device->Native()->CreateUnorderedAccessView(deltaIrradianceComponent.allocation->GetResource(), nullptr, &uavDesc, deltaIrradianceUAV);
 
-	std::vector<uint32_t> constantBufferData;
-	constantBufferData.resize(sizeof(PrecomputeData) / 4);
-
 	// Transmission.
 
 	auto dispatchX = std::ceil((float)transmittanceComponent.description.width / groupSize);
@@ -108,7 +105,6 @@ void Atmosphere::Precompute(CommandList& list)
 	precomputeData.deltaMieTexture = 0;
 	precomputeData.deltaScatteringDensityTexture = 0;
 	precomputeData.deltaIrradianceTexture = 0;
-	std::memcpy(constantBufferData.data(), &precomputeData, constantBufferData.size() * sizeof(uint32_t));
 
 	list.TransitionBarrier(transmittanceTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	list.FlushBarriers();
@@ -116,7 +112,7 @@ void Atmosphere::Precompute(CommandList& list)
 	list.BindPipelineState(transmissionPrecompute);
 	list.BindDescriptorAllocator(device->GetDescriptorAllocator());
 	list.BindResourceTable("texturesRW", device->GetDescriptorAllocator().GetBindlessHeap());
-	list.BindConstants("precomputeData", constantBufferData);
+	list.BindConstants("precomputeData", precomputeData);
 	list.Native()->Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
 	list.UAVBarrier(transmittanceTexture);
 
@@ -133,7 +129,6 @@ void Atmosphere::Precompute(CommandList& list)
 	precomputeData.deltaMieTexture = 0;
 	precomputeData.deltaScatteringDensityTexture = 0;
 	precomputeData.deltaIrradianceTexture = deltaIrradianceUAV.bindlessIndex;
-	std::memcpy(constantBufferData.data(), &precomputeData, constantBufferData.size() * sizeof(uint32_t));
 
 	list.TransitionBarrier(transmittanceTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	list.TransitionBarrier(irradianceTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -144,7 +139,7 @@ void Atmosphere::Precompute(CommandList& list)
 	list.BindDescriptorAllocator(device->GetDescriptorAllocator());
 	list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
 	list.BindResourceTable("texturesRW", device->GetDescriptorAllocator().GetBindlessHeap());
-	list.BindConstants("precomputeData", constantBufferData);
+	list.BindConstants("precomputeData", precomputeData);
 	list.Native()->Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
 	list.UAVBarrier(deltaIrradianceTexture);
 	list.UAVBarrier(irradianceTexture);
@@ -162,7 +157,6 @@ void Atmosphere::Precompute(CommandList& list)
 	precomputeData.deltaMieTexture = deltaMieUAV.bindlessIndex;
 	precomputeData.deltaScatteringDensityTexture = 0;
 	precomputeData.deltaIrradianceTexture = 0;
-	std::memcpy(constantBufferData.data(), &precomputeData, constantBufferData.size() * sizeof(uint32_t));
 
 	list.TransitionBarrier(transmittanceTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 	list.TransitionBarrier(scatteringTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -174,7 +168,7 @@ void Atmosphere::Precompute(CommandList& list)
 	list.BindDescriptorAllocator(device->GetDescriptorAllocator());
 	list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
 	list.BindResourceTable("textures3DRW", device->GetDescriptorAllocator().GetBindlessHeap());
-	list.BindConstants("precomputeData", constantBufferData);
+	list.BindConstants("precomputeData", precomputeData);
 	list.Native()->Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
 	list.UAVBarrier(deltaRayleighTexture);
 	list.UAVBarrier(deltaMieTexture);
@@ -199,7 +193,6 @@ void Atmosphere::Precompute(CommandList& list)
 		precomputeData.deltaMieTexture = deltaMieComponent.SRV->bindlessIndex;
 		precomputeData.deltaScatteringDensityTexture = deltaScatteringDensityUAV.bindlessIndex;
 		precomputeData.deltaIrradianceTexture = deltaIrradianceComponent.SRV->bindlessIndex;
-		std::memcpy(constantBufferData.data(), &precomputeData, constantBufferData.size() * sizeof(uint32_t));
 
 		list.TransitionBarrier(transmittanceTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		list.TransitionBarrier(deltaRayleighTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -213,7 +206,7 @@ void Atmosphere::Precompute(CommandList& list)
 		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
 		list.BindResourceTable("textures3D", device->GetDescriptorAllocator().GetBindlessHeap());
 		list.BindResourceTable("textures3DRW", device->GetDescriptorAllocator().GetBindlessHeap());
-		list.BindConstants("precomputeData", constantBufferData);
+		list.BindConstants("precomputeData", precomputeData);
 		list.Native()->Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
 		list.UAVBarrier(deltaScatteringDensityTexture);
 
@@ -231,7 +224,6 @@ void Atmosphere::Precompute(CommandList& list)
 		precomputeData.deltaMieTexture = deltaMieComponent.SRV->bindlessIndex;
 		precomputeData.deltaScatteringDensityTexture = 0;
 		precomputeData.deltaIrradianceTexture = deltaIrradianceUAV.bindlessIndex;
-		std::memcpy(constantBufferData.data(), &precomputeData, constantBufferData.size() * sizeof(uint32_t));
 
 		list.TransitionBarrier(irradianceTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		list.TransitionBarrier(deltaRayleighTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
@@ -243,7 +235,7 @@ void Atmosphere::Precompute(CommandList& list)
 		list.BindDescriptorAllocator(device->GetDescriptorAllocator());
 		list.BindResourceTable("textures3D", device->GetDescriptorAllocator().GetBindlessHeap());
 		list.BindResourceTable("texturesRW", device->GetDescriptorAllocator().GetBindlessHeap());
-		list.BindConstants("precomputeData", constantBufferData);
+		list.BindConstants("precomputeData", precomputeData);
 		list.Native()->Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
 		list.UAVBarrier(deltaIrradianceTexture);
 		list.UAVBarrier(irradianceTexture);
@@ -261,7 +253,6 @@ void Atmosphere::Precompute(CommandList& list)
 		precomputeData.deltaMieTexture = 0;
 		precomputeData.deltaScatteringDensityTexture = deltaScatteringDensityComponent.SRV->bindlessIndex;
 		precomputeData.deltaIrradianceTexture = 0;
-		std::memcpy(constantBufferData.data(), &precomputeData, constantBufferData.size() * sizeof(uint32_t));
 
 		list.TransitionBarrier(transmittanceTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		list.TransitionBarrier(scatteringTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -273,7 +264,7 @@ void Atmosphere::Precompute(CommandList& list)
 		list.BindDescriptorAllocator(device->GetDescriptorAllocator());
 		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
 		list.BindResourceTable("textures3DRW", device->GetDescriptorAllocator().GetBindlessHeap());
-		list.BindConstants("precomputeData", constantBufferData);
+		list.BindConstants("precomputeData", precomputeData);
 		list.Native()->Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
 		list.UAVBarrier(deltaRayleighTexture);
 		list.UAVBarrier(scatteringTexture);
@@ -435,15 +426,11 @@ void Atmosphere::Render(RenderGraph& graph, PipelineBuilder& pipelines, RenderRe
 		bindData.irradianceTexture = device->GetResourceManager().Get(irradianceTexture).SRV->bindlessIndex;
 		bindData.solarZenithAngle = solarZenithAngle;
 
-		std::vector<uint32_t> bindConstants;
-		bindConstants.resize(sizeof(BindData) / 4);
-		std::memcpy(bindConstants.data(), &bindData, bindConstants.size() * sizeof(uint32_t));
-
 		list.BindPipelineState(pipelines["Atmosphere"]);
 		list.BindResource("camera", resources.GetBuffer(cameraBuffer));
 		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
 		list.BindResourceTable("textures3D", device->GetDescriptorAllocator().GetBindlessHeap());
-		list.BindConstants("bindData", bindConstants);
+		list.BindConstants("bindData", bindData);
 
 		list.DrawFullscreenQuad();
 	});

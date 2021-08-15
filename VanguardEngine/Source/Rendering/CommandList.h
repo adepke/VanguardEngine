@@ -7,6 +7,8 @@
 
 #include <Core/Windows/DirectX12Minimal.h>
 
+#include <cstring>
+
 class RenderDevice;
 class PipelineState;
 class DescriptorAllocator;
@@ -45,6 +47,8 @@ public:
 	void BindPipelineState(const PipelineState& state);
 	void BindDescriptorAllocator(DescriptorAllocator& allocator);
 	void BindConstants(const std::string& bindName, const std::vector<uint32_t>& data, size_t offset = 0);
+	template <typename T>
+	void BindConstants(const std::string& bindName, const T& data, size_t offset = 0);
 	void BindResource(const std::string& bindName, BufferHandle handle, size_t offset = 0);
 	void BindResourceTable(const std::string& bindName, D3D12_GPU_DESCRIPTOR_HANDLE descriptor);
 
@@ -53,3 +57,13 @@ public:
 	HRESULT Close();
 	HRESULT Reset();
 };
+
+template <typename T>
+void CommandList::BindConstants(const std::string& bindName, const T& data, size_t offset)
+{
+	std::vector<uint32_t> constants;
+	constants.resize(sizeof(T) / sizeof(uint32_t));
+	std::memcpy(constants.data(), &data, constants.size() * sizeof(uint32_t));
+
+	BindConstants(bindName, constants, offset);
+}
