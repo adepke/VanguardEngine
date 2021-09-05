@@ -9,7 +9,7 @@ project "Jobs"
 	
 	targetname "Jobs"
 	
-	includedirs { "Jobs/Include", "Jobs/Source", "Jobs/ThirdParty" }
+	includedirs { "Jobs/Include", "Jobs/ThirdParty" }
 	files { "**.h", "**.cpp" }
 	
 	disablewarnings { "5051" }

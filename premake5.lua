@@ -10,6 +10,7 @@ function IncludeThirdParty()
 	includedirs "VanguardEngine/ThirdParty/IconFontCppHeaders"
 	includedirs "VanguardEngine/ThirdParty/PIX/Include"
 	includedirs "VanguardEngine/ThirdParty/TinyGLTF"
+	includedirs "VanguardEngine/ThirdParty/spdlog/include"
 end
 
 function LinkThirdParty()
@@ -17,6 +18,7 @@ function LinkThirdParty()
 	libdirs "Build/ThirdParty/Jobs/Bin/*"
 	libdirs "Build/ThirdParty/Tracy/Bin/*"
 	libdirs "Build/ThirdParty/D3D12MemoryAllocator/Bin/*"
+	libdirs "Build/ThirdParty/spdlog/Bin/*"
 	libdirs "VanguardEngine/ThirdParty/DirectXShaderCompiler"
 	libdirs "VanguardEngine/ThirdParty/PIX"
 	
@@ -24,6 +26,7 @@ function LinkThirdParty()
 	links "Jobs"
 	links "TracyClient"
 	links "D3D12MemoryAllocator"
+	links "spdlog"
 	links "dxcompiler"
 	links "WinPixEventRuntime"
 end
@@ -34,6 +37,7 @@ function RunThirdParty()
 	include "VanguardEngine/ThirdParty/Jobs"
 	include "VanguardEngine/ThirdParty/Tracy"
 	include "VanguardEngine/ThirdParty/D3D12MemoryAllocator"
+	include "VanguardEngine/ThirdParty/spdlog"
 end
 
 workspace "Vanguard"
