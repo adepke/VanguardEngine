@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Andrew Depke
+// Copyright (c) 2019-2021 Andrew Depke
 
 #pragma once
 
@@ -16,45 +16,43 @@ namespace Jobs
 
 	class Worker
 	{
-		using EntryType = void(*)(Manager* const);
+		using EntryType = void(*)(void*);
 
 	private:
-		std::atomic_bool Ready;
-		Manager* Owner = nullptr;
-		std::thread ThreadHandle;
-		size_t ID;  // Manager-specific ID.
+		Manager* owner = nullptr;
+		std::thread threadHandle;
+		size_t id;  // Manager-specific ID.
 
-		Fiber* ThreadFiber = nullptr;
-		moodycamel::ConcurrentQueue<JobBuilder> JobQueue;
+		Fiber* threadFiber = nullptr;
+		moodycamel::ConcurrentQueue<JobBuilder> jobQueue;
 
-		static constexpr size_t InvalidFiberIndex = std::numeric_limits<size_t>::max();
+		static constexpr size_t invalidFiberIndex = std::numeric_limits<size_t>::max();
 
 	public:
-		Worker(Manager* const, size_t InID, EntryType Entry);
+		Worker(Manager* inOwner, size_t inID, EntryType entry);
 		Worker(const Worker&) = delete;
-		Worker(Worker&& Other) noexcept { Swap(Other); }
+		Worker(Worker&& other) noexcept { Swap(other); }
 		~Worker();
 
 		Worker& operator=(const Worker&) = delete;
-		Worker& operator=(Worker&& Other) noexcept
+		Worker& operator=(Worker&& other) noexcept
 		{
-			Swap(Other);
+			Swap(other);
 
 			return *this;
 		}
 
-		size_t FiberIndex = InvalidFiberIndex;  // Index into the owner's fiber pool that we're executing. We need this for rescheduling the thread fiber.
+		size_t fiberIndex = invalidFiberIndex;  // Index into the owner's fiber pool that we're executing. Allows for fibers to become aware of their own ID.
 
-		bool IsReady() const { return Ready.load(std::memory_order_acquire); }
-		std::thread& GetHandle() { return ThreadHandle; }
-		std::thread::id GetNativeID() const { return ThreadHandle.get_id(); }
-		size_t GetID() const { return ID; }
+		std::thread& GetHandle() { return threadHandle; }
+		std::thread::id GetNativeID() const { return threadHandle.get_id(); }
+		size_t GetID() const { return id; }
 
-		Fiber& GetThreadFiber() const { return *ThreadFiber; }
-		moodycamel::ConcurrentQueue<JobBuilder>& GetJobQueue() { return JobQueue; }
+		Fiber& GetThreadFiber() const { return *threadFiber; }
+		moodycamel::ConcurrentQueue<JobBuilder>& GetJobQueue() { return jobQueue; }
 
-		constexpr bool IsValidFiberIndex(size_t Index) const { return Index != InvalidFiberIndex; }
+		constexpr bool IsValidFiberIndex(size_t index) const { return index != invalidFiberIndex; }
 
-		void Swap(Worker& Other) noexcept;
+		void Swap(Worker& other) noexcept;
 	};
 }

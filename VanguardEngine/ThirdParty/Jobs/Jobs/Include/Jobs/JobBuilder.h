@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Andrew Depke
+// Copyright (c) 2019-2021 Andrew Depke
 
 #pragma once
 
@@ -12,7 +12,7 @@ namespace Jobs
 
 	private:
 		using TreeType = std::vector<std::pair<std::vector<Job>, std::shared_ptr<Counter<>>>>;
-		TreeType* JobTree = nullptr;  // We need a heap pointer so that the counter resources can be managed beyond the lifetime of this object, which will be thrown away once we execute.
+		TreeType* jobTree = nullptr;  // We need a heap pointer so that the counter resources can be managed beyond the lifetime of this object, which will be thrown away once we execute.
 
 		// Disabled indefinitely (for usage outside of the job system's internals). Did not find a clean solution for having the cleanup job signal
 		// this object that the resource has been destroyed. Attempting to get the counter without such synchronization is unsafe since the cleanup
@@ -21,71 +21,71 @@ namespace Jobs
 		// custom data wrapper with an atomic flag, but ran into the same problem.
 		Counter<>& GetCounter() const
 		{
-			return *std::prev(JobTree->end())->second;  // Return the last counter.
+			return *std::prev(jobTree->end())->second;  // Return the last counter.
 		}
 
 	public:
 		JobBuilder() = default;
-		JobBuilder(Job::EntryType InEntry, void* InData = nullptr) : Job(InEntry, InData) { Stream = true; JobTree = new TreeType{}; }
+		JobBuilder(Job::EntryType entry, void* data = nullptr) : Job(entry, data) { stream = true; jobTree = new TreeType{}; }
 		JobBuilder(const JobBuilder&) = default;
 		// Do not delete JobTree in the destructor, that would tie us to a stack lifetime.
 
 		// Since we rely on slicing, we need to be careful about swapping garbage.
-		JobBuilder(JobBuilder&& Other) noexcept : Job(Other)
+		JobBuilder(JobBuilder&& other) noexcept : Job(other)
 		{
-			if (Other.Stream)
+			if (other.stream)
 			{
-				JobTree = std::move(Other.JobTree);
+				jobTree = std::move(other.jobTree);
 			}
 		}
 
-		JobBuilder& operator=(JobBuilder&& Other) noexcept
+		JobBuilder& operator=(JobBuilder&& other) noexcept
 		{
-			Job::operator=(std::forward<Job>(static_cast<Job&&>(Other)));
+			Job::operator=(std::forward<Job>(static_cast<Job&&>(other)));
 
-			if (Other.Stream)
+			if (other.stream)
 			{
-				JobTree = std::move(Other.JobTree);
+				jobTree = std::move(other.jobTree);
 			}
 
 			return *this;
 		}
 		
 		template <typename... T>
-		JobBuilder& Then(T&&... Next)
+		JobBuilder& Then(T&&... next)
 		{
-			static_assert((std::is_same_v<std::decay_t<decltype(Next)>, Job> && ...), "Job building can only append jobs in Then()");
+			static_assert((std::is_same_v<std::decay_t<decltype(next)>, Job> && ...), "Job building can only append jobs in Then()");
 
-			JobTree->push_back(std::make_pair(std::vector{ Next... }, std::make_shared<Counter<>>()));  // #TODO: Heap pool.
+			jobTree->push_back(std::make_pair(std::vector{ next... }, std::make_shared<Counter<>>()));  // #TODO: Heap pool.
 
 			return *this;
 		}
 
 		// Disabled indefinitely. See GetCounter().
 		/*
-		void Wait(Counter<>::Type ExpectedValue)
+		void Wait(Counter<>::Type expectedValue)
 		{
-			if (auto ThisCounter{ std::move(GetCounter()) }; ThisCounter)
+			if (auto thisCounter{ std::move(GetCounter()) }; thisCounter)
 			{
-				ThisCounter->Wait(ExpectedValue);
+				thisCounter->Wait(expectedValue);
 			}
 		}
 
 		template <typename Rep, typename Period>
-		void WaitFor(Counter<>::Type ExpectedValue, const std::chrono::duration<Rep, Period>& Timeout)
+		void WaitFor(Counter<>::Type expectedValue, const std::chrono::duration<Rep, Period>& timeout)
 		{
-			if (auto ThisCounter{ std::move(GetCounter()) }; ThisCounter)
+			if (auto thisCounter{ std::move(GetCounter()) }; thisCounter)
 			{
-				ThisCounter->WaitFor(ExpectedValue, Timeout);
+				thisCounter->WaitFor(expectedValue, timeout);
 			}
 		}
 		*/
 
-		void operator()(Manager* InOwner);
+		void operator()(Manager* owner);
 	};
 
-	inline JobBuilder MakeJob(Job::EntryType InEntry, void* InData = nullptr)
+	inline JobBuilder MakeJob(Job::EntryType entry, void* data = nullptr)
 	{
-		return JobBuilder{ InEntry, InData };
+		return JobBuilder{ entry, data };
 	}
 }

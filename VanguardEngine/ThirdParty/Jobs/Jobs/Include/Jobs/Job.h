@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Andrew Depke
+// Copyright (c) 2019-2021 Andrew Depke
 
 #pragma once
 
@@ -15,41 +15,41 @@ namespace Jobs
 	class Job
 	{
 		friend class Manager;
-		friend void ManagerFiberEntry(void* Data);
+		friend void ManagerFiberEntry(void*);
 
 	public:
-		using EntryType = void(*)(void* Data);
-		EntryType Entry = nullptr;
+		using EntryType = void(*)(Manager*, void*);
+		EntryType entry = nullptr;
 
 	protected:
-		bool Stream = false;  // Bit to determine if we're a stream structure (JobBuilder).
+		bool stream = false;  // Bit to determine if we're a stream structure (JobBuilder).
 
-		void* Data = nullptr;
-		std::weak_ptr<Counter<>> AtomicCounter;
+		void* data = nullptr;
+		std::weak_ptr<Counter<>> atomicCounter;
 
 		// List of dependencies this job needs before executing. Pairs of counters to expected values.
 		using DependencyType = std::pair<std::weak_ptr<Counter<>>, Counter<>::Type>;
 		// MSVC throws errors with the stack allocator in debugging mode, so just turn it off unless we're in an optimized build.
-#if _DEBUG || NDEBUG
-		std::vector<DependencyType> Dependencies;
+#if !NDEBUG
+		std::vector<DependencyType> dependencies;
 #else
-		std::vector<DependencyType, DependencyAllocator<DependencyType, 2>> Dependencies;
+		std::vector<DependencyType, DependencyAllocator<DependencyType, 2>> dependencies;
 #endif
 
 	public:
 		Job() = default;
-		Job(EntryType InEntry, void* InData = nullptr) : Entry(InEntry), Data(InData) {}
+		Job(EntryType inEntry, void* inData = nullptr) : entry(inEntry), data(inData) {}
 
-		void AddDependency(const std::shared_ptr<Counter<>>& Handle, const Counter<>::Type ExpectedValue = Counter<>::Type{ 0 })
+		void AddDependency(const std::shared_ptr<Counter<>>& handle, const Counter<>::Type expectedValue = Counter<>::Type{ 0 })
 		{
-			Dependencies.push_back({ Handle, ExpectedValue });
+			dependencies.push_back({ handle, expectedValue });
 		}
 
-		void operator()()
+		void operator()(Manager* owner)
 		{
-			JOBS_ASSERT(Entry, "Attempted to execute empty job.");
+			JOBS_ASSERT(entry, "Attempted to execute empty job.");
 
-			return Entry(Data);
+			return entry(owner, data);
 		}
 	};
 }

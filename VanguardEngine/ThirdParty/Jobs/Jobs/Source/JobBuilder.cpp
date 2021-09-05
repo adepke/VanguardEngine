@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Andrew Depke
+// Copyright (c) 2019-2021 Andrew Depke
 
 #include <Jobs/JobBuilder.h>
 
@@ -6,33 +6,33 @@
 
 namespace Jobs
 {
-	void JobBuilder::operator()(Manager* InOwner)
+	void JobBuilder::operator()(Manager* owner)
 	{
 		// Execute our actual job before anything else, cache will probably be wiped out by the time we're back.
-		(*Entry)(Data);
+		(*entry)(owner, data);
 
-		for (size_t Iter{ 0 }; Iter < JobTree->size(); ++Iter)
+		for (size_t iter{ 0 }; iter < jobTree->size(); ++iter)
 		{
-			for (auto& NextJob : (*JobTree)[Iter].first)
+			for (auto& nextJob : (*jobTree)[iter].first)
 			{
-				if (Iter > 0)
+				if (iter > 0)
 				{
-					NextJob.AddDependency((*JobTree)[Iter - 1].second);
+					nextJob.AddDependency((*jobTree)[iter - 1].second);
 				}
 
-				InOwner->Enqueue(std::move(NextJob), (*JobTree)[Iter].second);  // Increments the counter prior to the depending jobs' enqueue.
+				owner->Enqueue(std::move(nextJob), (*jobTree)[iter].second);  // Increments the counter prior to the depending jobs' enqueue.
 			}
 		}
 
-		auto LockedCounter{ std::prev(JobTree->end())->second };  // We hold the heap resource keeping this counter alive, it will persist until the cleanup job runs.
-		LockedCounter->operator--();  // We queued up the jobs so the counter is guaranteed to be ready.
+		auto lockedCounter{ std::prev(jobTree->end())->second };  // We hold the heap resource keeping this counter alive, it will persist until the cleanup job runs.
+		lockedCounter->operator--();  // We queued up the jobs so the counter is guaranteed to be ready.
 
-		auto CleanupJob{ Job{ [](auto Payload)
+		auto cleanupJob{ Job{ [](auto, auto payload)
 		{
-			delete reinterpret_cast<TreeType*>(Payload);
-		}, static_cast<void*>(JobTree) } };
-		CleanupJob.AddDependency(LockedCounter, 0);
+			delete reinterpret_cast<TreeType*>(payload);
+		}, static_cast<void*>(jobTree) } };
+		cleanupJob.AddDependency(lockedCounter, 0);
 
-		InOwner->Enqueue(std::move(CleanupJob));  // This trailing job will cleanup the heap resources allocated from the job builder after every job has ran.
+		owner->Enqueue(std::move(cleanupJob));  // This trailing job will cleanup the heap resources allocated from the job builder after every job has ran.
 	}
 }

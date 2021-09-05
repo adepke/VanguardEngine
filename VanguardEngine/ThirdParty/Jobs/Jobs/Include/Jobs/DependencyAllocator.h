@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Andrew Depke
+// Copyright (c) 2019-2021 Andrew Depke
 
 #pragma once
 
@@ -18,14 +18,14 @@ namespace Jobs
 		using is_always_equal = std::true_type;
 
 	private:
-		std::aligned_storage_t<sizeof(T) * Size, alignof(T)> InlineBuffer = {};
-		value_type* Pointer;  // Points to next available space in inline buffer.
+		std::aligned_storage_t<sizeof(T) * Size, alignof(T)> inlineBuffer = {};
+		value_type* pointer;  // Points to next available space in inline buffer.
 
 	public:
-		constexpr DependencyAllocator() noexcept : Pointer{ reinterpret_cast<value_type*>(&InlineBuffer) } {}
-		constexpr DependencyAllocator(const DependencyAllocator& Other) noexcept : Pointer{ reinterpret_cast<value_type*>(&InlineBuffer) } {}
+		constexpr DependencyAllocator() noexcept : pointer{ reinterpret_cast<value_type*>(&inlineBuffer) } {}
+		constexpr DependencyAllocator(const DependencyAllocator& Other) noexcept : pointer{ reinterpret_cast<value_type*>(&inlineBuffer) } {}
 		template <typename U>
-		constexpr DependencyAllocator(const DependencyAllocator<U, Size>& Other) noexcept : Pointer{ reinterpret_cast<value_type*>(&InlineBuffer) } {}
+		constexpr DependencyAllocator(const DependencyAllocator<U, Size>& Other) noexcept : pointer{ reinterpret_cast<value_type*>(&inlineBuffer) } {}
 
 		template <typename U>
 		struct rebind
@@ -37,12 +37,12 @@ namespace Jobs
 		constexpr T* allocate(size_t n)
 		{
 			// First attempt to inline allocate.
-			if (reinterpret_cast<value_type*>(&InlineBuffer) + Size - Pointer >= static_cast<std::ptrdiff_t>(n))
+			if (reinterpret_cast<value_type*>(&inlineBuffer) + Size - pointer >= static_cast<std::ptrdiff_t>(n))
 			{
-				const auto Old = Pointer;
-				Pointer += n;
+				const auto old = pointer;
+				pointer += n;
 
-				return Old;
+				return old;
 			}
 
 			// Fall back to heap allocation.
@@ -51,12 +51,12 @@ namespace Jobs
 
 		constexpr void deallocate(T* p, size_t n)
 		{
-			if (reinterpret_cast<value_type*>(&InlineBuffer) <= p && p < reinterpret_cast<value_type*>(&InlineBuffer) + Size)
+			if (reinterpret_cast<value_type*>(&inlineBuffer) <= p && p < reinterpret_cast<value_type*>(&inlineBuffer) + Size)
 			{
 				// Stack allocated, do nothing.
-				if (p + n == Pointer)
+				if (p + n == pointer)
 				{
-					Pointer = p;
+					pointer = p;
 				}
 			}
 
@@ -69,8 +69,8 @@ namespace Jobs
 	};
 
 	template <typename T1, typename T2, size_t Size>
-	constexpr bool operator==(const DependencyAllocator<T1, Size>& Left, const DependencyAllocator<T2, Size>& Right) noexcept
+	constexpr bool operator==(const DependencyAllocator<T1, Size>& left, const DependencyAllocator<T2, Size>& right) noexcept
 	{
-		return &Left.InlineBuffer == &Right.InlineBuffer;
+		return &left.inlineBuffer == &right.inlineBuffer;
 	}
 }

@@ -1,117 +1,85 @@
-// Copyright (c) 2019 Andrew Depke
+// Copyright (c) 2019-2021 Andrew Depke
 
 #include <Jobs/Fiber.h>
 
+#include <Jobs/FiberRoutines.h>
 #include <Jobs/Logging.h>
 #include <Jobs/Assert.h>
+#include <Jobs/Profiling.h>
 
 #include <utility>  // std::swap
 
-#if defined(_WIN32) || defined(_WIN64)
-#define PLATFORM_WINDOWS 1
-#include <Jobs/WindowsMinimal.h>
+#if JOBS_PLATFORM_WINDOWS
+  #include <Jobs/WindowsMinimal.h>
 #else
-#define PLATFORM_POSIX 1
-#include <ucontext.h>
-#endif
-
-#ifndef PLATFORM_WINDOWS
-#define PLATFORM_WINDOWS 0
-#endif
-#ifndef PLATFORM_POSIX
-#define PLATFORM_POSIX 0
+  #include <unistd.h>
+  #include <cstdlib>
 #endif
 
 namespace Jobs
 {
-	void FiberEntry(void* Data)
+	Fiber::Fiber(size_t stackSize, EntryType entry, Manager* owner) : data(reinterpret_cast<void*>(owner))
 	{
-		JOBS_LOG(LogLevel::Log, "Fiber entry.");
-	}
+		JOBS_SCOPED_STAT("Fiber Creation");
 
-	Fiber::Fiber(size_t StackSize, decltype(&FiberEntry) Entry, void* Arg) : Data(Arg)
-	{
 		JOBS_LOG(LogLevel::Log, "Building fiber.");
-		JOBS_ASSERT(StackSize > 0, "Stack size must be greater than 0.");
+		JOBS_ASSERT(stackSize > 0, "Stack size must be greater than 0.");
 
-#if PLATFORM_WINDOWS
-		Context = CreateFiber(StackSize, Entry, Arg);
+		// Perform a page-aligned allocation for the stack. This is needed to allow for canary pages in overrun detection.
+
+#if JOBS_PLATFORM_WINDOWS
+		SYSTEM_INFO sysInfo{};
+		GetSystemInfo(&sysInfo);
+		const auto alignment = sysInfo.dwPageSize;
+
+		stack = _aligned_malloc(stackSize, alignment);
 #else
-		ucontext_t* NewContext = new ucontext_t{};
-		JOBS_ASSERT(getcontext(NewContext) == 0, "Error occurred in getcontext().");
+		const auto alignment = getpagesize();
 
-		auto* Stack = new std::byte[StackSize];
-		NewContext->uc_stack.ss_sp = Stack;
-		NewContext->uc_stack.ss_size = sizeof(std::byte) * StackSize;
-		NewContext->uc_link = nullptr;  // Exit thread on fiber return.
-
-		makecontext(NewContext, Entry, 0);
-
-		Context = static_cast<void*>(NewContext);
+		stack = std::aligned_alloc(alignment, stackSize);
 #endif
 
-		JOBS_ASSERT(Context, "Failed to build fiber.");
+		void* stackTop = reinterpret_cast<std::byte*>(stack) + (stackSize * sizeof(std::byte));
+
+		context = make_fcontext(stackTop, stackSize, entry);
+
+		JOBS_ASSERT(context, "Failed to build fiber.");
 	}
 
-	Fiber::Fiber(Fiber&& Other) noexcept
+	Fiber::Fiber(Fiber&& other) noexcept
 	{
-		Swap(Other);
+		Swap(other);
 	}
 
 	Fiber::~Fiber()
 	{
-#if PLATFORM_WINDOWS
-		if (Context)
-		{
-			// We only want to log when an actual fiber was destroyed, not the shell of a fiber that was moved.
-			JOBS_LOG(LogLevel::Log, "Destroying fiber.");
-
-			DeleteFiber(Context);
-		}
+#if JOBS_PLATFORM_WINDOWS
+		_aligned_free(stack);
 #else
-		delete[] Context->uc_stack.ss_sp;
-		delete Context;
+		std::free(stack);
 #endif
 	}
 
-	Fiber& Fiber::operator=(Fiber&& Other) noexcept
+	Fiber& Fiber::operator=(Fiber&& other) noexcept
 	{
-		Swap(Other);
+		Swap(other);
 
 		return *this;
 	}
 
-	void Fiber::Schedule(const Fiber& From)
+	void Fiber::Schedule(Fiber& from)
 	{
+		JOBS_SCOPED_STAT("Fiber Schedule");
+
 		JOBS_LOG(LogLevel::Log, "Scheduling fiber.");
 
-#if PLATFORM_WINDOWS
-		// #TODO Should this be windows only? Explore behavior of posix fibers swapping to themselves.
-		JOBS_ASSERT(Context != GetCurrentFiber(), "Fibers scheduling themselves causes unpredictable issues.");
-
-		SwitchToFiber(Context);
-#else
-		JOBS_ASSERT(swapcontext(static_cast<ucontext_t*>(From.Context), static_cast<ucontext_t*>(Context)) == 0, "Failed to schedule fiber.");
-#endif
+		jump_fcontext(&from.context, context, data);
 	}
 
-	void Fiber::Swap(Fiber& Other) noexcept
+	void Fiber::Swap(Fiber& other) noexcept
 	{
-		std::swap(Context, Other.Context);
-		std::swap(Data, Other.Data);
-	}
-
-	Fiber* Fiber::FromThisThread(void* Arg)
-	{
-		auto* Result{ new Fiber{} };
-
-#if PLATFORM_WINDOWS
-		Result->Context = ConvertThreadToFiber(Arg);
-#else
-		Result->Context = new ucontext_t{};
-		JOBS_ASSERT(getcontext(Result->Context) == 0, "Error occurred in getcontext().");
-#endif
-
-		return Result;
+		std::swap(context, other.context);
+		std::swap(stack, other.stack);
+		std::swap(data, other.data);
 	}
 }

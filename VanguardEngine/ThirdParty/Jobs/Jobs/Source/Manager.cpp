@@ -1,7 +1,8 @@
-// Copyright (c) 2019 Andrew Depke
+// Copyright (c) 2019-2021 Andrew Depke
 
 #include <Jobs/Manager.h>
 
+#include <Jobs/FiberMutex.h>
 #include <Jobs/Assert.h>
 #include <Jobs/Logging.h>
 
@@ -9,227 +10,254 @@
 
 namespace Jobs
 {
-	void ManagerWorkerEntry(Manager* const Owner)
+	void ManagerWorkerEntry(void* data)
 	{
-		JOBS_ASSERT(Owner, "Manager thread entry missing owner.");
+		auto* owner = reinterpret_cast<Manager*>(data);
+
+		JOBS_ASSERT(owner, "Manager thread entry missing owner.");
 
 		// Spin until the manager is ready.
-		while (!Owner->Ready.load(std::memory_order_acquire))[[unlikely]]
+		while (!owner->ready.load(std::memory_order_acquire))[[unlikely]]
 		{
 			std::this_thread::yield();
 		}
 
-		auto& Representation{ Owner->Workers[Owner->GetThisThreadID()] };
+		auto& representation{ owner->workers[owner->GetThisThreadID()] };
 
 		// We don't have a fiber at this point, so grab an available fiber.
-		auto NextFiberIndex{ Owner->GetAvailableFiber() };
-		JOBS_ASSERT(Owner->IsValidID(NextFiberIndex), "Failed to retrieve an available fiber from worker.");
+		auto nextFiberIndex{ owner->GetAvailableFiber() };
+		JOBS_ASSERT(owner->IsValidID(nextFiberIndex), "Failed to retrieve an available fiber from worker.");
 
-		Representation.FiberIndex = NextFiberIndex;
+		auto& nextFiber = owner->fibers[nextFiberIndex];
+		representation.fiberIndex = nextFiberIndex;  // Update the fiber index.
+		nextFiber.first.Schedule(representation.GetThreadFiber());
 
-		// Schedule the fiber, which executes the work. We will resume here when the manager is shutting down.
-		Owner->Fibers[NextFiberIndex].first.Schedule(Owner->Workers[Owner->GetThisThreadID()].GetThreadFiber());
+		JOBS_LOG(LogLevel::Log, "Worker Shutdown | ID: %i", representation.GetID());
 
-		JOBS_LOG(LogLevel::Log, "Worker Shutdown | ID: %i", Representation.GetID());
-
-		// Kill ourselves. #TODO: This is a little dirty, we should fix this so that we perform the standard thread cleanup procedure and get a return code of 0.
-		delete &Representation.GetThreadFiber();
+		// Exit the thread, this will not return to the host thread, but instead perform standard thread exit procedure.
 	}
 
-	void ManagerFiberEntry(void* Data)
+	void ManagerFiberEntry(void* data)
 	{
-		JOBS_ASSERT(Data, "Manager fiber entry missing data.");
+		JOBS_ASSERT(data, "Manager fiber entry missing data.");
 
-		auto FData = static_cast<FiberData*>(Data);
+		auto* owner = reinterpret_cast<Manager*>(data);
 
-		while (FData->Owner->CanContinue())
+		while (owner->CanContinue())
 		{
-			// Cleanup an unfinished state from the previous fiber if we need to.
-			auto& ThisFiber{ FData->Owner->Fibers[FData->Owner->Workers[FData->Owner->GetThisThreadID()].FiberIndex] };
-			const auto PreviousFiberIndex{ ThisFiber.first.PreviousFiberIndex };
-			if (FData->Owner->IsValidID(PreviousFiberIndex))
-			{
-				ThisFiber.first.PreviousFiberIndex = Manager::InvalidID;  // Reset.
-				auto& PreviousFiber{ FData->Owner->Fibers[PreviousFiberIndex] };
+			const auto thisThreadID = owner->GetThisThreadID();
 
-				// We're back, first make sure we restore availability to the fiber that scheduled us or enqueue it in the wait pool.
-				if (PreviousFiber.first.NeedsWaitEnqueue)
+			// Cleanup any unfinished state from the previous fiber if we need to.
+			auto& thisFiber{ owner->fibers[owner->workers[thisThreadID].fiberIndex] };
+			auto previousFiberIndex{ thisFiber.first.previousFiberIndex };
+			if (owner->IsValidID(previousFiberIndex))
+			{
+				thisFiber.first.previousFiberIndex = Manager::invalidID;  // Reset.
+				auto& previousFiber{ owner->fibers[previousFiberIndex] };
+
+				// Next make sure we restore availability to the fiber that scheduled us or enqueue it in the wait pool.
+				if (previousFiber.first.needsWaitEnqueue)
 				{
-					PreviousFiber.first.NeedsWaitEnqueue = false;  // Reset.
-					FData->Owner->WaitingFibers.enqueue(PreviousFiberIndex);
+					previousFiber.first.needsWaitEnqueue = false;  // Reset.
+					owner->waitingFibers.enqueue(previousFiberIndex);
 				}
 
 				else
 				{
-					PreviousFiber.second.store(true);  // #TODO: Memory order.
+					previousFiber.second.store(true);  // #TODO: Memory order.
 				}
 			}
 
-			const auto ThisThreadID{ FData->Owner->GetThisThreadID() };
-			auto& ThisThread{ FData->Owner->Workers[ThisThreadID] };
-			ThisFiber.first.WaitPoolPriority = !ThisFiber.first.WaitPoolPriority;  // Alternate wait pool priority.
+			auto& thisThread{ owner->workers[thisThreadID] };
+			thisFiber.first.waitPoolPriority = !thisFiber.first.waitPoolPriority;  // Alternate wait pool priority.
 
-			bool Continue = !ThisFiber.first.WaitPoolPriority || FData->Owner->WaitingFibers.size_approx() == 0;  // Used to favor jobs or waiters.
+			bool shouldContinue = !thisFiber.first.waitPoolPriority || owner->waitingFibers.size_approx() == 0;  // Used to favor jobs or waiters.
 
-			if (Continue)
+			if (shouldContinue)
 			{
-				auto NewJob{ std::move(FData->Owner->Dequeue(ThisThreadID)) };
-				if (NewJob)
+				auto newJob{ std::move(owner->Dequeue(thisThreadID)) };
+				if (newJob)
 				{
-					Continue = false;  // We're satisfied, don't continue.
+					shouldContinue = false;  // We're satisfied, don't continue.
 
 					// Loop until we satisfy all of our dependencies.
-					bool RequiresEvaluation = true;
-					while (RequiresEvaluation)
+					bool requiresEvaluation = true;
+					while (requiresEvaluation)
 					{
-						RequiresEvaluation = false;
+						requiresEvaluation = false;
 
-						for (const auto& Dependency : NewJob->Dependencies)
+						for (const auto& dependency : newJob->dependencies)
 						{
-							if (auto StrongDependency{ Dependency.first.lock() }; !StrongDependency->UnsafeWait(Dependency.second, std::chrono::milliseconds{ 1 }))
+							if (auto strongDependency{ dependency.first.lock() }; !strongDependency->UnsafeWait(dependency.second, std::chrono::milliseconds{ 1 }))
 							{
 								// This dependency timed out, move ourselves to the wait pool.
 								JOBS_LOG(LogLevel::Log, "Job dependencies timed out, moving to the wait pool.");
 
-								auto NextFiberIndex{ FData->Owner->GetAvailableFiber() };
-								JOBS_ASSERT(FData->Owner->IsValidID(NextFiberIndex), "Failed to retrieve an available fiber from waiting fiber.");
+								auto nextFiberIndex{ owner->GetAvailableFiber() };
+								JOBS_ASSERT(owner->IsValidID(nextFiberIndex), "Failed to retrieve an available fiber from waiting fiber.");
+								auto& nextFiber = owner->fibers[nextFiberIndex].first;
 
-								auto& ThisThreadLocal = FData->Owner->Workers[FData->Owner->GetThisThreadID()];  // We might resume on any worker, so we need to update this each iteration.
+								auto& thisNewThread = owner->workers[owner->GetThisThreadID()];  // We might resume on any worker, so we need to update this each iteration.
 
-								ThisFiber.first.NeedsWaitEnqueue = true;  // We are waiting on a dependency, so make sure we get added to the wait pool.
-								FData->Owner->Fibers[NextFiberIndex].first.PreviousFiberIndex = ThisThreadLocal.FiberIndex;
-								ThisThreadLocal.FiberIndex = NextFiberIndex;  // Update the fiber index.
-								FData->Owner->Fibers[NextFiberIndex].first.Schedule(FData->Owner->Fibers[ThisThread.FiberIndex].first);
+								thisFiber.first.needsWaitEnqueue = true;  // We are waiting on a dependency, so make sure we get added to the wait pool.
+								nextFiber.previousFiberIndex = thisNewThread.fiberIndex;
+								thisNewThread.fiberIndex = nextFiberIndex;  // Update the fiber index.
+								nextFiber.Schedule(thisFiber.first);
 
 								JOBS_LOG(LogLevel::Log, "Job resumed from wait pool, re-evaluating dependencies.");
 
+								// We just returned from a fiber, so we need to make sure to fix up its state. We can't wait until the main loop begins again
+								// because if any of the dependencies still hold, we lose that information about the previous fiber, causing a leak.
+
+								previousFiberIndex = thisFiber.first.previousFiberIndex;
+								if (owner->IsValidID(previousFiberIndex))
+								{
+									thisFiber.first.previousFiberIndex = Manager::invalidID;  // Reset. Skipping this will cause a double-cleanup on the next loop beginning if the dependency doesn't hold.
+									auto& previousFiber{ owner->fibers[previousFiberIndex] };
+
+									if (previousFiber.first.needsWaitEnqueue)
+									{
+										previousFiber.first.needsWaitEnqueue = false;  // Reset.
+										owner->waitingFibers.enqueue(previousFiberIndex);
+									}
+
+									else
+									{
+										previousFiber.second.store(true);  // #TODO: Memory order.
+									}
+								}
+
 								// Next we can re-evaluate the dependencies.
-								RequiresEvaluation = true;
+								requiresEvaluation = true;
 							}
 						}
 					}
 
-					if (NewJob->Stream) [[unlikely]]
+					if (newJob->stream) [[unlikely]]
 					{
-						(*NewJob)(FData->Owner);
+						(*newJob)(owner);
 					}
 
 					else
 					{
-						(static_cast<Job>(*NewJob))();  // Slice.
+						(static_cast<Job>(*newJob))(owner);  // Slice.
 					}
 
 					// Finished, notify the counter if we have one. Handles expired counters (cleanup jobs) fine.
-					if (auto StrongCounter{ NewJob->AtomicCounter.lock() })
+					if (auto strongCounter{ newJob->atomicCounter.lock() })
 					{
-						StrongCounter->operator--();
+						strongCounter->operator--();
 					}
 				}
 			}
 
-			if (Continue)
+			if (shouldContinue)
 			{
-				size_t WaitingFiberIndex = Manager::InvalidID;
-				if (FData->Owner->WaitingFibers.try_dequeue(WaitingFiberIndex))
+				size_t waitingFiberIndex = Manager::invalidID;
+				if (owner->waitingFibers.try_dequeue(waitingFiberIndex))
 				{
-					Continue = false;  // Satisfied, don't continue.
+					auto& waitingFiber{ owner->fibers[waitingFiberIndex].first };
 
-					auto& WaitingFiber{ FData->Owner->Fibers[WaitingFiberIndex].first };
+					JOBS_ASSERT(!thisFiber.first.needsWaitEnqueue, "Logic error, should never request an enqueue if we pulled down a fiber through a dequeue.");
 
-					JOBS_ASSERT(!ThisFiber.first.NeedsWaitEnqueue, "Logic error, should never request an enqueue if we pulled down a fiber through a dequeue.");
+					// Before we schedule the waiting fiber, we need to check if it's waiting on a mutex.
+					if (waitingFiber.mutex && !waitingFiber.mutex->try_lock())
+					{
+						JOBS_LOG(LogLevel::Log, "Waiting fiber failed to acquire mutex.");
 
-					WaitingFiber.PreviousFiberIndex = ThisThread.FiberIndex;
-					ThisThread.FiberIndex = WaitingFiberIndex;
-					WaitingFiber.Schedule(ThisFiber.first);  // Schedule the waiting fiber. It might be a long time before we resume, if ever.
+						// Move the waiting fiber to the back of the wait queue. We don't need to mark either fiber as needing a wait enqueue
+						// since we never left this fiber.
+						owner->waitingFibers.enqueue(waitingFiberIndex);
+
+						// Fall through and continue on this fiber.
+					}
+
+					else
+					{
+						shouldContinue = false;  // Satisfied, don't continue.
+
+						waitingFiber.previousFiberIndex = thisThread.fiberIndex;
+						thisThread.fiberIndex = waitingFiberIndex;
+						waitingFiber.Schedule(thisFiber.first);  // Schedule the waiting fiber. We're not a waiter, so we'll be marked as available.
+					}
 				}
 			}
 
-			if (Continue)
+			if (shouldContinue)
 			{
 				JOBS_LOG(LogLevel::Log, "Fiber sleeping.");
 
-				FData->Owner->QueueCV.Lock();
+				owner->queueCV.Lock();
 
 				// Test the shutdown condition once more under lock, as it could've been set during the transitional period.
-				if (!FData->Owner->CanContinue())
+				if (!owner->CanContinue())
 				{
-					FData->Owner->QueueCV.Unlock();
+					owner->queueCV.Unlock();
 
 					break;
 				}
 
-				FData->Owner->QueueCV.Wait();  // We will be woken up either by a shutdown event or if new work is available.
-				FData->Owner->QueueCV.Unlock();
+				owner->queueCV.Wait();  // We will be woken up either by a shutdown event or if new work is available.
+				owner->queueCV.Unlock();
 			}
 		}
 
-		// End of fiber lifetime, we are switching out to the worker thread to perform any final cleanup. We cannot be scheduled again beyond this point.
-		auto& ActiveWorker{ FData->Owner->Workers[FData->Owner->GetThisThreadID()] };
+		const auto& thisWorker = owner->workers[owner->GetThisThreadID()];
 
-		ActiveWorker.GetThreadFiber().Schedule(FData->Owner->Fibers[ActiveWorker.FiberIndex].first);
+		// End of fiber lifetime, we are switching out to the worker thread to perform any final cleanup. We cannot be scheduled again beyond this point.
+		thisWorker.GetThreadFiber().Schedule(owner->fibers[thisWorker.fiberIndex].first);
 
 		JOBS_ASSERT(false, "Dead fiber was rescheduled.");
 	}
 
 	Manager::~Manager()
 	{
-		QueueCV.Lock();  // This is used to make sure we don't let any fibers slip by and not catch the shutdown notify, which causes a deadlock.
-		Shutdown.store(true, std::memory_order_seq_cst);
+		queueCV.Lock();  // This is used to make sure we don't let any fibers slip by and not catch the shutdown notify, which causes a deadlock.
+		shutdown.store(true, std::memory_order_seq_cst);
 
-		QueueCV.NotifyAll();  // Wake all sleepers, it's time to shutdown.
-		QueueCV.Unlock();
+		queueCV.NotifyAll();  // Wake all sleepers, it's time to shutdown.
+		queueCV.Unlock();
 
 		// Wait for all of the workers to die before deleting the fiber data.
-		for (auto& Worker : Workers)
+		for (auto& worker : workers)
 		{
-			Worker.GetHandle().join();
+			worker.GetHandle().join();
 		}
 	}
 
-	void Manager::Initialize(size_t ThreadCount)
+	void Manager::Initialize(size_t threadCount)
 	{
-		JOBS_ASSERT(ThreadCount <= std::thread::hardware_concurrency(), "Job manager thread count should not exceed hardware concurrency.");
+		JOBS_ASSERT(threadCount <= std::thread::hardware_concurrency(), "Job manager thread count should not exceed hardware concurrency.");
 
-		Data = std::move(std::make_unique<FiberData>(this));
-
-		for (auto Iter = 0; Iter < FiberCount; ++Iter)
+		for (auto iter = 0; iter < fiberCount; ++iter)
 		{
-			Fibers[Iter].first = std::move(Fiber{ FiberStackSize, &ManagerFiberEntry, Data.get() });
-			Fibers[Iter].second.store(true);  // #TODO: Memory order.
+			fibers[iter].first = std::move(Fiber{ fiberStackSize, &ManagerFiberEntry, this });
+			fibers[iter].second.store(true);  // #TODO: Memory order.
 		}
 
-		if (ThreadCount == 0)
+		if (threadCount == 0)
 		{
-			ThreadCount = std::thread::hardware_concurrency();
+			threadCount = std::thread::hardware_concurrency();
 		}
 
-		Workers.reserve(ThreadCount);
+		workers.reserve(threadCount);
 
-		for (size_t Iter = 0; Iter < ThreadCount; ++Iter)
+		for (size_t iter = 0; iter < threadCount; ++iter)
 		{
-			Worker NewWorker{ this, Iter, &ManagerWorkerEntry };
-
-			// Fix for a rare data race when the swap occurs while the worker is saving the fiber pointer.
-			while (!NewWorker.IsReady())[[unlikely]]
-			{
-				// Should almost never end up spinning here.
-				std::this_thread::yield();
-			}
-
-			Workers.push_back(std::move(NewWorker));
+			workers.emplace_back(this, iter, &ManagerWorkerEntry);
 		}
 
-		Shutdown.store(false, std::memory_order_relaxed);  // This must be set before we are ready.
-		Ready.store(true, std::memory_order_release);  // This must be set last.
+		shutdown.store(false, std::memory_order_relaxed);  // This must be set before we are ready.
+		ready.store(true, std::memory_order_release);  // This must be set last.
 	}
 
-	std::optional<JobBuilder> Manager::Dequeue(size_t ThreadID)
+	std::optional<JobBuilder> Manager::Dequeue(size_t threadID)
 	{
-		JobBuilder Result{};
+		JobBuilder result{};
 
-		if (Workers[ThreadID].GetJobQueue().try_dequeue(Result))
+		if (workers[threadID].GetJobQueue().try_dequeue(result))
 		{
-			return Result;
+			return result;
 		}
 
 		else
@@ -237,11 +265,11 @@ namespace Jobs
 			// Our queue is empty, time to steal.
 			// #TODO: Implement a smart stealing algorithm.
 
-			for (auto Iter = 1; Iter < Workers.size(); ++Iter)
+			for (auto iter = 1; iter < workers.size(); ++iter)
 			{
-				if (Workers[(Iter + ThreadID) % Workers.size()].GetJobQueue().try_dequeue(Result))
+				if (workers[(iter + threadID) % workers.size()].GetJobQueue().try_dequeue(result))
 				{
-					return Result;
+					return result;
 				}
 			}
 		}
@@ -251,32 +279,32 @@ namespace Jobs
 
 	size_t Manager::GetThisThreadID() const
 	{
-		auto ThisID{ std::this_thread::get_id() };
+		auto thisID{ std::this_thread::get_id() };
 
-		for (auto& Worker : Workers)
+		for (auto& worker : workers)
 		{
-			if (Worker.GetNativeID() == ThisID)
+			if (worker.GetNativeID() == thisID)
 			{
-				return Worker.GetID();
+				return worker.GetID();
 			}
 		}
 
-		return InvalidID;
+		return invalidID;
 	}
 
 	size_t Manager::GetAvailableFiber()
 	{
-		for (auto Index = 0; Index < Fibers.size(); ++Index)
+		for (auto index = 0; index < fibers.size(); ++index)
 		{
-			auto Expected{ true };
-			if (Fibers[Index].second.compare_exchange_weak(Expected, false, std::memory_order_acquire))
+			auto expected{ true };
+			if (fibers[index].second.compare_exchange_weak(expected, false, std::memory_order_acquire))
 			{
-				return Index;
+				return index;
 			}
 		}
 
 		JOBS_LOG(LogLevel::Error, "No free fibers!");
 
-		return InvalidID;
+		return invalidID;
 	}
 }

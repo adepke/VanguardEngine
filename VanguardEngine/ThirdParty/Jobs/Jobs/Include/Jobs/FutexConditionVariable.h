@@ -1,35 +1,29 @@
-// Copyright (c) 2019 Andrew Depke
+// Copyright (c) 2019-2021 Andrew Depke
 
 #pragma once
 
+#include <Jobs/Platform.h>
+
 namespace Jobs
 {
-#if defined(_WIN32) || defined(_WIN64)
-#define PLATFORM_WINDOWS 1
-	constexpr auto SizeOfUserSpaceLock = 40;
-	constexpr auto SizeOfConditionVariable = 8;
-#else
-#define PLATFORM_POSIX 1
-	constexpr auto SizeOfUserSpaceLock = 40;
-	constexpr auto SizeOfConditionVariable = 48;
+#if JOBS_PLATFORM_WINDOWS
+	constexpr auto sizeOfUserSpaceLock = 40;
+	constexpr auto sizeOfConditionVariable = 8;
+#endif
+#if JOBS_PLATFORM_POSIX
+	constexpr auto sizeOfUserSpaceLock = 40;
+	constexpr auto sizeOfConditionVariable = 48;
 #endif
 }
-
-#ifndef PLATFORM_WINDOWS
-#define PLATFORM_WINDOWS 0
-#endif
-#ifndef PLATFORM_POSIX
-#define PLATFORM_POSIX 0
-#endif
 
 namespace Jobs
 {
 	class FutexConditionVariable
 	{
 	private:
-		// Opaque housing.
-		unsigned char UserSpaceLock[SizeOfUserSpaceLock];
-		unsigned char ConditionVariable[SizeOfConditionVariable];
+		// Opaque storage.
+		unsigned char userSpaceLock[sizeOfUserSpaceLock];
+		unsigned char conditionVariable[sizeOfConditionVariable];
 
 	public:
 		FutexConditionVariable();

@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Andrew Depke
+// Copyright (c) 2019-2021 Andrew Depke
 
 #pragma once
 
@@ -10,7 +10,7 @@ namespace Jobs
 	class Spinlock
 	{
 	private:
-		std::atomic_flag Status = ATOMIC_FLAG_INIT;
+		std::atomic_flag status = ATOMIC_FLAG_INIT;
 
 	public:
 		Spinlock() = default;
@@ -27,7 +27,7 @@ namespace Jobs
 
 	void Spinlock::Lock()
 	{
-		while (Status.test_and_set(std::memory_order_acquire))[[unlikely]]
+		while (status.test_and_set(std::memory_order_acquire))[[unlikely]]
 		{
 			std::this_thread::yield();
 		}
@@ -35,11 +35,11 @@ namespace Jobs
 
 	bool Spinlock::TryLock()
 	{
-		return !Status.test_and_set(std::memory_order_acquire);
+		return !status.test_and_set(std::memory_order_acquire);
 	}
 
 	void Spinlock::Unlock()
 	{
-		Status.clear(std::memory_order_release);
+		status.clear(std::memory_order_release);
 	}
 }

@@ -1,10 +1,11 @@
-// Copyright (c) 2019 Andrew Depke
+// Copyright (c) 2019-2021 Andrew Depke
 
 #pragma once
 
 #include <Jobs/Worker.h>
 #include <Jobs/Fiber.h>
 #include <Jobs/Counter.h>
+#include <Jobs/Profiling.h>
 
 #include <vector>  // std::vector
 #include <array>  // std::array
@@ -17,50 +18,50 @@
 #include <map>  // std::map
 #include <type_traits>  // std::is_same, std::decay
 #include <optional>  // std::optional
+#include <new>  // std::hardware_destructive_interference_size
 
 namespace Jobs
 {
-	// Shared common data.
-	struct FiberData
+	namespace Detail
 	{
-		Manager* const Owner;
-
-		FiberData(Manager* const InOwner) : Owner(InOwner) {};
-	};
+#ifdef __cpp_lib_hardware_interference_size
+		constexpr auto hardwareDestructiveInterference = std::hardware_destructive_interference_size;
+#else
+		constexpr auto hardwareDestructiveInterference = 64;
+#endif
+	}
 
 	class Manager
 	{
 		friend class Worker;
-		friend void ManagerWorkerEntry(Manager* const Owner);
-		friend void ManagerFiberEntry(void* Data);
+		friend class FiberMutex;
+		friend void ManagerWorkerEntry(void*);
+		friend void ManagerFiberEntry(void*);
 
 		// #TODO: Move these into template traits.
-		static constexpr size_t FiberCount = 64;
-		static constexpr size_t FiberStackSize = 1024 * 1024;  // 1 MB
+		static constexpr size_t fiberCount = 256;
+		static constexpr size_t fiberStackSize = 64 * 1024;  // 64 kB
 
 	private:
-		// Shared fiber storage.
-		std::unique_ptr<FiberData> Data;
+		std::vector<Worker> workers;
+		std::array<std::pair<Fiber, std::atomic_bool>, fiberCount> fibers;  // Pool of fibers paired to an availability flag.
+		moodycamel::ConcurrentQueue<size_t> waitingFibers;  // Queue of fiber indices that are waiting for some dependency or scheduled a waiting fiber.
 
-		std::vector<Worker> Workers;
-		std::array<std::pair<Fiber, std::atomic_bool>, FiberCount> Fibers;  // Pool of fibers paired to an availability flag.
-		moodycamel::ConcurrentQueue<size_t> WaitingFibers;  // Queue of fiber indices that are waiting for some dependency or scheduled a waiting fiber.
+		static constexpr auto invalidID = std::numeric_limits<size_t>::max();
 
-		static constexpr auto InvalidID = std::numeric_limits<size_t>::max();
-
-		std::atomic_bool Ready;
-		alignas(std::hardware_destructive_interference_size) std::atomic_bool Shutdown;
+		std::atomic_bool ready;
+		alignas(Detail::hardwareDestructiveInterference) std::atomic_bool shutdown;
 
 		// Used to cycle the worker thread to enqueue in.
-		std::atomic_uint EnqueueIndex;
+		std::atomic_uint enqueueIndex;
 
-		alignas(std::hardware_destructive_interference_size) FutexConditionVariable QueueCV;
+		alignas(Detail::hardwareDestructiveInterference) FutexConditionVariable queueCV;
 
 		// #TODO: Use a more efficient hash map data structure.
-		std::map<std::string, std::shared_ptr<Counter<>>> GroupMap;
+		std::map<std::string, std::shared_ptr<Counter<>>> groupMap;
 
 		template <typename U>
-		void EnqueueInternal(U&& InJob);
+		void EnqueueInternal(U&& job);
 
 	public:
 		Manager() = default;
@@ -71,33 +72,33 @@ namespace Jobs
 		Manager& operator=(const Manager&) = delete;
 		Manager& operator=(Manager&&) = delete;  // #TODO: Implement.
 
-		void Initialize(size_t ThreadCount = 0);
+		void Initialize(size_t threadCount = 0);
 
 		template <typename U>
-		void Enqueue(U&& InJob);
+		void Enqueue(U&& job);
 
 		template <size_t Size>
-		void Enqueue(Job (&InJobs)[Size]);
+		void Enqueue(Job (&jobs)[Size]);
 
 		template <typename U>
-		void Enqueue(U&& InJob, const std::shared_ptr<Counter<>>& InCounter);
+		void Enqueue(U&& job, const std::shared_ptr<Counter<>>& counter);
 
 		template <size_t Size>
-		void Enqueue(Job (&InJobs)[Size], const std::shared_ptr<Counter<>>& InCounter);
+		void Enqueue(Job (&jobs)[Size], const std::shared_ptr<Counter<>>& counter);
 
 		template <typename U>
-		std::shared_ptr<Counter<>> Enqueue(U&& InJob, const std::string& Group);
+		std::shared_ptr<Counter<>> Enqueue(U&& job, const std::string& group);
 
 		template <size_t Size>
-		std::shared_ptr<Counter<>> Enqueue(Job (&InJobs)[Size], const std::string& Group);
+		std::shared_ptr<Counter<>> Enqueue(Job (&jobs)[Size], const std::string& group);
 
-		size_t GetWorkerCount() const { return Workers.size(); }
+		size_t GetWorkerCount() const { return workers.size(); }
 
 	private:
-		std::optional<JobBuilder> Dequeue(size_t ThreadID);
+		std::optional<JobBuilder> Dequeue(size_t threadID);
 
 		size_t GetThisThreadID() const;
-		inline bool IsValidID(size_t ID) const;
+		inline bool IsValidID(size_t id) const;
 
 		inline bool CanContinue() const;
 
@@ -105,34 +106,36 @@ namespace Jobs
 	};
 
 	template <typename U>
-	void Manager::EnqueueInternal(U&& InJob)
+	void Manager::EnqueueInternal(U&& job)
 	{
+		JOBS_SCOPED_STAT("Enqueue Internal");
+
 		// If we're a job builder, we need to increment the counter before leaving Enqueue.
-		if (InJob.Stream)
+		if (job.stream)
 		{
-			InJob.GetCounter().operator++();  // We need to increment the counter since we might end up waiting on it immediately, before the sub jobs are enqueued. Decremented in the job builder.
+			job.GetCounter().operator++();  // We need to increment the counter since we might end up waiting on it immediately, before the sub jobs are enqueued. Decremented in the job builder.
 		}
 
-		auto ThisThreadID{ GetThisThreadID() };
+		auto thisThreadID{ GetThisThreadID() };
 
-		if (IsValidID(ThisThreadID))
+		if (IsValidID(thisThreadID))
 		{
-			Workers[ThisThreadID].GetJobQueue().enqueue(std::forward<JobBuilder>(static_cast<JobBuilder&&>(InJob)));
+			workers[thisThreadID].GetJobQueue().enqueue(std::forward<JobBuilder>(static_cast<JobBuilder&&>(job)));
 		}
 
 		else
 		{
-			auto CachedEI{ EnqueueIndex.load(std::memory_order_acquire) };
+			auto cachedEI{ enqueueIndex.load(std::memory_order_acquire) };
 
 			// Note: We might lose an increment here if this runs in parallel, but we would rather suffer that instead of locking.
-			EnqueueIndex.store((CachedEI + 1) % Workers.size(), std::memory_order_release);
+			enqueueIndex.store((cachedEI + 1) % workers.size(), std::memory_order_release);
 
-			Workers[CachedEI].GetJobQueue().enqueue(std::forward<JobBuilder>(static_cast<JobBuilder&&>(InJob)));
+			workers[cachedEI].GetJobQueue().enqueue(std::forward<JobBuilder>(static_cast<JobBuilder&&>(job)));
 		}
 	}
 
 	template <typename U>
-	void Manager::Enqueue(U&& InJob)
+	void Manager::Enqueue(U&& job)
 	{
 		if constexpr (!std::is_same_v<std::decay_t<U>, Job> && !std::is_same_v<std::decay_t<U>, JobBuilder>)
 		{
@@ -141,29 +144,31 @@ namespace Jobs
 
 		else
 		{
-			EnqueueInternal(std::forward<JobBuilder>(static_cast<JobBuilder&&>(InJob)));
+			EnqueueInternal(std::forward<JobBuilder>(static_cast<JobBuilder&&>(job)));
+
+			JOBS_SCOPED_STAT("Enqueue Notify");
 
 			// #NOTE: Safeguarding the notify can destroy performance in high enqueue situations. This leaves a blind spot potential,
 			// but the risk is worth it. Even if a blind spot signal happens, the worker will just sleep until a new enqueue arrives, where it can recover.
-			//QueueCV.Lock();
-			QueueCV.NotifyOne();  // Notify one sleeper. They will work steal if they don't get the job enqueued directly.
-			//QueueCV.Unlock();
+			//queueCV.Lock();
+			queueCV.NotifyOne();  // Notify one sleeper. They will work steal if they don't get the job enqueued directly.
+			//queueCV.Unlock();
 		}
 	}
 
 	template <size_t Size>
-	void Manager::Enqueue(Job (&InJobs)[Size])
+	void Manager::Enqueue(Job (&jobs)[Size])
 	{
-		for (auto Iter = 0; Iter < Size; ++Iter)
+		for (auto iter = 0; iter < Size; ++iter)
 		{
-			EnqueueInternal(InJobs[Iter]);
+			EnqueueInternal(jobs[iter]);
 		}
 
-		QueueCV.NotifyAll();  // Notify all sleepers.
+		queueCV.NotifyAll();  // Notify all sleepers.
 	}
 
 	template <typename U>
-	void Manager::Enqueue(U&& InJob, const std::shared_ptr<Counter<>>& InCounter)
+	void Manager::Enqueue(U&& job, const std::shared_ptr<Counter<>>& counter)
 	{
 		if constexpr (std::is_same_v<std::decay_t<U>, JobBuilder>)
 		{
@@ -177,28 +182,28 @@ namespace Jobs
 
 		else
 		{
-			InCounter->operator++();
-			InJob.AtomicCounter = InCounter;
+			counter->operator++();
+			job.atomicCounter = counter;
 
-			Enqueue(InJob);
+			Enqueue(job);
 		}
 	}
 
 	template <size_t Size>
-	void Manager::Enqueue(Job (&InJobs)[Size], const std::shared_ptr<Counter<>>& InCounter)
+	void Manager::Enqueue(Job (&jobs)[Size], const std::shared_ptr<Counter<>>& counter)
 	{
-		InCounter->operator+=(Size);
+		counter->operator+=(Size);
 
-		for (auto Iter = 0; Iter < Size; ++Iter)
+		for (auto iter = 0; iter < Size; ++iter)
 		{
-			InJobs[Iter].AtomicCounter = InCounter;
+			jobs[iter].atomicCounter = counter;
 		}
 
-		Enqueue(InJobs);
+		Enqueue(jobs);
 	}
 
 	template <typename U>
-	std::shared_ptr<Counter<>> Manager::Enqueue(U&& InJob, const std::string& Group)
+	std::shared_ptr<Counter<>> Manager::Enqueue(U&& job, const std::string& group)
 	{
 		if constexpr (!std::is_same_v<std::decay_t<U>, Job> && !std::is_same_v<std::decay_t<U>, JobBuilder>)
 		{
@@ -207,85 +212,85 @@ namespace Jobs
 
 		else
 		{
-			std::shared_ptr<Counter<>> GroupCounter;
+			std::shared_ptr<Counter<>> groupCounter;
 
-			auto AllocateCounter{ []() { return std::make_shared<Counter<>>(1); } };
+			auto allocateCounter{ []() { return std::make_shared<Counter<>>(1); } };
 
-			if (Group.empty())
+			if (group.empty())
 			{
-				GroupCounter = std::move(AllocateCounter());
+				groupCounter = std::move(allocateCounter());
 			}
 
 			else
 			{
-				auto GroupIter{ GroupMap.find(Group) };
+				auto groupIter{ groupMap.find(group) };
 
-				if (GroupIter != GroupMap.end())
+				if (groupIter != groupMap.end())
 				{
-					GroupCounter = GroupIter->second;
-					GroupCounter->operator++();
+					groupCounter = groupIter->second;
+					groupCounter->operator++();
 				}
 
 				else
 				{
-					GroupCounter = std::move(AllocateCounter());
-					GroupMap.insert({ Group, GroupCounter });
+					groupCounter = std::move(allocateCounter());
+					groupMap.insert({ group, groupCounter });
 				}
 			}
 
-			InJob.AtomicCounter = GroupCounter;
-			Enqueue(InJob);
+			job.atomicCounter = groupCounter;
+			Enqueue(job);
 
-			return GroupCounter;
+			return groupCounter;
 		}
 	}
 
 	template <size_t Size>
-	std::shared_ptr<Counter<>> Manager::Enqueue(Job (&InJobs)[Size], const std::string& Group)
+	std::shared_ptr<Counter<>> Manager::Enqueue(Job (&jobs)[Size], const std::string& group)
 	{
-		std::shared_ptr<Counter<>> GroupCounter;
+		std::shared_ptr<Counter<>> groupCounter;
 
-		auto AllocateCounter{ []() { return std::make_shared<Counter<>>(1); } };
+		auto allocateCounter{ []() { return std::make_shared<Counter<>>(1); } };
 
-		if (Group.empty())
+		if (group.empty())
 		{
-			GroupCounter = std::move(AllocateCounter());
+			groupCounter = std::move(allocateCounter());
 		}
 
 		else
 		{
-			auto GroupIter{ GroupMap.find(Group) };
+			auto groupIter{ groupMap.find(group) };
 
-			if (GroupIter != GroupMap.end())
+			if (groupIter != groupMap.end())
 			{
-				GroupCounter = GroupIter->second;
-				GroupCounter->operator+=(Size);
+				groupCounter = groupIter->second;
+				groupCounter->operator+=(Size);
 			}
 
 			else
 			{
-				GroupCounter = std::move(AllocateCounter());
-				GroupMap.insert({ Group, GroupCounter });
+				groupCounter = std::move(allocateCounter());
+				groupMap.insert({ group, groupCounter });
 			}
 		}
 
-		for (auto Iter = 0; Iter < Size; ++Iter)
+		for (auto iter = 0; iter < Size; ++iter)
 		{
-			InJobs[Iter].AtomicCounter = GroupCounter;
+			jobs[iter].atomicCounter = groupCounter;
 		}
 
-		Enqueue(InJobs);
+		Enqueue(jobs);
 
-		return GroupCounter;
+		return groupCounter;
 	}
 
-	bool Manager::IsValidID(size_t ID) const
+	bool Manager::IsValidID(size_t id) const
 	{
-		return ID != InvalidID;
+		return id != invalidID;
 	}
 
 	bool Manager::CanContinue() const
 	{
-		return !Shutdown.load(std::memory_order_acquire);
+		return !shutdown.load(std::memory_order_acquire);
 	}
 }

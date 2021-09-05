@@ -1,6 +1,9 @@
-// Copyright (c) 2019 Andrew Depke
+// Copyright (c) 2019-2021 Andrew Depke
 
 #pragma once
+
+#include <Jobs/FiberRoutines.h>
+#include <Jobs/Platform.h>
 
 #include <atomic>  // std::atomic_flag
 #include <cstddef>  // std::size_t
@@ -9,33 +12,39 @@
 
 namespace Jobs
 {
-	void FiberEntry(void* Data);
+	class Manager;
+	class FiberMutex;
 
 	class Fiber
 	{
+		friend void ManagerFiberEntry(void*);
+
+		using EntryType = void(*)(void*);
+
 	private:
-		void* Context = nullptr;
-		void* Data = nullptr;
+		void* context = nullptr;
+		void* stack = nullptr;
+		void* data = nullptr;
 
 	public:
-		bool WaitPoolPriority = false;  // Used for alternating wait pool. Does not need to be atomic.
-		size_t PreviousFiberIndex = std::numeric_limits<size_t>::max();  // Used to track the fiber that scheduled us.
-		bool NeedsWaitEnqueue = false;  // Used to mark if we need to have availability restored or added to the wait pool.
+		bool waitPoolPriority = false;  // Used for alternating wait pool. Does not need to be atomic.
+		size_t previousFiberIndex = std::numeric_limits<size_t>::max();  // Used to track the fiber that scheduled us.
+		bool needsWaitEnqueue = false;  // Used to mark if we need to have availability restored or added to the wait pool.
+
+		FiberMutex* mutex = nullptr;  // Used to determine if we're waiting on a mutex.
 
 	public:
-		Fiber() = default;  // Used for converting a thread to a fiber.
-		Fiber(size_t StackSize, decltype(&FiberEntry) Entry, void* Arg);
+		Fiber() = default;
+		Fiber(size_t stackSize, EntryType entry, Manager* owner);
 		Fiber(const Fiber&) = delete;
-		Fiber(Fiber&& Other) noexcept;
+		Fiber(Fiber&& other) noexcept;
 		~Fiber();
 
 		Fiber& operator=(const Fiber&) = delete;
-		Fiber& operator=(Fiber&& Other) noexcept;
+		Fiber& operator=(Fiber&& other) noexcept;
 
-		void Schedule(const Fiber& From);
+		void Schedule(Fiber& from);
 
-		void Swap(Fiber& Other) noexcept;
-
-		static Fiber* FromThisThread(void* Arg);
+		void Swap(Fiber& other) noexcept;
 	};
 }

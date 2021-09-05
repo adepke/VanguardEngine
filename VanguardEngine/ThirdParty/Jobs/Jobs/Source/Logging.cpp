@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Andrew Depke
+// Copyright (c) 2019-2021 Andrew Depke
 
 #include <Jobs/Logging.h>
 
@@ -8,50 +8,50 @@
 
 namespace Jobs
 {
-	void LogManager::Log(LogLevel Level, const std::string& Format, ...)
+	void LogManager::Log(LogLevel level, const std::string& format, ...)
 	{
-		if (!OutputDevice)
+		if (!outputDevice)
 		{
 			return;
 		}
 
-		std::string Output;
+		std::string output;
 
-		switch (Level)
+		switch (level)
 		{
 		case LogLevel::Log:
-			Output = "[Log] ";
+			output = "[Log] ";
 			break;
 		case LogLevel::Warning:
-			Output = "[Warning] ";
+			output = "[Warning] ";
 			break;
 		case LogLevel::Error:
-			Output = "[Error] ";
+			output = "[Error] ";
 			break;
 		}
 
-		constexpr size_t BufferSize = 1024;
-		char Buffer[BufferSize];
+		constexpr size_t bufferSize = 1024;
+		char buffer[bufferSize];
 
-		std::va_list Args;
-		va_start(Args, &Format);
+		std::va_list args;
+		va_start(args, &format);
 
-		Lock.Lock();  // Latest possible point to lock: We need to guard our c_str() buffer resource.
+		lock.Lock();  // Latest possible point to lock: We need to guard our c_str() buffer resource.
 
-		std::vsnprintf(Buffer, BufferSize, Format.c_str(), Args);
-		va_end(Args);
+		std::vsnprintf(buffer, bufferSize, format.c_str(), args);
+		va_end(args);
 
-		std::string Formatted{ Buffer };
+		std::string formatted{ buffer };
 
-		Output += Formatted + "\n";
+		output += formatted + "\n";
 
 		//Lock.Lock();  // Can't lock this late, we accessed the c_str() resource.
-		*OutputDevice << Output.c_str();
-		Lock.Unlock();
+		*outputDevice << output.c_str();
+		lock.Unlock();
 	}
 
-	void LogManager::SetOutputDevice(std::ostream& Device)
+	void LogManager::SetOutputDevice(std::ostream& device)
 	{
-		OutputDevice = &Device;
+		outputDevice = &device;
 	}
 }

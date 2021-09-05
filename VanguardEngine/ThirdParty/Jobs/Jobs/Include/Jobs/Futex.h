@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Andrew Depke
+// Copyright (c) 2019-2021 Andrew Depke
 
 #pragma once
 
@@ -9,7 +9,7 @@ namespace Jobs
 	class Futex
 	{
 	private:
-		void* Address = nullptr;
+		void* address = nullptr;
 
 	public:
 		Futex() = default;
@@ -20,35 +20,35 @@ namespace Jobs
 		Futex& operator=(Futex&&) noexcept = delete;  // #TODO: Implement.
 
 		template <typename T>
-		void Set(T* InAddress);
+		void Set(T* inAddress);
 
 		template <typename T>
-		bool Wait(T* CompareAddress) const;
+		bool Wait(T* compareAddress) const;
 		template <typename T, typename Rep, typename Period>
-		bool Wait(T* CompareAddress, const std::chrono::duration<Rep, Period>& Timeout) const;
+		bool Wait(T* compareAddress, const std::chrono::duration<Rep, Period>& timeout) const;
 
 		void NotifyOne() const;
 		void NotifyAll() const;
 
 	private:
-		bool Wait(void* CompareAddress, size_t Size, uint64_t TimeoutNs) const;
+		bool Wait(void* compareAddress, size_t size, uint64_t timeoutNs) const;
 	};
 
 	template <typename T>
-	void Futex::Set(T* InAddress)
+	void Futex::Set(T* inAddress)
 	{
-		Address = static_cast<void*>(InAddress);
+		address = static_cast<void*>(inAddress);
 	}
 
 	template <typename T>
-	bool Futex::Wait(T* CompareAddress) const
+	bool Futex::Wait(T* compareAddress) const
 	{
-		return Wait(static_cast<void*>(CompareAddress), sizeof(T), 0);
+		return Wait(static_cast<void*>(compareAddress), sizeof(T), 0);
 	}
 
 	template <typename T, typename Rep, typename Period>
-	bool Futex::Wait(T* CompareAddress, const std::chrono::duration<Rep, Period>& Timeout) const
+	bool Futex::Wait(T* compareAddress, const std::chrono::duration<Rep, Period>& timeout) const
 	{
-		return Wait(static_cast<void*>(CompareAddress), sizeof(T), std::chrono::duration_cast<std::chrono::nanoseconds>(Timeout).count());
+		return Wait(static_cast<void*>(compareAddress), sizeof(T), std::chrono::duration_cast<std::chrono::nanoseconds>(timeout).count());
 	}
 }

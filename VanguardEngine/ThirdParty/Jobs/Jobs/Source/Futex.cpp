@@ -1,61 +1,61 @@
-// Copyright (c) 2019 Andrew Depke
+// Copyright (c) 2019-2021 Andrew Depke
 
 #include <Jobs/Futex.h>
+#include <Jobs/Platform.h>
+#include <Jobs/Profiling.h>
 
-#if defined(_WIN32) || defined(_WIN64)
-#define PLATFORM_WINDOWS 1
-#include <Jobs/WindowsMinimal.h>
-#else
-#define PLATFORM_POSIX 1
-#include <unistd.h>
-#include <sys/syscall.h>
-#include <linux/futex.h>
-#include <sys/time.h>
-#include <limits>
+#if JOBS_PLATFORM_WINDOWS
+  #include <Jobs/WindowsMinimal.h>
 #endif
-
-#ifndef PLATFORM_WINDOWS
-#define PLATFORM_WINDOWS 0
-#endif
-#ifndef PLATFORM_POSIX
-#define PLATFORM_POSIX 0
+#if JOBS_PLATFORM_POSIX
+  #include <unistd.h>
+  #include <sys/syscall.h>
+  #include <linux/futex.h>
+  #include <sys/time.h>
+  #include <limits>
 #endif
 
 namespace Jobs
 {
-	bool Futex::Wait(void* CompareAddress, size_t Size, uint64_t TimeoutNs) const
+	bool Futex::Wait(void* compareAddress, size_t size, uint64_t timeoutNs) const
 	{
-#if PLATFORM_WINDOWS
-		return WaitOnAddress(Address, CompareAddress, Size, static_cast<DWORD>(TimeoutNs > 0 ? (TimeoutNs >= 1e6 ? TimeoutNs : 1e6) / 1e6 : INFINITE));
-#else
-		timespec Timeout;
-		Timeout.tv_sec = static_cast<time_t>(TimeoutNs / (uint64_t)1e9);  // Whole seconds.
-		Timeout.tv_nsec = static_cast<long>(TimeoutNs % (uint64_t)1e9);  // Remaining nano seconds.
+		JOBS_SCOPED_STAT("Futex Wait");
 
-		syscall(SYS_futex, CompareAddress, FUTEX_WAIT, &Address, TimeoutNs > 0 ? &Timeout : nullptr, nullptr, 0);
+#if JOBS_PLATFORM_WINDOWS
+		return WaitOnAddress(address, compareAddress, size, static_cast<DWORD>(timeoutNs > 0 ? (timeoutNs >= 1e6 ? timeoutNs : 1e6) / 1e6 : INFINITE));
+#else
+		timespec timeout;
+		timeout.tv_sec = static_cast<time_t>(timeoutNs / (uint64_t)1e9);  // Whole seconds.
+		timeout.tv_nsec = static_cast<long>(timeoutNs % (uint64_t)1e9);  // Remaining nano seconds.
+
+		syscall(SYS_futex, compareAddress, FUTEX_WAIT, &address, timeoutNs > 0 ? &timeout : nullptr, nullptr, 0);
 #endif
 	}
 
 	void Futex::NotifyOne() const
 	{
-		if (Address)
+		JOBS_SCOPED_STAT("Futex Notify One");
+
+		if (address)
 		{
-#if PLATFORM_WINDOWS
-			WakeByAddressSingle(Address);
+#if JOBS_PLATFORM_WINDOWS
+			WakeByAddressSingle(address);
 #else
-			syscall(SYS_futex, Address, FUTEX_WAKE, 1);
+			syscall(SYS_futex, address, FUTEX_WAKE, 1);
 #endif
 		}
 	}
 
 	void Futex::NotifyAll() const
 	{
-		if (Address)
+		JOBS_SCOPED_STAT("Futex Notify All");
+
+		if (address)
 		{
-#if PLATFORM_WINDOWS
-			WakeByAddressAll(Address);
+#if JOBS_PLATFORM_WINDOWS
+			WakeByAddressAll(address);
 #else
-			syscall(SYS_futex, Address, FUTEX_WAKE, std::numeric_limits<int>::max());
+			syscall(SYS_futex, address, FUTEX_WAKE, std::numeric_limits<int>::max());
 #endif
 		}
 	}

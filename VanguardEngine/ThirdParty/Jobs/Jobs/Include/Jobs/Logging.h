@@ -1,4 +1,4 @@
-// Copyright (c) 2019 Andrew Depke
+// Copyright (c) 2019-2021 Andrew Depke
 
 #pragma once
 
@@ -6,10 +6,10 @@
 
 #include <Jobs/Spinlock.h>
 
-#ifndef JOBS_DISABLE_LOGGING
-#define JOBS_LOG(Level, Format, ...) Jobs::LogManager::Get().Log(Level, Format, ## __VA_ARGS__)
+#if JOBS_ENABLE_LOGGING
+#define JOBS_LOG(level, format, ...) Jobs::LogManager::Get().Log(level, format, ## __VA_ARGS__)
 #else
-#define JOBS_LOG(Level, Format, ...) do {} while (0)
+#define JOBS_LOG(level, format, ...) do {} while (0)
 #endif
 
 namespace Jobs
@@ -24,9 +24,9 @@ namespace Jobs
 	class LogManager
 	{
 	private:
-		Spinlock Lock;
+		Spinlock lock;
 
-		std::ostream* OutputDevice = nullptr;
+		std::ostream* outputDevice = nullptr;
 
 	public:
 		LogManager() = default;
@@ -37,13 +37,13 @@ namespace Jobs
 
 		static inline LogManager& Get()
 		{
-			static LogManager Singleton;
+			static LogManager singleton;
 
-			return Singleton;
+			return singleton;
 		}
 
-		void Log(LogLevel Level, const std::string& Format, ...);
+		void Log(LogLevel level, const std::string& format, ...);
 
-		void SetOutputDevice(std::ostream& Device);
+		void SetOutputDevice(std::ostream& device);
 	};
 }
