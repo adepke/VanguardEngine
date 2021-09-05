@@ -1,3 +1,12 @@
+newaction {
+	trigger = "clean",
+	description = "Cleans all build products",
+	execute = function()
+		os.rmdir("./Build")
+		os.remove("*.sln")
+	end
+}
+
 function IncludeThirdParty()
 	includedirs "VanguardEngine/ThirdParty/entt/single_include"
 	includedirs "VanguardEngine/ThirdParty/json/single_include/nlohmann"
