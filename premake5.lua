@@ -40,7 +40,7 @@ workspace "Vanguard"
 	architecture "x86_64"
 	platforms { "Win64" }
 	configurations { "Debug", "Development", "Release" }
-	startproject "Engine"  -- #TODO: Set to empty project, similar to UE4's BlankProgram.
+	startproject "Engine"
 	
 	-- General Settings
 	
@@ -48,7 +48,7 @@ workspace "Vanguard"
 	EnableProfiling = true
 	EnableEditor = true
 	
-	cppdialect "C++17"
+	cppdialect "C++20"
 	
 	-- Global Platform
 	
