@@ -119,7 +119,7 @@ project "Engine"
 		if EnableLogging then
 			defines { "ENABLE_LOGGING=1" }
 		else
-			defines { "ENABLE_LOGGING=0", "JOBS_DISABLE_LOGGING" }
+			defines { "ENABLE_LOGGING=0", "JOBS_DISABLE_LOGGING", "SPDLOG_ACTIVE_LEVEL=6" }  -- Level 6 is off
 		end
 		
 		if EnableProfiling then
@@ -134,7 +134,8 @@ project "Engine"
 			defines { "ENABLE_EDITOR=0" }
 		end
 		
-		defines "IMGUI_DEFINE_MATH_OPERATORS"
+		-- Extra third party defines
+		defines { "IMGUI_DEFINE_MATH_OPERATORS", "SPDLOG_COMPILED_LIB", "SPDLOG_WCHAR_TO_UTF8_SUPPORT", "SPDLOG_NO_EXCEPTIONS" }
 		
 	-- Specific Build
 		

@@ -12,8 +12,13 @@ project "spdlog"
 	includedirs { "include" }
 	
 	staticruntime "Off"
+	exceptionhandling "Off"
 	characterset "Unicode"
 	
 	defines { "SPDLOG_COMPILED_LIB", "SPDLOG_WCHAR_TO_UTF8_SUPPORT", "SPDLOG_NO_EXCEPTIONS" }
+	
+	if not EnableLogging then
+		defines { "SPDLOG_ACTIVE_LEVEL=6" }  -- Level 6 is off
+	end
 	
 	files { "include/**.h", "src/*.cpp" }
