@@ -10,6 +10,7 @@
 #include <Core/CoreComponents.h>
 #include <Core/CoreSystems.h>
 #include <Core/CrashHandler.h>
+#include <Core/LogSinks.h>
 
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
@@ -53,8 +54,9 @@ void EngineBoot()
 
 	auto fileSink = std::make_shared<spdlog::sinks::basic_file_sink_mt>("Log.txt", true);
 	auto msvcSink = std::make_shared<spdlog::sinks::msvc_sink_mt>();
+	auto tracySink = std::make_shared<TracySink_mt>();
 	
-	logCore = std::make_shared<spdlog::logger>("core", spdlog::sinks_init_list{ fileSink, msvcSink });
+	logCore = std::make_shared<spdlog::logger>("core", spdlog::sinks_init_list{ fileSink, msvcSink, tracySink });
 	logAsset = logCore->clone("asset");
 	logRendering = logCore->clone("rendering");
 	logThreading = logCore->clone("threading");
