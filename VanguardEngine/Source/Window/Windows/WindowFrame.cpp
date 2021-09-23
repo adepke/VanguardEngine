@@ -122,7 +122,7 @@ WindowFrame::WindowFrame(const std::wstring& title, uint32_t width, uint32_t hei
 
 	if (!handle)
 	{
-		VGLogFatal(Window) << "Failed to create window: " << GetPlatformError();
+		VGLogCritical(logWindow, "Failed to create window: {}", GetPlatformError());
 	}
 
 	// Save this class instance in the per-window memory.
@@ -146,14 +146,14 @@ WindowFrame::~WindowFrame()
 	::UnregisterClass(windowClassName, ::GetModuleHandle(nullptr));
 }
 
-void WindowFrame::SetTitle(std::wstring title)
+void WindowFrame::SetTitle(const std::wstring& title)
 {
 	VGScopedCPUStat("Set Window Title");
 
 	const auto result = ::SetWindowText(static_cast<HWND>(handle), title.c_str());
 	if (!result)
 	{
-		VGLogError(Window) << "Failed to set title to: '" << title << "': " << GetPlatformError();
+		VGLogError(logWindow, "Failed to set title to: '{}': {}", title, GetPlatformError());
 	}
 }
 
@@ -174,7 +174,7 @@ void WindowFrame::SetSize(uint32_t width, uint32_t height)
 
 	if (!result)
 	{
-		VGLogError(Window) << "Failed to set size to: (" << width << ", " << height << "): " << GetPlatformError();
+		VGLogError(logWindow, "Failed to set size to: ({}, {}): {}", width, height, GetPlatformError());
 	}
 
 	// Window size updated, we need to update the clipping bounds.
@@ -206,7 +206,7 @@ void WindowFrame::RestrainCursor(CursorRestraint restraint)
 		const auto result = ::ClipCursor(nullptr);
 		if (!result)
 		{
-			VGLogError(Window) << "Failed to unrestrain cursor: " << GetPlatformError();
+			VGLogError(logWindow, "Failed to unrestrain cursor: {}", GetPlatformError());
 		}
 
 		break;
@@ -218,7 +218,7 @@ void WindowFrame::RestrainCursor(CursorRestraint restraint)
 		const auto result = ::ClipCursor(nullptr);
 		if (!result)
 		{
-			VGLogError(Window) << "Failed to unrestrain cursor: " << GetPlatformError();
+			VGLogError(logWindow, "Failed to unrestrain cursor: {}", GetPlatformError());
 		}
 
 		RECT clientRect;
@@ -256,7 +256,7 @@ void WindowFrame::RestrainCursor(CursorRestraint restraint)
 		const auto result = ::ClipCursor(&clientRect);
 		if (!result)
 		{
-			VGLogError(Window) << "Failed to restrain cursor: " << GetPlatformError();
+			VGLogError(logWindow, "Failed to restrain cursor: {}", GetPlatformError());
 		}
 
 		break;
@@ -271,7 +271,7 @@ void WindowFrame::UpdateCursor()
 	{
 		if (!::SetCursorPos(cursorLockPosition.first, cursorLockPosition.second))
 		{
-			VGLogWarning(Window) << "Failed to set cursor position to window center: " << GetPlatformError();
+			VGLogWarning(logWindow, "Failed to set cursor position to window center: {}", GetPlatformError());
 		}
 
 		else
@@ -281,7 +281,7 @@ void WindowFrame::UpdateCursor()
 			// ImGui stores cursor positions in client space.
 			if (!::ScreenToClient(static_cast<HWND>(GetHandle()), &clientMousePos))
 			{
-				VGLogWarning(Window) << "Failed to convert mouse position from screen space to window space: " << GetPlatformError();
+				VGLogWarning(logWindow, "Failed to convert mouse position from screen space to window space: {}", GetPlatformError());
 			}
 
 			else

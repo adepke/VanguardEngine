@@ -29,7 +29,7 @@ void DescriptorHeapBase::Create(RenderDevice* device, DescriptorType type, size_
 	auto result = device->Native()->CreateDescriptorHeap(&heapDesc, IID_PPV_ARGS(heap.Indirect()));
 	if (FAILED(result))
 	{
-		VGLogFatal(Rendering) << "Failed to create descriptor heap for type '" << static_cast<int>(type) << "' with " << descriptors << " descriptors: " << result;
+		VGLogCritical(logRendering, "Failed to create descriptor heap for type '{}' with {} descriptors: {}", (int)type, descriptors, result);
 	}
 
 	cpuHeapStart = heap->GetCPUDescriptorHandleForHeapStart().ptr;

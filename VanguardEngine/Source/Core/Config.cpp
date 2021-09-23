@@ -39,7 +39,7 @@ namespace Config
 
 		else
 		{
-			VGLogFatal(Core) << "Failed to find engine root.";
+			VGLogCritical(logCore, "Failed to find engine root.");
 		}
 
 		std::ifstream engineConfigStream{ engineRootPath / engineConfigPath };

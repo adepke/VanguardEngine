@@ -35,7 +35,7 @@ public:
 	WindowFrame(const std::wstring& title, uint32_t width, uint32_t height);
 	~WindowFrame();
 
-	void SetTitle(std::wstring title);
+	void SetTitle(const std::wstring& title);
 	void SetSize(uint32_t width, uint32_t height);
 	void ShowCursor(bool visible);
 	void RestrainCursor(CursorRestraint restraint);

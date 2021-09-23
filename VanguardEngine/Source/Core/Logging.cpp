@@ -2,15 +2,9 @@
 
 #include <Core/Logging.h>
 
-#if PLATFORM_WINDOWS
-#include <Core/Windows/WindowsMinimal.h>
-#endif
-
-PlatformErrorType GetPlatformError()
-{
-#if PLATFORM_WINDOWS
-	return HRESULT_FROM_WIN32(::GetLastError());
-#else
-	return 0;
-#endif
-}
+std::shared_ptr<spdlog::logger> logAsset;
+std::shared_ptr<spdlog::logger> logCore;
+std::shared_ptr<spdlog::logger> logRendering;
+std::shared_ptr<spdlog::logger> logThreading;
+std::shared_ptr<spdlog::logger> logUtility;
+std::shared_ptr<spdlog::logger> logWindow;

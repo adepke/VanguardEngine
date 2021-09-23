@@ -113,7 +113,7 @@ void ResourceManager::CreateResourceViews(TextureComponent& target)
 			viewDesc.Texture3D.WSize = -1;
 			break;
 		default:
-			VGLogError(Rendering) << "Render target views for textures in " << target.Native()->GetDesc().Dimension << " dimension is unsupported.";
+			VGLogError(logRendering, "Render target views for textures in {} dimension is unsupported.", target.Native()->GetDesc().Dimension);
 		}
 
 		device->Native()->CreateRenderTargetView(target.Native(), &viewDesc, *target.RTV);
@@ -144,7 +144,7 @@ void ResourceManager::CreateResourceViews(TextureComponent& target)
 			viewDesc.Texture2D.MipSlice = 0;
 			break;
 		default:
-			VGLogError(Rendering) << "Depth stencil views for textures in " << target.Native()->GetDesc().Dimension << " dimension is unsupported.";
+			VGLogError(logRendering, "Depth stencil views for textures in {} dimension is unsupported.", target.Native()->GetDesc().Dimension);
 		}
 		viewDesc.Flags = (target.description.accessFlags & AccessFlag::GPUWrite) ? D3D12_DSV_FLAG_NONE : (D3D12_DSV_FLAG_READ_ONLY_DEPTH | D3D12_DSV_FLAG_READ_ONLY_STENCIL);
 
@@ -190,7 +190,7 @@ void ResourceManager::CreateResourceViews(TextureComponent& target)
 			viewDesc.Texture3D.ResourceMinLODClamp = 0.f;
 			break;
 		default:
-			VGLogError(Rendering) << "Shader resource views for textures in " << target.Native()->GetDesc().Dimension << " dimension is unsupported.";
+			VGLogError(logRendering, "Shader resource views for textures in {} dimension is unsupported.", target.Native()->GetDesc().Dimension);
 		}
 		viewDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 
@@ -210,7 +210,7 @@ void ResourceManager::SetResourceName(ResourcePtr<D3D12MA::Allocation>& target, 
 	const auto result = target->GetResource()->SetName(name.data());  // Set the name in the API.
 	if (FAILED(result))
 	{
-		VGLogWarning(Rendering) << "Failed to set resource name to: '" << name << "': " << result;
+		VGLogWarning(logRendering, "Failed to set resource name to: '{}': {}", name, result);
 	}
 #endif
 }
@@ -266,7 +266,7 @@ void ResourceManager::Initialize(RenderDevice* inDevice, size_t bufferedFrames)
 		auto result = device->allocator->CreateResource(&allocationDesc, &resourceDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, &allocationHandle, IID_PPV_ARGS(&rawResource));
 		if (FAILED(result))
 		{
-			VGLogError(Rendering) << "Failed to allocate write upload resource: " << result;
+			VGLogError(logRendering, "Failed to allocate write upload resource: {}", result);
 
 			continue;
 		}
@@ -276,7 +276,7 @@ void ResourceManager::Initialize(RenderDevice* inDevice, size_t bufferedFrames)
 		result = allocationHandle->GetResource()->Map(0, &range, &uploadPtrs[i]);
 		if (FAILED(result))
 		{
-			VGLogError(Rendering) << "Failed to map upload resource: " << result;
+			VGLogError(logRendering, "Failed to map upload resource: {}", result);
 
 			continue;
 		}
@@ -347,7 +347,7 @@ const BufferHandle ResourceManager::Create(const BufferDescription& description,
 	auto result = device->allocator->CreateResource(&allocationDesc, &resourceDesc, resourceState, nullptr, &allocationHandle, IID_PPV_ARGS(&rawResource));
 	if (FAILED(result))
 	{
-		VGLogError(Rendering) << "Failed to allocate buffer: " << result;
+		VGLogError(logRendering, "Failed to allocate buffer: {}", result);
 
 		return { entt::null };
 	}
@@ -399,7 +399,7 @@ const TextureHandle ResourceManager::Create(const TextureDescription& descriptio
 	{
 		if (description.depth > 1)
 		{
-			VGLogWarning(Rendering) << "3D textures cannot have depth stencil binding.";
+			VGLogWarning(logRendering, "3D textures cannot have depth stencil binding.");
 		}
 
 		else
@@ -480,7 +480,7 @@ const TextureHandle ResourceManager::Create(const TextureDescription& descriptio
 	auto result = device->allocator->CreateResource(&allocationDesc, &resourceDesc, resourceState, useClearValue ? &clearValue : nullptr, &allocationHandle, IID_PPV_ARGS(&rawResource));
 	if (FAILED(result))
 	{
-		VGLogError(Rendering) << "Failed to allocate texture: " << result;
+		VGLogError(logRendering, "Failed to allocate texture: {}", result);
 
 		return { entt::null };
 	}
@@ -581,7 +581,7 @@ void ResourceManager::Write(BufferHandle target, const std::vector<uint8_t>& sou
 		auto result = component.Native()->Map(0, &readRange, &mappedPtr);
 		if (FAILED(result))
 		{
-			VGLogError(Rendering) << "Failed to map buffer resource during resource write: " << result;
+			VGLogError(logRendering, "Failed to map buffer resource during resource write: {}", result);
 
 			return;
 		}

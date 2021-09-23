@@ -209,7 +209,7 @@ void ClusteredLightCulling::Initialize(RenderDevice* inDevice)
 	const auto result = device->Native()->CreateCommandSignature(&binningIndirectSignatureDesc, nullptr, IID_PPV_ARGS(binningIndirectSignature.Indirect()));
 	if (FAILED(result))
 	{
-		VGLogError(Rendering) << "Failed to create cluster light binning indirect command signature: " << result;
+		VGLogError(logRendering, "Failed to create cluster light binning indirect command signature: {}", result);
 	}
 }
 

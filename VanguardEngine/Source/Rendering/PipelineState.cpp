@@ -20,7 +20,7 @@ void PipelineState::ReflectRootSignature()
 	const auto result = D3D12CreateRootSignatureDeserializer(rootSignatureData.data(), rootSignatureData.size(), IID_PPV_ARGS(deserializer.Indirect()));
 	if (FAILED(result))
 	{
-		VGLogError(Rendering) << "Failed to create root signature deserializer during reflection: " << result;
+		VGLogError(logRendering, "Failed to create root signature deserializer during reflection: {}", result);
 
 		return;
 	}
@@ -171,7 +171,7 @@ void PipelineState::CreateRootSignature(RenderDevice& device)
 	const auto result = device.Native()->CreateRootSignature(0, rootSignatureData.data(), rootSignatureData.size(), IID_PPV_ARGS(rootSignature.Indirect()));
 	if (FAILED(result))
 	{
-		VGLogError(Rendering) << "Failed to create root signature: " << result;
+		VGLogError(logRendering, "Failed to create root signature: {}", result);
 	}
 
 	ReflectRootSignature();
@@ -187,7 +187,7 @@ void PipelineState::Build(RenderDevice& device, const GraphicsPipelineStateDescr
 
 	if (!vertexShader)
 	{
-		VGLogError(Rendering) << "Missing required vertex shader for graphics pipeline state.";
+		VGLogError(logRendering, "Missing required vertex shader for graphics pipeline state.");
 
 		return;
 	}
@@ -225,7 +225,7 @@ void PipelineState::Build(RenderDevice& device, const GraphicsPipelineStateDescr
 	const auto result = device.Native()->CreateGraphicsPipelineState(&graphicsDesc, IID_PPV_ARGS(pipeline.Indirect()));
 	if (FAILED(result))
 	{
-		VGLogFatal(Rendering) << "Failed to create graphics pipeline state: " << result;
+		VGLogCritical(logRendering, "Failed to create graphics pipeline state: {}", result);
 	}
 }
 
@@ -248,6 +248,6 @@ void PipelineState::Build(RenderDevice& device, const ComputePipelineStateDescri
 	const auto result = device.Native()->CreateComputePipelineState(&computeDesc, IID_PPV_ARGS(pipeline.Indirect()));
 	if (FAILED(result))
 	{
-		VGLogFatal(Rendering) << "Failed to create compute pipeline state: " << result;
+		VGLogCritical(logRendering, "Failed to create compute pipeline state: {}", result);
 	}
 }

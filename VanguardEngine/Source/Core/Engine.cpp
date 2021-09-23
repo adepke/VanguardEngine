@@ -1,7 +1,7 @@
 // Copyright (c) 2019-2021 Andrew Depke
 
 #include <Core/Engine.h>
-#include <Core/LogOutputs.h>
+#include <Core/Base.h>
 #include <Core/Config.h>
 #include <Rendering/Device.h>
 #include <Rendering/Renderer.h>
@@ -11,6 +11,10 @@
 #include <Core/CoreSystems.h>
 #include <Core/CrashHandler.h>
 
+#include <spdlog/spdlog.h>
+#include <spdlog/sinks/basic_file_sink.h>
+#include <spdlog/sinks/msvc_sink.h>
+
 #include <string>
 #include <memory>
 #include <chrono>
@@ -19,6 +23,7 @@
 #include <Rendering/RenderComponents.h>
 #include <Rendering/RenderSystems.h>
 #include <Asset/AssetLoader.h>
+#include <Utility/Random.h>
 //
 
 entt::registry registry;
@@ -27,7 +32,7 @@ void OnFocusChanged(bool focus)
 {
 	VGScopedCPUStat("Focus Changed");
 
-	VGLog(Window) << (focus ? "Acquired focus." : "Released focus.");
+	VGLog(logWindow, "{}", (focus ? VGText("Acquired focus.") : VGText("Released focus.")));
 
 	// #TODO: Limit render FPS, disable audio.
 }
@@ -36,7 +41,7 @@ void OnSizeChanged(uint32_t width, uint32_t height, bool fullscreen)
 {
 	VGScopedCPUStat("Size Changed");
 
-	VGLog(Window) << "Window size changed (" << width << ", " << height << ").";
+	VGLog(logWindow, "Window size changed ({}, {}).", width, height);
 
 	Renderer::Get().device->SetResolution(width, height, fullscreen);
 	Renderer::Get().OnBackBufferSizeChanged(registry);
@@ -46,9 +51,28 @@ void EngineBoot()
 {
 	VGScopedCPUStat("Engine Boot");
 
-	// Send the output to the profiler and to the VS debugger.
-	Logger::Get().AddOutput<LogWindowsOutput>();
-	Logger::Get().AddOutput<LogProfilerOutput>();
+	auto fileSink = std::make_shared<spdlog::sinks::basic_file_sink_mt>("Log.txt", true);
+	auto msvcSink = std::make_shared<spdlog::sinks::msvc_sink_mt>();
+	
+	logCore = std::make_shared<spdlog::logger>("core", spdlog::sinks_init_list{ fileSink, msvcSink });
+	logAsset = logCore->clone("asset");
+	logRendering = logCore->clone("rendering");
+	logThreading = logCore->clone("threading");
+	logUtility = logCore->clone("utility");
+	logWindow = logCore->clone("window");
+
+	spdlog::set_default_logger(logCore);
+	spdlog::set_pattern("[%H:%M:%S.%e][tid:%t][%n.%l] %v");
+	spdlog::flush_on(spdlog::level::critical);
+	spdlog::flush_every(1s);
+
+	// Not useful to set an error handler, this isn't invoked unless exceptions are enabled.
+	// With exceptions disabled, spdlog just writes to stderr.
+	// #TODO: Consider changing the behavior of error handling with exceptions disabled.
+	//spdlog::set_error_handler([](const std::string& msg)
+	//{
+	//	VGLogError(logCore, "Logger: {}", msg);
+	//});
 
 	Config::Initialize();
 
@@ -97,34 +121,21 @@ void EngineLoop()
 	registry.emplace<TransformComponent>(sponza, std::move(sponzaTransform));
 	registry.emplace<MeshComponent>(sponza, AssetLoader::LoadMesh(*Renderer::Get().device, Config::shadersPath / "../Assets/Models/Sponza/glTF/Sponza.gltf"));
 
-	LightComponent pointLight1{};
-	pointLight1.color = { 1.f, 1.f, 1.f };
-	LightComponent pointLight2{};
-	pointLight2.color = { 1.f, 1.f, 1.f };
-	LightComponent pointLight3{};
-	pointLight3.color = { 1.f, 1.f, 1.f };
+	int lightCount = 10000;
 
-	TransformComponent light1Transform{};
-	light1Transform.translation = { -60, 4.f, 10.f };
-	TransformComponent light2Transform{};
-	light2Transform.translation = { 0.f, 4.f, 10.f };
-	TransformComponent light3Transform{};
-	light3Transform.translation = { 60.f, 4.f, 10.f };
+	for (int i = 0; i < lightCount; ++i)
+	{
+		LightComponent pointLight{ .color = { (float)Rand(0.2f, 1.f), (float)Rand(0.2f, 1.f), (float)Rand(0.2f, 1.f) } };
+		TransformComponent transform{
+			.scale = { 1.f, 1.f, 1.f },
+			.rotation = { 0.f, 0.f, 0.f },
+			.translation = { (float)Rand(-150.0, 150.0), (float)Rand(-65.0, 65.0), (float)Rand(0.0, 120.0) }
+		};
 
-	const auto light1 = registry.create();
-	registry.emplace<NameComponent>(light1, "Light1");
-	registry.emplace<TransformComponent>(light1, std::move(light1Transform));
-	registry.emplace<LightComponent>(light1, pointLight1);
-	
-	const auto light2 = registry.create();
-	registry.emplace<NameComponent>(light2, "Light2");
-	registry.emplace<TransformComponent>(light2, std::move(light2Transform));
-	registry.emplace<LightComponent>(light2, pointLight2);
-
-	const auto light3 = registry.create();
-	registry.emplace<NameComponent>(light3, "Light3");
-	registry.emplace<TransformComponent>(light3, std::move(light3Transform));
-	registry.emplace<LightComponent>(light3, pointLight3);
+		const auto light = registry.create();
+		registry.emplace<LightComponent>(light, pointLight);
+		registry.emplace<TransformComponent>(light, transform);
+	}
 
 	auto frameBegin = std::chrono::high_resolution_clock::now();
 	float lastDeltaTime = 0.f;
@@ -169,7 +180,7 @@ void EngineShutdown()
 {
 	VGScopedCPUStat("Engine Shutdown");
 
-	VGLog(Core) << "Engine shutting down.";
+	VGLog(logCore, "Engine shutting down.");
 }
 
 int32_t EngineMain()

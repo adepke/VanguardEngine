@@ -3,6 +3,7 @@
 #include <Asset/AssetLoader.h>
 #include <Asset/TextureLoader.h>
 #include <Rendering/RenderComponents.h>
+#include <Utility/StringTools.h>
 
 #define TINYGLTF_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -60,28 +61,28 @@ namespace AssetLoader
 
 			else
 			{
-				VGLogError(Asset) << "Unknown asset load file extension '" << (path.has_extension() ? path.extension() : "[ No extension ]") << "'.";
+				VGLogError(logAsset, "Unknown asset load file extension '{}'.", (path.has_extension() ? path.extension().generic_wstring() : VGText("[ No extension ]")));
 			}
 		}
 
 		if (!warning.empty())
 		{
-			VGLogWarning(Asset) << "GLTF load: " << warning;
+			VGLogWarning(logAsset, "GLTF load: {}", Str2WideStr(warning));
 		}
 
 		if (!error.empty())
 		{
-			VGLogError(Asset) << "GLTF load: " << error;
+			VGLogError(logAsset, "GLTF load: {}", Str2WideStr(error));
 		}
 
 		if (!result)
 		{
-			VGLogError(Asset) << "Failed to load asset '" << path.filename().generic_string() << "'.";
+			VGLogError(logAsset, "Failed to load asset '{}'.", path.filename().generic_wstring());
 		}
 
 		else
 		{
-			VGLog(Asset) << "Loaded asset '" << path.filename().generic_string() << "'.";
+			VGLog(logAsset, "Loaded asset '{}'.", path.filename().generic_wstring());
 		}
 
 		std::vector<MeshComponent::Subset> subsets;

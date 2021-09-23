@@ -21,7 +21,7 @@ void ReflectShader(std::unique_ptr<Shader>& inShader, ID3D12ShaderReflection* re
 	auto result = reflection->GetDesc(&shaderDesc);
 	if (FAILED(result))
 	{
-		VGLogError(Rendering) << "Shader reflection for '" << name << "' failed internally: " << result;
+		VGLogError(logRendering, "Shader reflection for '{}' failed internally: {}", name, result);
 		return;
 	}
 
@@ -33,7 +33,7 @@ void ReflectShader(std::unique_ptr<Shader>& inShader, ID3D12ShaderReflection* re
 		result = reflection->GetInputParameterDesc(i, &parameterDesc);
 		if (FAILED(result))
 		{
-			VGLogError(Rendering) << "Shader reflection for '" << name << "' failed internally: " << result;
+			VGLogError(logRendering, "Shader reflection for '{}' failed internally: {}", name, result);
 			return;
 		}
 
@@ -47,7 +47,7 @@ void ReflectShader(std::unique_ptr<Shader>& inShader, ID3D12ShaderReflection* re
 		result = reflection->GetResourceBindingDesc(i, &bindDesc);
 		if (FAILED(result))
 		{
-			VGLogError(Rendering) << "Shader reflection for '" << name << "' failed internally: " << result;
+			VGLogError(logRendering, "Shader reflection for '{}' failed internally: {}", name, result);
 			return;
 		}
 
@@ -63,7 +63,7 @@ void ReflectShader(std::unique_ptr<Shader>& inShader, ID3D12ShaderReflection* re
 		case D3D_SIT_STRUCTURED: type = ShaderReflection::ResourceBindType::ShaderResource; break;
 		case D3D_SIT_UAV_RWSTRUCTURED: type = ShaderReflection::ResourceBindType::UnorderedAccess; break;
 		case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER: type = ShaderReflection::ResourceBindType::UnorderedAccess; break;
-		default: VGLogError(Rendering) << "Shader reflection for '" << name << "' failed internally: " << "Unknown resource bind type '" << bindDesc.Type << "'.";
+		default: VGLogError(logRendering, "Shader reflection for '{}' failed internally: Unknown resource bind type '{}'.", name, (int)bindDesc.Type);
 		}
 
 		inShader->reflection.resourceBindings.push_back({ bindDesc.Name, bindDesc.BindPoint, bindDesc.BindCount, bindDesc.Space, type });
@@ -76,14 +76,14 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderT
 {
 	VGScopedCPUStat("Compile Shader");
 
-	VGLog(Rendering) << "Compiling shader: " << path.generic_wstring();
+	VGLog(logRendering, "Compiling shader: {}", path.generic_wstring());
 
 	if (!shaderUtils)
 	{
 		auto result = DxcCreateInstance(CLSID_DxcUtils, IID_PPV_ARGS(shaderUtils.Indirect()));
 		if (FAILED(result))
 		{
-			VGLogFatal(Rendering) << "Failed to create DXC utilities: " << result;
+			VGLogCritical(logRendering, "Failed to create DXC utilities: {}", result);
 		}
 	}
 
@@ -92,7 +92,7 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderT
 		auto result = DxcCreateInstance(CLSID_DxcCompiler, IID_PPV_ARGS(shaderCompiler.Indirect()));
 		if (FAILED(result))
 		{
-			VGLogFatal(Rendering) << "Failed to create DXC compiler: " << result;
+			VGLogCritical(logRendering, "Failed to create DXC compiler: {}", result);
 		}
 	}
 
@@ -101,7 +101,7 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderT
 		auto result = shaderUtils->CreateDefaultIncludeHandler(shaderIncludeHandler.Indirect());
 		if (FAILED(result))
 		{
-			VGLogFatal(Rendering) << "Failed to create DXC include handler: " << result;
+			VGLogCritical(logRendering, "Failed to create DXC include handler: {}", result);
 		}
 	}
 
@@ -125,7 +125,7 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderT
 	auto result = shaderUtils->LoadFile(pathModified.c_str(), nullptr, sourceBlob.Indirect());
 	if (FAILED(result))
 	{
-		VGLogError(Rendering) << "Failed to create shader blob at '" << path.generic_wstring() << "': " << result;
+		VGLogError(logRendering, "Failed to create shader blob at '{}': {}", path.generic_wstring(), result);
 
 		return {};
 	}
@@ -193,28 +193,28 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderT
 		IID_PPV_ARGS(compileResult.Indirect())
 	);
 	
-	ResourcePtr<IDxcBlobUtf8> errorBlob;
+	ResourcePtr<IDxcBlobUtf16> errorBlob;
 	compileResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(errorBlob.Indirect()), nullptr);
 
 	compileResult->GetStatus(&result);
 	if (FAILED(result))
 	{
-		VGLogError(Rendering) << "Failed to compile shader at '" << path.generic_wstring() << "': " << result
-			<< " | Error: " << ((errorBlob && errorBlob->GetStringLength()) ? errorBlob->GetStringPointer() : "Unknown.");
+		VGLogError(logRendering, "Failed to compile shader at '{}': {} | Error: {}", path.generic_wstring(), result,
+			((errorBlob && errorBlob->GetStringLength()) ? errorBlob->GetStringPointer() : VGText("Unknown.")));
 
 		return {};
 	}
 
 	else if (errorBlob && errorBlob->GetStringLength())
 	{
-		VGLogWarning(Rendering) << "Compiling shader at '" << path.generic_wstring() << "' had warnings and/or errors: " << errorBlob->GetStringPointer();
+		VGLogWarning(logRendering, "Compiling shader at '{}' had warnings and/or errors: {}", path.generic_wstring(), errorBlob->GetStringPointer());
 	}
 
 	ResourcePtr<IDxcBlob> compiledShader;
 	compileResult->GetOutput(DXC_OUT_OBJECT, IID_PPV_ARGS(compiledShader.Indirect()), nullptr);
 	if (!compiledShader)
 	{
-		VGLogError(Rendering) << "Failed to get compiled shader object.";
+		VGLogError(logRendering, "Failed to get compiled shader object.");
 
 		return {};
 	}
@@ -241,7 +241,7 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderT
 
 	else
 	{
-		VGLogWarning(Rendering) << "Failed to retrieve shader reflection data.";
+		VGLogWarning(logRendering, "Failed to retrieve shader reflection data.");
 	}
 
 	return std::move(resultShader);

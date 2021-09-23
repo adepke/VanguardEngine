@@ -39,13 +39,13 @@ void CommandList::Create(RenderDevice* inDevice, D3D12_COMMAND_LIST_TYPE type)
 	auto result = device->Native()->CreateCommandAllocator(type, IID_PPV_ARGS(allocator.Indirect()));
 	if (FAILED(result))
 	{
-		VGLogFatal(Rendering) << "Failed to create command allocator: " << result;
+		VGLogCritical(logRendering, "Failed to create command allocator: {}", result);
 	}
 
 	result = device->Native()->CreateCommandList(0, type, allocator.Get(), nullptr, IID_PPV_ARGS(list.Indirect()));
 	if (FAILED(result))
 	{
-		VGLogFatal(Rendering) << "Failed to create command list: " << result;
+		VGLogCritical(logRendering, "Failed to create command list: {}", result);
 	}
 }
 

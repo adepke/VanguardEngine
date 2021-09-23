@@ -4,6 +4,8 @@
 
 #include <Core/Misc.h>
 
+#include <spdlog/spdlog.h>
+
 #include <string>
 #include <atomic>
 
@@ -23,12 +25,15 @@ VGForceInline void RequestCrash(const std::wstring& reason, bool printToLog = fa
 	{
 		ReportCrashEvent(reason, printToLog);
 
+		spdlog::shutdown();  // Flushes all sinks.
+
 		if (HasDebuggerAttached())
 		{
 			VGBreak();
 		}
 
 		// Use exit instead of std::terminate to avoid a message box.
+		// #TODO: Consider proper thread shutdown instead of hard killing the process.
 		exit(-1);
 	}
 

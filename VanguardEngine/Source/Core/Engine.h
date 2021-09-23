@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include <Core/Base.h>
+#include <cstdint>
 
 int32_t EngineMain();
 void EngineShutdown();

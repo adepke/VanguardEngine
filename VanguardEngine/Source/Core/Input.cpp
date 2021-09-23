@@ -22,7 +22,7 @@ namespace Input
 
 		if (FAILED(::GetDpiForMonitor(static_cast<HMONITOR>(monitor), MDT_EFFECTIVE_DPI, &dpiX, &dpiY)))
 		{
-			VGLogError(Core) << "Failed to get monitor DPI.";
+			VGLogError(logCore, "Failed to get monitor DPI.");
 
 			return 1.f;
 		}
@@ -106,7 +106,7 @@ namespace Input
 		POINT mousePosition;
 		if (!::GetCursorPos(&mousePosition))
 		{
-			VGLogWarning(Core) << "Failed to get mouse cursor position: " << GetPlatformError();
+			VGLogWarning(logCore, "Failed to get mouse cursor position: {}", GetPlatformError());
 
 			return;
 		}
@@ -131,7 +131,7 @@ namespace Input
 				if (foregroundWindow == window)
 				{
 					if (!::ScreenToClient(static_cast<HWND>(window), &mousePosition))
-						VGLogWarning(Core) << "Failed to convert mouse position from screen space to window space: " << GetPlatformError();
+						VGLogWarning(logCore, "Failed to convert mouse position from screen space to window space: {}", GetPlatformError());
 					else
 						io.MousePos = { static_cast<float>(mousePosition.x), static_cast<float>(mousePosition.y) };
 				}
@@ -176,7 +176,7 @@ namespace Input
 
 			if (!::SetCursor(::LoadCursor(nullptr, platformCursor)))
 			{
-				VGLogWarning(Core) << "Failed to set cursor: " << GetPlatformError();
+				VGLogWarning(logCore, "Failed to set cursor: {}", GetPlatformError());
 			}
 		}
 	}
@@ -195,7 +195,7 @@ namespace Input
 		// Ensure we have an ImGui context.
 		if (!ImGui::GetCurrentContext())
 		{
-			VGLogFatal(Core) << "Missing ImGui context!";
+			VGLogCritical(logCore, "Missing ImGui context!");
 		}
 
 		auto& io = ImGui::GetIO();

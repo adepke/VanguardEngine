@@ -104,7 +104,7 @@ std::wstringstream GetDredInfo(ID3D12Device5* device, ID3D12DeviceRemovedExtende
 	auto result = dred->GetAutoBreadcrumbsOutput1(&breadcrumbs);
 	if (FAILED(result))
 	{
-		VGLogWarning(Rendering) << "Failed to get DRED breadcrumbs: " << result;
+		VGLogWarning(logRendering, "Failed to get DRED breadcrumbs: {}", result);
 	}
 
 	else
@@ -163,7 +163,7 @@ std::wstringstream GetDredInfo(ID3D12Device5* device, ID3D12DeviceRemovedExtende
 	result = dred->GetPageFaultAllocationOutput1(&pageFault);
 	if (FAILED(result))
 	{
-		VGLogWarning(Rendering) << "Failed to get DRED page fault: " << result;
+		VGLogWarning(logRendering, "Failed to get DRED page fault: {}", result);
 	}
 
 	else

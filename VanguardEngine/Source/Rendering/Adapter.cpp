@@ -41,5 +41,5 @@ void Adapter::Initialize(ResourcePtr<IDXGIFactory7>& factory, D3D_FEATURE_LEVEL 
 	DXGI_ADAPTER_DESC1 adapterDesc;
 	adapterResource->GetDesc1(&adapterDesc);
 
-	VGLog(Rendering) << "Using adapter: " << adapterDesc.Description;
+	VGLog(logRendering, "Using adapter: {}", adapterDesc.Description);
 }

@@ -2,10 +2,12 @@
 
 #include <Core/Engine.h>
 #include <Core/Globals.h>
-#include <Core/Logging.h>
 //#include <Core/Windows/WindowsMinimal.h>  // We actually can't include this since we need some API that's excluded from lean and mean.
 
+#define NOMINMAX
 #include <Windows.h>
+
+#include <Core/Logging.h>  // spdlog leaks Windows.h, likely with lean and mean defined, so we have to include it after.
 
 void ParseCommandLine()
 {

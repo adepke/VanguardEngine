@@ -29,7 +29,7 @@ namespace AssetLoader
 
 		if (!data)
 		{
-			VGLogError(Asset) << "Failed to load texture at '" << path.generic_wstring() << "'.";
+			VGLogError(logAsset, "Failed to load texture at '{}'.", path.generic_wstring());
 			return {};
 		}
 
