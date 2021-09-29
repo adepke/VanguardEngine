@@ -12,15 +12,6 @@
 using namespace DirectX;
 using Microsoft::WRL::ComPtr;
 
-struct Vertex
-{
-	XMFLOAT3 position;
-	XMFLOAT3 normal;
-	XMFLOAT2 uv;
-	XMFLOAT3 tangent;
-	XMFLOAT3 bitangent;
-};
-
 // #TODO: Temporary globals.
 inline XMMATRIX globalViewMatrix;
 inline XMMATRIX globalProjectionMatrix;
