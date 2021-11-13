@@ -63,6 +63,8 @@ void ReflectShader(std::unique_ptr<Shader>& inShader, ID3D12ShaderReflection* re
 		case D3D_SIT_STRUCTURED: type = ShaderReflection::ResourceBindType::ShaderResource; break;
 		case D3D_SIT_UAV_RWSTRUCTURED: type = ShaderReflection::ResourceBindType::UnorderedAccess; break;
 		case D3D_SIT_UAV_RWSTRUCTURED_WITH_COUNTER: type = ShaderReflection::ResourceBindType::UnorderedAccess; break;
+		case D3D_SIT_BYTEADDRESS: type = ShaderReflection::ResourceBindType::ShaderResource; break;
+		case D3D_SIT_UAV_RWBYTEADDRESS: type = ShaderReflection::ResourceBindType::UnorderedAccess; break;
 		default: VGLogError(logRendering, "Shader reflection for '{}' failed internally: Unknown resource bind type '{}'.", name, (int)bindDesc.Type);
 		}
 
