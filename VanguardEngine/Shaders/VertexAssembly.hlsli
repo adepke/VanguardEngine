@@ -18,6 +18,7 @@ ByteAddressBuffer vertexExtraBuffer : register(t1, space2);
 struct VertexMetadata
 {
     uint activeChannels;  // Bit mask of vertex attributes.
+    float3 padding;
     uint channelStrides[vertexChannels];
     uint channelOffsets[vertexChannels];
 };
