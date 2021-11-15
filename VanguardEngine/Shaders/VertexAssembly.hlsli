@@ -19,6 +19,7 @@ struct VertexMetadata
 {
     uint activeChannels;  // Bit mask of vertex attributes.
     float3 padding;
+    // All entries are really uint4's.
     uint channelStrides[vertexChannels];
     uint channelOffsets[vertexChannels];
 };
@@ -52,7 +53,17 @@ float4 LoadVertexTangent(uint vertexId)
 
 float4 LoadVertexBitangent(uint vertexId)
 {
-    return HasVertexAttribute(vertexChannelBitangent) ? vertexExtraBuffer.Load<float4>(vertexId * vertexMetadata.channelStrides[vertexChannelBitangent] + vertexMetadata.channelOffsets[vertexChannelBitangent]) : float4(0, 0, 0, 0);
+    if (HasVertexAttribute(vertexChannelBitangent))
+    {
+        return vertexExtraBuffer.Load<float4>(vertexId * vertexMetadata.channelStrides[vertexChannelBitangent] + vertexMetadata.channelOffsets[vertexChannelBitangent]);
+    }
+    
+    else
+    {
+        float3 normal = LoadVertexNormal(vertexId);
+        float3 tangent = LoadVertexTangent(vertexId).xyz;
+        return float4(cross(normal, tangent), 1.f);
+    }
 }
 
 float4 LoadVertexColor(uint vertexId)
