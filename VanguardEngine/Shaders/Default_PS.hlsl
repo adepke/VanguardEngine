@@ -9,8 +9,8 @@ SamplerState defaultSampler : register(s0);
 
 struct ClusterData
 {
-    uint3 dimensions;
-    float logY;
+	uint3 dimensions;
+	float logY;
 };
 
 ConstantBuffer<ClusterData> clusterData : register(b0);
@@ -28,7 +28,7 @@ struct Input
 	float2 uv : UV;
 	float3 tangent : TANGENT;  // World space.
 	float3 bitangent : BITANGENT;  // World space.
-    float depthVS : DEPTH;  // View space.
+	float depthVS : DEPTH;  // View space.
 };
 
 struct Output
@@ -43,7 +43,7 @@ Output main(Input input)
 
 	float4 baseColor = baseColorMap.Sample(defaultSampler, input.uv);
 	
-    clip(baseColor.a < alphaTestThreshold ? -1 : 1);
+	clip(baseColor.a < alphaTestThreshold ? -1 : 1);
 	
 	float2 metallicRoughness = { 0.0, 0.0 };
 	float3 normal = input.normal;
@@ -86,22 +86,22 @@ Output main(Input input)
 	float3 viewDirection = normalize(camera.position.xyz - input.position);
 	float3 normalDirection = normal;
 	
-    Material materialSample;
-    materialSample.baseColor = baseColor;
-    materialSample.metalness = metallicRoughness.r;
-    materialSample.roughness = metallicRoughness.g;
-    materialSample.normal = normal;
-    materialSample.occlusion = ambientOcclusion;
-    materialSample.emissive = emissive;
+	Material materialSample;
+	materialSample.baseColor = baseColor;
+	materialSample.metalness = metallicRoughness.r;
+	materialSample.roughness = metallicRoughness.g;
+	materialSample.normal = normal;
+	materialSample.occlusion = ambientOcclusion;
+	materialSample.emissive = emissive;
 	
-    uint3 clusterId = DrawToClusterId(FROXEL_SIZE, clusterData.logY, camera, input.positionSS.xy, input.depthVS);
-    uint2 lightInfo = clusteredLightInfo[ClusterId2Index(clusterData.dimensions, clusterId)];
-    for (uint i = 0; i < lightInfo.y; ++i)
-    {
-        uint lightIndex = clusteredLightList[lightInfo.x + i];
-        LightSample sample = SampleLight(lights[lightIndex], materialSample, camera, viewDirection, input.position, normalDirection);
-        output.color.rgb += sample.diffuse.rgb;
-    }
+	uint3 clusterId = DrawToClusterId(FROXEL_SIZE, clusterData.logY, camera, input.positionSS.xy, input.depthVS);
+	uint2 lightInfo = clusteredLightInfo[ClusterId2Index(clusterData.dimensions, clusterId)];
+	for (uint i = 0; i < lightInfo.y; ++i)
+	{
+		uint lightIndex = clusteredLightList[lightInfo.x + i];
+		LightSample sample = SampleLight(lights[lightIndex], materialSample, camera, viewDirection, input.position, normalDirection);
+		output.color.rgb += sample.diffuse.rgb;
+	}
 
 	// Ambient contribution.
 	const float ambientLight = 0.025;

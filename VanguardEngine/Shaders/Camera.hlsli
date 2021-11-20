@@ -7,32 +7,32 @@
 
 struct Camera
 {
-    float4 position;  // World space.
-    // Boundary
-    matrix view;
-    matrix projection;
-    matrix inverseView;
-    matrix inverseProjection;
-    // Boundary
-    float nearPlane;
-    float farPlane;
-    float fieldOfView;  // Horizontal, radians.
-    float aspectRatio;
+	float4 position;  // World space.
+	// Boundary
+	matrix view;
+	matrix projection;
+	matrix inverseView;
+	matrix inverseProjection;
+	// Boundary
+	float nearPlane;
+	float farPlane;
+	float fieldOfView;  // Horizontal, radians.
+	float aspectRatio;
 };
 
 float4 UvToClipSpace(float2 uv)
 {
-    uv = float2(uv.x, 1.f - uv.y);  // Reverse the y axis.
-    uv = uv * 2.f - 1.f;  // Remap to [-1, 1].
-    
-    return float4(uv, 0.f, 1.f);  // Clip space Z of 0 due to the inverse depth buffer.
+	uv = float2(uv.x, 1.f - uv.y);  // Reverse the y axis.
+	uv = uv * 2.f - 1.f;  // Remap to [-1, 1].
+	
+	return float4(uv, 0.f, 1.f);  // Clip space Z of 0 due to the inverse depth buffer.
 }
 
 float4 ClipToViewSpace(Camera camera, float4 clipSpace)
 {
-    float4 viewSpace = mul(clipSpace, camera.inverseProjection);
-    
-    return viewSpace / viewSpace.w;  // Perspective division.
+	float4 viewSpace = mul(clipSpace, camera.inverseProjection);
+	
+	return viewSpace / viewSpace.w;  // Perspective division.
 }
 
 float LinearizeDepth(Camera camera, float hyperbolicDepth)
@@ -46,11 +46,11 @@ float LinearizeDepth(Camera camera, float hyperbolicDepth)
 
 float3 ComputeRayDirection(Camera camera, float2 uv)
 {
-    float4 positionClipSpace = UvToClipSpace(uv);
-    float4 positionViewSpace = float4(mul(positionClipSpace, camera.inverseProjection).xyz, 0.f);  // No perspective division.
-    float4 positionWorldSpace = mul(positionViewSpace, camera.inverseView);
-    
-    return normalize(positionWorldSpace.xyz);
+	float4 positionClipSpace = UvToClipSpace(uv);
+	float4 positionViewSpace = float4(mul(positionClipSpace, camera.inverseProjection).xyz, 0.f);  // No perspective division.
+	float4 positionWorldSpace = mul(positionViewSpace, camera.inverseView);
+	
+	return normalize(positionWorldSpace.xyz);
 }
 
 #endif  // __CAMERA_HLSLI__

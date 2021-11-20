@@ -5,27 +5,27 @@
 
 struct MaterialData
 {
-    uint baseColor;
-    uint metallicRoughness;
-    uint normal;
-    uint occlusion;
+	uint baseColor;
+	uint metallicRoughness;
+	uint normal;
+	uint occlusion;
 	// Boundary
-    uint emissive;
-    float3 padding;
+	uint emissive;
+	float3 padding;
 };
 
 struct Material
 {
-    float4 baseColor;
-    // Boundary
-    float metalness;
-    float3 normal;
-    // Boundary
-    float roughness;
-    float3 emissive;
-    // Boundary
-    float occlusion;
-    float3 padding;
+	float4 baseColor;
+	// Boundary
+	float metalness;
+	float3 normal;
+	// Boundary
+	float roughness;
+	float3 emissive;
+	// Boundary
+	float occlusion;
+	float3 padding;
 };
 
 #endif  // __MATERIAL_HLSLI__

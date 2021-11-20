@@ -27,7 +27,7 @@ struct Output
 [RootSignature(RS)]
 Output main(Input input)
 {
-    float4 position = LoadVertexPosition(input.vertexID);
+	float4 position = LoadVertexPosition(input.vertexID);
 	float4 normal = float4(LoadVertexNormal(input.vertexID), 0.f);
 	float2 uv = LoadVertexTexcoord(input.vertexID);
 	float4 tangent = LoadVertexTangent(input.vertexID);

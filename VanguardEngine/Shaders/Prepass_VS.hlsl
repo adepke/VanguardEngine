@@ -22,7 +22,7 @@ struct Output
 Output main(Input input)
 {
 	Output output;
-    output.positionCS = LoadVertexPosition(input.vertexID);
+	output.positionCS = LoadVertexPosition(input.vertexID);
 	output.positionCS = mul(output.positionCS, perObject.worldMatrix);
 	output.positionCS = mul(output.positionCS, camera.view);
 	output.positionCS = mul(output.positionCS, camera.projection);
