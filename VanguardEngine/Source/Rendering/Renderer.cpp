@@ -343,6 +343,7 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 
 	window = std::move(inWindow);
 	device = std::move(inDevice);
+	meshFactory = std::make_unique<MeshFactory>(device.get(), 1024 * 1024, 1024 * 1024);
 
 	device->CheckFeatureSupport();
 
@@ -383,7 +384,9 @@ void Renderer::Render(entt::registry& registry)
 
 	RenderGraph graph{ &renderGraphResources };
 	
-	const auto [instanceBuffer, instanceOffset] = CreateInstanceBuffer(registry);
+	const auto instanceData = CreateInstanceBuffer(registry);
+	instanceBuffer = instanceData.first;
+	instanceOffset = instanceData.second;
 	const auto lightBuffer = CreateLightBuffer(registry);
 
 	auto backBufferTag = graph.Import(device->GetBackBuffer());
@@ -402,38 +405,11 @@ void Renderer::Render(entt::registry& registry)
 		list.BindPipelineState(pipelines["Prepass"]);
 		list.BindResource("camera", resources.GetBuffer(cameraBufferTag));
 
-		size_t entityIndex = 0;
-		registry.view<const TransformComponent, const MeshComponent>().each([&](auto entity, const auto&, const auto& mesh)
-		{
-			list.BindResource("perObject", instanceBuffer, instanceOffset + (entityIndex * sizeof(EntityInstance)));
-
-			// Set the index buffer.
-			auto& indexBuffer = device->GetResourceManager().Get(mesh.indexBuffer);
-			D3D12_INDEX_BUFFER_VIEW indexView{};
-			indexView.BufferLocation = indexBuffer.Native()->GetGPUVirtualAddress();
-			indexView.SizeInBytes = static_cast<UINT>(indexBuffer.description.size * indexBuffer.description.stride);
-			indexView.Format = DXGI_FORMAT_R32_UINT;
-
-			list.Native()->IASetIndexBuffer(&indexView);
-
-			for (const auto& subset : mesh.subsets)
-			{
-				// Early out if we're a transparent material. We don't want transparent meshes in our depth buffer.
-				if (subset.material.transparent)
-					continue;
-
-				// #TODO: Only bind once per mesh, and pass subset.vertexOffset into the draw call. This isn't yet supported with DXC, see: https://github.com/microsoft/DirectXShaderCompiler/issues/2907
-				list.BindResource("vertexBuffer", mesh.vertexBuffer, subset.vertexOffset * sizeof(Vertex));
-
-				list.Native()->DrawIndexedInstanced(static_cast<uint32_t>(subset.indices), 1, static_cast<uint32_t>(subset.indexOffset), 0, 0);
-			}
-
-			++entityIndex;
-		});
+		MeshSystem::Render(Renderer::Get(), registry, list, false);
 	});
 
 	// #TODO: Don't have this here.
-	const auto clusterResources = clusteredCulling.Render(graph, registry, cameraBufferTag, depthStencilTag, instanceBuffer, instanceOffset, lightBuffer);
+	const auto clusterResources = clusteredCulling.Render(graph, registry, cameraBufferTag, depthStencilTag, lightBuffer);
 	
 	auto& forwardPass = graph.AddPass("Forward Pass", ExecutionQueue::Graphics);
 	const auto outputHDRTag = forwardPass.Create(TransientTextureDescription{
@@ -478,40 +454,7 @@ void Renderer::Render(entt::registry& registry)
 		{
 			VGScopedGPUStat("Opaque", device->GetDirectContext(), list.Native());
 
-			size_t entityIndex = 0;
-			registry.view<const TransformComponent, const MeshComponent>().each([&](auto entity, const auto&, const auto& mesh)
-			{
-				list.BindResource("perObject", instanceBuffer, instanceOffset + (entityIndex * sizeof(EntityInstance)));
-
-				// Set the index buffer.
-				auto& indexBuffer = device->GetResourceManager().Get(mesh.indexBuffer);
-				D3D12_INDEX_BUFFER_VIEW indexView{};
-				indexView.BufferLocation = indexBuffer.Native()->GetGPUVirtualAddress();
-				indexView.SizeInBytes = static_cast<UINT>(indexBuffer.description.size * indexBuffer.description.stride);
-				indexView.Format = DXGI_FORMAT_R32_UINT;
-
-				list.Native()->IASetIndexBuffer(&indexView);
-
-				for (const auto& subset : mesh.subsets)
-				{
-					// Early out if we're a transparent material. We cannot be drawn in this initial pass.
-					if (subset.material.transparent)
-						continue;
-
-					// #TODO: Only bind once per mesh, and pass subset.vertexOffset into the draw call. This isn't yet supported with DXC, see: https://github.com/microsoft/DirectXShaderCompiler/issues/2907
-					list.BindResource("vertexBuffer", mesh.vertexBuffer, subset.vertexOffset * sizeof(Vertex));
-
-					// Set the material data.
-					if (device->GetResourceManager().Valid(subset.material.materialBuffer))
-					{
-						list.BindResource("material", subset.material.materialBuffer);
-					}
-
-					list.Native()->DrawIndexedInstanced(static_cast<uint32_t>(subset.indices), 1, static_cast<uint32_t>(subset.indexOffset), 0, 0);
-				}
-
-				++entityIndex;
-			});
+			MeshSystem::Render(Renderer::Get(), registry, list, true);
 		}
 
 		// Transparent
@@ -528,40 +471,7 @@ void Renderer::Render(entt::registry& registry)
 			VGScopedGPUStat("Transparent", device->GetDirectContext(), list.Native());
 
 			// #TODO: Sort transparent mesh components by distance.
-			size_t entityIndex = 0;
-			registry.view<const TransformComponent, const MeshComponent>().each([&](auto entity, const auto&, const auto& mesh)
-			{
-				list.BindResource("perObject", instanceBuffer, instanceOffset + (entityIndex * sizeof(EntityInstance)));
-
-				// Set the index buffer.
-				auto& indexBuffer = device->GetResourceManager().Get(mesh.indexBuffer);
-				D3D12_INDEX_BUFFER_VIEW indexView{};
-				indexView.BufferLocation = indexBuffer.Native()->GetGPUVirtualAddress();
-				indexView.SizeInBytes = static_cast<UINT>(indexBuffer.description.size * indexBuffer.description.stride);
-				indexView.Format = DXGI_FORMAT_R32_UINT;
-
-				list.Native()->IASetIndexBuffer(&indexView);
-
-				for (const auto& subset : mesh.subsets)
-				{
-					// Early out if we're an opaque material.
-					if (!subset.material.transparent)
-						continue;
-
-					// #TODO: Only bind once per mesh, and pass subset.vertexOffset into the draw call. This isn't yet supported with DXC, see: https://github.com/microsoft/DirectXShaderCompiler/issues/2907
-					list.BindResource("vertexBuffer", mesh.vertexBuffer, subset.vertexOffset * sizeof(Vertex));
-
-					// Set the material data.
-					if (device->GetResourceManager().Valid(subset.material.materialBuffer))
-					{
-						list.BindResource("material", subset.material.materialBuffer);
-					}
-
-					list.Native()->DrawIndexedInstanced(static_cast<uint32_t>(subset.indices), 1, static_cast<uint32_t>(subset.indexOffset), 0, 0);
-				}
-
-				++entityIndex;
-			});
+			MeshSystem::Render(Renderer::Get(), registry, list, true);
 		}
 	});
 

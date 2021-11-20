@@ -41,10 +41,19 @@ static const uint32_t vertexChannelBitangent = 4;
 static const uint32_t vertexChannelColor = 5;
 static const uint32_t vertexChannels = 6;
 
+struct uint128_t
+{
+	uint64_t low;
+	uint64_t high;
+
+	// The upper 96 bits are unused for the time being, since this struct is only used for arrays.
+	uint128_t& operator=(uint32_t other) { low = static_cast<uint64_t>(other); return *this; }
+};
+
 struct VertexMetadata
 {
 	uint32_t activeChannels;  // Bit mask of vertex attributes.
 	uint32_t padding[3];
-	uint32_t channelStrides[vertexChannels];
-	uint32_t channelOffsets[vertexChannels];
+	uint128_t channelStrides[vertexChannels];
+	uint128_t channelOffsets[vertexChannels];
 };

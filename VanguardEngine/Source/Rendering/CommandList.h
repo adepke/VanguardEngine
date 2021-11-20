@@ -28,6 +28,7 @@ protected:
 
 private:
 	void TransitionBarrierInternal(ID3D12Resource* resource, D3D12_RESOURCE_STATES oldState, D3D12_RESOURCE_STATES newState);
+	void BindResourceInternal(const std::string& bindName, BufferHandle handle, size_t offset, bool optional);
 
 public:
 	auto* Native() const noexcept { return list.Get(); }
@@ -50,6 +51,7 @@ public:
 	template <typename T>
 	void BindConstants(const std::string& bindName, const T& data, size_t offset = 0);
 	void BindResource(const std::string& bindName, BufferHandle handle, size_t offset = 0);
+	void BindResourceOptional(const std::string& bindName, BufferHandle handle, size_t offset = 0);
 	void BindResourceTable(const std::string& bindName, D3D12_GPU_DESCRIPTOR_HANDLE descriptor);
 
 	void DrawFullscreenQuad();
@@ -59,11 +61,21 @@ public:
 };
 
 template <typename T>
-void CommandList::BindConstants(const std::string& bindName, const T& data, size_t offset)
+inline void CommandList::BindConstants(const std::string& bindName, const T& data, size_t offset)
 {
 	std::vector<uint32_t> constants;
 	constants.resize(sizeof(T) / sizeof(uint32_t));
 	std::memcpy(constants.data(), &data, constants.size() * sizeof(uint32_t));
 
 	BindConstants(bindName, constants, offset);
+}
+
+inline void CommandList::BindResource(const std::string& bindName, BufferHandle handle, size_t offset)
+{
+	BindResourceInternal(bindName, handle, offset, false);
+}
+
+inline void CommandList::BindResourceOptional(const std::string& bindName, BufferHandle handle, size_t offset)
+{
+	BindResourceInternal(bindName, handle, offset, true);
 }

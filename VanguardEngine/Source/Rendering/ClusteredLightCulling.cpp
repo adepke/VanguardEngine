@@ -1,6 +1,7 @@
 // Copyright (c) 2019-2021 Andrew Depke
 
 #include <Rendering/ClusteredLightCulling.h>
+#include <Rendering/Renderer.h>
 #include <Rendering/Device.h>
 #include <Rendering/CommandList.h>
 #include <Rendering/RenderPass.h>
@@ -9,6 +10,7 @@
 #include <Rendering/RenderComponents.h>
 #include <Rendering/ShaderStructs.h>
 #include <Rendering/RenderComponents.h>
+#include <Rendering/RenderSystems.h>
 #include <Core/CoreComponents.h>
 #include <Rendering/RenderUtils.h>
 
@@ -213,7 +215,7 @@ void ClusteredLightCulling::Initialize(RenderDevice* inDevice)
 	}
 }
 
-ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::registry& registry, RenderResource cameraBuffer, RenderResource depthStencil, BufferHandle instanceBuffer, size_t instanceOffset, BufferHandle lights)
+ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::registry& registry, RenderResource cameraBuffer, RenderResource depthStencil, BufferHandle lights)
 {
 	VGScopedCPUStat("Clustered Light Culling");
 	VGScopedGPUStat("Clustered Light Culling", device->GetDirectContext(), device->GetDirectList().Native());
@@ -248,7 +250,7 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 		.stride = sizeof(bool) * 4  // Structured buffers pad each element out to 4 bytes.
 	}, VGText("Cluster visibility"));
 	clusterDepthCullingPass.Write(clusterVisibilityTag, ResourceBind::UAV);
-	clusterDepthCullingPass.Bind([&, cameraBuffer, clusterVisibilityTag, instanceBuffer, instanceOffset](CommandList& list, RenderGraphResourceManager& resources)
+	clusterDepthCullingPass.Bind([&, cameraBuffer, clusterVisibilityTag](CommandList& list, RenderGraphResourceManager& resources)
 	{
 		RenderUtils::Get().ClearUAV(list, resources.GetBuffer(clusterVisibilityTag));
 
@@ -274,30 +276,7 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 
 		list.BindConstants("clusterData", clusterData);
 
-		size_t entityIndex = 0;
-		registry.view<const TransformComponent, const MeshComponent>().each([&](auto entity, const auto&, const auto& mesh)
-		{
-			list.BindResource("perObject", instanceBuffer, instanceOffset + (entityIndex * sizeof(EntityInstance)));
-
-			// Set the index buffer.
-			auto& indexBuffer = device->GetResourceManager().Get(mesh.indexBuffer);
-			D3D12_INDEX_BUFFER_VIEW indexView{};
-			indexView.BufferLocation = indexBuffer.Native()->GetGPUVirtualAddress();
-			indexView.SizeInBytes = static_cast<UINT>(indexBuffer.description.size * indexBuffer.description.stride);
-			indexView.Format = DXGI_FORMAT_R32_UINT;
-
-			list.Native()->IASetIndexBuffer(&indexView);
-
-			for (const auto& subset : mesh.subsets)
-			{
-				// #TODO: Only bind once per mesh, and pass subset.vertexOffset into the draw call. This isn't yet supported with DXC, see: https://github.com/microsoft/DirectXShaderCompiler/issues/2907
-				list.BindResource("vertexBuffer", mesh.vertexBuffer, subset.vertexOffset * sizeof(Vertex));
-
-				list.Native()->DrawIndexedInstanced(static_cast<uint32_t>(subset.indices), 1, static_cast<uint32_t>(subset.indexOffset), 0, 0);
-			}
-
-			++entityIndex;
-		});
+		MeshSystem::Render(Renderer::Get(), registry, list, false);
 	});
 
 	auto& clusterCompaction = graph.AddPass("Visible Cluster Compaction", ExecutionQueue::Compute);

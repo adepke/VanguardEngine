@@ -17,7 +17,8 @@ struct AttributeSort
 		"NORMAL",
 		"TEXCOORD_0",
 		"TANGENT",
-		"BITANGENT"
+		"BITANGENT",
+		"COLOR_0"
 	};
 
 	bool operator()(const std::string& left, const std::string& right) const

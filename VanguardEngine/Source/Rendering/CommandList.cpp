@@ -30,6 +30,68 @@ void CommandList::TransitionBarrierInternal(ID3D12Resource* resource, D3D12_RESO
 	pendingBarriers.emplace_back(std::move(barrier));
 }
 
+void CommandList::BindResourceInternal(const std::string& bindName, BufferHandle handle, size_t offset, bool optional)
+{
+	VGAssert(boundPipeline, "Attempted to bind resource without first binding a pipeline.");
+
+	const auto hasBinding = boundPipeline->GetReflectionData()->resourceIndexMap.contains(bindName);
+	if (optional && !hasBinding)
+	{
+		return;
+	}
+
+	else if (!optional)
+	{
+		VGAssert(boundPipeline->GetReflectionData()->resourceIndexMap.contains(bindName), "Shader does not contain resource bind '%s'", bindName.c_str());
+	}
+
+	auto& bufferComponent = device->GetResourceManager().Get(handle);
+
+	const auto& bindMetadata = boundPipeline->GetReflectionData()->resourceIndexMap.at(bindName);  // Can't use operator[] due to lack of const-ness.
+	switch (bindMetadata.type)
+	{
+	case PipelineStateReflection::ResourceBindType::ConstantBuffer:
+		if (boundPipeline->vertexShader)
+		{
+			list->SetGraphicsRootConstantBufferView(bindMetadata.signatureIndex, bufferComponent.Native()->GetGPUVirtualAddress() + offset);
+		}
+
+		else
+		{
+			list->SetComputeRootConstantBufferView(bindMetadata.signatureIndex, bufferComponent.Native()->GetGPUVirtualAddress() + offset);
+		}
+
+		break;
+	case PipelineStateReflection::ResourceBindType::ShaderResource:
+		if (boundPipeline->vertexShader)
+		{
+			list->SetGraphicsRootShaderResourceView(bindMetadata.signatureIndex, bufferComponent.Native()->GetGPUVirtualAddress() + offset);
+		}
+
+		else
+		{
+			list->SetComputeRootShaderResourceView(bindMetadata.signatureIndex, bufferComponent.Native()->GetGPUVirtualAddress() + offset);
+		}
+
+		break;
+	case PipelineStateReflection::ResourceBindType::UnorderedAccess:
+		if (boundPipeline->vertexShader)
+		{
+			list->SetGraphicsRootUnorderedAccessView(bindMetadata.signatureIndex, bufferComponent.Native()->GetGPUVirtualAddress() + offset);
+		}
+
+		else
+		{
+			list->SetComputeRootUnorderedAccessView(bindMetadata.signatureIndex, bufferComponent.Native()->GetGPUVirtualAddress() + offset);
+		}
+
+		break;
+	default:
+		VGAssert(false, "Invalid binding, attempting to bind buffer to binding '%s', where the bind type is '%i'.", bindName.c_str(), bindMetadata.type);
+		break;
+	}
+}
+
 void CommandList::Create(RenderDevice* inDevice, D3D12_COMMAND_LIST_TYPE type)
 {
 	VGScopedCPUStat("Command List Create");
@@ -157,58 +219,6 @@ void CommandList::BindConstants(const std::string& bindName, const std::vector<u
 		break;
 	default:
 		VGAssert(false, "Invalid binding, attempting to bind constants to binding '%s', where the bind type is '%i'.", bindName.c_str(), bindMetadata.type);
-		break;
-	}
-}
-
-void CommandList::BindResource(const std::string& bindName, BufferHandle handle, size_t offset)
-{
-	VGAssert(boundPipeline, "Attempted to bind resource without first binding a pipeline.");
-	VGAssert(boundPipeline->GetReflectionData()->resourceIndexMap.contains(bindName), "Shader does not contain resource bind '%s'", bindName.c_str());
-
-	auto& bufferComponent = device->GetResourceManager().Get(handle);
-
-	const auto& bindMetadata = boundPipeline->GetReflectionData()->resourceIndexMap.at(bindName);  // Can't use operator[] due to lack of const-ness.
-	switch (bindMetadata.type)
-	{
-	case PipelineStateReflection::ResourceBindType::ConstantBuffer:
-		if (boundPipeline->vertexShader)
-		{
-			list->SetGraphicsRootConstantBufferView(bindMetadata.signatureIndex, bufferComponent.Native()->GetGPUVirtualAddress() + offset);
-		}
-
-		else
-		{
-			list->SetComputeRootConstantBufferView(bindMetadata.signatureIndex, bufferComponent.Native()->GetGPUVirtualAddress() + offset);
-		}
-
-		break;
-	case PipelineStateReflection::ResourceBindType::ShaderResource:
-		if (boundPipeline->vertexShader)
-		{
-			list->SetGraphicsRootShaderResourceView(bindMetadata.signatureIndex, bufferComponent.Native()->GetGPUVirtualAddress() + offset);
-		}
-
-		else
-		{
-			list->SetComputeRootShaderResourceView(bindMetadata.signatureIndex, bufferComponent.Native()->GetGPUVirtualAddress() + offset);
-		}
-
-		break;
-	case PipelineStateReflection::ResourceBindType::UnorderedAccess:
-		if (boundPipeline->vertexShader)
-		{
-			list->SetGraphicsRootUnorderedAccessView(bindMetadata.signatureIndex, bufferComponent.Native()->GetGPUVirtualAddress() + offset);
-		}
-
-		else
-		{
-			list->SetComputeRootUnorderedAccessView(bindMetadata.signatureIndex, bufferComponent.Native()->GetGPUVirtualAddress() + offset);
-		}
-
-		break;
-	default:
-		VGAssert(false, "Invalid binding, attempting to bind buffer to binding '%s', where the bind type is '%i'.", bindName.c_str(), bindMetadata.type);
 		break;
 	}
 }

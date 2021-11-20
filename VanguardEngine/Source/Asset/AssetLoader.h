@@ -7,8 +7,9 @@
 #include <filesystem>
 
 class RenderDevice;
+class MeshFactory;
 
 namespace AssetLoader
 {
-	MeshComponent LoadMesh(RenderDevice& device, const std::filesystem::path& path);
+	MeshComponent LoadMesh(RenderDevice& device, MeshFactory& factory, const std::filesystem::path& path);
 }

@@ -5,6 +5,7 @@
 #include <Rendering/Base.h>
 #include <Rendering/Material.h>
 #include <Rendering/ResourceHandle.h>
+#include <Rendering/ShaderStructs.h>
 
 #include <vector>
 
@@ -21,6 +22,7 @@ struct MeshComponent
 	struct Subset
 	{
 		PrimitiveOffset localOffset;
+		size_t indices;
 
 		Material material;
 	};
@@ -28,6 +30,8 @@ struct MeshComponent
 	std::vector<Subset> subsets;
 
 	PrimitiveOffset globalOffset;
+
+	VertexMetadata metadata;
 };
 
 struct CameraComponent

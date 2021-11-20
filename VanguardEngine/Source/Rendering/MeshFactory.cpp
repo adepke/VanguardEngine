@@ -3,10 +3,21 @@
 #include <Rendering/MeshFactory.h>
 #include <Rendering/Device.h>
 
-MeshComponent MeshFactory::AllocateMesh(const std::vector<uint8_t>& vertexPositionData, const std::vector<uint8_t>& vertexExtraData, const std::vector<uint8_t>& indexData)
-{
-	MeshComponent result;
+#include <string>
 
+uint32_t MeshFactory::SearchVertexChannel(const std::string& name)
+{
+	if (name.find("POSITION") != std::string::npos) return 0;
+	if (name.find("NORMAL") != std::string::npos) return 1;
+	if (name.find("TEXCOORD") != std::string::npos) return 2;
+	if (name.find("TANGENT") != std::string::npos) return 3;
+	if (name.find("BITANGENT") != std::string::npos) return 4;
+	if (name.find("COLOR") != std::string::npos) return 5;
+	return std::numeric_limits<uint32_t>::max();
+}
+
+PrimitiveOffset MeshFactory::AllocateMesh(const std::vector<uint8_t>& vertexPositionData, const std::vector<uint8_t>& vertexExtraData, const std::vector<uint8_t>& indexData)
+{
 	device->GetResourceManager().Write(vertexPositionBuffer, vertexPositionData, vertexPositionOffset);
 	device->GetResourceManager().Write(vertexExtraBuffer, vertexExtraData, vertexExtrasOffset);
 	device->GetResourceManager().Write(indexBuffer, indexData, indexOffset);
@@ -16,7 +27,7 @@ MeshComponent MeshFactory::AllocateMesh(const std::vector<uint8_t>& vertexPositi
 	device->GetDirectList().TransitionBarrier(indexBuffer, D3D12_RESOURCE_STATE_INDEX_BUFFER);
 	device->GetDirectList().FlushBarriers();
 
-	result.globalOffset = PrimitiveOffset{
+	auto result = PrimitiveOffset{
 		.index = indexOffset,
 		.position = vertexPositionOffset,
 		.extra = vertexExtrasOffset
@@ -26,7 +37,7 @@ MeshComponent MeshFactory::AllocateMesh(const std::vector<uint8_t>& vertexPositi
 	vertexExtrasOffset += vertexExtraData.size();
 	indexOffset += indexData.size();
 
-	return std::move(result);
+	return result;
 }
 
 MeshFactory::MeshFactory(RenderDevice* inDevice, size_t maxVertices, size_t maxIndices)
@@ -43,7 +54,8 @@ MeshFactory::MeshFactory(RenderDevice* inDevice, size_t maxVertices, size_t maxI
 	vertexDescription.accessFlags = AccessFlag::CPUWrite;
 	vertexPositionBuffer = device->GetResourceManager().Create(vertexDescription, VGText("Vertex position buffer"));
 
-	vertexDescription.stride = sizeof(float) * 13;  // Doesn't really matter, average size of vertex extras.
+	vertexDescription.stride = 1;
+	vertexDescription.size *= 8;  // One attribute per element, so increase the size a bit.
 	vertexExtraBuffer = device->GetResourceManager().Create(vertexDescription, VGText("Vertex extra attributes buffer"));
 
 	BufferDescription indexDescription{};

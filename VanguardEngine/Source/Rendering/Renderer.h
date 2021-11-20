@@ -6,6 +6,7 @@
 #include <Utility/Singleton.h>
 #include <Window/WindowFrame.h>
 #include <Rendering/Device.h>
+#include <Rendering/MeshFactory.h>
 #include <Rendering/ResourceHandle.h>
 #include <Rendering/PipelineBuilder.h>
 #include <Rendering/Material.h>
@@ -24,6 +25,7 @@ class Renderer : public Singleton<Renderer>
 public:
 	std::unique_ptr<WindowFrame> window;
 	std::unique_ptr<RenderDevice> device;  // Destruct the device after all other resources.
+	std::unique_ptr<MeshFactory> meshFactory;
 
 private:
 	RenderGraphResourceManager renderGraphResources;
@@ -41,6 +43,9 @@ public:
 	std::unique_ptr<UserInterfaceManager> userInterface;
 	Atmosphere atmosphere;
 	ClusteredLightCulling clusteredCulling;
+
+	BufferHandle instanceBuffer;
+	size_t instanceOffset = 0;
 
 private:
 	void UpdateCameraBuffer(const entt::registry& registry);

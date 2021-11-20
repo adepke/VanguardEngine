@@ -2,7 +2,11 @@
 
 #include <Asset/AssetLoader.h>
 #include <Asset/TextureLoader.h>
+#include <Rendering/Device.h>
 #include <Rendering/RenderComponents.h>
+#include <Rendering/PrimitiveAssembly.h>
+#include <Rendering/MeshFactory.h>
+#include <Rendering/Resource.h>
 #include <Utility/StringTools.h>
 
 #define TINYGLTF_IMPLEMENTATION
@@ -10,11 +14,89 @@
 #include <tiny_gltf.h>
 
 #include <vector>
+#include <list>
 #include <utility>
 #include <algorithm>
 
 namespace AssetLoader
 {
+	Material CreateMaterial(RenderDevice& device, const tinygltf::Material& material, const tinygltf::Model& model)
+	{
+		// #TODO: Conform to PBR specification, including terms such as emissive factor.
+
+		Material result;
+		result.transparent = material.alphaMode != "OPAQUE";
+
+		// Table layout:
+		// Base color texture
+		// Metallic roughness texture
+		// Normal texture
+		// Occlusion texture
+		// Emissive texture
+		// Padding[3]
+
+		// #TODO: Single buffer for all materials.
+		BufferDescription tableDesc{
+			.updateRate = ResourceFrequency::Static,
+			.bindFlags = BindFlag::ConstantBuffer,
+			.accessFlags = AccessFlag::CPUWrite,
+			.size = 1,
+			.stride = 8 * sizeof(uint32_t)
+		};
+
+		result.materialBuffer = device.GetResourceManager().Create(tableDesc, VGText("Material table"));
+
+		std::vector<uint32_t> table{};
+		table.resize(8);
+
+		const auto CreateTexture = [&](int index, std::wstring_view name, DXGI_FORMAT format, bool mipmap) -> uint32_t
+		{
+			if (index < 0)
+			{
+				return 0;
+			}
+
+			const auto& texture = model.images[model.textures[index].source];
+
+			TextureDescription description{
+				.bindFlags = BindFlag::ShaderResource,
+				.accessFlags = AccessFlag::CPUWrite,
+				.width = (uint32_t)texture.width,
+				.height = (uint32_t)texture.height,
+				.format = format,
+				.mipMapping = mipmap
+			};
+			auto resource = device.GetResourceManager().Create(description, name);
+			device.GetResourceManager().Write(resource, texture.image);
+			if (mipmap)
+			{
+				device.GetResourceManager().GenerateMipmaps(resource);
+			}
+			device.GetDirectList().TransitionBarrier(resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+			return device.GetResourceManager().Get(resource).SRV->bindlessIndex;
+		};
+
+		// #TODO: Include asset name in texture name.
+		table[0] = CreateTexture(material.pbrMetallicRoughness.baseColorTexture.index, VGText("Base color asset texture"), DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, true);
+		table[1] = CreateTexture(material.pbrMetallicRoughness.metallicRoughnessTexture.index, VGText("Metallic roughness asset texture"), DXGI_FORMAT_R8G8B8A8_UNORM, true);
+		table[2] = CreateTexture(material.normalTexture.index, VGText("Normal asset texture"), DXGI_FORMAT_R8G8B8A8_UNORM, true);
+		table[3] = CreateTexture(material.occlusionTexture.index, VGText("Occlusion asset texture"), DXGI_FORMAT_R8_UNORM, false);
+		table[4] = CreateTexture(material.emissiveTexture.index, VGText("Emissive asset texture"), DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, false);  // #TODO: Correct format?
+		table[5] = 0;
+		table[6] = 0;
+		table[7] = 0;
+
+		std::vector<uint8_t> tableData{};
+		tableData.resize(table.size() * sizeof(uint32_t));
+		std::memcpy(tableData.data(), table.data(), tableData.size());
+
+		device.GetResourceManager().Write(result.materialBuffer, tableData);
+		device.GetDirectList().TransitionBarrier(result.materialBuffer, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+
+		return result;
+	}
+
 	template <typename T, typename U, typename V>
 	auto FindVertexAttribute(const char* name, U&& model, V&& primitive) -> std::pair<const T*, size_t>
 	{
@@ -34,7 +116,7 @@ namespace AssetLoader
 		return { nullptr, 0 };
 	}
 
-	MeshComponent LoadMesh(RenderDevice& device, const std::filesystem::path& path)
+	MeshComponent LoadMesh(RenderDevice& device, MeshFactory& factory, const std::filesystem::path& path)
 	{
 		VGScopedCPUStat("Load Mesh");
 
@@ -85,11 +167,10 @@ namespace AssetLoader
 			VGLog(logAsset, "Loaded asset '{}'.", path.filename().generic_wstring());
 		}
 
-		std::vector<MeshComponent::Subset> subsets;
-		std::vector<uint32_t> indices;
-		std::vector<Vertex> vertices;
-		size_t indexOffset = 0;
-		size_t vertexOffset = 0;
+		std::vector<PrimitiveAssembly> assemblies;
+		std::vector<Material> materials;
+		std::vector<uint32_t> materialIndices;
+		std::list<std::vector<uint32_t>> indices;  // We convert indices instead of using TinyGLTF's stream. One buffer per assembly. Stable buffers.
 
 		const auto& scene = model.scenes[model.defaultScene];
 
@@ -98,199 +179,15 @@ namespace AssetLoader
 			const auto& node = model.nodes[nodeIndex];  // #TODO: Nodes can have children.
 			const auto& mesh = model.meshes[node.mesh];
 
-			// Load the model materials.
-
-			std::vector<Material> materials;
-			materials.reserve(model.materials.size());
-
-			for (int i = 0; i < model.materials.size(); ++i)
+			for (const auto& material : model.materials)
 			{
-				// #TODO: Conform to PBR specification, including terms such as emissive factor.			
-
-				const auto& material = model.materials[i];
-				materials.emplace_back();
-
-				materials[i].transparent = material.alphaMode != "OPAQUE";
-
-				// Table layout:
-				// Base color texture
-				// Metallic roughness texture
-				// Normal texture
-				// Occlusion texture
-				// Emissive texture
-				// Padding[3]
-
-				// Create the material table.
-				BufferDescription matTableDesc{
-					.updateRate = ResourceFrequency::Static,
-					.bindFlags = BindFlag::ConstantBuffer,
-					.accessFlags = AccessFlag::CPUWrite,
-					.size = 1,
-					.stride = 8 * sizeof(uint32_t)
-				};
-
-				materials[i].materialBuffer = device.GetResourceManager().Create(matTableDesc, VGText("Material table"));
-
-				TextureDescription textureDescription{};
-				textureDescription.bindFlags = BindFlag::ShaderResource;
-				textureDescription.accessFlags = AccessFlag::CPUWrite;
-
-				std::vector<uint32_t> materialTable{};
-
-				// #TODO: Reduce code duplication.
-
-				const auto& baseColorTextureMeta = material.pbrMetallicRoughness.baseColorTexture;
-				if (baseColorTextureMeta.index > 0)
-				{
-					const auto& baseColorTexture = model.images[model.textures[baseColorTextureMeta.index].source];
-
-					textureDescription.width = baseColorTexture.width;
-					textureDescription.height = baseColorTexture.height;
-					textureDescription.format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
-					textureDescription.mipMapping = true;
-
-					// #TODO: Derive name from asset name + texture type.
-					auto textureResource = device.GetResourceManager().Create(textureDescription, VGText("Base color asset texture"));
-					device.GetResourceManager().Write(textureResource, baseColorTexture.image);
-					device.GetResourceManager().GenerateMipmaps(textureResource);
-					device.GetDirectList().TransitionBarrier(textureResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-
-					const auto& textureComponent = device.GetResourceManager().Get(textureResource);
-					const auto bindlessIndex = textureComponent.SRV->bindlessIndex;
-
-					materialTable.emplace_back(bindlessIndex);
-				}
-
-				else
-				{
-					materialTable.emplace_back(0);
-				}
-
-				const auto& metallicRoughnessTextureMeta = material.pbrMetallicRoughness.metallicRoughnessTexture;
-				if (metallicRoughnessTextureMeta.index > 0)
-				{
-					const auto& metallicRoughnessTexture = model.images[model.textures[metallicRoughnessTextureMeta.index].source];
-
-					textureDescription.width = metallicRoughnessTexture.width;
-					textureDescription.height = metallicRoughnessTexture.height;
-					textureDescription.format = DXGI_FORMAT_R8G8B8A8_UNORM;
-					textureDescription.mipMapping = true;
-
-					// #TODO: Derive name from asset name + texture type.
-					auto textureResource = device.GetResourceManager().Create(textureDescription, VGText("Metallic roughness asset texture"));
-					device.GetResourceManager().Write(textureResource, metallicRoughnessTexture.image);
-					device.GetResourceManager().GenerateMipmaps(textureResource);
-					device.GetDirectList().TransitionBarrier(textureResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-
-					const auto& textureComponent = device.GetResourceManager().Get(textureResource);
-					const auto bindlessIndex = textureComponent.SRV->bindlessIndex;
-
-					materialTable.emplace_back(bindlessIndex);
-				}
-
-				else
-				{
-					materialTable.emplace_back(0);
-				}
-
-				const auto& normalTextureMeta = material.normalTexture;
-				if (normalTextureMeta.index > 0)
-				{
-					const auto& normalTexture = model.images[model.textures[normalTextureMeta.index].source];
-
-					textureDescription.width = normalTexture.width;
-					textureDescription.height = normalTexture.height;
-					textureDescription.format = DXGI_FORMAT_R8G8B8A8_UNORM;
-					textureDescription.mipMapping = true;
-
-					// #TODO: Derive name from asset name + texture type.
-					auto textureResource = device.GetResourceManager().Create(textureDescription, VGText("Normal asset texture"));
-					device.GetResourceManager().Write(textureResource, normalTexture.image);
-					device.GetResourceManager().GenerateMipmaps(textureResource);
-					device.GetDirectList().TransitionBarrier(textureResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-
-					const auto& textureComponent = device.GetResourceManager().Get(textureResource);
-					const auto bindlessIndex = textureComponent.SRV->bindlessIndex;
-
-					materialTable.emplace_back(bindlessIndex);
-				}
-
-				else
-				{
-					materialTable.emplace_back(0);
-				}
-
-				const auto& occlusionTextureMeta = material.occlusionTexture;
-				if (occlusionTextureMeta.index > 0)
-				{
-					const auto& occlusionTexture = model.images[model.textures[occlusionTextureMeta.index].source];
-
-					textureDescription.width = occlusionTexture.width;
-					textureDescription.height = occlusionTexture.height;
-					textureDescription.format = DXGI_FORMAT_R8_UNORM;
-					textureDescription.mipMapping = false;
-
-					// #TODO: Derive name from asset name + texture type.
-					auto textureResource = device.GetResourceManager().Create(textureDescription, VGText("Occlusion asset texture"));
-					device.GetResourceManager().Write(textureResource, occlusionTexture.image);
-					device.GetDirectList().TransitionBarrier(textureResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-
-					const auto& textureComponent = device.GetResourceManager().Get(textureResource);
-					const auto bindlessIndex = textureComponent.SRV->bindlessIndex;
-
-					materialTable.emplace_back(bindlessIndex);
-				}
-
-				else
-				{
-					materialTable.emplace_back(0);
-				}
-
-				const auto& emissiveTextureMeta = material.emissiveTexture;
-				if (emissiveTextureMeta.index > 0)
-				{
-					const auto& emissiveTexture = model.images[model.textures[emissiveTextureMeta.index].source];
-
-					textureDescription.width = emissiveTexture.width;
-					textureDescription.height = emissiveTexture.height;
-					textureDescription.format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;  // #TODO: Is this the correct format?
-					textureDescription.mipMapping = false;
-
-					// #TODO: Derive name from asset name + texture type.
-					auto textureResource = device.GetResourceManager().Create(textureDescription, VGText("Emissive asset texture"));
-					device.GetResourceManager().Write(textureResource, emissiveTexture.image);
-					device.GetDirectList().TransitionBarrier(textureResource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-
-					const auto& textureComponent = device.GetResourceManager().Get(textureResource);
-					const auto bindlessIndex = textureComponent.SRV->bindlessIndex;
-
-					materialTable.emplace_back(bindlessIndex);
-				}
-
-				else
-				{
-					materialTable.emplace_back(0);
-				}
-
-				// Padding.
-				materialTable.emplace_back(0);
-				materialTable.emplace_back(0);
-				materialTable.emplace_back(0);
-				
-				VGAssert(materialTable.size() == 8, "");
-
-				std::vector<uint8_t> materialTableBytes{};
-				materialTableBytes.resize(materialTable.size() * sizeof(uint32_t));
-				std::memcpy(materialTableBytes.data(), materialTable.data(), materialTableBytes.size());
-
-				device.GetResourceManager().Write(materials[i].materialBuffer, materialTableBytes);
-				device.GetDirectList().TransitionBarrier(materials[i].materialBuffer, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+				materials.emplace_back(CreateMaterial(device, material, model));
 			}
-
-			subsets.reserve(mesh.primitives.size());
 
 			for (const auto& primitive : mesh.primitives)
 			{
+				PrimitiveAssembly assembly;
+
 				const auto& indexAccessor = model.accessors[primitive.indices];
 
 				VGAssert(
@@ -303,79 +200,57 @@ namespace AssetLoader
 				const auto& indexBuffer = model.buffers[indexBufferView.buffer];
 				const auto* indexData16 = reinterpret_cast<const uint16_t*>(indexBuffer.data.data() + indexBufferView.byteOffset);
 				const auto* indexData32 = reinterpret_cast<const uint32_t*>(indexBuffer.data.data() + indexBufferView.byteOffset);
-
-				indices.reserve(indices.size() + indexAccessor.count);
+				
+				std::vector<uint32_t> primitiveIndices;
+				primitiveIndices.reserve(indexAccessor.count);
 
 				for (int i = 0; i < indexAccessor.count; ++i)
 				{
 					if (indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_SHORT)
 					{
-						indices.emplace_back(static_cast<uint32_t>(*(indexData16 + i)));
+						primitiveIndices.emplace_back(static_cast<uint32_t>(*(indexData16 + i)));
 					}
 
 					else if (indexAccessor.componentType == TINYGLTF_COMPONENT_TYPE_UNSIGNED_INT)
 					{
-						indices.emplace_back(*(indexData32 + i));
+						primitiveIndices.emplace_back(*(indexData32 + i));
 					}
 				}
 
-				const auto [positionData, positionCount] = FindVertexAttribute<XMFLOAT3>("POSITION", model, primitive);
-				const auto [normalData, normalCount] = FindVertexAttribute<XMFLOAT3>("NORMAL", model, primitive);
-				const auto [texcoordData, texcoordCount] = FindVertexAttribute<XMFLOAT2>("TEXCOORD_0", model, primitive);
-				const auto [tangentData, tangentCount] = FindVertexAttribute<XMFLOAT4>("TANGENT", model, primitive);
+				indices.emplace_back(std::move(primitiveIndices));
+				assembly.AddIndexStream(std::span{ indices.back().data(), indexAccessor.count });
 
-				vertices.reserve(vertices.size() + positionCount);
-				const auto verticesSize = vertices.size();
-
-				for (int i = 0; i < positionCount; ++i)
+				for (const auto& [name, idx] : primitive.attributes)
 				{
-					// Tangent has to be handled differently because we're trimming the fourth dimension.
-					XMFLOAT3 tangent = { 0.f, 0.f, 0.f };
-					if (tangentData)
+					const auto& accessor = model.accessors[idx];
+					const auto& bufferView = model.bufferViews[accessor.bufferView];
+					const auto& buffer = model.buffers[bufferView.buffer];
+					const auto* data = buffer.data.data() + bufferView.byteOffset;
+
+					switch (accessor.type)
 					{
-						const auto tangent4D = *(tangentData + i);
-						tangent = { tangent4D.x, tangent4D.y, tangent4D.z };
-					}
-
-					vertices.push_back({
-						.position = *(positionData + i),
-						.normal = normalData ? *(normalData + i) : XMFLOAT3{ 0.f, 0.f, 0.f },
-						.uv = texcoordData ? *(texcoordData + i) : XMFLOAT2{ 0.f, 0.f },
-						.tangent = tangent,
-						.bitangent = XMFLOAT3{ 0.f, 0.f, 0.f }
-					});
-
-					// Compute bitangent.
-					if (tangentData)
-					{
-						const auto normal = XMLoadFloat3(&vertices[verticesSize + i].normal);
-						const auto tangent = XMLoadFloat3(&vertices[verticesSize + i].tangent);
-
-						XMStoreFloat3(&vertices[verticesSize + i].bitangent, XMVector3Cross(normal, tangent));
+					case TINYGLTF_TYPE_VEC2: assembly.AddVertexStream(name, std::span{ (XMFLOAT2*)data, accessor.count }); break;
+					case TINYGLTF_TYPE_VEC3: assembly.AddVertexStream(name, std::span{ (XMFLOAT3*)data, accessor.count }); break;
+					case TINYGLTF_TYPE_VEC4: assembly.AddVertexStream(name, std::span{ (XMFLOAT4*)data, accessor.count }); break;
+					default: VGAssert(false, "Unknown primitive accessor type."); break;
 					}
 				}
 
-				subsets.push_back({
-					.vertexOffset = vertexOffset,
-					.indexOffset = indexOffset,
-					.indices = indexAccessor.count,
-					.material = materials[primitive.material]
-				});
+				assemblies.emplace_back(std::move(assembly));
 
-				indexOffset += indexAccessor.count;
-				vertexOffset += positionCount;
+				materialIndices.emplace_back(primitive.material);
 			}
 		}
 
-		// Reverse the model's winding order.
-		for (int i = 2; i < indices.size(); i += 3)
+		// Reverse the winding order for all assemblies.
+		for (auto& indexBuffer : indices)
 		{
-			std::iter_swap(indices.begin() + i - 2, indices.begin() + i);
+			for (int i = 2; i < indexBuffer.size(); i += 3)
+			{
+				std::iter_swap(indexBuffer.begin() + i - 2, indexBuffer.begin() + i);
+			}
 		}
 
-		auto meshComponent = std::move(CreateMeshComponent(device, vertices, indices));
-		meshComponent.subsets = std::move(subsets);
-
-		return std::move(meshComponent);
+		return factory.CreateMeshComponent(assemblies, materials, materialIndices);
 	}
 }

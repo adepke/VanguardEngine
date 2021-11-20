@@ -4,6 +4,14 @@
 
 #include <entt/entt.hpp>
 
+class Renderer;
+class CommandList;
+
+struct MeshSystem
+{
+	static void Render(Renderer& renderer, const entt::registry& registry, CommandList& list, bool renderTransparents);
+};
+
 struct CameraSystem
 {
 	static void Update(entt::registry& registry, float deltaTime);

@@ -121,7 +121,7 @@ void EngineLoop()
 	const auto sponza = registry.create();
 	registry.emplace<NameComponent>(sponza, "Sponza");
 	registry.emplace<TransformComponent>(sponza, std::move(sponzaTransform));
-	registry.emplace<MeshComponent>(sponza, AssetLoader::LoadMesh(*Renderer::Get().device, Config::shadersPath / "../Assets/Models/Sponza/glTF/Sponza.gltf"));
+	registry.emplace<MeshComponent>(sponza, AssetLoader::LoadMesh(*Renderer::Get().device, *Renderer::Get().meshFactory, Config::shadersPath / "../Assets/Models/Sponza/glTF/Sponza.gltf"));
 
 	int lightCount = 10000;
 
