@@ -60,6 +60,28 @@ void ComponentProperties::RenderMeshComponent(entt::registry& registry, entt::en
 	auto& component = registry.get<MeshComponent>(entity);
 
 	ImGui::Text("Mesh");
+	ImGui::Text("Subsets: %i", component.subsets.size());
+	ImGui::Text("Vertex metadata");
+
+	bool enabled = true;
+	bool disabled = false;
+
+	const auto isChannelActive = [&component](uint32_t shift)
+	{
+		return (component.metadata.activeChannels >> shift) & 0x1;
+	};
+
+	static_assert(vertexChannels == 6, "Editor out of date with vertex channels.");
+
+	// #TODO: Read-only checkboxes.
+	ImGui::Indent();
+	ImGui::Checkbox("Position", isChannelActive(0) ? &enabled : &disabled);
+	ImGui::Checkbox("Normal", isChannelActive(1) ? &enabled : &disabled);
+	ImGui::Checkbox("Texcoord", isChannelActive(2) ? &enabled : &disabled);
+	ImGui::Checkbox("Tangent", isChannelActive(3) ? &enabled : &disabled);
+	ImGui::Checkbox("Bitangent", isChannelActive(4) ? &enabled : &disabled);
+	ImGui::Checkbox("Color", isChannelActive(5) ? &enabled : &disabled);
+	ImGui::Unindent();
 }
 
 void ComponentProperties::RenderCameraComponent(entt::registry& registry, entt::entity entity)
