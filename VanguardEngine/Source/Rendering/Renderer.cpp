@@ -341,9 +341,11 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 {
 	VGScopedCPUStat("Renderer Initialize");
 
+	constexpr size_t maxVertices = 32 * 1024 * 1024;
+
 	window = std::move(inWindow);
 	device = std::move(inDevice);
-	meshFactory = std::make_unique<MeshFactory>(device.get(), 1024 * 1024, 1024 * 1024);
+	meshFactory = std::make_unique<MeshFactory>(device.get(), maxVertices, maxVertices);
 
 	device->CheckFeatureSupport();
 
