@@ -43,7 +43,7 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 	{
 		editorPass.Read(activeOverlayTag, ResourceBind::SRV);
 	}
-	editorPass.Output(backBuffer, OutputBind::RTV, false);
+	editorPass.Output(backBuffer, OutputBind::RTV, LoadType::Ignore);
 	editorPass.Bind([&, cameraBuffer, depthStencil, outputLDR, activeOverlayTag](CommandList& list, RenderGraphResourceManager& resources)
 	{
 		renderer.userInterface->NewFrame();

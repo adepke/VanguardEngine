@@ -289,7 +289,7 @@ void RenderGraph::Execute(RenderDevice* device)
 
 		for (const auto& [resource, info] : pass->outputBindInfo)
 		{
-			if (info.second)
+			if (info.second == LoadType::Clear)
 			{
 				const auto texture = resourceManager->GetTexture(resource);
 				auto& component = device->GetResourceManager().Get(texture);

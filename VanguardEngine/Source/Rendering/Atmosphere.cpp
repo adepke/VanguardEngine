@@ -408,7 +408,7 @@ void Atmosphere::Render(RenderGraph& graph, PipelineBuilder& pipelines, RenderRe
 	auto& atmospherePass = graph.AddPass("Atmosphere Pass", ExecutionQueue::Graphics);
 	atmospherePass.Read(cameraBuffer, ResourceBind::CBV);
 	atmospherePass.Read(depthStencil, ResourceBind::DSV);
-	atmospherePass.Output(outputHDR, OutputBind::RTV, false);
+	atmospherePass.Output(outputHDR, OutputBind::RTV, LoadType::Ignore);
 	atmospherePass.Bind([&, cameraBuffer, depthStencil, outputHDR](CommandList& list, RenderGraphResourceManager& resources)
 	{
 		struct BindData

@@ -25,6 +25,12 @@ enum class OutputBind
 	DSV
 };
 
+enum class LoadType
+{
+	Ignore,
+	Clear
+};
+
 class RenderPass
 {
 public:
@@ -34,7 +40,7 @@ public:
 	std::set<RenderResource> writes;
 
 	std::unordered_map<RenderResource, ResourceBind> bindInfo;
-	std::unordered_map<RenderResource, std::pair<OutputBind, bool>> outputBindInfo;
+	std::unordered_map<RenderResource, std::pair<OutputBind, LoadType>> outputBindInfo;
 
 private:
 	RenderGraphResourceManager* resourceManager;
@@ -53,7 +59,7 @@ public:
 	const RenderResource Create(TransientTextureDescription description, const std::wstring& name);
 	void Read(const RenderResource resource, ResourceBind bind);
 	void Write(const RenderResource resource, ResourceBind bind);
-	void Output(const RenderResource resource, OutputBind bind, bool clear);
+	void Output(const RenderResource resource, OutputBind bind, LoadType load);
 	void Bind(std::function<void(CommandList&, RenderGraphResourceManager&)>&& function) noexcept;
 
 	void Validate() const;  // Internal validation invoked from the graph. Checks for conditions after completing the pass setup.
@@ -98,10 +104,10 @@ inline void RenderPass::Write(const RenderResource resource, ResourceBind bind)
 	bindInfo[resource] = bind;
 }
 
-inline void RenderPass::Output(const RenderResource resource, OutputBind bind, bool clear)
+inline void RenderPass::Output(const RenderResource resource, OutputBind bind, LoadType load)
 {
 	writes.emplace(resource);
-	outputBindInfo[resource] = std::make_pair(bind, clear);
+	outputBindInfo[resource] = std::make_pair(bind, load);
 
 #if !BUILD_RELEASE
 	outputs.emplace(resource);

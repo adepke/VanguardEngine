@@ -396,7 +396,7 @@ RenderResource ClusteredLightCulling::RenderDebugOverlay(RenderGraph& graph, Ren
 	const auto clusterDebugOverlayTag = overlayPass.Create(TransientTextureDescription{
 		.format = DXGI_FORMAT_R16G16B16A16_FLOAT
 	}, VGText("Cluster debug overlay"));
-	overlayPass.Output(clusterDebugOverlayTag, OutputBind::RTV, false);
+	overlayPass.Output(clusterDebugOverlayTag, OutputBind::RTV, LoadType::Ignore);
 	overlayPass.Bind([&, lightInfoBuffer, clusterVisibilityBuffer](CommandList& list, RenderGraphResourceManager& resources)
 	{
 		list.BindPipelineState(debugOverlayState);

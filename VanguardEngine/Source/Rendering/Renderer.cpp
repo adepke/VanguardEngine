@@ -401,7 +401,7 @@ void Renderer::Render(entt::registry& registry)
 		.format = DXGI_FORMAT_R24G8_TYPELESS
 	}, VGText("Depth stencil"));
 	prePass.Read(cameraBufferTag, ResourceBind::CBV);
-	prePass.Output(depthStencilTag, OutputBind::DSV, true);
+	prePass.Output(depthStencilTag, OutputBind::DSV, LoadType::Clear);
 	prePass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
 	{
 		list.BindPipelineState(pipelines["Prepass"]);
@@ -421,7 +421,7 @@ void Renderer::Render(entt::registry& registry)
 	forwardPass.Read(cameraBufferTag, ResourceBind::CBV);
 	forwardPass.Read(clusterResources.lightList, ResourceBind::SRV);
 	forwardPass.Read(clusterResources.lightInfo, ResourceBind::SRV);
-	forwardPass.Output(outputHDRTag, OutputBind::RTV, true);
+	forwardPass.Output(outputHDRTag, OutputBind::RTV, LoadType::Clear);
 	forwardPass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
 	{
 		// Opaque
@@ -485,7 +485,7 @@ void Renderer::Render(entt::registry& registry)
 		.format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB
 	}, VGText("Output LDR sRGB"));
 	postProcessPass.Read(outputHDRTag, ResourceBind::SRV);
-	postProcessPass.Output(outputLDRTag, OutputBind::RTV, true);
+	postProcessPass.Output(outputLDRTag, OutputBind::RTV, LoadType::Clear);
 	postProcessPass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
 	{
 		list.BindPipelineState(pipelines["PostProcess"]);
