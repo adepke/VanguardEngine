@@ -12,6 +12,7 @@ namespace Config
 
 	inline std::filesystem::path engineRootPath;
 	inline std::filesystem::path shadersPath;
+	inline std::filesystem::path fontsPath;
 	inline std::filesystem::path materialsPath;
 
 	void Initialize();

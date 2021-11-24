@@ -224,6 +224,14 @@ UserInterfaceManager::UserInterfaceManager(RenderDevice* inDevice) : device(inDe
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable | ImGuiConfigFlags_ViewportsEnable;  // #TODO: Navigation features.
 	io.ConfigWindowsMoveFromTitleBarOnly = true;
 
+	// Load the font.
+	// #TODO: Improved font handling.
+	const auto fontPath = Config::fontsPath / "Cousine-Regular.ttf";
+	if (!io.Fonts->AddFontFromFileTTF(fontPath.generic_string().c_str(), 15.f, nullptr, nullptr))
+	{
+		VGLogWarning(logCore, "Failed to load custom font, falling back to default font.");
+	}
+
 	frameResources = new FrameResources[device->frameCount];
 	numFramesInFlight = device->frameCount;
 	frameIndex = UINT_MAX;
