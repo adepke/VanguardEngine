@@ -2,6 +2,7 @@
 
 #include <Asset/AssetLoader.h>
 #include <Asset/TextureLoader.h>
+#include <Asset/AssetManager.h>
 #include <Rendering/Device.h>
 #include <Rendering/RenderComponents.h>
 #include <Rendering/PrimitiveAssembly.h>
@@ -22,11 +23,10 @@ namespace AssetLoader
 {
 	Material CreateMaterial(RenderDevice& device, const tinygltf::Material& material, const tinygltf::Model& model)
 	{
-		// #TODO: Conform to PBR specification, including terms such as emissive factor.
-
 		Material result;
 		result.transparent = material.alphaMode != "OPAQUE";
 
+		// #TODO: Conform to PBR specification, including terms such as emissive factor.
 		// Table layout:
 		// Base color texture
 		// Metallic roughness texture
@@ -45,54 +45,9 @@ namespace AssetLoader
 		};
 
 		result.materialBuffer = device.GetResourceManager().Create(tableDesc, VGText("Material table"));
-
-		std::vector<uint32_t> table{};
-		table.resize(8);
-
-		const auto CreateTexture = [&](int index, std::wstring_view name, DXGI_FORMAT format, bool mipmap) -> uint32_t
-		{
-			if (index < 0)
-			{
-				return 0;
-			}
-
-			const auto& texture = model.images[model.textures[index].source];
-
-			TextureDescription description{
-				.bindFlags = BindFlag::ShaderResource,
-				.accessFlags = AccessFlag::CPUWrite,
-				.width = (uint32_t)texture.width,
-				.height = (uint32_t)texture.height,
-				.format = format,
-				.mipMapping = mipmap
-			};
-			auto resource = device.GetResourceManager().Create(description, name);
-			device.GetResourceManager().Write(resource, texture.image);
-			if (mipmap)
-			{
-				device.GetResourceManager().GenerateMipmaps(resource);
-			}
-			device.GetDirectList().TransitionBarrier(resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-
-			return device.GetResourceManager().Get(resource).SRV->bindlessIndex;
-		};
-
-		// #TODO: Include asset name in texture name.
-		table[0] = CreateTexture(material.pbrMetallicRoughness.baseColorTexture.index, VGText("Base color asset texture"), DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, true);
-		table[1] = CreateTexture(material.pbrMetallicRoughness.metallicRoughnessTexture.index, VGText("Metallic roughness asset texture"), DXGI_FORMAT_R8G8B8A8_UNORM, true);
-		table[2] = CreateTexture(material.normalTexture.index, VGText("Normal asset texture"), DXGI_FORMAT_R8G8B8A8_UNORM, true);
-		table[3] = CreateTexture(material.occlusionTexture.index, VGText("Occlusion asset texture"), DXGI_FORMAT_R8_UNORM, false);
-		table[4] = CreateTexture(material.emissiveTexture.index, VGText("Emissive asset texture"), DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, false);  // #TODO: Correct format?
-		table[5] = 0;
-		table[6] = 0;
-		table[7] = 0;
-
-		std::vector<uint8_t> tableData{};
-		tableData.resize(table.size() * sizeof(uint32_t));
-		std::memcpy(tableData.data(), table.data(), tableData.size());
-
-		device.GetResourceManager().Write(result.materialBuffer, tableData);
 		device.GetDirectList().TransitionBarrier(result.materialBuffer, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+
+		AssetManager::Get().EnqueueMaterialLoad(material, result.materialBuffer);
 
 		return result;
 	}
@@ -123,8 +78,11 @@ namespace AssetLoader
 		std::string error;
 		std::string warning;
 
-		tinygltf::Model model;
+		//tinygltf::Model model;
 		tinygltf::TinyGLTF loader;
+
+		// #TEMP
+		auto& model = AssetManager::Get().model;
 
 		bool result = false;
 
@@ -172,17 +130,35 @@ namespace AssetLoader
 		std::vector<uint32_t> materialIndices;
 		std::list<std::vector<uint32_t>> indices;  // We convert indices instead of using TinyGLTF's stream. One buffer per assembly. Stable buffers.
 
-		const auto& scene = model.scenes[model.defaultScene];
-
-		for (const auto nodeIndex : scene.nodes)
+		if (model.scenes.size() > 1)
 		{
-			const auto& node = model.nodes[nodeIndex];  // #TODO: Nodes can have children.
-			const auto& mesh = model.meshes[node.mesh];
+			VGLogWarning(logAsset, "Asset '{}' contains more than one scene, ignoring all except scene {}.", path.filename().generic_wstring(), model.defaultScene);
+		}
 
-			for (const auto& material : model.materials)
-			{
-				materials.emplace_back(CreateMaterial(device, material, model));
-			}
+		const auto& scene = model.scenes[model.defaultScene];
+		if (scene.nodes.size() == 0)
+		{
+			VGLogWarning(logAsset, "Asset '{}' does not contain any nodes in the scene.", path.filename().generic_wstring());
+			return {};
+		}
+
+		for (const auto& material : model.materials)
+		{
+			materials.emplace_back(CreateMaterial(device, material, model));
+		}
+
+		//for (const auto nodeIndex : scene.nodes)
+		for (const auto& mesh : model.meshes)
+		{
+			//const auto& node = model.nodes[nodeIndex];
+
+			// Process the node's mesh.
+			//if (node.mesh >= 0)
+			//model.meshes[node.mesh]
+
+			// Process all the node's children.
+			//for (const auto child : node.children)
+			//model.nodes[child]
 
 			for (const auto& primitive : mesh.primitives)
 			{

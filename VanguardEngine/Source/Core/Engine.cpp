@@ -25,6 +25,7 @@
 #include <Rendering/RenderSystems.h>
 #include <Asset/AssetLoader.h>
 #include <Utility/Random.h>
+#include <Asset/AssetManager.h>
 //
 
 entt::registry registry;
@@ -100,6 +101,9 @@ void EngineBoot()
 
 	// The input requires the user interface to be created first.
 	Input::Initialize(Renderer::Get().window->GetHandle());
+
+	// #TEMP
+	AssetManager::Get().Initialize(Renderer::Get().device.get());
 }
 
 void EngineLoop()
@@ -116,23 +120,35 @@ void EngineLoop()
 	TransformComponent sponzaTransform{};
 	sponzaTransform.translation = { 0.f, 0.f, 0.f };
 	sponzaTransform.rotation = { -90.f * 3.14159f / 180.f, 0.f, 0.f };  // Rotate the sponza into our coordinate space.
+	//sponzaTransform.rotation = { 0.f, 0.f, 0.f };
 	sponzaTransform.scale = { 0.1f, 0.1f, 0.1f };
 
 	const auto sponza = registry.create();
 	registry.emplace<NameComponent>(sponza, "Sponza");
 	registry.emplace<TransformComponent>(sponza, std::move(sponzaTransform));
-	registry.emplace<MeshComponent>(sponza, AssetLoader::LoadMesh(*Renderer::Get().device, *Renderer::Get().meshFactory, Config::shadersPath / "../Assets/Models/Sponza/glTF/Sponza.gltf"));
+	registry.emplace<MeshComponent>(sponza, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/Sponza/glTF/Sponza.gltf"));
+	//registry.emplace<MeshComponent>(sponza, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/Bistro/Bistro2.gltf"));
+	//registry.emplace<MeshComponent>(sponza, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/SunTemple.glb"));
 
 	int lightCount = 10000;
+	//int lightCount = 20000;
 
 	for (int i = 0; i < lightCount; ++i)
 	{
 		LightComponent pointLight{ .color = { (float)Rand(0.2f, 1.f), (float)Rand(0.2f, 1.f), (float)Rand(0.2f, 1.f) } };
+		// Sponza lights.
 		TransformComponent transform{
 			.scale = { 1.f, 1.f, 1.f },
 			.rotation = { 0.f, 0.f, 0.f },
 			.translation = { (float)Rand(-150.0, 150.0), (float)Rand(-65.0, 65.0), (float)Rand(0.0, 120.0) }
 		};
+		
+		// Sun temple lights.
+		//TransformComponent transform{
+		//	.scale = { 1.f, 1.f, 1.f },
+		//	.rotation = { 0.f, 0.f, 0.f },
+		//	.translation = { (float)Rand(-150.0, 150.0), (float)Rand(-700, 700), (float)Rand(20, 100) }
+		//};
 
 		const auto light = registry.create();
 		registry.emplace<LightComponent>(light, pointLight);
@@ -159,6 +175,8 @@ void EngineLoop()
 				return;
 			}
 		}
+
+		AssetManager::Get().Update();
 
 		ControlSystem::Update(registry);
 
