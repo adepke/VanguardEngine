@@ -155,7 +155,6 @@ project "Engine"
 		
 	filter { "configurations:Development" }
 		defines { "BUILD_DEVELOPMENT=1" }
-		flags { "LinkTimeOptimization" }
 		symbols "On"
 		optimize "Debug"
 		omitframepointer "Off"
