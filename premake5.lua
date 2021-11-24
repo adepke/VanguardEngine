@@ -147,11 +147,13 @@ project "Engine"
 		
 	filter { "configurations:Debug" }
 		defines { "BUILD_DEBUG=1" }
-		flags { }
 		symbols "On"
 		optimize "Off"
 		omitframepointer "Off"
 		exceptionhandling "On"
+		
+		buildoptions "/fsanitize=address"  -- Enable asan in debug builds, it's still too slow for development.
+		flags { "NoRuntimeChecks", "NoIncrementalLink" }  -- Required by asan, see: https://docs.microsoft.com/en-us/cpp/sanitizers/asan-known-issues
 		
 	filter { "configurations:Development" }
 		defines { "BUILD_DEVELOPMENT=1" }
@@ -170,7 +172,9 @@ project "Engine"
 		
 	filter { "configurations:not Release" }
 		buildoptions "/Ob1"  -- Inline VGForceInline's, this is necessary to prevent the logger from breaking on the wrong line. Use default expansion in release builds.
-		buildoptions "/Zi"  -- Disable symbols for edit and continue, since Tracy needs __LINE__ to be a constant.
+		
+	filter {}
+		editandcontinue "Off"  -- Disable edit and continue, since Tracy needs __LINE__ to be a constant. Also required for asan.
 		
 	-- General Files
 		
