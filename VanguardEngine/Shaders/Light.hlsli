@@ -23,7 +23,7 @@ struct Light
 float ComputeLightRadius(Light light)
 {
 	// #TEMP
-	return 15.f;
+	return 150.f;
 }
 
 float ComputeLightAttenuation(Light light, float distance)

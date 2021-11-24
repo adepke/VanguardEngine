@@ -53,7 +53,7 @@ Output main(Input input)
 	if (material.metallicRoughness > 0)
 	{
 		Texture2D metallicRoughnessMap = textures[material.metallicRoughness];
-		metallicRoughness = metallicRoughnessMap.Sample(defaultSampler, input.uv).rg;
+		metallicRoughness = metallicRoughnessMap.Sample(defaultSampler, input.uv).bg;  // GLTF 2.0 spec.
 	}
 
 	if (material.normal > 0)

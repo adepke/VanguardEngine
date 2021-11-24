@@ -130,7 +130,11 @@ void EngineLoop()
 	//registry.emplace<MeshComponent>(sponza, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/Bistro/Bistro2.gltf"));
 	//registry.emplace<MeshComponent>(sponza, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/SunTemple.glb"));
 
-	int lightCount = 10000;
+	const auto light = registry.create();
+	registry.emplace<LightComponent>(light, LightComponent{ .color = { 1.f, 1.f, 1.f } });
+	registry.emplace<TransformComponent>(light, TransformComponent{ .scale = { 1.f, 1.f, 1.f }, .rotation = { 0.f, 0.f, 0.f }, .translation = { -120.f, 4.f, 20.f } });
+
+	int lightCount = 0;//10000;
 	//int lightCount = 20000;
 
 	for (int i = 0; i < lightCount; ++i)
