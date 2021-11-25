@@ -163,14 +163,10 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderT
 	compileArguments.emplace_back(DXC_ARG_DEBUG);  // Enable debug information.
 	compileArguments.emplace_back(VGText("-Qembed_debug"));  // Embed the PDB.
 #endif
-#if BUILD_DEBUG
-	compileArguments.emplace_back(DXC_ARG_SKIP_OPTIMIZATIONS);  // Disable optimization.
-#endif
-#if BUILD_DEVELOPMENT
-	compileArguments.emplace_back(DXC_ARG_OPTIMIZATION_LEVEL1);  // Basic optimization.
-#endif
 #if BUILD_RELEASE
 	compileArguments.emplace_back(DXC_ARG_OPTIMIZATION_LEVEL3);  // Maximum optimization.
+#else
+	compileArguments.emplace_back(DXC_ARG_SKIP_OPTIMIZATIONS);  // Disable optimization.
 #endif
 
 	// Shader macros.
