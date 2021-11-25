@@ -201,7 +201,7 @@ namespace AssetLoader
 					const auto& accessor = model.accessors[idx];
 					const auto& bufferView = model.bufferViews[accessor.bufferView];
 					const auto& buffer = model.buffers[bufferView.buffer];
-					const auto* data = buffer.data.data() + bufferView.byteOffset;
+					const auto* data = buffer.data.data() + accessor.byteOffset + bufferView.byteOffset;
 
 					switch (accessor.type)
 					{
