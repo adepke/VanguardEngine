@@ -456,7 +456,7 @@ void Renderer::Render(entt::registry& registry)
 		{
 			VGScopedGPUStat("Opaque", device->GetDirectContext(), list.Native());
 
-			MeshSystem::Render(Renderer::Get(), registry, list, true);
+			MeshSystem::Render(Renderer::Get(), registry, list, false);
 		}
 
 		// Transparent
