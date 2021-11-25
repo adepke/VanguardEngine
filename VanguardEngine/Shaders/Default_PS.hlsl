@@ -39,11 +39,15 @@ struct Output
 [RootSignature(RS)]
 Output main(Input input)
 {
-	Texture2D baseColorMap = textures[material.baseColor];
-
-	float4 baseColor = baseColorMap.Sample(defaultSampler, input.uv);
+	float4 baseColor = { 1.f, 1.f, 1.f, 1.f };
 	
-	clip(baseColor.a < alphaTestThreshold ? -1 : 1);
+	if (material.baseColor > 0)
+	{
+		Texture2D baseColorMap = textures[material.baseColor];
+		baseColor = baseColorMap.Sample(defaultSampler, input.uv);
+		
+		clip(baseColor.a < alphaTestThreshold ? -1 : 1);
+	}
 	
 	float2 metallicRoughness = { 0.0, 0.0 };
 	float3 normal = input.normal;
