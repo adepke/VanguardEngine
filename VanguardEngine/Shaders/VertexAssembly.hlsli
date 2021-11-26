@@ -12,8 +12,8 @@ static const uint vertexChannelColor = 5;
 static const uint vertexChannels = 6;
 
 // Vertex data is stored in two separate buffers.
-ByteAddressBuffer vertexPositionBuffer : register(t0, space2);
-ByteAddressBuffer vertexExtraBuffer : register(t1, space2);
+ByteAddressBuffer vertexPositionBuffer : register(t0, space3);
+ByteAddressBuffer vertexExtraBuffer : register(t1, space3);
 
 struct VertexMetadata
 {
@@ -24,7 +24,7 @@ struct VertexMetadata
 	uint channelOffsets[vertexChannels];
 };
 
-ConstantBuffer<VertexMetadata> vertexMetadata : register(b0, space2);
+ConstantBuffer<VertexMetadata> vertexMetadata : register(b0, space3);
 
 bool HasVertexAttribute(uint channel)
 {
