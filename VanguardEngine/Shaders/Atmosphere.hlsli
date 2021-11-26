@@ -753,4 +753,33 @@ float3 GetSolarRadiance(AtmosphereData atmosphere)
 	return atmosphere.solarIrradiance / (pi * sunAngularRadius * sunAngularRadius);
 }
 
+float4 GetPlanetSurfaceRadiance(AtmosphereData atmosphere, float3 planetCenter, float3 cameraPosition, float3 rayDirection, float3 sunDirection, Texture2D transmittanceLut, Texture3D scatteringLut, Texture2D irradianceLut, SamplerState lutSampler)
+{
+	float3 p = cameraPosition - planetCenter;
+	float pDotRay = dot(p, rayDirection);
+	float intersectionDistance = -pDotRay - sqrt(planetCenter.z * planetCenter.z - (dot(p, p) - (pDotRay * pDotRay)));
+	
+	if (intersectionDistance > 0.f)
+	{
+		float3 surfacePoint = cameraPosition + rayDirection * intersectionDistance;
+		float3 surfaceNormal = normalize(surfacePoint - planetCenter);
+		
+		float3 sunIrradiance;
+		float3 skyIrradiance;
+		GetSunAndSkyIrradiance(atmosphere, transmittanceLut, irradianceLut, lutSampler, surfacePoint - planetCenter, surfaceNormal, sunDirection, sunIrradiance, skyIrradiance);
+		
+		float sunVisibility = 1.f;  // Light shafts are not yet supported.
+		float skyVisibility = 1.f;  // Light shafts are not yet supported.
+		float3 radiance = atmosphere.surfaceColor * (1.f / pi) * (sunIrradiance * sunVisibility) + (skyIrradiance * skyVisibility);
+		
+		float shadowLength = 0.f;  // Light shafts are not yet supported.
+		float3 transmittance;
+		float3 scattering = GetSkyRadianceToPoint(atmosphere, transmittanceLut, scatteringLut, lutSampler, cameraPosition - planetCenter, surfacePoint - planetCenter, shadowLength, sunDirection, transmittance);
+		
+		return float4(radiance * transmittance + scattering, 1.f);
+	}
+	
+	return 0.f;
+}
+
 #endif  // __ATMOSPHERE_HLSLI__
