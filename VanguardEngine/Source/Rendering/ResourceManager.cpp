@@ -376,10 +376,11 @@ const TextureHandle ResourceManager::Create(const TextureDescription& descriptio
 
 	// Early validation.
 	VGAssert(description.width > 0 && description.height > 0 && description.depth > 0, "Failed to create texture, must have non-zero dimensions.");
+	VGAssert(!description.array || description.depth > 0, "Failed to create texture, array textures must have non-zero depth.");
 
 	D3D12_RESOURCE_DESC resourceDesc{};
 	resourceDesc.Alignment = 0;  // Let the device determine the alignment, see: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_resource_desc#alignment
-	resourceDesc.Dimension = description.height > 1 ? (description.depth > 1 ? D3D12_RESOURCE_DIMENSION_TEXTURE3D : D3D12_RESOURCE_DIMENSION_TEXTURE2D) : D3D12_RESOURCE_DIMENSION_TEXTURE1D;
+	resourceDesc.Dimension = description.height > 1 ? (description.depth > 1 && !description.array ? D3D12_RESOURCE_DIMENSION_TEXTURE3D : D3D12_RESOURCE_DIMENSION_TEXTURE2D) : D3D12_RESOURCE_DIMENSION_TEXTURE1D;
 	resourceDesc.Width = description.width;
 	resourceDesc.Height = description.height;
 	resourceDesc.DepthOrArraySize = description.depth;

@@ -56,6 +56,7 @@ struct TextureDescription
 	uint32_t depth = 1;
 	DXGI_FORMAT format;
 	bool mipMapping = false;  // Enables support for multiple mip levels, does not automatically generate mips.
+	bool array = false;  // Determines if this texture is 3D or an array, depth must be >0.
 };
 
 struct BufferComponent
