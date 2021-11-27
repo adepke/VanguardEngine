@@ -57,7 +57,7 @@ float3 SampleAtmosphere(float3 cameraPosition, float3 direction, float3 sunDirec
 
 float3 ComputeDirection(uint3 dispatch)
 {
-	float2 uv = dispatch.xy / (float)IRRADIANCE_MAP_SIZE;
+	float2 uv = (dispatch.xy + 0.5f) / (float)IRRADIANCE_MAP_SIZE;
 	uv = uv * 2.f - 1.f;
 	switch (dispatch.z)
 	{
