@@ -177,12 +177,27 @@ void ResourceManager::CreateResourceViews(TextureComponent& target)
 			viewDesc.Texture1D.ResourceMinLODClamp = 0.f;
 			break;
 		case D3D12_RESOURCE_DIMENSION_TEXTURE2D:
-			viewDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-			viewDesc.Texture2D.MostDetailedMip = 0;
-			viewDesc.Texture2D.MipLevels = -1;
-			viewDesc.Texture2D.PlaneSlice = 0;
-			viewDesc.Texture2D.ResourceMinLODClamp = 0.f;
-			break;
+			if (target.description.depth == 1)
+			{
+				viewDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+				viewDesc.Texture2D.MostDetailedMip = 0;
+				viewDesc.Texture2D.MipLevels = -1;
+				viewDesc.Texture2D.PlaneSlice = 0;
+				viewDesc.Texture2D.ResourceMinLODClamp = 0.f;
+				break;
+			}
+
+			else
+			{
+				viewDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+				viewDesc.Texture2DArray.MostDetailedMip = 0;
+				viewDesc.Texture2DArray.MipLevels = -1;
+				viewDesc.Texture2DArray.FirstArraySlice = 0;
+				viewDesc.Texture2DArray.ArraySize = target.description.depth;
+				viewDesc.Texture2DArray.PlaneSlice = 0;
+				viewDesc.Texture2DArray.ResourceMinLODClamp = 0.f;
+				break;
+			}
 		case D3D12_RESOURCE_DIMENSION_TEXTURE3D:
 			viewDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE3D;
 			viewDesc.Texture3D.MostDetailedMip = 0;
@@ -219,7 +234,7 @@ void ResourceManager::CreateMipmapTools()
 {
 	ComputePipelineStateDescription mipmapDescription;
 	mipmapDescription.shader = { "GenerateMipmaps_CS", "main" };
-	
+
 	mipmapPipeline.Build(*device, mipmapDescription);
 }
 
@@ -651,6 +666,9 @@ void ResourceManager::Write(TextureHandle target, const std::vector<uint8_t>& so
 
 void ResourceManager::GenerateMipmaps(TextureHandle texture)
 {
+	VGScopedCPUStat("Generate mipmaps");
+	VGScopedGPUStat("Generate mipmaps", device->GetDirectContext(), device->GetDirectList().Native());
+
 	// Run mipmapping on the direct queue, no need for async compute.
 	auto& list = device->GetDirectList();
 
@@ -660,70 +678,92 @@ void ResourceManager::GenerateMipmaps(TextureHandle texture)
 
 	auto& textureComponent = Get(texture);
 	VGAssert(textureComponent.description.mipMapping, "Textures must have mipmapping enabled in order to generate mipmaps.");
+	VGAssert(textureComponent.description.depth > 1 ? textureComponent.description.array : true, "Mipmapping a 3D texture requires it to be a texture array.");
 
+	const auto layers = textureComponent.description.depth;
 	const auto mipLevels = textureComponent.allocation->GetResource()->GetDesc().MipLevels;
 	const auto mipDispatches = static_cast<uint32_t>(std::ceil(mipLevels / 4.f));
 
 	std::vector<DescriptorHandle> uavDescriptors;
-	uavDescriptors.reserve(mipLevels - 1);
+	uavDescriptors.reserve(layers * (mipLevels - 1));
 
-	for (int i = 0; i < mipDispatches; ++i)
+	for (int i = 0; i < layers; ++i)
 	{
-		const auto baseMipWidth = NextPowerOf2(textureComponent.description.width) >> i * 4;
-		const auto baseMipHeight = NextPowerOf2(textureComponent.description.height) >> i * 4;
-
-		struct MipmapData
+		for (int j = 0; j < mipDispatches; ++j)
 		{
-			uint32_t mipBase;
-			uint32_t mipCount;
-			XMFLOAT2 texelSize;
-			// Boundary
-			uint32_t outputTextureIndices[4];
-			// Boundary
-			uint32_t inputTextureIndex;
-			uint32_t sRGB;
-			XMFLOAT2 padding;
-		} mipmapData;
+			const auto baseMipWidth = NextPowerOf2(textureComponent.description.width) >> j * 4;
+			const auto baseMipHeight = NextPowerOf2(textureComponent.description.height) >> j * 4;
 
-		mipmapData.mipBase = i * 4;  // Starting mip.
-		mipmapData.mipCount = std::min(mipLevels - mipmapData.mipBase - 1, 4u);  // How many mips to generate (0, 4].
-		mipmapData.sRGB = IsResourceFormatSRGB(textureComponent.description.format);
-		mipmapData.texelSize = { 2.f / baseMipWidth, 2.f / baseMipHeight };
-		mipmapData.inputTextureIndex = textureComponent.SRV->bindlessIndex;
+			struct MipmapData
+			{
+				uint32_t mipBase;
+				uint32_t mipCount;
+				XMFLOAT2 texelSize;
+				// Boundary
+				uint32_t outputTextureIndices[4];
+				// Boundary
+				uint32_t inputTextureIndex;
+				uint32_t sRGB;
+				uint32_t array;
+				uint32_t layer;
+			} mipmapData;
 
-		// Allocate UAVs.
-		for (int j = 0; j < mipmapData.mipCount; ++j)
-		{
-			auto descriptor = device->AllocateDescriptor(DescriptorType::Default);
+			mipmapData.mipBase = j * 4;  // Starting mip.
+			mipmapData.mipCount = std::min(mipLevels - mipmapData.mipBase - 1, 4u);  // How many mips to generate (0, 4].
+			mipmapData.sRGB = IsResourceFormatSRGB(textureComponent.description.format);
+			mipmapData.texelSize = { 2.f / baseMipWidth, 2.f / baseMipHeight };
+			mipmapData.inputTextureIndex = textureComponent.SRV->bindlessIndex;
+			mipmapData.array = layers > 1;
+			mipmapData.layer = i;
 
-			D3D12_UNORDERED_ACCESS_VIEW_DESC viewDesc{};
-			viewDesc.Format = ConvertResourceFormatToLinear(textureComponent.description.format);
-			viewDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-			viewDesc.Texture2D.MipSlice = i * 4 + j + 1;
-			viewDesc.Texture2D.PlaneSlice = 0;
+			// Allocate UAVs.
+			for (int k = 0; k < mipmapData.mipCount; ++k)
+			{
+				auto descriptor = device->AllocateDescriptor(DescriptorType::Default);
 
-			device->Native()->CreateUnorderedAccessView(textureComponent.allocation->GetResource(), nullptr, &viewDesc, descriptor);
+				D3D12_UNORDERED_ACCESS_VIEW_DESC viewDesc{};
+				viewDesc.Format = ConvertResourceFormatToLinear(textureComponent.description.format);
+				if (layers == 1)
+				{
+					viewDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+					viewDesc.Texture2D.MipSlice = j * 4 + k + 1;
+					viewDesc.Texture2D.PlaneSlice = 0;
+				}
 
-			mipmapData.outputTextureIndices[j] = descriptor.bindlessIndex;
+				else
+				{
+					viewDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
+					viewDesc.Texture2DArray.MipSlice = j * 4 + k + 1;
+					viewDesc.Texture2DArray.FirstArraySlice = 0;
+					viewDesc.Texture2DArray.ArraySize = textureComponent.description.depth;
+					viewDesc.Texture2DArray.PlaneSlice = 0;
+				}
 
-			uavDescriptors.emplace_back(std::move(descriptor));
+				device->Native()->CreateUnorderedAccessView(textureComponent.allocation->GetResource(), nullptr, &viewDesc, descriptor);
+
+				mipmapData.outputTextureIndices[k] = descriptor.bindlessIndex;
+
+				uavDescriptors.emplace_back(std::move(descriptor));
+			}
+
+			std::vector<uint32_t> constantData;
+			constantData.resize(12);
+			std::memcpy(constantData.data(), &mipmapData, constantData.size() * sizeof(uint32_t));
+
+			list.BindPipelineState(mipmapPipeline);
+			list.BindDescriptorAllocator(device->GetDescriptorAllocator());
+			list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
+			list.BindResourceTable("textureArrays", device->GetDescriptorAllocator().GetBindlessHeap());
+			list.BindResourceTable("texturesRW", device->GetDescriptorAllocator().GetBindlessHeap());
+			list.BindResourceTable("textureArraysRW", device->GetDescriptorAllocator().GetBindlessHeap());
+			list.BindConstants("mipmapData", constantData);
+
+			// Dispatch the compute shader.
+			list.Native()->Dispatch(std::max((uint32_t)std::ceil(baseMipWidth / (2.f * 8.f)), 1u), std::max((uint32_t)std::ceil(baseMipHeight / (2.f * 8.f)), 1u), 1);
+
+			list.UAVBarrier(texture);
+			list.FlushBarriers();
 		}
-
-		std::vector<uint32_t> constantData;
-		constantData.resize(12);
-		std::memcpy(constantData.data(), &mipmapData, constantData.size() * sizeof(uint32_t));
-
-		list.BindPipelineState(mipmapPipeline);
-		list.BindDescriptorAllocator(device->GetDescriptorAllocator());
-		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
-		list.BindResourceTable("texturesRW", device->GetDescriptorAllocator().GetBindlessHeap());
-		list.BindConstants("mipmapData", constantData);
-
-		// Dispatch the compute shader.
-		list.Native()->Dispatch(std::max((uint32_t)std::ceil(baseMipWidth / (2.f * 8.f)), 1u), std::max((uint32_t)std::ceil(baseMipHeight / (2.f * 8.f)), 1u), 1);
-
-		list.UAVBarrier(texture);
-		list.FlushBarriers();
 	}
 
 	for (auto&& descriptor : uavDescriptors)

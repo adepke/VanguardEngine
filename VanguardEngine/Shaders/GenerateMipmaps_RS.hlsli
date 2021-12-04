@@ -6,7 +6,11 @@
 	"DescriptorTable(" \
 		"SRV(t0, space = 0, numDescriptors = unbounded, flags = DESCRIPTORS_VOLATILE))," \
 	"DescriptorTable(" \
+		"SRV(t0, space = 2, numDescriptors = unbounded, flags = DESCRIPTORS_VOLATILE))," \
+	"DescriptorTable(" \
 		"UAV(u0, space = 0, numDescriptors = unbounded, flags = DESCRIPTORS_VOLATILE))," \
+	"DescriptorTable(" \
+		"UAV(u0, space = 2, numDescriptors = unbounded, flags = DESCRIPTORS_VOLATILE))," \
 	"StaticSampler(" \
 		"s0," \
 		"filter = FILTER_MIN_MAG_MIP_LINEAR," \
