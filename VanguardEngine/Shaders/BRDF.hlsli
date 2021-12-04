@@ -30,6 +30,12 @@ float3 FresnelSchlick(float cosine, float3 fNaught)
 	return fNaught + (1.0 - fNaught) * pow(1.0 - cosine, 5.0);
 }
 
+// Fresnel approximation including a roughness term.
+float3 FresnelSchlick(float cosine, float3 fNaught, float roughness)
+{
+	return fNaught + (max(1.0 - roughness, fNaught) - fNaught) * pow(1.0 - cosine, 5.0);
+}
+
 enum class LightingType
 {
 	Direct,
@@ -38,15 +44,15 @@ enum class LightingType
 
 float ComputeGeometryConstant(LightingType type, float roughness)
 {
-    switch (type)
-    {
-        case LightingType::Direct:
-            return ((roughness + 1.0) * (roughness + 1.0)) / 8.0;
+	switch (type)
+	{
+		case LightingType::Direct:
+			return ((roughness + 1.0) * (roughness + 1.0)) / 8.0;
 		case LightingType::IBL:
-            return (roughness * roughness) / 2.0;
+			return (roughness * roughness) / 2.0;
 		default:
-            return 0.f;
-    }
+			return 0.f;
+	}
 }
 
 float SchlickGGX(float dotProduct, float geometryConstant)
@@ -63,7 +69,7 @@ float SmithGeometry(float3 normal, float3 view, float3 light, float geometryCons
 // Specular BRDF component.
 float3 CookTorranceSpecular(float3 normal, float3 view, float3 halfway, float3 light, float roughness, float3 fresnel)
 {
-    const float3 DFG = TrowbridgeReitzGGX(normal, halfway, roughness) * fresnel * SmithGeometry(normal, view, light, ComputeGeometryConstant(LightingType::Direct, roughness));
+	const float3 DFG = TrowbridgeReitzGGX(normal, halfway, roughness) * fresnel * SmithGeometry(normal, view, light, ComputeGeometryConstant(LightingType::Direct, roughness));
 
 	return DFG / max(4.0 * saturate(dot(view, normal)) * saturate(dot(light, normal)), 0.001);
 }
