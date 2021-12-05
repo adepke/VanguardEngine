@@ -101,13 +101,13 @@ void ClusteredLightCulling::Initialize(RenderDevice* inDevice)
 	clusterBounds = device->GetResourceManager().Create(clusterBoundsDesc, VGText("Cluster bounds"));
 
 	ComputePipelineStateDescription boundsStateDesc;
-	boundsStateDesc.shader = { "ClusterBounds.hlsl", "ComputeClusterBoundsMain" };
+	boundsStateDesc.shader = { "Clusters/ClusterBounds.hlsl", "ComputeClusterBoundsMain" };
 	boundsStateDesc.macros.emplace_back("FROXEL_SIZE", froxelSize);
 	boundsState.Build(*device, boundsStateDesc);
 
 	GraphicsPipelineStateDescription depthCullStateDesc;
-	depthCullStateDesc.vertexShader = { "ClusterDepthCulling.hlsl", "VSMain" };
-	depthCullStateDesc.pixelShader = { "ClusterDepthCulling.hlsl", "PSMain" };
+	depthCullStateDesc.vertexShader = { "Clusters/ClusterDepthCulling.hlsl", "VSMain" };
+	depthCullStateDesc.pixelShader = { "Clusters/ClusterDepthCulling.hlsl", "PSMain" };
 	depthCullStateDesc.macros.emplace_back("FROXEL_SIZE", froxelSize);
 	depthCullStateDesc.blendDescription.AlphaToCoverageEnable = false;
 	depthCullStateDesc.blendDescription.IndependentBlendEnable = false;
@@ -144,22 +144,22 @@ void ClusteredLightCulling::Initialize(RenderDevice* inDevice)
 	depthCullState.Build(*device, depthCullStateDesc, false);
 
 	ComputePipelineStateDescription compactionStateDesc;
-	compactionStateDesc.shader = { "ClusterCompaction.hlsl", "ComputeDenseClusterListMain" };
+	compactionStateDesc.shader = { "Clusters/ClusterCompaction.hlsl", "ComputeDenseClusterListMain" };
 	compactionState.Build(*device, compactionStateDesc);
 
 	ComputePipelineStateDescription binningStateDesc;
-	binningStateDesc.shader = { "ClusterLightBinning.hlsl", "ComputeLightBinsMain" };
+	binningStateDesc.shader = { "Clusters/ClusterLightBinning.hlsl", "ComputeLightBinsMain" };
 	binningStateDesc.macros.emplace_back("MAX_LIGHTS_PER_FROXEL", maxLightsPerFroxel);
 	binningState.Build(*device, binningStateDesc);
 
 	ComputePipelineStateDescription indirectGenerationStateDesc;
-	indirectGenerationStateDesc.shader = { "ClusterIndirectBufferGeneration.hlsl", "BufferGenerationMain" };
+	indirectGenerationStateDesc.shader = { "Clusters/ClusterIndirectBufferGeneration.hlsl", "BufferGenerationMain" };
 	indirectGenerationState.Build(*device, indirectGenerationStateDesc);
 
 #if ENABLE_EDITOR
 	GraphicsPipelineStateDescription debugOverlayStateDesc{};
-	debugOverlayStateDesc.vertexShader = { "ClusterDebugOverlay.hlsl", "VSMain" };
-	debugOverlayStateDesc.pixelShader = { "ClusterDebugOverlay.hlsl", "PSMain" };
+	debugOverlayStateDesc.vertexShader = { "Clusters/ClusterDebugOverlay.hlsl", "VSMain" };
+	debugOverlayStateDesc.pixelShader = { "Clusters/ClusterDebugOverlay.hlsl", "PSMain" };
 	debugOverlayStateDesc.macros.emplace_back("FROXEL_SIZE", froxelSize);
 	debugOverlayStateDesc.macros.emplace_back("MAX_LIGHTS_PER_FROXEL", maxLightsPerFroxel);
 	debugOverlayStateDesc.blendDescription.AlphaToCoverageEnable = false;

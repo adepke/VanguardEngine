@@ -1,7 +1,7 @@
 // Copyright (c) 2019-2021 Andrew Depke
 
 #include "Base.hlsli"
-#include "Atmosphere.hlsli"
+#include "Atmosphere/Atmosphere.hlsli"
 #include "Camera.hlsli"
 #include "Constants.hlsli"
 #include "ImportanceSampling.hlsli"
@@ -40,7 +40,7 @@ struct AtmosphereBindData
 	uint irradianceTexture;
 	float solarZenithAngle;
 	// Boundary
-    uint luminanceTexture;
+	uint luminanceTexture;
 	uint convolutionTexture;
 	uint brdfTexture;
 	float padding;
@@ -83,31 +83,28 @@ float3 ComputeDirection(float2 uv, uint z)
 [numthreads(8, 8, 1)]
 void LuminanceMain(uint3 dispatchId : SV_DispatchThreadID)
 {
-    float3 cameraPosition = camera.position.xyz / 1000.f;  // Atmosphere distances work in terms of kilometers due to floating point precision, so convert.
-    float3 sunDirection = float3(sin(bindData.solarZenithAngle), 0.f, cos(bindData.solarZenithAngle));
-    float3 planetCenter = float3(0.f, 0.f, -bindData.atmosphere.radiusBottom);  // World origin is planet surface.
+	float3 cameraPosition = camera.position.xyz / 1000.f;  // Atmosphere distances work in terms of kilometers due to floating point precision, so convert.
+	float3 sunDirection = float3(sin(bindData.solarZenithAngle), 0.f, cos(bindData.solarZenithAngle));
+	float3 planetCenter = float3(0.f, 0.f, -bindData.atmosphere.radiusBottom);  // World origin is planet surface.
 	
-    RWTexture2DArray<float4> luminanceMap = textureArraysRW[bindData.luminanceTexture];
-    float width, height, depth;
-    luminanceMap.GetDimensions(width, height, depth);
+	RWTexture2DArray<float4> luminanceMap = textureArraysRW[bindData.luminanceTexture];
+	float width, height, depth;
+	luminanceMap.GetDimensions(width, height, depth);
 	
-    float2 uv = (dispatchId.xy + 0.5f) / width;
-    uv = uv * 2.f - 1.f;
-    float3 direction = normalize(ComputeDirection(uv, dispatchId.z));
+	float2 uv = (dispatchId.xy + 0.5f) / width;
+	uv = uv * 2.f - 1.f;
+	float3 direction = normalize(ComputeDirection(uv, dispatchId.z));
 	
-    float3 sample = SampleAtmosphere(cameraPosition, direction, sunDirection, planetCenter);
-    luminanceMap[dispatchId] = float4(sample, 0.f);
+	float3 sample = SampleAtmosphere(cameraPosition, direction, sunDirection, planetCenter);
+	luminanceMap[dispatchId] = float4(sample, 0.f);
 }
 
 [RootSignature(RS)]
 [numthreads(IRRADIANCE_MAP_SIZE, IRRADIANCE_MAP_SIZE, 1)]
 void IrradianceMain(uint3 dispatchId : SV_DispatchThreadID)
-{	
-	float3 cameraPosition = camera.position.xyz / 1000.f;  // Atmosphere distances work in terms of kilometers due to floating point precision, so convert.
-	float3 sunDirection = float3(sin(bindData.solarZenithAngle), 0.f, cos(bindData.solarZenithAngle));
-	float3 planetCenter = float3(0.f, 0.f, -bindData.atmosphere.radiusBottom);  // World origin is planet surface.
-	
+{
 	RWTexture2DArray<float4> irradianceMap = textureArraysRW[bindData.convolutionTexture];
+	TextureCube luminanceMap = textureCubes[bindData.luminanceTexture];
 	
 	float2 uv = (dispatchId.xy + 0.5f) / (float)IRRADIANCE_MAP_SIZE;
 	uv = uv * 2.f - 1.f;
@@ -130,7 +127,7 @@ void IrradianceMain(uint3 dispatchId : SV_DispatchThreadID)
 			float phi = 0.5f * pi * ((float)j / float(steps - 1.f));
 			float3 tangentSpace = normalize(float3(sin(phi) * cos(theta), sin(phi) * sin(theta), cos(phi)));
 			float3 worldSpace = tangentSpace.x * left + tangentSpace.y * up + tangentSpace.z * forward;
-			float3 value = SampleAtmosphere(cameraPosition, worldSpace, sunDirection, planetCenter);
+            float3 value = luminanceMap.SampleLevel(lutSampler, worldSpace, 0.f).rgb;
 			irradianceSum += value * cos(phi) * sin(phi);  // Scaling improves light distribution.
 		}
 	}
@@ -147,13 +144,13 @@ void PrefilterMain(uint3 dispatchId : SV_DispatchThreadID)
 	RWTexture2DArray<float4> baseMip = textureArraysRW[bindData.prefilterMips[0]];
 	float width, height, depth;
 	baseMip.GetDimensions(width, height, depth);
-    const float baseMipSize = width;
-    const float saTexel = (4.f * pi) / (6.f * baseMipSize * baseMipSize);
+	const float baseMipSize = width;
+	const float saTexel = (4.f * pi) / (6.f * baseMipSize * baseMipSize);
 	
 	const uint maskShift = log2(width);
 	const uint xyIndex = dispatchId.y * width + dispatchId.x;
 	
-    TextureCube luminanceMap = textureCubes[bindData.luminanceTexture];
+	TextureCube luminanceMap = textureCubes[bindData.luminanceTexture];
 	
 	for (int i = 0; i < PREFILTER_LEVELS; ++i)
 	{
@@ -191,16 +188,16 @@ void PrefilterMain(uint3 dispatchId : SV_DispatchThreadID)
 					// Reduce aliasing artifacts from the predictible sequence. Can also jitter the sequence to improve visual fidelity.
 					// See: https://chetanjags.wordpress.com/2015/08/26/image-based-lighting/
 			
-                    float D = TrowbridgeReitzGGX(normal, halfway, roughness);
-                    float normalDotHalfway = saturate(dot(normal, halfway));
-                    float halfwayDotView = saturate(dot(halfway, view));
-                    float pdf = D * normalDotHalfway / (4.f * halfwayDotView) + 0.0001f;
-                    float saSample = 1.f / ((float)steps * pdf + 0.0001f);
-                    float mip = roughness == 0.f ? 0.f : 0.5f * log2(saSample / saTexel);
+					float D = TrowbridgeReitzGGX(normal, halfway, roughness);
+					float normalDotHalfway = saturate(dot(normal, halfway));
+					float halfwayDotView = saturate(dot(halfway, view));
+					float pdf = D * normalDotHalfway / (4.f * halfwayDotView) + 0.0001f;
+					float saSample = 1.f / ((float)steps * pdf + 0.0001f);
+					float mip = roughness == 0.f ? 0.f : 0.5f * log2(saSample / saTexel);
 					
 					sumWeight += normalDotLight;
-                    sumSamples += luminanceMap.SampleLevel(lutSampler, light, mip).rgb * normalDotLight;
-                }
+					sumSamples += luminanceMap.SampleLevel(lutSampler, light, mip).rgb * normalDotLight;
+				}
 			}
 	
 			prefilterMap[uint3(pixel, dispatchId.z)] = float4(sumSamples / sumWeight, 0.f);

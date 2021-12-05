@@ -2,7 +2,7 @@
 
 #include "Geometry.hlsli"
 #include "Camera.hlsli"
-#include "Clusters.hlsli"
+#include "Clusters/Clusters.hlsli"
 
 #define RS \
 	"RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT)," \

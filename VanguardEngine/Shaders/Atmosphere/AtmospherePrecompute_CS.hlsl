@@ -1,8 +1,8 @@
 // Copyright (c) 2019-2021 Andrew Depke
 
-#include "AtmospherePrecompute_RS.hlsli"
+#include "Atmosphere/AtmospherePrecompute_RS.hlsli"
 #include "Base.hlsli"
-#include "Atmosphere.hlsli"
+#include "Atmosphere/Atmosphere.hlsli"
 
 struct PrecomputeData
 {

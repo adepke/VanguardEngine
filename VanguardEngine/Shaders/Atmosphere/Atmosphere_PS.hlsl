@@ -1,8 +1,8 @@
 // Copyright (c) 2019-2021 Andrew Depke
 
-#include "Atmosphere_RS.hlsli"
+#include "Atmosphere/Atmosphere_RS.hlsli"
 #include "Base.hlsli"
-#include "Atmosphere.hlsli"
+#include "Atmosphere/Atmosphere.hlsli"
 #include "Camera.hlsli"
 
 ConstantBuffer<Camera> camera : register(b0);

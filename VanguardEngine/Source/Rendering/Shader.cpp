@@ -1,6 +1,7 @@
 // Copyright (c) 2019-2021 Andrew Depke
 
 #include <Rendering/Shader.h>
+#include <Core/Config.h>
 
 #include <cstring>
 
@@ -137,12 +138,9 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderT
 	sourceBuffer.Size = sourceBlob->GetBufferSize();
 	sourceBuffer.Encoding = DXC_CP_ACP;
 
-	auto includeSearchDirectory = path;
-	includeSearchDirectory.remove_filename();
-
 	// Stable names so we don't have to worry about c_str() being overwritten.
 	const auto stableShaderName = pathModified.filename().generic_wstring();
-	const auto stableShaderIncludePath = includeSearchDirectory.generic_wstring();
+	const auto stableShaderIncludePath = Config::shadersPath.generic_wstring();
 
 	const auto entryWide = std::wstring{ entry.begin(), entry.end() };
 

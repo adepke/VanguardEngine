@@ -1,6 +1,6 @@
 // Copyright (c) 2019-2021 Andrew Depke
 
-#include "Atmosphere_RS.hlsli"
+#include "Atmosphere/Atmosphere_RS.hlsli"
 
 struct Input
 {
