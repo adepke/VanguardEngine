@@ -6,8 +6,6 @@
 #include "Material.hlsli"
 #include "BRDF.hlsli"
 
-// #TODO: Use BRDF.hlsli
-
 // Performs diffuse and specular IBL.
 float3 ComputeIBL(float3 normalDirection, float3 viewDirection, Material material, TextureCube irradianceLut, TextureCube prefilterLut, Texture2D brdfLut, SamplerState lutSampler)
 {
