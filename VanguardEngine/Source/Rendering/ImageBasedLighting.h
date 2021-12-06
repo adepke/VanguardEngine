@@ -16,7 +16,7 @@ class ImageBasedLighting
 private:
 	static constexpr uint32_t irradianceTextureSize = 32;
 	static constexpr uint32_t prefilterTextureSize = 128;  // Resolution of base mip.
-	static constexpr uint32_t prefilterLevels = 8;  // Roughness bins, must be equal to lg(prefilterTextureSize).
+	static constexpr uint32_t prefilterLevels = 6;  // Roughness bins, must be <= lg(prefilterTextureSize).
 	static constexpr uint32_t brdfTextureSize = 512;
 
 	static_assert(irradianceTextureSize <= 32, "irradianceTextureSize must be less than or equal to 32.");
@@ -40,4 +40,6 @@ public:
 	~ImageBasedLighting();
 	void Initialize(RenderDevice* inDevice);
 	void UpdateLuts(RenderGraph& graph, RenderResource luminanceTexture, RenderResource cameraBuffer);
+
+	uint32_t GetPrefilterLevels() const { return prefilterLevels; }
 };

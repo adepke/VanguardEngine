@@ -7,13 +7,12 @@
 #include "BRDF.hlsli"
 
 // Performs diffuse and specular IBL.
-float3 ComputeIBL(float3 normalDirection, float3 viewDirection, Material material, TextureCube irradianceLut, TextureCube prefilterLut, Texture2D brdfLut, SamplerState lutSampler)
-{
-	float width, height, prefilterMipCount;
-	prefilterLut.GetDimensions(0, width, height, prefilterMipCount);
-	
+float3 ComputeIBL(float3 normalDirection, float3 viewDirection, Material material, uint prefilterLevels, TextureCube irradianceLut, TextureCube prefilterLut, Texture2D brdfLut, SamplerState lutSampler)
+{	
 	float3 reflectionDirection = reflect(-viewDirection, normalDirection);
-	float3 prefilterSample = prefilterLut.SampleLevel(lutSampler, reflectionDirection, material.roughness * prefilterMipCount).rgb;
+	// Note that prefilterLevels is most likely smaller than the mip levels of the prefilter map. This reduces glowing rim artifacts on
+	// highly rough metals due to losing too much data in the prefilter map.
+	float3 prefilterSample = prefilterLut.SampleLevel(lutSampler, reflectionDirection, material.roughness * (prefilterLevels - 1.f)).rgb;
 	float2 brdf = brdfLut.Sample(lutSampler, float2(saturate(dot(normalDirection, viewDirection)), material.roughness)).xy;
 	
 	float3 fNaught = lerp(0.04.xxx, material.baseColor.rgb, material.metalness);

@@ -26,7 +26,7 @@ struct IblData
 	uint irradianceTexture;
 	uint prefilterTexture;
 	uint brdfTexture;
-	float padding;
+	uint prefilterLevels;
 };
 
 ConstantBuffer<IblData> iblData : register(b3);
@@ -125,7 +125,7 @@ Output main(Input input)
 	float width, height, prefilterMipCount;
 	prefilterMap.GetDimensions(0, width, height, prefilterMipCount);
 	
-	float3 ibl = ComputeIBL(normalDirection, viewDirection, materialSample, irradianceMap, prefilterMap, brdfMap, defaultSampler);
+	float3 ibl = ComputeIBL(normalDirection, viewDirection, materialSample, iblData.prefilterLevels, irradianceMap, prefilterMap, brdfMap, defaultSampler);
 	output.color.rgb += ibl;
 	
 	return output;

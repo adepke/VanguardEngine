@@ -460,7 +460,7 @@ void Renderer::Render(entt::registry& registry)
 			uint32_t irradianceTexture;
 			uint32_t prefilterTexture;
 			uint32_t brdfTexture;
-			float padding;
+			uint32_t prefilterLevels;
 		} iblData;
 
 		const auto& irradianceComponent = device->GetResourceManager().Get(ibl.irradianceTexture);
@@ -504,6 +504,7 @@ void Renderer::Render(entt::registry& registry)
 		iblData.irradianceTexture = irradianceSRV.bindlessIndex;
 		iblData.prefilterTexture = prefilterSRV.bindlessIndex;
 		iblData.brdfTexture = brdfSRV.bindlessIndex;
+		iblData.prefilterLevels = ibl.GetPrefilterLevels();
 		list.BindConstants("iblData", iblData);
 
 		device->GetResourceManager().AddFrameDescriptor(device->GetFrameIndex(), std::move(irradianceSRV));

@@ -50,7 +50,7 @@ void ImageBasedLighting::Initialize(RenderDevice* inDevice)
 		.height = prefilterTextureSize,
 		.depth = 6,  // Texture cube.
 		.format = DXGI_FORMAT_R16G16B16A16_FLOAT,
-		.mipMapping = true,  // One mip level per roughness bin.
+		.mipMapping = true,  // Roughness bins are stored in mip levels.
 		.array = true
 	};
 
