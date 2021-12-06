@@ -78,9 +78,15 @@ private:
 
 	void Precompute(CommandList& list);
 
+	static constexpr uint32_t luminanceTextureSize = 1024;
+	static_assert(luminanceTextureSize % 8 == 0, "luminanceTextureSize must be evenly divisible by 8.");
+
+	TextureHandle luminanceTexture;
+	PipelineState luminancePrecompute;
+
 public:
 	~Atmosphere();
 	void Initialize(RenderDevice* inDevice);
-	void Render(RenderGraph& graph, PipelineBuilder& pipeline, RenderResource cameraBuffer, RenderResource depthStencil, RenderResource outputHDRs);
+	RenderResource Render(RenderGraph& graph, PipelineBuilder& pipeline, RenderResource cameraBuffer, RenderResource depthStencil, RenderResource outputHDRs);
 	void MarkModelDirty() { dirty = true; }
 };

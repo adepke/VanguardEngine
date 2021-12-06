@@ -3,7 +3,8 @@
 #include "Default_RS.hlsli"
 #include "Base.hlsli"
 #include "Light.hlsli"
-#include "Clusters.hlsli"
+#include "Clusters/Clusters.hlsli"
+#include "IBL/ImageBasedLighting.hlsli"
 
 SamplerState defaultSampler : register(s0);
 
@@ -19,6 +20,16 @@ ConstantBuffer<Camera> camera : register(b2);
 StructuredBuffer<Light> lights : register(t0, space1);
 StructuredBuffer<uint> clusteredLightList : register(t1, space1);
 StructuredBuffer<uint2> clusteredLightInfo : register(t2, space1);
+
+struct IblData
+{
+	uint irradianceTexture;
+	uint prefilterTexture;
+	uint brdfTexture;
+	float padding;
+};
+
+ConstantBuffer<IblData> iblData : register(b3);
 
 struct Input
 {
@@ -106,11 +117,16 @@ Output main(Input input)
 		LightSample sample = SampleLight(lights[lightIndex], materialSample, camera, viewDirection, input.position, normalDirection);
 		output.color.rgb += sample.diffuse.rgb;
 	}
-
-	// Ambient contribution.
-	const float ambientLight = 0.025;
-	float3 ambient = ambientLight * baseColor.rgb * ambientOcclusion;
-	output.color.rgb += ambient;
-
+	
+	TextureCube irradianceMap = textureCubes[iblData.irradianceTexture];
+	TextureCube prefilterMap = textureCubes[iblData.prefilterTexture];
+	Texture2D brdfMap = textures[iblData.brdfTexture];
+	
+	float width, height, prefilterMipCount;
+	prefilterMap.GetDimensions(0, width, height, prefilterMipCount);
+	
+	float3 ibl = ComputeIBL(normalDirection, viewDirection, materialSample, irradianceMap, prefilterMap, brdfMap, defaultSampler);
+	output.color.rgb += ibl;
+	
 	return output;
 }

@@ -6,6 +6,7 @@
 #include <Rendering/RenderPass.h>
 #include <Rendering/ResourceManager.h>
 #include <Rendering/PipelineBuilder.h>
+#include <Rendering/ShaderStructs.h>
 
 #include <vector>
 #include <cmath>
@@ -295,6 +296,7 @@ Atmosphere::~Atmosphere()
 	device->GetResourceManager().Destroy(deltaMieTexture);
 	device->GetResourceManager().Destroy(deltaScatteringDensityTexture);
 	device->GetResourceManager().Destroy(deltaIrradianceTexture);
+	device->GetResourceManager().Destroy(luminanceTexture);
 }
 
 void Atmosphere::Initialize(RenderDevice* inDevice)
@@ -302,23 +304,27 @@ void Atmosphere::Initialize(RenderDevice* inDevice)
 	device = inDevice;
 
 	ComputePipelineStateDescription precomputeState;
-	precomputeState.shader = { "AtmospherePrecompute_CS", "TransmittanceLutMain" };
+	precomputeState.shader = { "Atmosphere/AtmospherePrecompute_CS", "TransmittanceLutMain" };
 	transmissionPrecompute.Build(*device, precomputeState);
 
-	precomputeState.shader = { "AtmospherePrecompute_CS", "DirectIrradianceLutMain" };
+	precomputeState.shader = { "Atmosphere/AtmospherePrecompute_CS", "DirectIrradianceLutMain" };
 	directIrradiancePrecompute.Build(*device, precomputeState);
 
-	precomputeState.shader = { "AtmospherePrecompute_CS", "SingleScatteringLutMain" };
+	precomputeState.shader = { "Atmosphere/AtmospherePrecompute_CS", "SingleScatteringLutMain" };
 	singleScatteringPrecompute.Build(*device, precomputeState);
 
-	precomputeState.shader = { "AtmospherePrecompute_CS", "ScatteringDensityLutMain" };
+	precomputeState.shader = { "Atmosphere/AtmospherePrecompute_CS", "ScatteringDensityLutMain" };
 	scatteringDensityPrecompute.Build(*device, precomputeState);
 
-	precomputeState.shader = { "AtmospherePrecompute_CS", "IndirectIrradianceLutMain" };
+	precomputeState.shader = { "Atmosphere/AtmospherePrecompute_CS", "IndirectIrradianceLutMain" };
 	indirectIrradiancePrecompute.Build(*device, precomputeState);
 
-	precomputeState.shader = { "AtmospherePrecompute_CS", "MultipleScatteringLutMain" };
+	precomputeState.shader = { "Atmosphere/AtmospherePrecompute_CS", "MultipleScatteringLutMain" };
 	multipleScatteringPrecompute.Build(*device, precomputeState);
+
+	ComputePipelineStateDescription luminanceState;
+	luminanceState.shader = { "Atmosphere/Luminance", "Main" };
+	luminancePrecompute.Build(*device, luminanceState);
 
 	TextureDescription transmittanceDesc{
 		.bindFlags = BindFlag::ShaderResource | BindFlag::UnorderedAccess,
@@ -361,6 +367,19 @@ void Atmosphere::Initialize(RenderDevice* inDevice)
 	deltaScatteringDensityTexture = device->GetResourceManager().Create(scatteringDesc, VGText("Atmosphere delta scattering density"));
 	deltaIrradianceTexture = device->GetResourceManager().Create(irradianceDesc, VGText("Atmosphere delta irradiance"));
 
+	TextureDescription luminanceDesc{
+		.bindFlags = BindFlag::ShaderResource | BindFlag::UnorderedAccess,
+		.accessFlags = AccessFlag::GPUWrite,
+		.width = luminanceTextureSize,
+		.height = luminanceTextureSize,
+		.depth = 6,  // Texture cube.
+		.format = DXGI_FORMAT_R16G16B16A16_FLOAT,
+		.mipMapping = true,
+		.array = true
+	};
+
+	luminanceTexture = device->GetResourceManager().Create(luminanceDesc, VGText("Atmosphere luminance"));
+
 	XMFLOAT3 rayleighScattering = { 0.005802f, 0.013558f, 0.0331f };
 	float mieScattering = 0.003996f * 1.2f;
 	float mieExtinction = 1.11f * mieScattering;
@@ -392,7 +411,7 @@ void Atmosphere::Initialize(RenderDevice* inDevice)
 	model.solarIrradiance = { 1.474f, 1.8504f, 1.91198f };
 }
 
-void Atmosphere::Render(RenderGraph& graph, PipelineBuilder& pipelines, RenderResource cameraBuffer, RenderResource depthStencil, RenderResource outputHDR)
+RenderResource Atmosphere::Render(RenderGraph& graph, PipelineBuilder& pipelines, RenderResource cameraBuffer, RenderResource depthStencil, RenderResource outputHDR)
 {
 	if (dirty)
 	{
@@ -434,4 +453,76 @@ void Atmosphere::Render(RenderGraph& graph, PipelineBuilder& pipelines, RenderRe
 
 		list.DrawFullscreenQuad();
 	});
+
+	const auto luminanceTag = graph.Import(luminanceTexture);
+
+	auto& luminancePass = graph.AddPass("Atmosphere Luminance Pass", ExecutionQueue::Compute);
+	luminancePass.Read(cameraBuffer, ResourceBind::CBV);
+	luminancePass.Write(luminanceTag, ResourceBind::UAV);
+	luminancePass.Bind([&, cameraBuffer, luminanceTag](CommandList& list, RenderGraphResourceManager& resources)
+	{
+		// #TEMP: Should be const.
+		auto& luminanceComponent = device->GetResourceManager().Get(resources.GetTexture(luminanceTag));
+
+		D3D12_UNORDERED_ACCESS_VIEW_DESC luminanceDesc{};
+		luminanceDesc.Format = luminanceComponent.description.format;
+		luminanceDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
+		luminanceDesc.Texture2DArray.MipSlice = 0;
+		luminanceDesc.Texture2DArray.FirstArraySlice = 0;
+		luminanceDesc.Texture2DArray.ArraySize = luminanceComponent.description.depth;
+		luminanceDesc.Texture2DArray.PlaneSlice = 0;
+
+		auto luminanceUAV = device->AllocateDescriptor(DescriptorType::Default);
+		device->Native()->CreateUnorderedAccessView(luminanceComponent.allocation->GetResource(), nullptr, &luminanceDesc, luminanceUAV);
+
+		struct BindData
+		{
+			AtmosphereData atmosphere;
+			uint32_t transmissionTexture;
+			uint32_t scatteringTexture;
+			uint32_t irradianceTexture;
+			float solarZenithAngle;
+			uint32_t luminanceTexture;
+			XMFLOAT3 padding;
+		} bindData;
+
+		bindData.atmosphere = model;
+		bindData.transmissionTexture = device->GetResourceManager().Get(transmittanceTexture).SRV->bindlessIndex;
+		bindData.scatteringTexture = device->GetResourceManager().Get(scatteringTexture).SRV->bindlessIndex;
+		bindData.irradianceTexture = device->GetResourceManager().Get(irradianceTexture).SRV->bindlessIndex;
+		bindData.solarZenithAngle = solarZenithAngle;
+		bindData.luminanceTexture = luminanceUAV.bindlessIndex;
+		std::vector<uint8_t> bindBytes;
+		bindBytes.resize(sizeof(bindData));
+		std::memcpy(bindBytes.data(), &bindData, bindBytes.size());
+
+		const auto [handle, offset] = device->FrameAllocate(bindBytes.size());
+		device->GetResourceManager().Write(handle, bindBytes, offset);
+
+		list.BindPipelineState(luminancePrecompute);
+		list.BindResource("camera", resources.GetBuffer(cameraBuffer));
+		list.BindResource("bindData", handle, offset);
+		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
+		list.BindResourceTable("textures3D", device->GetDescriptorAllocator().GetBindlessHeap());
+		list.BindResourceTable("textureArraysRW", device->GetDescriptorAllocator().GetBindlessHeap());
+
+		list.Native()->Dispatch(luminanceTextureSize / 8, luminanceTextureSize / 8, 6);
+
+		device->GetResourceManager().AddFrameDescriptor(device->GetFrameIndex(), std::move(luminanceUAV));
+
+		list.UAVBarrier(luminanceTexture);
+		list.FlushBarriers();
+
+		// #TEMP, #BUG: This is a limitation of the render graph implementation, so using this awful workaround for the time being.
+		// The issue is that a later pass uses the luminance texture in pixel/nonpixel state, and since resource states aren't
+		// tracked at the per-pass level, this pass thinks the resource is in a pixel/nonpixel state when it records. This causes
+		// generate mips to administer a wrong barrier (pixel/nonpixel -> uav).
+		// Remember to make luminanceComponent const again when this is fixed.
+		const auto oldState = luminanceComponent.state;
+		luminanceComponent.state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
+		device->GetResourceManager().GenerateMipmaps(luminanceTexture);
+		luminanceComponent.state = oldState;
+	});
+
+	return luminanceTag;
 }

@@ -15,6 +15,7 @@
 #include <Rendering/RenderGraphResourceManager.h>
 #include <Rendering/Atmosphere.h>
 #include <Rendering/ClusteredLightCulling.h>
+#include <Rendering/ImageBasedLighting.h>
 
 #include <entt/entt.hpp>
 
@@ -43,6 +44,7 @@ public:
 	std::unique_ptr<UserInterfaceManager> userInterface;
 	Atmosphere atmosphere;
 	ClusteredLightCulling clusteredCulling;
+	ImageBasedLighting ibl;
 
 	BufferHandle instanceBuffer;
 	size_t instanceOffset = 0;

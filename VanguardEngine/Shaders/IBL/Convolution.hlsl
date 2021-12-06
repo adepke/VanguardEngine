@@ -1,20 +1,14 @@
 // Copyright (c) 2019-2021 Andrew Depke
 
 #include "Base.hlsli"
-#include "Atmosphere/Atmosphere.hlsli"
-#include "Camera.hlsli"
 #include "Constants.hlsli"
 #include "ImportanceSampling.hlsli"
 #include "BRDF.hlsli"
+#include "CubeMap.hlsli"
 
 #define RS \
 	"RootFlags(0)," \
 	"CBV(b0)," \
-	"CBV(b1)," \
-	"DescriptorTable(" \
-		"SRV(t0, space = 0, numDescriptors = unbounded, flags = DESCRIPTORS_VOLATILE))," \
-	"DescriptorTable(" \
-		"SRV(t0, space = 1, numDescriptors = unbounded, flags = DESCRIPTORS_VOLATILE))," \
 	"DescriptorTable(" \
 		"SRV(t0, space = 3, numDescriptors = unbounded, flags = DESCRIPTORS_VOLATILE))," \
 	"DescriptorTable(" \
@@ -28,82 +22,25 @@
 		"addressV = TEXTURE_ADDRESS_CLAMP," \
 		"addressW = TEXTURE_ADDRESS_CLAMP)"
 
-ConstantBuffer<Camera> camera : register(b0);
 SamplerState lutSampler : register(s0);
 
-struct AtmosphereBindData
+struct BindData
 {
-	AtmosphereData atmosphere;
-	// Boundary
-	uint transmissionTexture;
-	uint scatteringTexture;
-	uint irradianceTexture;
-	float solarZenithAngle;
-	// Boundary
 	uint luminanceTexture;
-	uint convolutionTexture;
+	uint irradianceTexture;
 	uint brdfTexture;
 	float padding;
 	// Boundary
 	uint prefilterMips[PREFILTER_LEVELS];
 };
 
-ConstantBuffer<AtmosphereBindData> bindData : register(b1);
-
-float3 SampleAtmosphere(float3 cameraPosition, float3 direction, float3 sunDirection, float3 planetCenter)
-{
-	Texture2D transmittanceLut = textures[bindData.transmissionTexture];
-	Texture3D scatteringLut = textures3D[bindData.scatteringTexture];
-	Texture2D irradianceLut = textures[bindData.irradianceTexture];
-	
-	float3 transmittance;
-	float3 radiance = GetSkyRadiance(bindData.atmosphere, transmittanceLut, scatteringLut, lutSampler, cameraPosition - planetCenter, direction, 0.f, sunDirection, transmittance);
-	
-	float4 planetRadiance = GetPlanetSurfaceRadiance(bindData.atmosphere, planetCenter, cameraPosition, direction, sunDirection, transmittanceLut, scatteringLut, irradianceLut, lutSampler);
-	radiance = lerp(radiance, planetRadiance.xyz, planetRadiance.w);
-	
-	return 1.f - exp(-radiance * 10.f);
-}
-
-float3 ComputeDirection(float2 uv, uint z)
-{	
-	switch (z)
-	{
-		case 0: return float3(1.f, -uv.y, -uv.x);
-		case 1: return float3(-1.f, uv.y, uv.x);
-		case 2: return float3(uv.x, 1.f, uv.y);
-		case 3: return float3(uv.x, -1.f, -uv.y);
-		case 4: return float3(uv.x, uv.y, 1.f);
-		case 5: return float3(-uv.x, -uv.y, -1.f);
-	}
-	
-	return 0.f;
-}
-[RootSignature(RS)]
-[numthreads(8, 8, 1)]
-void LuminanceMain(uint3 dispatchId : SV_DispatchThreadID)
-{
-	float3 cameraPosition = camera.position.xyz / 1000.f;  // Atmosphere distances work in terms of kilometers due to floating point precision, so convert.
-	float3 sunDirection = float3(sin(bindData.solarZenithAngle), 0.f, cos(bindData.solarZenithAngle));
-	float3 planetCenter = float3(0.f, 0.f, -bindData.atmosphere.radiusBottom);  // World origin is planet surface.
-	
-	RWTexture2DArray<float4> luminanceMap = textureArraysRW[bindData.luminanceTexture];
-	float width, height, depth;
-	luminanceMap.GetDimensions(width, height, depth);
-	
-	float2 uv = (dispatchId.xy + 0.5f) / width;
-	uv = uv * 2.f - 1.f;
-	float3 direction = normalize(ComputeDirection(uv, dispatchId.z));
-	
-	float3 sample = SampleAtmosphere(cameraPosition, direction, sunDirection, planetCenter);
-	luminanceMap[dispatchId] = float4(sample, 0.f);
-}
+ConstantBuffer<BindData> bindData : register(b0);
 
 [RootSignature(RS)]
 [numthreads(IRRADIANCE_MAP_SIZE, IRRADIANCE_MAP_SIZE, 1)]
 void IrradianceMain(uint3 dispatchId : SV_DispatchThreadID)
 {
-	RWTexture2DArray<float4> irradianceMap = textureArraysRW[bindData.convolutionTexture];
+	RWTexture2DArray<float4> irradianceMap = textureArraysRW[bindData.irradianceTexture];
 	TextureCube luminanceMap = textureCubes[bindData.luminanceTexture];
 	
 	float2 uv = (dispatchId.xy + 0.5f) / (float)IRRADIANCE_MAP_SIZE;
@@ -127,7 +64,7 @@ void IrradianceMain(uint3 dispatchId : SV_DispatchThreadID)
 			float phi = 0.5f * pi * ((float)j / float(steps - 1.f));
 			float3 tangentSpace = normalize(float3(sin(phi) * cos(theta), sin(phi) * sin(theta), cos(phi)));
 			float3 worldSpace = tangentSpace.x * left + tangentSpace.y * up + tangentSpace.z * forward;
-            float3 value = luminanceMap.SampleLevel(lutSampler, worldSpace, 0.f).rgb;
+			float3 value = luminanceMap.SampleLevel(lutSampler, worldSpace, 0.f).rgb;
 			irradianceSum += value * cos(phi) * sin(phi);  // Scaling improves light distribution.
 		}
 	}

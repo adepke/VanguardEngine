@@ -169,8 +169,8 @@ void Renderer::CreatePipelines()
 
 	GraphicsPipelineStateDescription atmosphereStateDesc;
 
-	atmosphereStateDesc.vertexShader = { "Atmosphere_VS", "main" };
-	atmosphereStateDesc.pixelShader = { "Atmosphere_PS", "main" };
+	atmosphereStateDesc.vertexShader = { "Atmosphere/Atmosphere_VS", "main" };
+	atmosphereStateDesc.pixelShader = { "Atmosphere/Atmosphere_PS", "main" };
 
 	atmosphereStateDesc.blendDescription.AlphaToCoverageEnable = false;
 	atmosphereStateDesc.blendDescription.IndependentBlendEnable = false;
@@ -375,6 +375,7 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 
 	atmosphere.Initialize(device.get());
 	clusteredCulling.Initialize(device.get());
+	ibl.Initialize(device.get());
 }
 
 void Renderer::Render(entt::registry& registry)
@@ -428,6 +429,7 @@ void Renderer::Render(entt::registry& registry)
 
 		list.BindPipelineState(pipelines["ForwardOpaque"]);
 		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
+		list.BindResourceTable("textureCubes", device->GetDescriptorAllocator().GetBindlessHeap());
 		list.BindResource("camera", resources.GetBuffer(cameraBufferTag));
 		list.BindResource("lights", lightBuffer);
 		list.BindResource("clusteredLightList", resources.GetBuffer(clusterResources.lightList));
@@ -453,6 +455,61 @@ void Renderer::Render(entt::registry& registry)
 		std::memcpy(clusterBufferData.data(), &clusterData, clusterBufferData.size() * sizeof(uint32_t));
 		list.BindConstants("clusterData", clusterBufferData);
 
+		struct IblData
+		{
+			uint32_t irradianceTexture;
+			uint32_t prefilterTexture;
+			uint32_t brdfTexture;
+			float padding;
+		} iblData;
+
+		const auto& irradianceComponent = device->GetResourceManager().Get(ibl.irradianceTexture);
+		
+		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
+		srvDesc.Format = irradianceComponent.description.format;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.TextureCube.MostDetailedMip = 0;
+		srvDesc.TextureCube.MipLevels = -1;
+		srvDesc.TextureCube.ResourceMinLODClamp = 0.f;
+
+		auto irradianceSRV = device->AllocateDescriptor(DescriptorType::Default);
+		device->Native()->CreateShaderResourceView(irradianceComponent.allocation->GetResource(), &srvDesc, irradianceSRV);
+
+		const auto& prefilterComponent = device->GetResourceManager().Get(ibl.prefilterTexture);
+
+		srvDesc.Format = prefilterComponent.description.format;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.TextureCube.MostDetailedMip = 0;
+		srvDesc.TextureCube.MipLevels = -1;
+		srvDesc.TextureCube.ResourceMinLODClamp = 0.f;
+
+		auto prefilterSRV = device->AllocateDescriptor(DescriptorType::Default);
+		device->Native()->CreateShaderResourceView(prefilterComponent.allocation->GetResource(), &srvDesc, prefilterSRV);
+
+		const auto& brdfComponent = device->GetResourceManager().Get(ibl.brdfTexture);
+
+		srvDesc.Format = brdfComponent.description.format;
+		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		srvDesc.Texture2D.MostDetailedMip = 0;
+		srvDesc.Texture2D.MipLevels = -1;
+		srvDesc.Texture2D.PlaneSlice = 0;
+		srvDesc.Texture2D.ResourceMinLODClamp = 0.f;
+
+		auto brdfSRV = device->AllocateDescriptor(DescriptorType::Default);
+		device->Native()->CreateShaderResourceView(brdfComponent.allocation->GetResource(), &srvDesc, brdfSRV);
+
+		iblData.irradianceTexture = irradianceSRV.bindlessIndex;
+		iblData.prefilterTexture = prefilterSRV.bindlessIndex;
+		iblData.brdfTexture = brdfSRV.bindlessIndex;
+		list.BindConstants("iblData", iblData);
+
+		device->GetResourceManager().AddFrameDescriptor(device->GetFrameIndex(), std::move(irradianceSRV));
+		device->GetResourceManager().AddFrameDescriptor(device->GetFrameIndex(), std::move(prefilterSRV));
+		device->GetResourceManager().AddFrameDescriptor(device->GetFrameIndex(), std::move(brdfSRV));
+
 		{
 			VGScopedGPUStat("Opaque", device->GetDirectContext(), list.Native());
 
@@ -468,6 +525,7 @@ void Renderer::Render(entt::registry& registry)
 		list.BindResource("clusteredLightList", resources.GetBuffer(clusterResources.lightList));
 		list.BindResource("clusteredLightInfo", resources.GetBuffer(clusterResources.lightInfo));
 		list.BindConstants("clusterData", clusterBufferData);
+		list.BindConstants("iblData", iblData);
 
 		{
 			VGScopedGPUStat("Transparent", device->GetDirectContext(), list.Native());
@@ -478,7 +536,10 @@ void Renderer::Render(entt::registry& registry)
 	});
 
 	// #TODO: Don't have this here.
-	atmosphere.Render(graph, pipelines, cameraBufferTag, depthStencilTag, outputHDRTag);
+	const auto luminanceTexture = atmosphere.Render(graph, pipelines, cameraBufferTag, depthStencilTag, outputHDRTag);
+
+	// #TODO: Don't have this here.
+	ibl.UpdateLuts(graph, luminanceTexture, cameraBufferTag);
 
 	auto& postProcessPass = graph.AddPass("Post Process Pass", ExecutionQueue::Graphics);
 	const auto outputLDRTag = postProcessPass.Create(TransientTextureDescription{
