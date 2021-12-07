@@ -40,26 +40,10 @@ struct AtmosphereBindData
 
 ConstantBuffer<AtmosphereBindData> bindData : register(b1);
 
-float3 SampleAtmosphere(float3 cameraPosition, float3 direction, float3 sunDirection, float3 planetCenter)
-{
-	Texture2D transmittanceLut = textures[bindData.transmissionTexture];
-	Texture3D scatteringLut = textures3D[bindData.scatteringTexture];
-	Texture2D irradianceLut = textures[bindData.irradianceTexture];
-	
-	float3 transmittance;
-	float3 radiance = GetSkyRadiance(bindData.atmosphere, transmittanceLut, scatteringLut, lutSampler, cameraPosition - planetCenter, direction, 0.f, sunDirection, transmittance);
-	
-	float4 planetRadiance = GetPlanetSurfaceRadiance(bindData.atmosphere, planetCenter, cameraPosition, direction, sunDirection, transmittanceLut, scatteringLut, irradianceLut, lutSampler);
-	radiance = lerp(radiance, planetRadiance.xyz, planetRadiance.w);
-	
-	return 1.f - exp(-radiance * 10.f);
-}
-
 [RootSignature(RS)]
 [numthreads(8, 8, 1)]
 void Main(uint3 dispatchId : SV_DispatchThreadID)
 {
-	float3 cameraPosition = camera.position.xyz / 1000.f;  // Atmosphere distances work in terms of kilometers due to floating point precision, so convert.
 	float3 sunDirection = float3(sin(bindData.solarZenithAngle), 0.f, cos(bindData.solarZenithAngle));
 	float3 planetCenter = float3(0.f, 0.f, -bindData.atmosphere.radiusBottom);  // World origin is planet surface.
 	
@@ -71,6 +55,10 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	uv = uv * 2.f - 1.f;
 	float3 direction = normalize(ComputeDirection(uv, dispatchId.z));
 	
-	float3 sample = SampleAtmosphere(cameraPosition, direction, sunDirection, planetCenter);
+	Texture2D transmittanceLut = textures[bindData.transmissionTexture];
+	Texture3D scatteringLut = textures3D[bindData.scatteringTexture];
+	Texture2D irradianceLut = textures[bindData.irradianceTexture];
+	
+	float3 sample = SampleAtmosphere(bindData.atmosphere, camera, direction, sunDirection, planetCenter, transmittanceLut, scatteringLut, irradianceLut, lutSampler);
 	luminanceMap[dispatchId] = float4(sample, 0.f);
 }

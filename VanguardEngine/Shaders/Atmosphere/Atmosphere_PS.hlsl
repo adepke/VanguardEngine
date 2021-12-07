@@ -34,8 +34,7 @@ struct Output
 
 [RootSignature(RS)]
 Output main(Input input)
-{   
-	float3 cameraPosition = camera.position.xyz / 1000.f;  // Atmosphere distances work in terms of kilometers due to floating point precision, so convert.
+{
 	float3 sunDirection = float3(sin(bindData.solarZenithAngle), 0.f, cos(bindData.solarZenithAngle));
 	float3 planetCenter = float3(0.f, 0.f, -bindData.atmosphere.radiusBottom);  // World origin is planet surface.
 	
@@ -45,20 +44,10 @@ Output main(Input input)
 	Texture3D scatteringLut = textures3D[bindData.scatteringTexture];
 	Texture2D irradianceLut = textures[bindData.irradianceTexture];
 	
-	float3 transmittance;
-	float3 radiance = GetSkyRadiance(bindData.atmosphere, transmittanceLut, scatteringLut, lutSampler, cameraPosition - planetCenter, rayDirection, 0.f, sunDirection, transmittance);
-	
-	// If the ray intersects the sun, add solar radiance.
-	if (dot(rayDirection, sunDirection) > cos(sunAngularRadius))
-	{
-		radiance += transmittance * GetSolarRadiance(bindData.atmosphere);
-	}
-	
-	float4 planetRadiance = GetPlanetSurfaceRadiance(bindData.atmosphere, planetCenter, cameraPosition, rayDirection, sunDirection, transmittanceLut, scatteringLut, irradianceLut, lutSampler);
-	radiance = lerp(radiance, planetRadiance.xyz, planetRadiance.w);
+	float3 atmosphere = SampleAtmosphere(bindData.atmosphere, camera, rayDirection, sunDirection, planetCenter, transmittanceLut, scatteringLut, irradianceLut, lutSampler);
 	
 	Output output;
-	output.color.rgb = 1.f - exp(-radiance * 10.f);
+	output.color.rgb = atmosphere;
 	output.color.a = 1.f;
 	
 	return output;

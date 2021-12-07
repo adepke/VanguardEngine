@@ -4,6 +4,7 @@
 #define __ATMOSPHERE_HLSLI__
 
 #include "Constants.hlsli"
+#include "Camera.hlsli"
 
 // Atmospheric scattering, inspired by "Precomputed Atmospheric Rendering" [https://hal.inria.fr/inria-00288758/en]
 // and with additions from Frostbite [https://media.contentapi.ea.com/content/dam/eacom/frostbite/files/s2016-pbs-frostbite-sky-clouds-new.pdf]
@@ -780,6 +781,26 @@ float4 GetPlanetSurfaceRadiance(AtmosphereData atmosphere, float3 planetCenter, 
 	}
 	
 	return 0.f;
+}
+
+float3 SampleAtmosphere(AtmosphereData atmosphere, Camera camera, float3 direction, float3 sunDirection, float3 planetCenter, Texture2D transmittanceLut, Texture3D scatteringLut, Texture2D irradianceLut, SamplerState lutSampler)
+{
+	static const float3 surfaceOffset = float3(0.f, 0.f, 1.f);  // The atmosphere looks better off of the surface.
+	float3 cameraPosition = camera.position.xyz / 1000.f + surfaceOffset;  // Atmosphere distances work in terms of kilometers due to floating point precision, so convert.
+	
+	float3 transmittance;
+	float3 radiance = GetSkyRadiance(atmosphere, transmittanceLut, scatteringLut, lutSampler, cameraPosition - planetCenter, direction, 0.f, sunDirection, transmittance);
+	
+	// If the ray intersects the sun, add solar radiance.
+	if (dot(direction, sunDirection) > cos(sunAngularRadius))
+	{
+		radiance += transmittance * GetSolarRadiance(atmosphere);
+	}
+	
+	float4 planetRadiance = GetPlanetSurfaceRadiance(atmosphere, planetCenter, cameraPosition, direction, sunDirection, transmittanceLut, scatteringLut, irradianceLut, lutSampler);
+	radiance = lerp(radiance, planetRadiance.xyz, planetRadiance.w);
+	
+	return 1.f - exp(-radiance * 10.f);
 }
 
 #endif  // __ATMOSPHERE_HLSLI__
