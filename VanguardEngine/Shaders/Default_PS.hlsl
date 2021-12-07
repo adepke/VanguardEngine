@@ -50,7 +50,7 @@ struct Output
 [RootSignature(RS)]
 Output main(Input input)
 {
-    float4 baseColor = { 1.f, 1.f, 1.f, 1.f };
+	float4 baseColor = { 1.f, 1.f, 1.f, 1.f };
 	
 	if (material.baseColor > 0)
 	{
