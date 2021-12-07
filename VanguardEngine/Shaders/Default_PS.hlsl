@@ -50,7 +50,7 @@ struct Output
 [RootSignature(RS)]
 Output main(Input input)
 {
-	float4 baseColor = { 1.f, 1.f, 1.f, 1.f };
+    float4 baseColor = { 1.f, 1.f, 1.f, 1.f };
 	
 	if (material.baseColor > 0)
 	{
@@ -104,7 +104,7 @@ Output main(Input input)
 	Material materialSample;
 	materialSample.baseColor = baseColor;
 	materialSample.metalness = metallicRoughness.r;
-	materialSample.roughness = metallicRoughness.g;
+	materialSample.roughness = metallicRoughness.g * metallicRoughness.g;  // Perceptually linear roughness remapping, from observations by Disney.
 	materialSample.normal = normal;
 	materialSample.occlusion = ambientOcclusion;
 	materialSample.emissive = emissive;
