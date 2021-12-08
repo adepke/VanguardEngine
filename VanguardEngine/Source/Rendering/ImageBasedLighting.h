@@ -36,6 +36,8 @@ private:
 	RenderDevice* device = nullptr;
 	bool brdfRendered = false;
 
+	uint32_t slice = 0;
+
 public:
 	~ImageBasedLighting();
 	void Initialize(RenderDevice* inDevice);

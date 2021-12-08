@@ -91,7 +91,7 @@ void ImageBasedLighting::UpdateLuts(RenderGraph& graph, RenderResource luminance
 				uint32_t luminanceTexture;
 				uint32_t convolutionTexture;
 				uint32_t brdfTexture;
-				float padding;
+				uint32_t cubeFace;
 				uint128_t prefilterMips[prefilterLevels];
 			} bindData;
 
@@ -149,7 +149,7 @@ void ImageBasedLighting::UpdateLuts(RenderGraph& graph, RenderResource luminance
 			uint32_t luminanceTexture;
 			uint32_t irradianceTexture;
 			uint32_t brdfTexture;
-			float padding;
+			uint32_t cubeFace;
 			uint128_t prefilterMips[prefilterLevels];
 		} bindData;
 		
@@ -214,11 +214,13 @@ void ImageBasedLighting::UpdateLuts(RenderGraph& graph, RenderResource luminance
 			uint32_t luminanceTexture;
 			uint32_t irradianceTexture;
 			uint32_t brdfTexture;
-			float padding;
+			uint32_t cubeFace;
 			uint128_t prefilterMips[prefilterLevels];
 		} bindData;
 		
 		bindData.luminanceTexture = luminanceSRV.bindlessIndex;
+		bindData.cubeFace = slice;
+		slice = (slice + 1) % 6;
 		for (int i = 0; i < prefilterLevels; ++i)
 		{
 			bindData.prefilterMips[i] = prefilterDescriptors[i].bindlessIndex;

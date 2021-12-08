@@ -29,7 +29,7 @@ struct BindData
 	uint luminanceTexture;
 	uint irradianceTexture;
 	uint brdfTexture;
-	float padding;
+	uint cubeFace;
 	// Boundary
 	uint prefilterMips[PREFILTER_LEVELS];
 };
@@ -108,12 +108,12 @@ void PrefilterMain(uint3 dispatchId : SV_DispatchThreadID)
 			uv = uv * 2.f - 1.f;
 	
 			// Simplified model.
-			float3 normal = normalize(ComputeDirection(uv, dispatchId.z));
+			float3 normal = normalize(ComputeDirection(uv, bindData.cubeFace));
 			float3 reflection = normal;
 			float3 view = reflection;
 		
-			// Sample count, importance sampled.
-			static const int steps = 1024;
+			// Sample count.
+			const int steps = roughness * 256 + 1;
 			float sumWeight = 0.f;
 			float3 sumSamples = 0.f;
 	
@@ -140,7 +140,7 @@ void PrefilterMain(uint3 dispatchId : SV_DispatchThreadID)
 				}
 			}
 	
-			prefilterMap[uint3(pixel, dispatchId.z)] = float4(sumSamples / sumWeight, 0.f);
+			prefilterMap[uint3(pixel, bindData.cubeFace)] = float4(sumSamples / sumWeight, 0.f);
 		}
 	}
 }
