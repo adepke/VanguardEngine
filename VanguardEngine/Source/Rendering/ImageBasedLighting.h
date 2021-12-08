@@ -19,7 +19,7 @@ private:
 	static constexpr uint32_t prefilterLevels = 6;  // Roughness bins, must be <= lg(prefilterTextureSize).
 	static constexpr uint32_t brdfTextureSize = 512;
 
-	static_assert(irradianceTextureSize <= 32, "irradianceTextureSize must be less than or equal to 32.");
+	static_assert(irradianceTextureSize % 8 == 0, "irradianceTextureSize must be evenly divisible by 8.");
 	static_assert(prefilterTextureSize % 8 == 0, "prefilterTextureSize must be evenly divisible by 8.");
 	static_assert(brdfTextureSize % 8 == 0, "brdfTextureSize must be evenly divisible by 8.");
 

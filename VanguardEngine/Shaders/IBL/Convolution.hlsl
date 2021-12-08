@@ -37,13 +37,16 @@ struct BindData
 ConstantBuffer<BindData> bindData : register(b0);
 
 [RootSignature(RS)]
-[numthreads(IRRADIANCE_MAP_SIZE, IRRADIANCE_MAP_SIZE, 1)]
+[numthreads(8, 8, 1)]
 void IrradianceMain(uint3 dispatchId : SV_DispatchThreadID)
 {
 	RWTexture2DArray<float4> irradianceMap = textureArraysRW[bindData.irradianceTexture];
 	TextureCube luminanceMap = textureCubes[bindData.luminanceTexture];
 	
-	float2 uv = (dispatchId.xy + 0.5f) / (float)IRRADIANCE_MAP_SIZE;
+	float width, height, elements;
+	irradianceMap.GetDimensions(width, height, elements);
+	
+	float2 uv = (dispatchId.xy + 0.5f) / width;
 	uv = uv * 2.f - 1.f;
 	
 	float3 forward = normalize(ComputeDirection(uv, dispatchId.z));

@@ -20,7 +20,6 @@ void ImageBasedLighting::Initialize(RenderDevice* inDevice)
 
 	ComputePipelineStateDescription convolutionState;
 	convolutionState.shader = { "IBL/Convolution", "IrradianceMain" };
-	convolutionState.macros.emplace_back("IRRADIANCE_MAP_SIZE", irradianceTextureSize);
 	convolutionState.macros.emplace_back("PREFILTER_LEVELS", prefilterLevels);
 	irradiancePrecompute.Build(*device, convolutionState);
 
@@ -168,7 +167,7 @@ void ImageBasedLighting::UpdateLuts(RenderGraph& graph, RenderResource luminance
 		list.BindResourceTable("textureCubes", device->GetDescriptorAllocator().GetBindlessHeap());
 		list.BindResourceTable("textureArraysRW", device->GetDescriptorAllocator().GetBindlessHeap());
 
-		list.Native()->Dispatch(1, 1, 6);
+		list.Native()->Dispatch(irradianceTextureSize / 8, irradianceTextureSize / 8, 6);
 
 		device->GetResourceManager().AddFrameDescriptor(device->GetFrameIndex(), std::move(luminanceSRV));
 		device->GetResourceManager().AddFrameDescriptor(device->GetFrameIndex(), std::move(irradianceUAV));
