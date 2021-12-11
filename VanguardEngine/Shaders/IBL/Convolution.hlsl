@@ -72,7 +72,7 @@ void IrradianceMain(uint3 dispatchId : SV_DispatchThreadID)
 		}
 	}
 	
-	irradianceMap[dispatchId] = float4(pi * irradianceSum / (float)steps, 0.f);
+	irradianceMap[dispatchId] = float4(irradianceSum / (float)steps, 0.f);
 }
 
 [RootSignature(RS)]

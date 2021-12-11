@@ -8,7 +8,7 @@
 
 // Performs diffuse and specular IBL.
 float3 ComputeIBL(float3 normalDirection, float3 viewDirection, Material material, uint prefilterLevels, TextureCube irradianceLut, TextureCube prefilterLut, Texture2D brdfLut, SamplerState lutSampler)
-{	
+{
 	float3 reflectionDirection = reflect(-viewDirection, normalDirection);
 	// Note that prefilterLevels is most likely smaller than the mip levels of the prefilter map. This reduces glowing rim artifacts on
 	// highly rough metals due to losing too much data in the prefilter map.
