@@ -11,7 +11,13 @@ struct MaterialData
 	uint occlusion;
 	// Boundary
 	uint emissive;
-	float3 padding;
+	float3 emissiveFactor;
+	// Boundary
+	float4 baseColorFactor;
+	// Boundary
+	float metallicFactor;
+	float roughnessFactor;
+	float2 padding;
 };
 
 struct Material

@@ -25,6 +25,20 @@ struct Camera
 	float aspectRatio;
 };
 
+struct MaterialData
+{
+	uint32_t baseColor;
+	uint32_t metallicRoughness;
+	uint32_t normal;
+	uint32_t occlusion;
+	uint32_t emissive;
+	XMFLOAT3 emissiveFactor;
+	XMFLOAT4 baseColorFactor;
+	float metallicFactor;
+	float roughnessFactor;
+	XMFLOAT2 padding;
+};
+
 struct Light
 {
 	XMFLOAT3 position;

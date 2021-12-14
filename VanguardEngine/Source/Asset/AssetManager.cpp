@@ -3,6 +3,7 @@
 #include <Asset/AssetManager.h>
 #include <Asset/AssetLoader.h>
 #include <Rendering/Renderer.h>
+#include <Rendering/ShaderStructs.h>
 
 MeshComponent AssetManager::LoadModel(const std::filesystem::path& path)
 {
@@ -54,23 +55,27 @@ void AssetManager::Update()
 		return device->GetResourceManager().Get(resource).SRV->bindlessIndex;
 	};
 
-	std::vector<uint32_t> table{};
-	table.resize(8);
-
+	MaterialData materialData;
 	// #TODO: Include asset name in texture name.
-	table[0] = CreateTexture(material.pbrMetallicRoughness.baseColorTexture.index, VGText("Base color asset texture"), DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, true);
-	table[1] = CreateTexture(material.pbrMetallicRoughness.metallicRoughnessTexture.index, VGText("Metallic roughness asset texture"), DXGI_FORMAT_R8G8B8A8_UNORM, true);
-	table[2] = CreateTexture(material.normalTexture.index, VGText("Normal asset texture"), DXGI_FORMAT_R8G8B8A8_UNORM, true);
-	table[3] = CreateTexture(material.occlusionTexture.index, VGText("Occlusion asset texture"), DXGI_FORMAT_R8G8B8A8_UNORM, false);
-	table[4] = CreateTexture(material.emissiveTexture.index, VGText("Emissive asset texture"), DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, false);
-	table[5] = 0;
-	table[6] = 0;
-	table[7] = 0;
+	materialData.baseColor = CreateTexture(material.pbrMetallicRoughness.baseColorTexture.index, VGText("Base color asset texture"), DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, true);
+	materialData.metallicRoughness = CreateTexture(material.pbrMetallicRoughness.metallicRoughnessTexture.index, VGText("Metallic roughness asset texture"), DXGI_FORMAT_R8G8B8A8_UNORM, true);
+	materialData.normal = CreateTexture(material.normalTexture.index, VGText("Normal asset texture"), DXGI_FORMAT_R8G8B8A8_UNORM, true);
+	materialData.occlusion = CreateTexture(material.occlusionTexture.index, VGText("Occlusion asset texture"), DXGI_FORMAT_R8G8B8A8_UNORM, false);
+	materialData.emissive = CreateTexture(material.emissiveTexture.index, VGText("Emissive asset texture"), DXGI_FORMAT_R8G8B8A8_UNORM_SRGB, false);
+	materialData.emissiveFactor.x = static_cast<float>(material.emissiveFactor[0]);
+	materialData.emissiveFactor.y = static_cast<float>(material.emissiveFactor[1]);
+	materialData.emissiveFactor.z = static_cast<float>(material.emissiveFactor[2]);
+	materialData.baseColorFactor.x = static_cast<float>(material.pbrMetallicRoughness.baseColorFactor[0]);
+	materialData.baseColorFactor.y = static_cast<float>(material.pbrMetallicRoughness.baseColorFactor[1]);
+	materialData.baseColorFactor.z = static_cast<float>(material.pbrMetallicRoughness.baseColorFactor[2]);
+	materialData.baseColorFactor.w = static_cast<float>(material.pbrMetallicRoughness.baseColorFactor[3]);
+	materialData.metallicFactor = static_cast<float>(material.pbrMetallicRoughness.metallicFactor);
+	materialData.roughnessFactor = static_cast<float>(material.pbrMetallicRoughness.roughnessFactor);
 
-	std::vector<uint8_t> tableData{};
-	tableData.resize(table.size() * sizeof(uint32_t));
-	std::memcpy(tableData.data(), table.data(), tableData.size());
+	std::vector<uint8_t> materialBytes{};
+	materialBytes.resize(sizeof(materialData));
+	std::memcpy(materialBytes.data(), &materialData, materialBytes.size());
 
-	device->GetResourceManager().Write(buffer, tableData);
+	device->GetResourceManager().Write(buffer, materialBytes);
 	device->GetDirectList().TransitionBarrier(buffer, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
 }

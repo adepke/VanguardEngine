@@ -2,6 +2,8 @@
 
 #include "Default_RS.hlsli"
 #include "Base.hlsli"
+#include "Camera.hlsli"
+#include "Material.hlsli"
 #include "Light.hlsli"
 #include "Clusters/Clusters.hlsli"
 #include "IBL/ImageBasedLighting.hlsli"
@@ -60,10 +62,10 @@ Output main(Input input)
 		clip(baseColor.a < alphaTestThreshold ? -1 : 1);
 	}
 	
-	float2 metallicRoughness = { 0.0, 0.0 };
+	float2 metallicRoughness = { 1.0, 1.0 };
 	float3 normal = input.normal;
 	float ambientOcclusion = 1.0;
-	float3 emissive = { 0.0, 0.0, 0.0 };
+	float3 emissive = { 1.0, 1.0, 1.0 };
 
 	if (material.metallicRoughness > 0)
 	{
@@ -93,6 +95,10 @@ Output main(Input input)
 		Texture2D emissiveMap = textures[material.emissive];
 		emissive = emissiveMap.Sample(defaultSampler, input.uv).rgb;
 	}
+	
+	baseColor *= material.baseColorFactor;
+	metallicRoughness *= float2(material.metallicFactor, material.roughnessFactor);
+	emissive *= material.emissiveFactor;
 
 	Output output;
 	output.color.rgb = float3(0.0, 0.0, 0.0);
@@ -127,6 +133,8 @@ Output main(Input input)
 	
 	float3 ibl = ComputeIBL(normalDirection, viewDirection, materialSample, iblData.prefilterLevels, irradianceMap, prefilterMap, brdfMap, defaultSampler);
 	output.color.rgb += ibl;
+	
+	output.color.rgb += materialSample.emissive;
 	
 	return output;
 }

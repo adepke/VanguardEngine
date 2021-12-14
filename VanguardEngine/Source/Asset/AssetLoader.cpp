@@ -8,6 +8,7 @@
 #include <Rendering/PrimitiveAssembly.h>
 #include <Rendering/MeshFactory.h>
 #include <Rendering/Resource.h>
+#include <Rendering/ShaderStructs.h>
 #include <Utility/StringTools.h>
 
 #define TINYGLTF_IMPLEMENTATION
@@ -26,22 +27,13 @@ namespace AssetLoader
 		Material result;
 		result.transparent = material.alphaMode != "OPAQUE";
 
-		// #TODO: Conform to PBR specification, including terms such as emissive factor.
-		// Table layout:
-		// Base color texture
-		// Metallic roughness texture
-		// Normal texture
-		// Occlusion texture
-		// Emissive texture
-		// Padding[3]
-
 		// #TODO: Single buffer for all materials.
 		BufferDescription tableDesc{
 			.updateRate = ResourceFrequency::Static,
 			.bindFlags = BindFlag::ConstantBuffer,
 			.accessFlags = AccessFlag::CPUWrite,
 			.size = 1,
-			.stride = 8 * sizeof(uint32_t)
+			.stride = sizeof(MaterialData)
 		};
 
 		result.materialBuffer = device.GetResourceManager().Create(tableDesc, VGText("Material table"));
