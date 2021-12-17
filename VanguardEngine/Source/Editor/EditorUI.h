@@ -22,6 +22,8 @@ class ClusteredLightCulling;
 class EditorUI
 {
 private:
+	bool enabled = true;
+
 	entt::entity hierarchySelectedEntity = entt::null;
 	bool linearizeDepth = true;
 

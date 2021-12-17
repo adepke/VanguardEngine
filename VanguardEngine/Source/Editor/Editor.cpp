@@ -9,6 +9,8 @@
 #include <Rendering/Device.h>
 #include <Rendering/Renderer.h>
 #include <Rendering/ClusteredLightCulling.h>
+
+#include <imgui.h>
 #endif
 
 Editor::Editor()
@@ -27,38 +29,71 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 	RenderResource outputLDR, RenderResource backBuffer, const ClusterResources& clusterResources)
 {
 #if ENABLE_EDITOR
-	// Render the active overlay if there is one.
-	RenderResource activeOverlayTag{};
-	switch (ui->activeOverlay)
+	// Allow toggling the editor rendering entirely with F1.
+	auto& io = ImGui::GetIO();
+	static bool newPress = true;
+	if (io.KeysDown[0x70])
 	{
-	case RenderOverlay::Clusters: activeOverlayTag = renderer.clusteredCulling.RenderDebugOverlay(graph, clusterResources.lightInfo, clusterResources.lightVisibility); break;
-	default: break;
+		if (newPress)
+		{
+			enabled = !enabled;
+			newPress = false;
+		}
 	}
 
-	auto& editorPass = graph.AddPass("Editor Pass", ExecutionQueue::Graphics);
-	editorPass.Read(cameraBuffer, ResourceBind::CBV);
-	editorPass.Read(depthStencil, ResourceBind::SRV);
-	editorPass.Read(outputLDR, ResourceBind::SRV);
-	if (ui->activeOverlay != RenderOverlay::None)
+	else
 	{
-		editorPass.Read(activeOverlayTag, ResourceBind::SRV);
+		newPress = true;
 	}
-	editorPass.Output(backBuffer, OutputBind::RTV, LoadType::Ignore);
-	editorPass.Bind([&, cameraBuffer, depthStencil, outputLDR, activeOverlayTag](CommandList& list, RenderGraphResourceManager& resources)
+
+	if (enabled)
 	{
-		renderer.userInterface->NewFrame();
+		// Render the active overlay if there is one.
+		RenderResource activeOverlayTag{};
+		switch (ui->activeOverlay)
+		{
+		case RenderOverlay::Clusters: activeOverlayTag = renderer.clusteredCulling.RenderDebugOverlay(graph, clusterResources.lightInfo, clusterResources.lightVisibility); break;
+		default: break;
+		}
 
-		ui->DrawLayout();
-		ui->DrawDemoWindow();
-		ui->DrawScene(&device, registry, resources.GetTexture(outputLDR));
-		ui->DrawEntityHierarchy(registry);
-		ui->DrawEntityPropertyViewer(registry);
-		ui->DrawPerformanceMetrics(renderer.lastFrameTime);
-		ui->DrawRenderGraph(&device, resources.GetTexture(depthStencil), resources.GetTexture(outputLDR));
-		ui->DrawAtmosphereControls(renderer.atmosphere);
-		ui->DrawRenderVisualizer(&device, renderer.clusteredCulling, ui->activeOverlay != RenderOverlay::None ? resources.GetTexture(activeOverlayTag) : TextureHandle{});
+		auto& editorPass = graph.AddPass("Editor Pass", ExecutionQueue::Graphics);
+		editorPass.Read(cameraBuffer, ResourceBind::CBV);
+		editorPass.Read(depthStencil, ResourceBind::SRV);
+		editorPass.Read(outputLDR, ResourceBind::SRV);
+		if (ui->activeOverlay != RenderOverlay::None)
+		{
+			editorPass.Read(activeOverlayTag, ResourceBind::SRV);
+		}
+		editorPass.Output(backBuffer, OutputBind::RTV, LoadType::Ignore);
+		editorPass.Bind([&, cameraBuffer, depthStencil, outputLDR, activeOverlayTag](CommandList& list, RenderGraphResourceManager& resources)
+		{
+			renderer.userInterface->NewFrame();
 
-		renderer.userInterface->Render(list, resources.GetBuffer(cameraBuffer));
-	});
+			ui->DrawLayout();
+			ui->DrawDemoWindow();
+			ui->DrawScene(&device, registry, resources.GetTexture(outputLDR));
+			ui->DrawEntityHierarchy(registry);
+			ui->DrawEntityPropertyViewer(registry);
+			ui->DrawPerformanceMetrics(renderer.lastFrameTime);
+			ui->DrawRenderGraph(&device, resources.GetTexture(depthStencil), resources.GetTexture(outputLDR));
+			ui->DrawAtmosphereControls(renderer.atmosphere);
+			ui->DrawRenderVisualizer(&device, renderer.clusteredCulling, ui->activeOverlay != RenderOverlay::None ? resources.GetTexture(activeOverlayTag) : TextureHandle{});
+
+			renderer.userInterface->Render(list, resources.GetBuffer(cameraBuffer));
+		});
+	}
+
+	else
+	{
+		// No editor rendering, just copy outputLDR to the back buffer.
+
+		auto& editorPass = graph.AddPass("Editor Pass", ExecutionQueue::Graphics);
+		editorPass.Read(outputLDR, ResourceBind::SRV);
+		editorPass.Output(backBuffer, OutputBind::RTV, LoadType::Ignore);
+		editorPass.Bind([&, outputLDR](CommandList& list, RenderGraphResourceManager& resources)
+		{
+			list.Copy(resources.GetTexture(backBuffer), resources.GetTexture(outputLDR));
+		});
+	}
 #endif
 }

@@ -246,6 +246,30 @@ void CommandList::DrawFullscreenQuad()
 	list->DrawInstanced(3, 1, 0, 0);
 }
 
+void CommandList::Copy(BufferHandle destination, BufferHandle source)
+{
+	TransitionBarrier(destination, D3D12_RESOURCE_STATE_COPY_DEST);
+	TransitionBarrier(source, D3D12_RESOURCE_STATE_COPY_SOURCE);
+	FlushBarriers();
+
+	auto& destinationComponent = device->GetResourceManager().Get(destination);
+	auto& sourceComponent = device->GetResourceManager().Get(source);
+
+	list->CopyResource(destinationComponent.Native(), sourceComponent.Native());
+}
+
+void CommandList::Copy(TextureHandle destination, TextureHandle source)
+{
+	TransitionBarrier(destination, D3D12_RESOURCE_STATE_COPY_DEST);
+	TransitionBarrier(source, D3D12_RESOURCE_STATE_COPY_SOURCE);
+	FlushBarriers();
+
+	auto& destinationComponent = device->GetResourceManager().Get(destination);
+	auto& sourceComponent = device->GetResourceManager().Get(source);
+
+	list->CopyResource(destinationComponent.Native(), sourceComponent.Native());
+}
+
 HRESULT CommandList::Close()
 {
 	return list->Close();

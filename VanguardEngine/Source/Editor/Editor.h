@@ -17,6 +17,7 @@ class Editor : public Singleton<Editor>
 {
 private:
 #if ENABLE_EDITOR
+	bool enabled = true;
 	std::unique_ptr<EditorUI> ui;  // Maintains all user interface state.
 #endif
 

@@ -56,6 +56,9 @@ public:
 
 	void DrawFullscreenQuad();
 
+	void Copy(BufferHandle destination, BufferHandle source);
+	void Copy(TextureHandle destination, TextureHandle source);
+
 	HRESULT Close();
 	HRESULT Reset();
 };
