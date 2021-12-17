@@ -21,7 +21,7 @@ struct GraphicsPipelineStateDescription
 	D3D12_BLEND_DESC blendDescription;
 	D3D12_RASTERIZER_DESC rasterizerDescription;
 	D3D12_DEPTH_STENCIL_DESC depthStencilDescription;
-	D3D12_PRIMITIVE_TOPOLOGY topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP;
+	D3D12_PRIMITIVE_TOPOLOGY topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 };
 
 struct ComputePipelineStateDescription
