@@ -155,7 +155,7 @@ void BRDFMain(uint3 dispatchId : SV_DispatchThreadID)
 	
 	float2 uv = (dispatchId.xy + 0.5f) / float2(width, height);
 	float normalDotView = uv.x;
-	float roughness = uv.y;
+	float roughness = 1.f - uv.y;
 	
 	float3 view = float3(sqrt(1.f - normalDotView * normalDotView), 0.f, normalDotView);
 	float3 normal = float3(0.f, 0.f, 1.f);
