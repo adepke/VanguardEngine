@@ -36,6 +36,8 @@ struct BindData
 
 ConstantBuffer<BindData> bindData : register(b0);
 
+// Reference: https://cdn2.unrealengine.com/Resources/files/2013SiggraphPresentationsNotes-26915738.pdf
+
 [RootSignature(RS)]
 [numthreads(8, 8, 1)]
 void IrradianceMain(uint3 dispatchId : SV_DispatchThreadID)
@@ -72,7 +74,8 @@ void IrradianceMain(uint3 dispatchId : SV_DispatchThreadID)
 		}
 	}
 	
-	irradianceMap[dispatchId] = float4(irradianceSum / (float)steps, 0.f);
+	const float samples = steps * steps;
+	irradianceMap[dispatchId] = float4(pi * irradianceSum / samples, 0.f);
 }
 
 [RootSignature(RS)]
@@ -107,7 +110,7 @@ void PrefilterMain(uint3 dispatchId : SV_DispatchThreadID)
 			float2 uv = (pixel + 0.5f) / width;
 			uv = uv * 2.f - 1.f;
 	
-			// Simplified model.
+			// Assuming normal = view results in reduced highlights at grazing angles.
 			float3 normal = normalize(ComputeDirection(uv, bindData.cubeFace));
 			float3 reflection = normal;
 			float3 view = reflection;
