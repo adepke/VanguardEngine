@@ -29,13 +29,13 @@ public:
 	bool vSync = false;
 	uint32_t renderWidth = 10;
 	uint32_t renderHeight = 10;
-	bool fullscreen = false;
 
 	static constexpr uint32_t frameCount = 3;  // #TODO: Determine at runtime.
 
 private:
 	const D3D_FEATURE_LEVEL targetFeatureLevel = D3D_FEATURE_LEVEL_12_1;
 	const D3D_SHADER_MODEL targetShaderModel = D3D_SHADER_MODEL_6_3;
+	uint32_t swapChainFlags = 0;
 
 	// #NOTE: Ordering of these variables is significant for proper destruction!
 	ResourcePtr<ID3D12Device5> device;
@@ -113,5 +113,5 @@ public:
 	auto& GetDescriptorAllocator() noexcept { return descriptorManager; }
 	auto& GetResourceManager() noexcept { return resourceManager; }
 
-	void SetResolution(uint32_t width, uint32_t height, bool inFullscreen);
+	void SetResolution(uint32_t width, uint32_t height, bool fullscreen);
 };

@@ -8,18 +8,19 @@
 #include <Core/Windows/WindowsMinimal.h>
 
 constexpr auto windowStyle = WS_OVERLAPPED | WS_SYSMENU | WS_MAXIMIZEBOX | WS_MINIMIZEBOX | WS_SIZEBOX | WS_VISIBLE | CS_HREDRAW | CS_VREDRAW;
+constexpr auto windowStyleBorderless = 0;
 constexpr auto windowStyleEx = 0;
 constexpr auto windowClassStyle = CS_CLASSDC;
 constexpr auto windowClassName = VGText("VanguardEngine");
 
-RECT CreateCenteredRect(uint32_t width, uint32_t height)
+RECT CreateCenteredRect(uint32_t width, uint32_t height, bool fullscreen)
 {
 	RECT result{};
 	result.left = (::GetSystemMetrics(SM_CXSCREEN) / 2) - (static_cast<int>(width) / 2);
 	result.top = (::GetSystemMetrics(SM_CYSCREEN) / 2) - (static_cast<int>(height) / 2);
 	result.right = result.left + static_cast<int>(width);
 	result.bottom = result.top + static_cast<int>(height);
-	::AdjustWindowRect(&result, windowStyle, false);
+	::AdjustWindowRect(&result, fullscreen ? windowStyleBorderless : windowStyle, false);
 
 	return result;
 }
@@ -49,8 +50,7 @@ int64_t __stdcall WndProc(void* hWnd, uint32_t msg, uint64_t wParam, int64_t lPa
 	case WM_SIZE:
 		if (wParam != SIZE_MINIMIZED && owningFrame->onSizeChanged)
 		{
-			// #TODO: Handle fullscreen.
-			owningFrame->onSizeChanged(static_cast<uint32_t>(LOWORD(lParam)), static_cast<uint32_t>(HIWORD(lParam)), false);
+			owningFrame->onSizeChanged(static_cast<uint32_t>(LOWORD(lParam)), static_cast<uint32_t>(HIWORD(lParam)));
 		}
 
 		return 0;
@@ -81,13 +81,18 @@ int64_t __stdcall WndProc(void* hWnd, uint32_t msg, uint64_t wParam, int64_t lPa
 	return Input::ProcessWindowMessage(hWnd, msg, wParam, lParam) ? 0 : ::DefWindowProc(static_cast<HWND>(hWnd), msg, wParam, lParam);
 }
 
-WindowFrame::WindowFrame(const std::wstring& title, uint32_t width, uint32_t height)
+WindowFrame::WindowFrame(const std::wstring& title, uint32_t inWidth, uint32_t inHeight)
 {
 	VGScopedCPUStat("Create Window");
 
+	width = inWidth;
+	height = inHeight;
+	oldWidth = width;
+	oldHeight = height;
+
 	const auto moduleHandle = ::GetModuleHandle(nullptr);
 
-	auto windowRect{ CreateCenteredRect(width, height) };
+	auto windowRect{ CreateCenteredRect(width, height, fullscreen) };
 
 	WNDCLASSEX windowDesc{};
 	windowDesc.cbSize = sizeof(windowDesc);
@@ -157,25 +162,60 @@ void WindowFrame::SetTitle(const std::wstring& title)
 	}
 }
 
-void WindowFrame::SetSize(uint32_t width, uint32_t height)
+void WindowFrame::SetSize(uint32_t inWidth, uint32_t inHeight, bool inFullscreen)
 {
 	VGScopedCPUStat("Set Window Size");
 
-	const auto rect{ CreateCenteredRect(width, height) };
+	bool frameChanged = false;
+	if (fullscreen != inFullscreen)
+	{
+		frameChanged = true;
+		::SetWindowLongPtr(static_cast<HWND>(handle), GWL_STYLE, inFullscreen ? windowStyleBorderless : windowStyle);
+	}
+
+	fullscreen = inFullscreen;
+	if (fullscreen)
+	{
+		// Entering fullscreen.
+		inWidth = ::GetSystemMetrics(SM_CXSCREEN);
+		inHeight = ::GetSystemMetrics(SM_CYSCREEN);
+		oldWidth = width;
+		oldHeight = height;
+	}
+
+	else if (frameChanged)
+	{
+		// Leaving fullscreen.
+		inWidth = oldWidth;
+		inHeight = oldHeight;
+	}
+
+	width = inWidth;
+	height = inHeight;
+
+	const auto rect = CreateCenteredRect(width, height, fullscreen);
+
+	auto positionFlags = SWP_NOACTIVATE;
+	if (frameChanged)
+	{
+		positionFlags |= SWP_FRAMECHANGED;
+	}
 
 	const auto result = ::SetWindowPos(
 		static_cast<HWND>(handle),
-		HWND_NOTOPMOST,
+		fullscreen ? HWND_TOP : HWND_NOTOPMOST,
 		rect.left,
 		rect.top,
 		rect.right - rect.left,
 		rect.bottom - rect.top,
-		0);  // Possibly SWP_NOREPOSITION
+		positionFlags);
 
 	if (!result)
 	{
 		VGLogError(logWindow, "Failed to set size to: ({}, {}): {}", width, height, GetPlatformError());
 	}
+
+	::ShowWindow(static_cast<HWND>(handle), fullscreen ? SW_MAXIMIZE : SW_NORMAL);
 
 	// Window size updated, we need to update the clipping bounds.
 	RestrainCursor(activeCursorRestraint);

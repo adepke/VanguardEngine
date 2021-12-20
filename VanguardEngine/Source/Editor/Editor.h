@@ -25,6 +25,7 @@ public:
 	Editor();
 	~Editor();
 
+	void Update();
 	void Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer, entt::registry& registry, RenderResource cameraBuffer, RenderResource depthStencil,
 		RenderResource outputLDR, RenderResource backBuffer, const ClusterResources& clusterResources);
 };

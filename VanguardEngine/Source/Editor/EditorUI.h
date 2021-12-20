@@ -27,6 +27,8 @@ private:
 	entt::entity hierarchySelectedEntity = entt::null;
 	bool linearizeDepth = true;
 
+	bool fullscreen = false;
+
 	// Window states.
 	bool entityHierarchyOpen = true;
 	bool entityPropertyViewerOpen = true;
@@ -58,6 +60,7 @@ private:
 	void DrawFrameTimeHistory();
 
 public:
+	void Update();
 	void DrawLayout();
 	void DrawDemoWindow();
 	void DrawScene(RenderDevice* device, entt::registry& registry, TextureHandle sceneTexture);

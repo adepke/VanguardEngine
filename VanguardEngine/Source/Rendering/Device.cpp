@@ -243,6 +243,21 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 		}
 	}
 
+	uint32_t hasTearing = false;
+	result = factory->CheckFeatureSupport(DXGI_FEATURE_PRESENT_ALLOW_TEARING, &hasTearing, sizeof(hasTearing));
+	if (FAILED(result))
+	{
+		hasTearing = false;
+		VGLogError(logRendering, "Failed to check present tearing feature support: {}", result);
+	}
+
+	if (hasTearing)
+	{
+		swapChainFlags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;
+	}
+
+	VGLog(logRendering, "Swap chain tearing {}.", hasTearing ? VGText("enabled") : VGText("disabled"));
+
 	DXGI_SWAP_CHAIN_DESC1 swapChainDescription{};
 	swapChainDescription.Width = renderWidth;
 	swapChainDescription.Height = renderHeight;
@@ -254,17 +269,10 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 	swapChainDescription.SampleDesc.Quality = 0;
 	swapChainDescription.AlphaMode = DXGI_ALPHA_MODE_IGNORE;
 	swapChainDescription.Stereo = false;
-	swapChainDescription.Flags = DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING;  // #TODO: Check for tearing support before enabling.
-
-	DXGI_SWAP_CHAIN_FULLSCREEN_DESC swapChainFSDescription{};
-	swapChainFSDescription.RefreshRate.Numerator = 60;  // #TODO: Determine this based on the current monitor refresh rate?
-	swapChainFSDescription.RefreshRate.Denominator = 1;
-	swapChainFSDescription.Scaling = DXGI_MODE_SCALING_UNSPECIFIED;  // Required for proper scaling.
-	swapChainFSDescription.ScanlineOrdering = DXGI_MODE_SCANLINE_ORDER_PROGRESSIVE;
-	swapChainFSDescription.Windowed = !fullscreen;
+	swapChainDescription.Flags = swapChainFlags;
 
 	Microsoft::WRL::ComPtr<IDXGISwapChain1> swapChainWrapper;
-	result = factory->CreateSwapChainForHwnd(directCommandQueue.Get(), static_cast<HWND>(window), &swapChainDescription, &swapChainFSDescription, nullptr, &swapChainWrapper);
+	result = factory->CreateSwapChainForHwnd(directCommandQueue.Get(), static_cast<HWND>(window), &swapChainDescription, nullptr, nullptr, &swapChainWrapper);
 	if (FAILED(result))
 	{
 		VGLogCritical(logRendering, "Failed to create swap chain: {}", result);
@@ -277,7 +285,7 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 	result = factory->MakeWindowAssociation(static_cast<HWND>(window), DXGI_MWA_NO_ALT_ENTER);
 	if (FAILED(result))
 	{
-		VGLogCritical(logRendering, "Failed to bind device to window: {}", result);
+		VGLogCritical(logRendering, "Failed to make window association: {}", result);
 	}
 
 	syncValues.resize(frameCount, 0);
@@ -589,7 +597,7 @@ void RenderDevice::AdvanceGPU()
 	VGStatFrameGPU(directContext);
 }
 
-void RenderDevice::SetResolution(uint32_t width, uint32_t height, bool inFullscreen)
+void RenderDevice::SetResolution(uint32_t width, uint32_t height, bool fullscreen)
 {
 	VGScopedCPUStat("Render Device Change Resolution");
 
@@ -603,9 +611,6 @@ void RenderDevice::SetResolution(uint32_t width, uint32_t height, bool inFullscr
 
 	renderWidth = width;
 	renderHeight = height;
-	fullscreen = inFullscreen;
-
-	// #TODO: Fullscreen.
 
 	// Release the swap chain frame surfaces.
 	for (const auto texture : backBufferTextures)
@@ -613,8 +618,13 @@ void RenderDevice::SetResolution(uint32_t width, uint32_t height, bool inFullscr
 		resourceManager.Destroy(texture);
 	}
 
-	// #TODO: Don't duplicate flags, use the original swap chain flags.
-	auto result = swapChain->ResizeBuffers(static_cast<UINT>(frameCount), static_cast<UINT>(width), static_cast<UINT>(height), DXGI_FORMAT_UNKNOWN, DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING);
+	auto result = swapChain->SetFullscreenState(fullscreen, nullptr);
+	if (FAILED(result))
+	{
+		VGLogError(logRendering, "Failed to set swap chain fullscreen state: {}", result);
+	}
+
+	result = swapChain->ResizeBuffers(static_cast<UINT>(frameCount), static_cast<UINT>(width), static_cast<UINT>(height), DXGI_FORMAT_UNKNOWN, swapChainFlags);
 	if (FAILED(result))
 	{
 		VGLogCritical(logRendering, "Failed to resize swap chain buffers: {}", result);

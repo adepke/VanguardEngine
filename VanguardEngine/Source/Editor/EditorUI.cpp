@@ -2,6 +2,7 @@
 
 #include <Editor/EditorUI.h>
 #include <Rendering/Device.h>
+#include <Rendering/Renderer.h>
 #include <Core/CoreComponents.h>
 #include <Rendering/RenderComponents.h>
 #include <Editor/EntityReflection.h>
@@ -26,6 +27,13 @@ void EditorUI::DrawMenu()
 			ImGui::MenuItem("Render Graph", nullptr, &renderGraphOpen);
 			ImGui::MenuItem("Atmosphere Controls", nullptr, &atmosphereControlsOpen);
 			ImGui::MenuItem("Render Visualizer", nullptr, &renderVisualizerOpen);
+
+			ImGui::EndMenu();
+		}
+
+		if (ImGui::BeginMenu("Window"))
+		{
+			ImGui::MenuItem("Fullscreen", nullptr, &fullscreen);
 
 			ImGui::EndMenu();
 		}
@@ -93,6 +101,15 @@ void EditorUI::DrawFrameTimeHistory()
 	}
 
 	ImGui::End();
+}
+
+void EditorUI::Update()
+{
+	if (fullscreen != Renderer::Get().window->IsFullscreen())
+	{
+		const auto [width, height] = Renderer::Get().GetResolution();
+		Renderer::Get().window->SetSize(width, height, fullscreen);
+	}
 }
 
 void EditorUI::DrawLayout()

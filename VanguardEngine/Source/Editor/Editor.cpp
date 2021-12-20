@@ -25,6 +25,11 @@ Editor::~Editor()
 	// Destroys the UI.
 }
 
+void Editor::Update()
+{
+	ui->Update();
+}
+
 void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer, entt::registry& registry, RenderResource cameraBuffer, RenderResource depthStencil,
 	RenderResource outputLDR, RenderResource backBuffer, const ClusterResources& clusterResources)
 {

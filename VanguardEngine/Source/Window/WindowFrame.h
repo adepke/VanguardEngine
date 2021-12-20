@@ -25,18 +25,25 @@ private:
 	bool cursorShown = true;
 	CursorRestraint activeCursorRestraint = CursorRestraint::None;
 	std::pair<int, int> cursorLockPosition;
+	uint32_t width;
+	uint32_t height;
+	bool fullscreen = false;
+
+	// Used to return to original window size when leaving fullscreen.
+	uint32_t oldWidth;
+	uint32_t oldHeight;
 
 public:
 	// #TODO: Use delegates instead of std::function.
 	std::function<void(bool)> onFocusChanged;
-	std::function<void(uint32_t, uint32_t, bool)> onSizeChanged;
+	std::function<void(uint32_t, uint32_t)> onSizeChanged;
 
 public:
-	WindowFrame(const std::wstring& title, uint32_t width, uint32_t height);
+	WindowFrame(const std::wstring& title, uint32_t inWidth, uint32_t inHeight);
 	~WindowFrame();
 
 	void SetTitle(const std::wstring& title);
-	void SetSize(uint32_t width, uint32_t height);
+	void SetSize(uint32_t inWidth, uint32_t inHeight, bool inFullscreen);
 	void ShowCursor(bool visible);
 	void RestrainCursor(CursorRestraint restraint);
 
@@ -45,5 +52,10 @@ public:
 	void* GetHandle() noexcept
 	{
 		return handle;
+	}
+
+	bool IsFullscreen() const noexcept
+	{
+		return fullscreen;
 	}
 };

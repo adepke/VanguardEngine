@@ -572,10 +572,19 @@ void Renderer::Render(entt::registry& registry)
 	device->Present();
 
 	device->AdvanceGPU();
+
+	Editor::Get().Update();
 }
 
-void Renderer::OnBackBufferSizeChanged(const entt::registry& registry)
+std::pair<uint32_t, uint32_t> Renderer::GetResolution() const
 {
+	return std::make_pair(device->renderWidth, device->renderHeight);
+}
+
+void Renderer::SetResolution(uint32_t width, uint32_t height, bool fullscreen)
+{
+	device->SetResolution(width, height, fullscreen);
+
 	renderGraphResources.DiscardTransients(device.get());
 	clusteredCulling.MarkDirty();
 }

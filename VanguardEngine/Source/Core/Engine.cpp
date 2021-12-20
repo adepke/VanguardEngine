@@ -39,14 +39,12 @@ void OnFocusChanged(bool focus)
 	// #TODO: Limit render FPS, disable audio.
 }
 
-void OnSizeChanged(uint32_t width, uint32_t height, bool fullscreen)
+void OnSizeChanged(uint32_t width, uint32_t height)
 {
 	VGScopedCPUStat("Size Changed");
 
-	VGLog(logWindow, "Window size changed ({}, {}).", width, height);
-
-	Renderer::Get().device->SetResolution(width, height, fullscreen);
-	Renderer::Get().OnBackBufferSizeChanged(registry);
+	VGLog(logWindow, "Render size changed ({}, {}).", width, height);
+	Renderer::Get().SetResolution(width, height, false);
 }
 
 void EngineBoot()
@@ -88,15 +86,13 @@ void EngineBoot()
 	window->onFocusChanged = &OnFocusChanged;
 	window->onSizeChanged = &OnSizeChanged;
 
-#if BUILD_DEBUG
+#if BUILD_DEBUG || BUILD_DEVELOPMENT
 	constexpr auto enableDebugging = true;
 #else
 	constexpr auto enableDebugging = false;
 #endif
 
 	auto device = std::make_unique<RenderDevice>(static_cast<HWND>(window->GetHandle()), false, enableDebugging);
-	device->SetResolution(defaultWindowSizeX, defaultWindowSizeY, false);
-
 	Renderer::Get().Initialize(std::move(window), std::move(device));
 
 	// The input requires the user interface to be created first.
@@ -109,7 +105,8 @@ void EngineBoot()
 void EngineLoop()
 {
 	TransformComponent spectatorTransform{};
-	spectatorTransform.translation = { -120.f, 4.f, 20.f };
+	spectatorTransform.translation = { 84.7401f, -12.6401f, -23.2183f };
+	spectatorTransform.rotation = { 0.f, -11.9175f * 3.14159f / 180.f, 31.9711 * 3.14159f / 180.f };
 
 	const auto spectator = registry.create();
 	registry.emplace<NameComponent>(spectator, "Spectator");
@@ -118,21 +115,25 @@ void EngineLoop()
 	registry.emplace<ControlComponent>(spectator);  // #TEMP
 
 	TransformComponent sponzaTransform{};
-	sponzaTransform.translation = { 0.f, 0.f, 0.f };
-	sponzaTransform.rotation = { -90.f * 3.14159f / 180.f, 0.f, 0.f };  // Rotate the sponza into our coordinate space.
-	//sponzaTransform.rotation = { 0.f, 0.f, 0.f };
-	sponzaTransform.scale = { 0.1f, 0.1f, 0.1f };
+	sponzaTransform.translation = { 100.f, -25.f, -34.f };
+	//sponzaTransform.rotation = { -90.f * 3.14159f / 180.f, 0.f, 0.f };  // Rotate the sponza into our coordinate space.
+	sponzaTransform.rotation = { -90.f * 3.14159f / 180.f, 0.f, -90.f * 3.14159f / 180.f };
+	sponzaTransform.scale = { 10.f, 10.f, 10.f };
 
 	const auto sponza = registry.create();
 	registry.emplace<NameComponent>(sponza, "Sponza");
 	registry.emplace<TransformComponent>(sponza, std::move(sponzaTransform));
-	registry.emplace<MeshComponent>(sponza, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/Sponza/glTF/Sponza.gltf"));
+	//registry.emplace<MeshComponent>(sponza, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/Sponza/glTF/Sponza.gltf"));
 	//registry.emplace<MeshComponent>(sponza, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/Bistro/Bistro2.gltf"));
 	//registry.emplace<MeshComponent>(sponza, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/SunTemple.glb"));
+	registry.emplace<MeshComponent>(sponza, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/DamagedHelmet/HelmetTangents.glb"));
+	//registry.emplace<MeshComponent>(sponza, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/PbrSpheres/scene.gltf"));
+	//registry.emplace<MeshComponent>(sponza, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/GoldKPM.glb"));
+	//registry.emplace<MeshComponent>(sponza, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/Bowl2.glb"));
 
 	const auto light = registry.create();
 	registry.emplace<LightComponent>(light, LightComponent{ .color = { 1.f, 1.f, 1.f } });
-	registry.emplace<TransformComponent>(light, TransformComponent{ .scale = { 1.f, 1.f, 1.f }, .rotation = { 0.f, 0.f, 0.f }, .translation = { -120.f, 4.f, 20.f } });
+	registry.emplace<TransformComponent>(light, TransformComponent{ .scale = { 1.f, 1.f, 1.f }, .rotation = { 0.f, 0.f, 0.f }, .translation = { -15.f, 28.f, 3200.f } });
 
 	int lightCount = 0;//10000;
 	//int lightCount = 20000;
