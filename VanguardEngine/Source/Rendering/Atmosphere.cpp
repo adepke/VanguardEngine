@@ -7,6 +7,8 @@
 #include <Rendering/ResourceManager.h>
 #include <Rendering/PipelineBuilder.h>
 #include <Rendering/ShaderStructs.h>
+#include <Core/CoreComponents.h>
+#include <Rendering/RenderComponents.h>
 
 #include <vector>
 #include <cmath>
@@ -299,7 +301,7 @@ Atmosphere::~Atmosphere()
 	device->GetResourceManager().Destroy(luminanceTexture);
 }
 
-void Atmosphere::Initialize(RenderDevice* inDevice)
+void Atmosphere::Initialize(RenderDevice* inDevice, entt::registry& registry)
 {
 	device = inDevice;
 
@@ -409,9 +411,14 @@ void Atmosphere::Initialize(RenderDevice* inDevice)
 	model.absorptionExtinction = ozoneAbsorption;
 	model.surfaceColor = { 0.1f, 0.1f, 0.1f };
 	model.solarIrradiance = { 1.474f, 1.8504f, 1.91198f };
+
+	sunLight = registry.create();
+	registry.emplace<TransformComponent>(sunLight);
+	// Hack while figuring out proper radiometry.
+	registry.emplace<LightComponent>(sunLight, LightComponent{ .type = LightType::Directional, .color = { 3.f, 3.f, 3.f } });
 }
 
-RenderResource Atmosphere::Render(RenderGraph& graph, PipelineBuilder& pipelines, RenderResource cameraBuffer, RenderResource depthStencil, RenderResource outputHDR)
+RenderResource Atmosphere::Render(RenderGraph& graph, PipelineBuilder& pipelines, RenderResource cameraBuffer, RenderResource depthStencil, RenderResource outputHDR, entt::registry& registry)
 {
 	if (dirty)
 	{
@@ -523,6 +530,10 @@ RenderResource Atmosphere::Render(RenderGraph& graph, PipelineBuilder& pipelines
 		device->GetResourceManager().GenerateMipmaps(luminanceTexture);
 		luminanceComponent.state = oldState;
 	});
+
+	// Update the sun light entity.
+	auto& lightTransform = registry.get<TransformComponent>(sunLight);
+	lightTransform.rotation = { 0.f, solarZenithAngle + 3.14159f / 2.f, 0.f };
 
 	return luminanceTag;
 }

@@ -40,10 +40,19 @@ groupshared uint globalLightListOffset;
 
 bool LightInFroxel(Light light, AABB aabb)
 {
-	// #TODO: Precompute view space position of each light in a separate pass to prevent redundant work.
-	float4 viewSpace = mul(float4(light.position, 1.f), camera.view);
+	switch (light.type)
+	{
+		case LightType::Point:
+		{
+			// #TODO: Precompute view space position of each light in a separate pass to prevent redundant work.
+			float4 viewSpace = mul(float4(light.position, 1.f), camera.view);
+			return SphereAABBIntersection(viewSpace.xyz, ComputeLightRadius(light), aabb);
+		}
+		case LightType::Directional:
+			return true;
+	}
 	
-	return SphereAABBIntersection(viewSpace.xyz, ComputeLightRadius(light), aabb);
+	return false;
 }
 
 // Bins all lights into froxels. One thread group per froxel.

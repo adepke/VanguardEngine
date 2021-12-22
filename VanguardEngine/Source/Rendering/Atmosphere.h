@@ -7,6 +7,8 @@
 #include <Rendering/RenderGraphResource.h>
 #include <Rendering/PipelineState.h>
 
+#include <entt/entt.hpp>
+
 class PipelineBuilder;
 class RenderDevice;
 class RenderGraph;
@@ -84,9 +86,11 @@ private:
 	TextureHandle luminanceTexture;
 	PipelineState luminancePrecompute;
 
+	entt::entity sunLight;  // Directional light entity for direct solar illumination.
+
 public:
 	~Atmosphere();
-	void Initialize(RenderDevice* inDevice);
-	RenderResource Render(RenderGraph& graph, PipelineBuilder& pipeline, RenderResource cameraBuffer, RenderResource depthStencil, RenderResource outputHDRs);
+	void Initialize(RenderDevice* inDevice, entt::registry& registry);
+	RenderResource Render(RenderGraph& graph, PipelineBuilder& pipeline, RenderResource cameraBuffer, RenderResource depthStencil, RenderResource outputHDRs, entt::registry& registry);
 	void MarkModelDirty() { dirty = true; }
 };

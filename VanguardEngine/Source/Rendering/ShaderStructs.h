@@ -45,6 +45,8 @@ struct Light
 	uint32_t type;
 	XMFLOAT3 color;
 	float luminance;
+	XMFLOAT3 direction;
+	float padding;
 };
 
 static const uint32_t vertexChannelPosition = 0;

@@ -41,7 +41,14 @@ struct CameraComponent
 	float fieldOfView = 1.57079633f;  // 90 Degrees.
 };
 
+enum class LightType
+{
+	Point,
+	Directional
+};
+
 struct LightComponent
 {
+	LightType type;
 	XMFLOAT3 color;
 };

@@ -7,17 +7,21 @@
 #include "Material.hlsli"
 #include "Camera.hlsli"
 
-static const uint LightTypePoint = 0;
-static const uint LightTypeSpotlight = 1;
-static const uint LightTypeDirectional = 2;
+enum class LightType
+{
+	Point,
+	Directional
+};
 
 struct Light
 {
 	float3 position;
-	uint type;
+	LightType type;
 	// Boundary
 	float3 color;  // Combined diffuse and specular.
 	float luminance;
+	float3 direction;
+	float padding;
 };
 
 float ComputeLightRadius(Light light)
@@ -45,12 +49,29 @@ LightSample SampleLight(Light light, Material material, Camera camera, float3 vi
 {
 	LightSample output;
 	
-	float3 lightDirection = normalize(light.position - surfacePosition);
+	float3 lightDirection;
+	float3 radiance = light.color;
+	
+	switch (light.type)
+	{
+		case LightType::Point:
+		{
+			lightDirection  = normalize(light.position - surfacePosition);
+			
+			float distance = length(light.position - surfacePosition);
+			float attenuation = ComputeLightAttenuation(light, distance);
+			radiance *= attenuation;
+			break;
+		}
+		case LightType::Directional:
+		{
+			lightDirection = normalize(-light.direction);
+			// #TODO: Directional lights need to be affected the atmosphere's transmittance. Use GetSkyRadiance.
+			break;
+		}
+	}
+	
 	float3 halfwayDirection = normalize(viewDirection + lightDirection);
-
-	float distance = length(light.position - surfacePosition);
-	float attenuation = ComputeLightAttenuation(light, distance);
-	float3 radiance = light.color * attenuation;
 
 	output.diffuse.rgb = BRDF(surfaceNormal, viewDirection, halfwayDirection, lightDirection, material.baseColor.rgb, material.metalness, material.roughness, radiance);
 	output.diffuse.a = 1.0;

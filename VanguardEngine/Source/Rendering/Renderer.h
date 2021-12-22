@@ -58,7 +58,7 @@ private:
 public:
 	~Renderer();
 
-	void Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_ptr<RenderDevice>&& inDevice);
+	void Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_ptr<RenderDevice>&& inDevice, entt::registry& registry);
 
 	// Entity data is safe to write to immediately after this function returns. Do not attempt to write before Render() returns.
 	void Render(entt::registry& registry);

@@ -312,11 +312,16 @@ BufferHandle Renderer::CreateLightBuffer(const entt::registry& registry)
 	size_t index = 0;
 	lightView.each([&](auto entity, const auto& transform, const auto& light)
 	{
+		const auto direction = XMVector3Rotate(XMVectorSet(1.f, 0.f, 0.f, 0.f), XMQuaternionRotationRollPitchYaw(transform.rotation.x, transform.rotation.y, -transform.rotation.z));
+		XMFLOAT3 directionUnpacked;
+		XMStoreFloat3(&directionUnpacked, direction);
+
 		Light instance{
 			.position = transform.translation,
-			.type = 0,
+			.type = static_cast<uint32_t>(light.type),
 			.color = light.color,
-			.luminance = 1.f  // #TEMP
+			.luminance = 1.f,  // #TEMP
+			.direction = directionUnpacked
 		};
 
 		std::memcpy(instanceData.data() + index * sizeof(instance), &instance, sizeof(instance));
@@ -337,7 +342,7 @@ Renderer::~Renderer()
 	device->Synchronize();
 }
 
-void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_ptr<RenderDevice>&& inDevice)
+void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_ptr<RenderDevice>&& inDevice, entt::registry& registry)
 {
 	VGScopedCPUStat("Renderer Initialize");
 
@@ -373,7 +378,7 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 
 	RenderUtils::Get().Initialize(device.get());
 
-	atmosphere.Initialize(device.get());
+	atmosphere.Initialize(device.get(), registry);
 	clusteredCulling.Initialize(device.get());
 	ibl.Initialize(device.get());
 }
@@ -537,7 +542,7 @@ void Renderer::Render(entt::registry& registry)
 	});
 
 	// #TODO: Don't have this here.
-	const auto luminanceTexture = atmosphere.Render(graph, pipelines, cameraBufferTag, depthStencilTag, outputHDRTag);
+	const auto luminanceTexture = atmosphere.Render(graph, pipelines, cameraBufferTag, depthStencilTag, outputHDRTag, registry);
 
 	// #TODO: Don't have this here.
 	ibl.UpdateLuts(graph, luminanceTexture, cameraBufferTag);
