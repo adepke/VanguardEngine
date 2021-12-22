@@ -28,7 +28,7 @@ ConstantBuffer<VertexMetadata> vertexMetadata : register(b0, space3);
 
 bool HasVertexAttribute(uint channel)
 {
-	return vertexMetadata.activeChannels & (1 << channel);
+	return vertexMetadata.activeChannels & (1u << channel);
 }
 
 float4 LoadVertexPosition(uint vertexId)

@@ -14,14 +14,14 @@ float3 LambertianDiffuse(float3 baseColor)
 }
 
 // Normal distribution function.
-float3 TrowbridgeReitzGGX(float3 normal, float3 halfway, float roughness)
+float TrowbridgeReitzGGX(float3 normal, float3 halfway, float roughness)
 {
-	const float roughnessSquared = roughness * roughness;
-	const float dotProduct = saturate(dot(normal, halfway));
-	const float dotProductSquared = dotProduct * dotProduct;
-	const float denominator = dotProductSquared * (roughnessSquared - 1.0) + 1.0;
+	const float roughness2 = roughness * roughness;
+	const float normalDotHalfway = saturate(dot(normal, halfway));
+	const float normalDotHalfway2 = normalDotHalfway * normalDotHalfway;
+	const float denominator = normalDotHalfway2 * (roughness2 - 1.0) + 1.0;
 
-	return roughnessSquared / (pi * denominator * denominator);
+	return roughness2 / (pi * denominator * denominator);
 }
 
 // Fresnel approximation function.

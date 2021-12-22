@@ -2,6 +2,7 @@
 
 #include <Rendering/Shader.h>
 #include <Core/Config.h>
+#include <Utility/StringTools.h>
 
 #include <cstring>
 
@@ -155,8 +156,8 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderT
 	compileArguments.emplace_back(VGText("-I"));
 	compileArguments.emplace_back(stableShaderIncludePath.data());
 	//compileArguments.emplace_back(DXC_ARG_PACK_MATRIX_ROW_MAJOR);  // Row major matrices. #TODO: Use uniform packing, ImGui uses column major currently.
-	compileArguments.emplace_back(VGText("-HV"));  // HLSL version 2018.
-	compileArguments.emplace_back(VGText("2018"));
+	compileArguments.emplace_back(VGText("-HV"));
+	compileArguments.emplace_back(VGText("2021"));
 #if BUILD_DEBUG || BUILD_DEVELOPMENT
 	compileArguments.emplace_back(DXC_ARG_DEBUG);  // Enable debug information.
 	compileArguments.emplace_back(VGText("-Qembed_debug"));  // Embed the PDB.
@@ -181,29 +182,38 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderT
 	}
 
 	ResourcePtr<IDxcResult> compileResult;
-	shaderCompiler->Compile(
+	result = shaderCompiler->Compile(
 		&sourceBuffer,
 		compileArguments.size() ? compileArguments.data() : nullptr,
 		static_cast<uint32_t>(compileArguments.size()),
 		shaderIncludeHandler.Get(),
 		IID_PPV_ARGS(compileResult.Indirect())
 	);
+
+	if (FAILED(result))
+	{
+		// The compiler is in a bad state, it cannot be reused.
+		VGLogCritical(logRendering, "Shader compiler failed internally and cannot continue.");
+	}
 	
-	ResourcePtr<IDxcBlobUtf16> errorBlob;
+	ResourcePtr<IDxcBlobUtf8> errorBlob;
 	compileResult->GetOutput(DXC_OUT_ERRORS, IID_PPV_ARGS(errorBlob.Indirect()), nullptr);
 
 	compileResult->GetStatus(&result);
 	if (FAILED(result))
 	{
-		VGLogError(logRendering, "Failed to compile shader at '{}': {} | Error: {}", path.generic_wstring(), result,
-			((errorBlob && errorBlob->GetStringLength()) ? errorBlob->GetStringPointer() : VGText("Unknown.")));
+		const std::string errorString = (errorBlob && errorBlob->GetStringLength()) ? errorBlob->GetStringPointer() : "Unknown.";
+		const auto errorStringWide = Str2WideStr(errorString);
+		VGLogError(logRendering, "Failed to compile shader at '{}': {} | Error: {}", path.generic_wstring(), result, errorStringWide.c_str());
 
 		return {};
 	}
 
 	else if (errorBlob && errorBlob->GetStringLength())
 	{
-		VGLogWarning(logRendering, "Compiling shader at '{}' had warnings and/or errors: {}", path.generic_wstring(), errorBlob->GetStringPointer());
+		const std::string errorString = errorBlob->GetStringPointer();
+		const auto errorStringWide = Str2WideStr(errorString);
+		VGLogWarning(logRendering, "Compiling shader at '{}' had warnings: {}", path.generic_wstring(), errorStringWide.c_str());
 	}
 
 	ResourcePtr<IDxcBlob> compiledShader;
