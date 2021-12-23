@@ -107,7 +107,7 @@ void ImageBasedLighting::UpdateLuts(RenderGraph& graph, RenderResource luminance
 			list.BindResource("bindData", handle, offset);
 			list.BindResourceTable("texturesRW", device->GetDescriptorAllocator().GetBindlessHeap());
 
-			list.Native()->Dispatch(brdfTextureSize / 8, brdfTextureSize / 8, 1);
+			list.Dispatch(brdfTextureSize / 8, brdfTextureSize / 8, 1);
 
 			device->GetResourceManager().AddFrameDescriptor(device->GetFrameIndex(), std::move(brdfUAV));
 		});
@@ -167,7 +167,7 @@ void ImageBasedLighting::UpdateLuts(RenderGraph& graph, RenderResource luminance
 		list.BindResourceTable("textureCubes", device->GetDescriptorAllocator().GetBindlessHeap());
 		list.BindResourceTable("textureArraysRW", device->GetDescriptorAllocator().GetBindlessHeap());
 
-		list.Native()->Dispatch(irradianceTextureSize / 8, irradianceTextureSize / 8, 6);
+		list.Dispatch(irradianceTextureSize / 8, irradianceTextureSize / 8, 6);
 
 		device->GetResourceManager().AddFrameDescriptor(device->GetFrameIndex(), std::move(luminanceSRV));
 		device->GetResourceManager().AddFrameDescriptor(device->GetFrameIndex(), std::move(irradianceUAV));
@@ -238,7 +238,7 @@ void ImageBasedLighting::UpdateLuts(RenderGraph& graph, RenderResource luminance
 		list.BindResourceTable("textureCubes", device->GetDescriptorAllocator().GetBindlessHeap());
 		list.BindResourceTable("textureArraysRW", device->GetDescriptorAllocator().GetBindlessHeap());
 
-		list.Native()->Dispatch(prefilterTextureSize / 8, prefilterTextureSize / 8, 6);
+		list.Dispatch(prefilterTextureSize / 8, prefilterTextureSize / 8, 6);
 
 		device->GetResourceManager().AddFrameDescriptor(device->GetFrameIndex(), std::move(luminanceSRV));
 

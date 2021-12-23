@@ -54,6 +54,7 @@ public:
 	void BindResourceOptional(const std::string& bindName, BufferHandle handle, size_t offset = 0);
 	void BindResourceTable(const std::string& bindName, D3D12_GPU_DESCRIPTOR_HANDLE descriptor);
 
+	void Dispatch(uint32_t x, uint32_t y, uint32_t z);
 	void DrawFullscreenQuad();
 
 	void Copy(BufferHandle destination, BufferHandle source);

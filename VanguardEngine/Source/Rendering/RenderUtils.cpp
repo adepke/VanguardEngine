@@ -37,5 +37,5 @@ void RenderUtils::ClearUAV(CommandList& list, BufferHandle buffer)
 	list.BindConstants("clearUAVInfo", clearUAVInfoData);
 
 	uint32_t dispatchSize = static_cast<uint32_t>(std::ceil(bufferComponent.description.size / 64.f));
-	list.Native()->Dispatch(dispatchSize, 1, 1);
+	list.Dispatch(dispatchSize, 1, 1);
 }

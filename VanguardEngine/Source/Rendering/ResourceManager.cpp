@@ -759,7 +759,7 @@ void ResourceManager::GenerateMipmaps(TextureHandle texture)
 			list.BindConstants("mipmapData", constantData);
 
 			// Dispatch the compute shader.
-			list.Native()->Dispatch(std::max((uint32_t)std::ceil(baseMipWidth / (2.f * 8.f)), 1u), std::max((uint32_t)std::ceil(baseMipHeight / (2.f * 8.f)), 1u), 1);
+			list.Dispatch(std::max((uint32_t)std::ceil(baseMipWidth / (2.f * 8.f)), 1u), std::max((uint32_t)std::ceil(baseMipHeight / (2.f * 8.f)), 1u), 1);
 
 			list.UAVBarrier(texture);
 			list.FlushBarriers();

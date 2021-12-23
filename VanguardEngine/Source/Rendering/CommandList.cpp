@@ -241,6 +241,11 @@ void CommandList::BindResourceTable(const std::string& bindName, D3D12_GPU_DESCR
 	}
 }
 
+void CommandList::Dispatch(uint32_t x, uint32_t y, uint32_t z)
+{
+	list->Dispatch(x, y, z);
+}
+
 void CommandList::DrawFullscreenQuad()
 {
 	list->DrawInstanced(3, 1, 0, 0);

@@ -116,7 +116,7 @@ void Atmosphere::Precompute(CommandList& list)
 	list.BindDescriptorAllocator(device->GetDescriptorAllocator());
 	list.BindResourceTable("texturesRW", device->GetDescriptorAllocator().GetBindlessHeap());
 	list.BindConstants("precomputeData", precomputeData);
-	list.Native()->Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
+	list.Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
 	list.UAVBarrier(transmittanceTexture);
 
 	// Direct irradiance.
@@ -143,7 +143,7 @@ void Atmosphere::Precompute(CommandList& list)
 	list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
 	list.BindResourceTable("texturesRW", device->GetDescriptorAllocator().GetBindlessHeap());
 	list.BindConstants("precomputeData", precomputeData);
-	list.Native()->Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
+	list.Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
 	list.UAVBarrier(deltaIrradianceTexture);
 	list.UAVBarrier(irradianceTexture);
 
@@ -172,7 +172,7 @@ void Atmosphere::Precompute(CommandList& list)
 	list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
 	list.BindResourceTable("textures3DRW", device->GetDescriptorAllocator().GetBindlessHeap());
 	list.BindConstants("precomputeData", precomputeData);
-	list.Native()->Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
+	list.Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
 	list.UAVBarrier(deltaRayleighTexture);
 	list.UAVBarrier(deltaMieTexture);
 	list.UAVBarrier(scatteringTexture);
@@ -210,7 +210,7 @@ void Atmosphere::Precompute(CommandList& list)
 		list.BindResourceTable("textures3D", device->GetDescriptorAllocator().GetBindlessHeap());
 		list.BindResourceTable("textures3DRW", device->GetDescriptorAllocator().GetBindlessHeap());
 		list.BindConstants("precomputeData", precomputeData);
-		list.Native()->Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
+		list.Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
 		list.UAVBarrier(deltaScatteringDensityTexture);
 
 		// Indirect irradiance.
@@ -239,7 +239,7 @@ void Atmosphere::Precompute(CommandList& list)
 		list.BindResourceTable("textures3D", device->GetDescriptorAllocator().GetBindlessHeap());
 		list.BindResourceTable("texturesRW", device->GetDescriptorAllocator().GetBindlessHeap());
 		list.BindConstants("precomputeData", precomputeData);
-		list.Native()->Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
+		list.Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
 		list.UAVBarrier(deltaIrradianceTexture);
 		list.UAVBarrier(irradianceTexture);
 
@@ -268,7 +268,7 @@ void Atmosphere::Precompute(CommandList& list)
 		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
 		list.BindResourceTable("textures3DRW", device->GetDescriptorAllocator().GetBindlessHeap());
 		list.BindConstants("precomputeData", precomputeData);
-		list.Native()->Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
+		list.Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
 		list.UAVBarrier(deltaRayleighTexture);
 		list.UAVBarrier(scatteringTexture);
 	}
@@ -513,7 +513,7 @@ RenderResource Atmosphere::Render(RenderGraph& graph, PipelineBuilder& pipelines
 		list.BindResourceTable("textures3D", device->GetDescriptorAllocator().GetBindlessHeap());
 		list.BindResourceTable("textureArraysRW", device->GetDescriptorAllocator().GetBindlessHeap());
 
-		list.Native()->Dispatch(luminanceTextureSize / 8, luminanceTextureSize / 8, 6);
+		list.Dispatch(luminanceTextureSize / 8, luminanceTextureSize / 8, 6);
 
 		device->GetResourceManager().AddFrameDescriptor(device->GetFrameIndex(), std::move(luminanceUAV));
 

@@ -70,7 +70,7 @@ void ClusteredLightCulling::ComputeClusterGrid(CommandList& list, BufferHandle c
 	list.BindConstants("clusterData", clusterData);
 	list.BindResource("clusterBounds", clusterBoundsBuffer);
 	list.BindResource("camera", cameraBuffer);
-	list.Native()->Dispatch(std::ceil(gridInfo.x * gridInfo.y * gridInfo.z / 64.f), 1, 1);
+	list.Dispatch(std::ceil(gridInfo.x * gridInfo.y * gridInfo.z / 64.f), 1, 1);
 
 	list.UAVBarrier(clusterBoundsBuffer);
 }
@@ -317,7 +317,7 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 		list.BindConstants("clusterData", clusterData);
 
 		uint32_t dispatchSize = static_cast<uint32_t>(std::ceil(gridInfo.x * gridInfo.y * gridInfo.z / 64.f));
-		list.Native()->Dispatch(dispatchSize, 1, 1);
+		list.Dispatch(dispatchSize, 1, 1);
 
 		// Ensure that the compaction has finished.
 		list.UAVBarrier(resources.GetBuffer(denseClustersTag));
@@ -327,7 +327,7 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 		list.BindPipelineState(indirectGenerationState);
 		list.BindResourceTable("denseClusterList", *denseClustersComponent.UAV);
 		list.BindResource("indirectBuffer", resources.GetBuffer(indirectBufferTag));
-		list.Native()->Dispatch(1, 1, 1);
+		list.Dispatch(1, 1, 1);
 	});
 
 	auto& lightsBufferComponent = device->GetResourceManager().Get(lights);
