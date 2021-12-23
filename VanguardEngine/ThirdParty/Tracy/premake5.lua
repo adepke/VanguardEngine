@@ -1,3 +1,10 @@
+function InstallVcpkg()
+	prebuildcommands {
+		"cd ../../../../VanguardEngine/ThirdParty/Tracy/vcpkg",  -- Use the proper directory.
+		"install_vcpkg_dependencies.bat"  -- Install the required packages.
+	}
+end
+
 project "TracyClient"
 	language "C++"
 	kind "SharedLib"
@@ -30,6 +37,8 @@ project "TracyClient"
 	files "TracyClient.cpp"
 	
 	buildoptions "/sdl"  -- Security development lifecycle checks
+	
+	InstallVcpkg()
 	
 project "TracyServer"
 	language "C++"
@@ -121,3 +130,5 @@ project "TracyServer"
 		"zlib",
 		"bz2"
 	}
+	
+	InstallVcpkg()
