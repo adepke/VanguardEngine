@@ -10,6 +10,8 @@
 #include <optional>
 #include <string_view>
 
+class CommandList;
+
 enum class ResourceBind
 {
 	CBV,
@@ -31,10 +33,17 @@ enum class LoadType
 	Clear
 };
 
+enum class ExecutionQueue
+{
+	Graphics,
+	Compute
+};
+
 class RenderPass
 {
 public:
 	std::string_view stableName;
+	ExecutionQueue queue;
 
 	std::set<RenderResource> reads;
 	std::set<RenderResource> writes;
@@ -53,7 +62,7 @@ private:
 #endif
 
 public:
-	RenderPass(RenderGraphResourceManager* inResourceManager, std::string_view name);
+	RenderPass(RenderGraphResourceManager* inResourceManager, std::string_view name, ExecutionQueue execution);
 
 	const RenderResource Create(TransientBufferDescription description, const std::wstring& name);
 	const RenderResource Create(TransientTextureDescription description, const std::wstring& name);
@@ -66,7 +75,9 @@ public:
 	void Execute(CommandList& list, RenderGraphResourceManager& resources) const;
 };
 
-inline RenderPass::RenderPass(RenderGraphResourceManager* inResourceManager, std::string_view name) : resourceManager(inResourceManager), stableName(name) {}
+inline RenderPass::RenderPass(RenderGraphResourceManager* inResourceManager, std::string_view name, ExecutionQueue execution)
+	: resourceManager(inResourceManager), stableName(name), queue(execution)
+	{}
 
 inline const RenderResource RenderPass::Create(TransientBufferDescription description, const std::wstring& name)
 {

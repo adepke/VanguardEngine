@@ -22,7 +22,7 @@ void RenderGraph::BuildAdjacencyList()
 			std::vector<RenderResource> intersection;
 			// #TODO: We can stop as soon as there's a single intersection, std::set_intersection will find all intersections.
 			std::set_intersection(outer->writes.cbegin(), outer->writes.cend(), inner->reads.cbegin(), inner->reads.cend(), std::back_inserter(intersection));
-			
+
 			// If there's a write-to-read dependency, create an edge.
 			if (intersection.size() > 0)
 			{
@@ -182,7 +182,7 @@ std::pair<uint32_t, uint32_t> RenderGraph::GetBackBufferResolution(RenderDevice*
 
 RenderPass& RenderGraph::AddPass(std::string_view stableName, ExecutionQueue execution)
 {
-	return *passes.emplace_back(std::make_unique<RenderPass>(resourceManager, stableName));
+	return *passes.emplace_back(std::make_unique<RenderPass>(resourceManager, stableName, execution));
 }
 
 void RenderGraph::Build()
@@ -217,98 +217,99 @@ void RenderGraph::Execute(RenderDevice* device)
 		VGScopedCPUTransientStat(pass->stableName.data());
 		VGScopedGPUTransientStat(pass->stableName.data(), device->GetDirectContext(), list->Native());
 
-		// If graphics pass...
-
 		list->BindDescriptorAllocator(device->GetDescriptorAllocator());
 
-		D3D12_VIEWPORT viewport{
-			.TopLeftX = 0.f,
-			.TopLeftY = 0.f,
-			.Width = static_cast<float>(device->renderWidth),
-			.Height = static_cast<float>(device->renderHeight),
-			.MinDepth = 0.f,
-			.MaxDepth = 1.f
-		};
-
-		list->Native()->RSSetViewports(1, &viewport);
-
-		D3D12_RECT scissor{
-			.left = 0,
-			.top = 0,
-			.right = static_cast<LONG>(device->renderWidth),
-			.bottom = static_cast<LONG>(device->renderHeight)
-		};
-
-		list->Native()->RSSetScissorRects(1, &scissor);
-
-		std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> renderTargets;
-		renderTargets.reserve(pass->outputBindInfo.size());
-		D3D12_CPU_DESCRIPTOR_HANDLE depthStencil;
-		bool hasDepthStencil = false;
-
-		for (const auto& [resource, info] : pass->outputBindInfo)
+		if (pass->queue == ExecutionQueue::Graphics)
 		{
-			const auto texture = resourceManager->GetTexture(resource);
-			auto& component = device->GetResourceManager().Get(texture);
+			D3D12_VIEWPORT viewport{
+				.TopLeftX = 0.f,
+				.TopLeftY = 0.f,
+				.Width = static_cast<float>(device->renderWidth),
+				.Height = static_cast<float>(device->renderHeight),
+				.MinDepth = 0.f,
+				.MaxDepth = 1.f
+			};
 
-			if (info.first == OutputBind::RTV)
-			{
-				renderTargets.emplace_back(*component.RTV);
-			}
+			list->Native()->RSSetViewports(1, &viewport);
 
-			else if (info.first == OutputBind::DSV)
-			{
-				hasDepthStencil = true;
-				depthStencil = *component.DSV;
-			}
-		}
+			D3D12_RECT scissor{
+				.left = 0,
+				.top = 0,
+				.right = static_cast<LONG>(device->renderWidth),
+				.bottom = static_cast<LONG>(device->renderHeight)
+			};
 
-		// If we don't have a depth stencil output, we might still have one as an input.
-		if (!hasDepthStencil)
-		{
-			for (const auto [resource, bind] : pass->bindInfo)
-			{
-				if (bind == ResourceBind::DSV)
-				{
-					const auto texture = resourceManager->GetTexture(resource);
-					auto& component = device->GetResourceManager().Get(texture);
+			list->Native()->RSSetScissorRects(1, &scissor);
 
-					hasDepthStencil = true;
-					depthStencil = *component.DSV;
+			std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> renderTargets;
+			renderTargets.reserve(pass->outputBindInfo.size());
+			D3D12_CPU_DESCRIPTOR_HANDLE depthStencil;
+			bool hasDepthStencil = false;
 
-					break;
-				}
-			}
-		}
-
-		// #TODO: Replace with render passes.
-		list->Native()->OMSetRenderTargets(renderTargets.size(), renderTargets.size() > 0 ? renderTargets.data() : nullptr, false, hasDepthStencil ? &depthStencil : nullptr);
-
-		// #TODO: This should be the same as the color given during resource creation. Only store this value in one place.
-		const float ClearColor[] = { 0.f, 0.f, 0.f, 1.f };
-
-		for (const auto& [resource, info] : pass->outputBindInfo)
-		{
-			if (info.second == LoadType::Clear)
+			for (const auto& [resource, info] : pass->outputBindInfo)
 			{
 				const auto texture = resourceManager->GetTexture(resource);
 				auto& component = device->GetResourceManager().Get(texture);
 
 				if (info.first == OutputBind::RTV)
 				{
-					list->Native()->ClearRenderTargetView(*component.RTV, ClearColor, 0, nullptr);
+					renderTargets.emplace_back(*component.RTV);
 				}
 
 				else if (info.first == OutputBind::DSV)
 				{
-					// #TODO: Stencil clearing.
-					// #TODO: Retrieve clear color from the resource description.
-					list->Native()->ClearDepthStencilView(*component.DSV, D3D12_CLEAR_FLAG_DEPTH/* | D3D12_CLEAR_FLAG_STENCIL*/, 0.f, 0, 0, nullptr);  // Inverse Z.
+					hasDepthStencil = true;
+					depthStencil = *component.DSV;
 				}
 			}
-		}
 
-		list->Native()->OMSetStencilRef(0);
+			// If we don't have a depth stencil output, we might still have one as an input.
+			if (!hasDepthStencil)
+			{
+				for (const auto [resource, bind] : pass->bindInfo)
+				{
+					if (bind == ResourceBind::DSV)
+					{
+						const auto texture = resourceManager->GetTexture(resource);
+						auto& component = device->GetResourceManager().Get(texture);
+
+						hasDepthStencil = true;
+						depthStencil = *component.DSV;
+
+						break;
+					}
+				}
+			}
+
+			// #TODO: Replace with render passes.
+			list->Native()->OMSetRenderTargets(renderTargets.size(), renderTargets.size() > 0 ? renderTargets.data() : nullptr, false, hasDepthStencil ? &depthStencil : nullptr);
+
+			// #TODO: This should be the same as the color given during resource creation. Only store this value in one place.
+			const float ClearColor[] = { 0.f, 0.f, 0.f, 1.f };
+
+			for (const auto& [resource, info] : pass->outputBindInfo)
+			{
+				if (info.second == LoadType::Clear)
+				{
+					const auto texture = resourceManager->GetTexture(resource);
+					auto& component = device->GetResourceManager().Get(texture);
+
+					if (info.first == OutputBind::RTV)
+					{
+						list->Native()->ClearRenderTargetView(*component.RTV, ClearColor, 0, nullptr);
+					}
+
+					else if (info.first == OutputBind::DSV)
+					{
+						// #TODO: Stencil clearing.
+						// #TODO: Retrieve clear color from the resource description.
+						list->Native()->ClearDepthStencilView(*component.DSV, D3D12_CLEAR_FLAG_DEPTH/* | D3D12_CLEAR_FLAG_STENCIL*/, 0.f, 0, 0, nullptr);  // Inverse Z.
+					}
+				}
+			}
+
+			list->Native()->OMSetStencilRef(0);
+		}
 
 		pass->Execute(*list, *resourceManager);
 

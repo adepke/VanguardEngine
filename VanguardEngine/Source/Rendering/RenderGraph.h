@@ -4,6 +4,7 @@
 
 #include <Rendering/Base.h>
 #include <Rendering/ResourceHandle.h>
+#include <Rendering/RenderPass.h>
 #include <Rendering/RenderGraphResourceManager.h>
 
 #include <vector>
@@ -12,14 +13,7 @@
 #include <stack>
 #include <string_view>
 
-class RenderPass;
 class CommandList;
-
-enum class ExecutionQueue
-{
-	Graphics,
-	Compute
-};
 
 enum class ResourceTag
 {
