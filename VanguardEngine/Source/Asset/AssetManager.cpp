@@ -48,7 +48,7 @@ void AssetManager::Update()
 		device->GetResourceManager().Write(resource, texture.image);
 		if (mipmap)
 		{
-			device->GetResourceManager().GenerateMipmaps(resource);
+			device->GetResourceManager().GenerateMipmaps(device->GetDirectList(), resource);
 		}
 		device->GetDirectList().TransitionBarrier(resource, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 

@@ -664,13 +664,10 @@ void ResourceManager::Write(TextureHandle target, const std::vector<uint8_t>& so
 	uploadOffsets[frameIndex] += requiredCopySize;
 }
 
-void ResourceManager::GenerateMipmaps(TextureHandle texture)
+void ResourceManager::GenerateMipmaps(CommandList& list, TextureHandle texture)
 {
 	VGScopedCPUStat("Generate mipmaps");
-	VGScopedGPUStat("Generate mipmaps", device->GetDirectContext(), device->GetDirectList().Native());
-
-	// Run mipmapping on the direct queue, no need for async compute.
-	auto& list = device->GetDirectList();
+	VGScopedGPUStat("Generate mipmaps", device->GetDirectContext(), list.Native());
 
 	// Transition to UAV state.
 	list.TransitionBarrier(texture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);

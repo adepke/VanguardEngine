@@ -14,6 +14,7 @@
 #include <string_view>
 
 class RenderDevice;
+class CommandList;
 
 class ResourceManager
 {
@@ -74,7 +75,7 @@ public:
 	void Destroy(BufferHandle handle);
 	void Destroy(TextureHandle handle);
 
-	void GenerateMipmaps(TextureHandle texture);
+	void GenerateMipmaps(CommandList& list, TextureHandle texture);
 
 	void AddFrameResource(size_t frameIndex, const BufferHandle handle);
 	void AddFrameResource(size_t frameIndex, const TextureHandle handle);

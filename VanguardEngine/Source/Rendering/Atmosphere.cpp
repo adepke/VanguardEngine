@@ -547,7 +547,7 @@ RenderResource Atmosphere::RenderEnvironmentMap(RenderGraph& graph, AtmosphereRe
 		list.UAVBarrier(luminanceTexture);
 		list.FlushBarriers();
 
-		device->GetResourceManager().GenerateMipmaps(luminanceTexture);
+		device->GetResourceManager().GenerateMipmaps(list, luminanceTexture);
 	});
 
 	return luminanceTag;
