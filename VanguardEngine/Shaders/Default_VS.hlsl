@@ -22,6 +22,7 @@ struct Output
 	float3 tangent : TANGENT;  // World space.
 	float3 bitangent : BITANGENT;  // World space.
 	float depthVS : DEPTH;  // View space.
+	float4 color : COLOR;
 };
 
 [RootSignature(RS)]
@@ -32,6 +33,7 @@ Output main(Input input)
 	float2 uv = LoadVertexTexcoord(input.vertexID);
 	float4 tangent = LoadVertexTangent(input.vertexID);
 	float4 bitangent = LoadVertexBitangent(input.vertexID);
+	float4 color = LoadVertexColor(input.vertexID);
 	
 	Output output;
 	output.positionCS = position;
@@ -44,6 +46,7 @@ Output main(Input input)
 	output.uv = uv;
 	output.tangent = normalize(mul(tangent, perObject.worldMatrix)).xyz;
 	output.bitangent = normalize(mul(bitangent, perObject.worldMatrix)).xyz;
-
+	output.color = color;
+	
 	return output;
 }

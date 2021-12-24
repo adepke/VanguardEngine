@@ -42,6 +42,7 @@ struct Input
 	float3 tangent : TANGENT;  // World space.
 	float3 bitangent : BITANGENT;  // World space.
 	float depthVS : DEPTH;  // View space.
+	float4 color : COLOR;
 };
 
 struct Output
@@ -52,7 +53,7 @@ struct Output
 [RootSignature(RS)]
 Output main(Input input)
 {
-	float4 baseColor = { 1.f, 1.f, 1.f, 1.f };
+	float4 baseColor = input.color;
 	
 	if (material.baseColor > 0)
 	{

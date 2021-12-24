@@ -33,7 +33,7 @@ bool HasVertexAttribute(uint channel)
 
 float4 LoadVertexPosition(uint vertexId)
 {
-	return HasVertexAttribute(vertexChannelPosition) ? float4(vertexPositionBuffer.Load<float3>(vertexId * vertexMetadata.channelStrides[vertexChannelPosition] + vertexMetadata.channelOffsets[vertexChannelPosition]), 1) : float4(0, 0, 0, 1);
+	return HasVertexAttribute(vertexChannelPosition) ? float4(vertexPositionBuffer.Load<float3>(vertexId * vertexMetadata.channelStrides[vertexChannelPosition] + vertexMetadata.channelOffsets[vertexChannelPosition]), 1) : float4(1, 1, 1, 1);
 }
 
 float3 LoadVertexNormal(uint vertexId)
@@ -68,7 +68,7 @@ float4 LoadVertexBitangent(uint vertexId)
 
 float4 LoadVertexColor(uint vertexId)
 {
-	return HasVertexAttribute(vertexChannelColor) ? vertexExtraBuffer.Load<float4>(vertexId * vertexMetadata.channelStrides[vertexChannelColor] + vertexMetadata.channelOffsets[vertexChannelColor]) : float4(0, 0, 0, 0);
+	return HasVertexAttribute(vertexChannelColor) ? vertexExtraBuffer.Load<float4>(vertexId * vertexMetadata.channelStrides[vertexChannelColor] + vertexMetadata.channelOffsets[vertexChannelColor]) : float4(0, 0, 0, 1);
 }
 
 #endif  // __VERTEXASSEMBLY_HLSLI__
