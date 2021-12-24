@@ -8,6 +8,8 @@
 
 void RenderGraph::BuildAdjacencyLists()
 {
+	VGScopedCPUStat("Build Adjancency Lists");
+
 	for (int i = 0; i < passes.size(); ++i)
 	{
 		const auto& outer = passes[i];
@@ -73,6 +75,8 @@ void RenderGraph::DepthFirstSearch(size_t node, std::vector<bool>& visited, std:
 
 void RenderGraph::TopologicalSort()
 {
+	VGScopedCPUStat("Topological Sort");
+
 	sorted.reserve(passes.size());  // Most passes are unlikely to be trimmed.
 
 	std::vector<bool> visited(passes.size(), false);
@@ -95,6 +99,8 @@ void RenderGraph::TopologicalSort()
 
 void RenderGraph::BuildDepthMap()
 {
+	VGScopedCPUStat("Build Depth Map");
+
 	for (const auto pass : sorted)
 	{
 		for (const auto adjacentPass : adjacencyLists[pass])
@@ -109,6 +115,8 @@ void RenderGraph::BuildDepthMap()
 
 void RenderGraph::InjectBarriers(RenderDevice* device, size_t passId)
 {
+	VGScopedCPUStat("Inject Barriers");
+
 	auto& pass = passes[passId];
 	auto& list = passLists[passId];
 
@@ -228,6 +236,8 @@ RenderPass& RenderGraph::AddPass(std::string_view stableName, ExecutionQueue exe
 
 void RenderGraph::Build()
 {
+	VGScopedCPUStat("Render Graph Build");
+
 	for (const auto& pass : passes)
 	{
 		pass->Validate();
@@ -240,6 +250,8 @@ void RenderGraph::Build()
 
 void RenderGraph::Execute(RenderDevice* device)
 {
+	VGScopedCPUStat("Render Graph Execute");
+
 	resourceManager->BuildTransients(device, this);
 
 	passLists.reserve(passes.size());
