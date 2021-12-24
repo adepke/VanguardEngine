@@ -27,7 +27,7 @@ class RenderGraph
 private:
 	std::vector<std::unique_ptr<RenderPass>> passes;
 	std::vector<std::shared_ptr<CommandList>> passLists;
-	std::unordered_map<size_t, std::vector<size_t>> adjacencyList;
+	std::unordered_map<size_t, std::vector<size_t>> adjacencyLists;
 	std::vector<size_t> sorted;
 	std::unordered_map<size_t, std::uint32_t> depthMap;
 
@@ -36,12 +36,12 @@ private:
 	RenderGraphResourceManager* resourceManager = nullptr;
 
 private:
-	void BuildAdjacencyList();
-	void DepthFirstSearch(size_t node, std::vector<bool>& visited, std::stack<bool>& stack);
+	void BuildAdjacencyLists();
+	void DepthFirstSearch(size_t node, std::vector<bool>& visited, std::stack<size_t>& stack);
 	void TopologicalSort();
 	void BuildDepthMap();
 
-	void InjectStateBarriers(RenderDevice* device);
+	void InjectBarriers(RenderDevice* device, size_t passId);
 
 public:
 	std::pair<uint32_t, uint32_t> GetBackBufferResolution(RenderDevice* device);

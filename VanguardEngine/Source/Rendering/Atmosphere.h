@@ -52,6 +52,13 @@ struct AtmosphereData
 	float padding6;
 };
 
+struct AtmosphereResources
+{
+	RenderResource transmittanceHandle;
+	RenderResource scatteringHandle;
+	RenderResource irradianceHandle;
+};
+
 class Atmosphere
 {
 public:
@@ -78,7 +85,7 @@ private:
 	PipelineState indirectIrradiancePrecompute;
 	PipelineState multipleScatteringPrecompute;
 
-	void Precompute(CommandList& list);
+	void Precompute(CommandList& list, TextureHandle transmittanceHandle, TextureHandle scatteringHandle, TextureHandle irradianceHandle);
 
 	static constexpr uint32_t luminanceTextureSize = 1024;
 	static_assert(luminanceTextureSize % 8 == 0, "luminanceTextureSize must be evenly divisible by 8.");
@@ -91,6 +98,10 @@ private:
 public:
 	~Atmosphere();
 	void Initialize(RenderDevice* inDevice, entt::registry& registry);
-	RenderResource Render(RenderGraph& graph, PipelineBuilder& pipeline, RenderResource cameraBuffer, RenderResource depthStencil, RenderResource outputHDRs, entt::registry& registry);
+
+	AtmosphereResources ImportResources(RenderGraph& graph);
+	void Render(RenderGraph& graph, AtmosphereResources resourceHandles, PipelineBuilder& pipeline, RenderResource cameraBuffer,
+		RenderResource depthStencil, RenderResource outputHDRs, entt::registry& registry);
+	RenderResource RenderEnvironmentMap(RenderGraph& graph, AtmosphereResources resourceHandles, RenderResource cameraBuffer);
 	void MarkModelDirty() { dirty = true; }
 };

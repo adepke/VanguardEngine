@@ -11,6 +11,13 @@ class RenderDevice;
 class RenderGraph;
 class Atmosphere;
 
+struct IBLResources
+{
+	RenderResource irradianceTag;
+	RenderResource prefilterTag;
+	RenderResource brdfTag;
+};
+
 class ImageBasedLighting
 {
 private:
@@ -41,7 +48,7 @@ private:
 public:
 	~ImageBasedLighting();
 	void Initialize(RenderDevice* inDevice);
-	void UpdateLuts(RenderGraph& graph, RenderResource luminanceTexture, RenderResource cameraBuffer);
+	IBLResources UpdateLuts(RenderGraph& graph, RenderResource luminanceTexture, RenderResource cameraBuffer);
 
 	uint32_t GetPrefilterLevels() const { return prefilterLevels; }
 };

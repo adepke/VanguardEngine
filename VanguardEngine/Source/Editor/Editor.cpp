@@ -69,7 +69,7 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 		{
 			editorPass.Read(activeOverlayTag, ResourceBind::SRV);
 		}
-		editorPass.Output(backBuffer, OutputBind::RTV, LoadType::Ignore);
+		editorPass.Output(backBuffer, OutputBind::RTV, LoadType::Preserve);
 		editorPass.Bind([&, cameraBuffer, depthStencil, outputLDR, activeOverlayTag](CommandList& list, RenderGraphResourceManager& resources)
 		{
 			renderer.userInterface->NewFrame();
@@ -94,7 +94,7 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 
 		auto& editorPass = graph.AddPass("Editor Pass", ExecutionQueue::Graphics);
 		editorPass.Read(outputLDR, ResourceBind::SRV);
-		editorPass.Output(backBuffer, OutputBind::RTV, LoadType::Ignore);
+		editorPass.Output(backBuffer, OutputBind::RTV, LoadType::Preserve);
 		editorPass.Bind([&, outputLDR](CommandList& list, RenderGraphResourceManager& resources)
 		{
 			list.Copy(resources.GetTexture(backBuffer), resources.GetTexture(outputLDR));

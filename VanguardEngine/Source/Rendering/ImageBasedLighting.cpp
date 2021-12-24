@@ -68,14 +68,19 @@ void ImageBasedLighting::Initialize(RenderDevice* inDevice)
 	brdfTexture = device->GetResourceManager().Create(brdfDesc, VGText("IBL BRDF"));
 }
 
-void ImageBasedLighting::UpdateLuts(RenderGraph& graph, RenderResource luminanceTexture, RenderResource cameraBuffer)
+IBLResources ImageBasedLighting::UpdateLuts(RenderGraph& graph, RenderResource luminanceTexture, RenderResource cameraBuffer)
 {
+	const auto irradianceTag = graph.Import(irradianceTexture);
+	const auto prefilterTag = graph.Import(prefilterTexture);
+	const auto brdfTag = graph.Import(brdfTexture);
+
 	if (!brdfRendered)
 	{
 		auto& brdfPass = graph.AddPass("IBL BRDF Pass", ExecutionQueue::Compute);
-		brdfPass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
+		brdfPass.Write(brdfTag, ResourceBind::UAV);
+		brdfPass.Bind([&, brdfTag](CommandList& list, RenderGraphResourceManager& resources)
 		{
-			const auto& brdfComponent = device->GetResourceManager().Get(brdfTexture);
+			const auto& brdfComponent = device->GetResourceManager().Get(resources.GetTexture(brdfTag));
 
 			D3D12_UNORDERED_ACCESS_VIEW_DESC brdfDesc{};
 			brdfDesc.Format = brdfComponent.description.format;
@@ -117,10 +122,11 @@ void ImageBasedLighting::UpdateLuts(RenderGraph& graph, RenderResource luminance
 
 	auto& irradiancePass = graph.AddPass("IBL Irradiance Pass", ExecutionQueue::Compute);
 	irradiancePass.Read(luminanceTexture, ResourceBind::SRV);
-	irradiancePass.Bind([&, luminanceTexture](CommandList& list, RenderGraphResourceManager& resources)
+	irradiancePass.Write(irradianceTag, ResourceBind::UAV);
+	irradiancePass.Bind([&, luminanceTexture, irradianceTag](CommandList& list, RenderGraphResourceManager& resources)
 	{
 		const auto& luminanceComponent = device->GetResourceManager().Get(resources.GetTexture(luminanceTexture));
-		const auto& irradianceComponent = device->GetResourceManager().Get(irradianceTexture);
+		const auto& irradianceComponent = device->GetResourceManager().Get(resources.GetTexture(irradianceTag));
 
 		D3D12_SHADER_RESOURCE_VIEW_DESC luminanceDesc{};
 		luminanceDesc.Format = luminanceComponent.description.format;
@@ -175,10 +181,11 @@ void ImageBasedLighting::UpdateLuts(RenderGraph& graph, RenderResource luminance
 
 	auto& prefilterPass = graph.AddPass("IBL Prefilter Pass", ExecutionQueue::Compute);
 	prefilterPass.Read(luminanceTexture, ResourceBind::SRV);
-	prefilterPass.Bind([&, luminanceTexture](CommandList& list, RenderGraphResourceManager& resources)
+	prefilterPass.Write(prefilterTag, ResourceBind::UAV);
+	prefilterPass.Bind([&, luminanceTexture, prefilterTag](CommandList& list, RenderGraphResourceManager& resources)
 	{
 		const auto& luminanceComponent = device->GetResourceManager().Get(resources.GetTexture(luminanceTexture));
-		const auto& prefilterComponent = device->GetResourceManager().Get(prefilterTexture);
+		const auto& prefilterComponent = device->GetResourceManager().Get(resources.GetTexture(prefilterTag));
 
 		D3D12_SHADER_RESOURCE_VIEW_DESC luminanceDesc{};
 		luminanceDesc.Format = luminanceComponent.description.format;
@@ -247,4 +254,6 @@ void ImageBasedLighting::UpdateLuts(RenderGraph& graph, RenderResource luminance
 			device->GetResourceManager().AddFrameDescriptor(device->GetFrameIndex(), std::move(descriptor));
 		}
 	});
+
+	return { irradianceTag, prefilterTag, brdfTag };
 }

@@ -13,14 +13,14 @@
 #include <vector>
 #include <cmath>
 
-void Atmosphere::Precompute(CommandList& list)
+void Atmosphere::Precompute(CommandList& list, TextureHandle transmittanceHandle, TextureHandle scatteringHandle, TextureHandle irradianceHandle)
 {
 	constexpr auto groupSize = 8;
 	constexpr auto scatteringOrder = 4;
 
-	const auto& transmittanceComponent = device->GetResourceManager().Get(transmittanceTexture);
-	const auto& scatteringComponent = device->GetResourceManager().Get(scatteringTexture);
-	const auto& irradianceComponent = device->GetResourceManager().Get(irradianceTexture);
+	const auto& transmittanceComponent = device->GetResourceManager().Get(transmittanceHandle);
+	const auto& scatteringComponent = device->GetResourceManager().Get(scatteringHandle);
+	const auto& irradianceComponent = device->GetResourceManager().Get(irradianceHandle);
 	const auto& deltaRayleighComponent = device->GetResourceManager().Get(deltaRayleighTexture);
 	const auto& deltaMieComponent = device->GetResourceManager().Get(deltaMieTexture);
 	const auto& deltaScatteringDensityComponent = device->GetResourceManager().Get(deltaScatteringDensityTexture);
@@ -109,7 +109,7 @@ void Atmosphere::Precompute(CommandList& list)
 	precomputeData.deltaScatteringDensityTexture = 0;
 	precomputeData.deltaIrradianceTexture = 0;
 
-	list.TransitionBarrier(transmittanceTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	list.TransitionBarrier(transmittanceHandle, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	list.FlushBarriers();
 
 	list.BindPipelineState(transmissionPrecompute);
@@ -117,7 +117,7 @@ void Atmosphere::Precompute(CommandList& list)
 	list.BindResourceTable("texturesRW", device->GetDescriptorAllocator().GetBindlessHeap());
 	list.BindConstants("precomputeData", precomputeData);
 	list.Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
-	list.UAVBarrier(transmittanceTexture);
+	list.UAVBarrier(transmittanceHandle);
 
 	// Direct irradiance.
 
@@ -133,8 +133,8 @@ void Atmosphere::Precompute(CommandList& list)
 	precomputeData.deltaScatteringDensityTexture = 0;
 	precomputeData.deltaIrradianceTexture = deltaIrradianceUAV.bindlessIndex;
 
-	list.TransitionBarrier(transmittanceTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-	list.TransitionBarrier(irradianceTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	list.TransitionBarrier(transmittanceHandle, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	list.TransitionBarrier(irradianceHandle, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	list.TransitionBarrier(deltaIrradianceTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	list.FlushBarriers();
 
@@ -145,7 +145,7 @@ void Atmosphere::Precompute(CommandList& list)
 	list.BindConstants("precomputeData", precomputeData);
 	list.Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
 	list.UAVBarrier(deltaIrradianceTexture);
-	list.UAVBarrier(irradianceTexture);
+	list.UAVBarrier(irradianceHandle);
 
 	// Single scattering.
 
@@ -161,8 +161,8 @@ void Atmosphere::Precompute(CommandList& list)
 	precomputeData.deltaScatteringDensityTexture = 0;
 	precomputeData.deltaIrradianceTexture = 0;
 
-	list.TransitionBarrier(transmittanceTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-	list.TransitionBarrier(scatteringTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	list.TransitionBarrier(transmittanceHandle, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	list.TransitionBarrier(scatteringHandle, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	list.TransitionBarrier(deltaRayleighTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	list.TransitionBarrier(deltaMieTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	list.FlushBarriers();
@@ -175,7 +175,7 @@ void Atmosphere::Precompute(CommandList& list)
 	list.Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
 	list.UAVBarrier(deltaRayleighTexture);
 	list.UAVBarrier(deltaMieTexture);
-	list.UAVBarrier(scatteringTexture);
+	list.UAVBarrier(scatteringHandle);
 
 	for (int i = 2; i <= scatteringOrder; ++i)
 	{
@@ -197,7 +197,7 @@ void Atmosphere::Precompute(CommandList& list)
 		precomputeData.deltaScatteringDensityTexture = deltaScatteringDensityUAV.bindlessIndex;
 		precomputeData.deltaIrradianceTexture = deltaIrradianceComponent.SRV->bindlessIndex;
 
-		list.TransitionBarrier(transmittanceTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		list.TransitionBarrier(transmittanceHandle, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		list.TransitionBarrier(deltaRayleighTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		list.TransitionBarrier(deltaMieTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		list.TransitionBarrier(deltaScatteringDensityTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -228,7 +228,7 @@ void Atmosphere::Precompute(CommandList& list)
 		precomputeData.deltaScatteringDensityTexture = 0;
 		precomputeData.deltaIrradianceTexture = deltaIrradianceUAV.bindlessIndex;
 
-		list.TransitionBarrier(irradianceTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		list.TransitionBarrier(irradianceHandle, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		list.TransitionBarrier(deltaRayleighTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		list.TransitionBarrier(deltaMieTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		list.TransitionBarrier(deltaIrradianceTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
@@ -241,7 +241,7 @@ void Atmosphere::Precompute(CommandList& list)
 		list.BindConstants("precomputeData", precomputeData);
 		list.Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
 		list.UAVBarrier(deltaIrradianceTexture);
-		list.UAVBarrier(irradianceTexture);
+		list.UAVBarrier(irradianceHandle);
 
 		// Multiple scattering.
 
@@ -257,8 +257,8 @@ void Atmosphere::Precompute(CommandList& list)
 		precomputeData.deltaScatteringDensityTexture = deltaScatteringDensityComponent.SRV->bindlessIndex;
 		precomputeData.deltaIrradianceTexture = 0;
 
-		list.TransitionBarrier(transmittanceTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-		list.TransitionBarrier(scatteringTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		list.TransitionBarrier(transmittanceHandle, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+		list.TransitionBarrier(scatteringHandle, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		list.TransitionBarrier(deltaRayleighTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		list.TransitionBarrier(deltaScatteringDensityTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		list.FlushBarriers();
@@ -270,13 +270,8 @@ void Atmosphere::Precompute(CommandList& list)
 		list.BindConstants("precomputeData", precomputeData);
 		list.Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
 		list.UAVBarrier(deltaRayleighTexture);
-		list.UAVBarrier(scatteringTexture);
+		list.UAVBarrier(scatteringHandle);
 	}
-
-	list.TransitionBarrier(transmittanceTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-	list.TransitionBarrier(scatteringTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-	list.TransitionBarrier(irradianceTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-	list.FlushBarriers();
 
 	// UAV cleanup.
 
@@ -418,14 +413,27 @@ void Atmosphere::Initialize(RenderDevice* inDevice, entt::registry& registry)
 	registry.emplace<LightComponent>(sunLight, LightComponent{ .type = LightType::Directional, .color = { 3.f, 3.f, 3.f } });
 }
 
-RenderResource Atmosphere::Render(RenderGraph& graph, PipelineBuilder& pipelines, RenderResource cameraBuffer, RenderResource depthStencil, RenderResource outputHDR, entt::registry& registry)
+AtmosphereResources Atmosphere::ImportResources(RenderGraph& graph)
+{
+	const auto transmittanceTag = graph.Import(transmittanceTexture);
+	const auto scatteringTag = graph.Import(scatteringTexture);
+	const auto irradianceTag = graph.Import(irradianceTexture);
+
+	return { transmittanceTag, scatteringTag, irradianceTag };
+}
+
+void Atmosphere::Render(RenderGraph& graph, AtmosphereResources resourceHandles, PipelineBuilder& pipelines, RenderResource cameraBuffer,
+	RenderResource depthStencil, RenderResource outputHDR, entt::registry& registry)
 {
 	if (dirty)
 	{
 		auto& precomputePass = graph.AddPass("Atmosphere Precompute Pass", ExecutionQueue::Compute);
-		precomputePass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
+		precomputePass.Write(resourceHandles.transmittanceHandle, ResourceBind::UAV);
+		precomputePass.Write(resourceHandles.scatteringHandle, ResourceBind::UAV);
+		precomputePass.Write(resourceHandles.irradianceHandle, ResourceBind::UAV);
+		precomputePass.Bind([&, resourceHandles](CommandList& list, RenderGraphResourceManager& resources)
 		{
-			Precompute(list);
+			Precompute(list, resources.GetTexture(resourceHandles.transmittanceHandle), resources.GetTexture(resourceHandles.scatteringHandle), resources.GetTexture(resourceHandles.irradianceHandle));
 		});
 		
 		dirty = false;
@@ -434,9 +442,16 @@ RenderResource Atmosphere::Render(RenderGraph& graph, PipelineBuilder& pipelines
 	auto& atmospherePass = graph.AddPass("Atmosphere Pass", ExecutionQueue::Graphics);
 	atmospherePass.Read(cameraBuffer, ResourceBind::CBV);
 	atmospherePass.Read(depthStencil, ResourceBind::DSV);
-	atmospherePass.Output(outputHDR, OutputBind::RTV, LoadType::Ignore);
-	atmospherePass.Bind([&, cameraBuffer, depthStencil, outputHDR](CommandList& list, RenderGraphResourceManager& resources)
+	atmospherePass.Read(resourceHandles.transmittanceHandle, ResourceBind::SRV);
+	atmospherePass.Read(resourceHandles.scatteringHandle, ResourceBind::SRV);
+	atmospherePass.Read(resourceHandles.irradianceHandle, ResourceBind::SRV);
+	atmospherePass.Output(outputHDR, OutputBind::RTV, LoadType::Preserve);
+	atmospherePass.Bind([&, cameraBuffer, depthStencil, resourceHandles, outputHDR](CommandList& list, RenderGraphResourceManager& resources)
 	{
+		const auto transmittanceHandle = resources.GetTexture(resourceHandles.transmittanceHandle);
+		const auto scatteringHandle = resources.GetTexture(resourceHandles.scatteringHandle);
+		const auto irradianceHandle = resources.GetTexture(resourceHandles.irradianceHandle);
+
 		struct BindData
 		{
 			AtmosphereData atmosphere;
@@ -447,9 +462,9 @@ RenderResource Atmosphere::Render(RenderGraph& graph, PipelineBuilder& pipelines
 		} bindData;
 		
 		bindData.atmosphere = model;
-		bindData.transmissionTexture = device->GetResourceManager().Get(transmittanceTexture).SRV->bindlessIndex;
-		bindData.scatteringTexture = device->GetResourceManager().Get(scatteringTexture).SRV->bindlessIndex;
-		bindData.irradianceTexture = device->GetResourceManager().Get(irradianceTexture).SRV->bindlessIndex;
+		bindData.transmissionTexture = device->GetResourceManager().Get(transmittanceHandle).SRV->bindlessIndex;
+		bindData.scatteringTexture = device->GetResourceManager().Get(scatteringHandle).SRV->bindlessIndex;
+		bindData.irradianceTexture = device->GetResourceManager().Get(irradianceHandle).SRV->bindlessIndex;
 		bindData.solarZenithAngle = solarZenithAngle;
 
 		list.BindPipelineState(pipelines["Atmosphere"]);
@@ -461,15 +476,27 @@ RenderResource Atmosphere::Render(RenderGraph& graph, PipelineBuilder& pipelines
 		list.DrawFullscreenQuad();
 	});
 
+	// Update the sun light entity.
+	auto& lightTransform = registry.get<TransformComponent>(sunLight);
+	lightTransform.rotation = { 0.f, solarZenithAngle + 3.14159f / 2.f, 0.f };
+}
+
+RenderResource Atmosphere::RenderEnvironmentMap(RenderGraph& graph, AtmosphereResources resourceHandles, RenderResource cameraBuffer)
+{
 	const auto luminanceTag = graph.Import(luminanceTexture);
 
 	auto& luminancePass = graph.AddPass("Atmosphere Luminance Pass", ExecutionQueue::Compute);
 	luminancePass.Read(cameraBuffer, ResourceBind::CBV);
+	luminancePass.Read(resourceHandles.transmittanceHandle, ResourceBind::SRV);
+	luminancePass.Read(resourceHandles.scatteringHandle, ResourceBind::SRV);
+	luminancePass.Read(resourceHandles.irradianceHandle, ResourceBind::SRV);
 	luminancePass.Write(luminanceTag, ResourceBind::UAV);
-	luminancePass.Bind([&, cameraBuffer, luminanceTag](CommandList& list, RenderGraphResourceManager& resources)
+	luminancePass.Bind([&, cameraBuffer, resourceHandles, luminanceTag](CommandList& list, RenderGraphResourceManager& resources)
 	{
-		// #TEMP: Should be const.
-		auto& luminanceComponent = device->GetResourceManager().Get(resources.GetTexture(luminanceTag));
+		const auto transmittanceHandle = resources.GetTexture(resourceHandles.transmittanceHandle);
+		const auto scatteringHandle = resources.GetTexture(resourceHandles.scatteringHandle);
+		const auto irradianceHandle = resources.GetTexture(resourceHandles.irradianceHandle);
+		const auto& luminanceComponent = device->GetResourceManager().Get(resources.GetTexture(luminanceTag));
 
 		D3D12_UNORDERED_ACCESS_VIEW_DESC luminanceDesc{};
 		luminanceDesc.Format = luminanceComponent.description.format;
@@ -494,9 +521,9 @@ RenderResource Atmosphere::Render(RenderGraph& graph, PipelineBuilder& pipelines
 		} bindData;
 
 		bindData.atmosphere = model;
-		bindData.transmissionTexture = device->GetResourceManager().Get(transmittanceTexture).SRV->bindlessIndex;
-		bindData.scatteringTexture = device->GetResourceManager().Get(scatteringTexture).SRV->bindlessIndex;
-		bindData.irradianceTexture = device->GetResourceManager().Get(irradianceTexture).SRV->bindlessIndex;
+		bindData.transmissionTexture = device->GetResourceManager().Get(transmittanceHandle).SRV->bindlessIndex;
+		bindData.scatteringTexture = device->GetResourceManager().Get(scatteringHandle).SRV->bindlessIndex;
+		bindData.irradianceTexture = device->GetResourceManager().Get(irradianceHandle).SRV->bindlessIndex;
 		bindData.solarZenithAngle = solarZenithAngle;
 		bindData.luminanceTexture = luminanceUAV.bindlessIndex;
 		std::vector<uint8_t> bindBytes;
@@ -520,20 +547,8 @@ RenderResource Atmosphere::Render(RenderGraph& graph, PipelineBuilder& pipelines
 		list.UAVBarrier(luminanceTexture);
 		list.FlushBarriers();
 
-		// #TEMP, #BUG: This is a limitation of the render graph implementation, so using this awful workaround for the time being.
-		// The issue is that a later pass uses the luminance texture in pixel/nonpixel state, and since resource states aren't
-		// tracked at the per-pass level, this pass thinks the resource is in a pixel/nonpixel state when it records. This causes
-		// generate mips to administer a wrong barrier (pixel/nonpixel -> uav).
-		// Remember to make luminanceComponent const again when this is fixed.
-		const auto oldState = luminanceComponent.state;
-		luminanceComponent.state = D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
 		device->GetResourceManager().GenerateMipmaps(luminanceTexture);
-		luminanceComponent.state = oldState;
 	});
-
-	// Update the sun light entity.
-	auto& lightTransform = registry.get<TransformComponent>(sunLight);
-	lightTransform.rotation = { 0.f, solarZenithAngle + 3.14159f / 2.f, 0.f };
 
 	return luminanceTag;
 }

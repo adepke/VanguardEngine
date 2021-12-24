@@ -20,7 +20,7 @@ struct LightCount
 	uint count;
 };
 
-// #TEMP
+// #TODO: Precompute view space light positions.
 ConstantBuffer<Camera> camera : register(b1);
 
 StructuredBuffer<uint> denseClusterList : register(t0);

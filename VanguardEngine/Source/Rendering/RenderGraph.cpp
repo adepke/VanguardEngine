@@ -6,7 +6,7 @@
 
 #include <algorithm>
 
-void RenderGraph::BuildAdjacencyList()
+void RenderGraph::BuildAdjacencyLists()
 {
 	for (int i = 0; i < passes.size(); ++i)
 	{
@@ -23,23 +23,47 @@ void RenderGraph::BuildAdjacencyList()
 			// #TODO: We can stop as soon as there's a single intersection, std::set_intersection will find all intersections.
 			std::set_intersection(outer->writes.cbegin(), outer->writes.cend(), inner->reads.cbegin(), inner->reads.cend(), std::back_inserter(intersection));
 
-			// If there's a write-to-read dependency, create an edge.
+			if (intersection.size() == 0)
+			{
+				// No direct write-to-read, but we may still have a write-to-write. However, we can't just check the intersection of writes since a clearing load would imply
+				// a write without a read, and therefore no dependency.
+
+				auto preservingWrites = inner->writes;
+
+				auto iter = preservingWrites.begin();
+				while (iter != preservingWrites.end())
+				{
+					if (inner->outputBindInfo.contains(*iter) && inner->outputBindInfo[*iter].second == LoadType::Clear)
+					{
+						iter = preservingWrites.erase(iter);
+					}
+
+					else
+					{
+						++iter;
+					}
+				}
+
+				std::set_intersection(outer->writes.cbegin(), outer->writes.cend(), preservingWrites.cbegin(), preservingWrites.cend(), std::back_inserter(intersection));
+			}
+
+			// If there's a write-to-read or write-to-write dependency, create an edge.
 			if (intersection.size() > 0)
 			{
-				adjacencyList[i].emplace_back(j);
+				adjacencyLists[i].emplace_back(j);
 			}
 		}
 	}
 }
 
-void RenderGraph::DepthFirstSearch(size_t node, std::vector<bool>& visited, std::stack<bool>& stack)
+void RenderGraph::DepthFirstSearch(size_t node, std::vector<bool>& visited, std::stack<size_t>& stack)
 {
 	if (visited[node])
 		return;
 
 	visited[node] = true;
 
-	for (const auto adjacentNode : adjacencyList[node])
+	for (const auto adjacentNode : adjacencyLists[node])
 	{
 		DepthFirstSearch(adjacentNode, visited, stack);
 	}
@@ -52,7 +76,7 @@ void RenderGraph::TopologicalSort()
 	sorted.reserve(passes.size());  // Most passes are unlikely to be trimmed.
 
 	std::vector<bool> visited(passes.size(), false);
-	std::stack<bool> stack;
+	std::stack<size_t> stack;
 
 	for (int i = 0; i < passes.size(); ++i)
 	{
@@ -73,7 +97,7 @@ void RenderGraph::BuildDepthMap()
 {
 	for (const auto pass : sorted)
 	{
-		for (const auto adjacentPass : adjacencyList[pass])
+		for (const auto adjacentPass : adjacencyLists[pass])
 		{
 			if (depthMap[adjacentPass] < depthMap[pass] + 1)
 			{
@@ -83,84 +107,101 @@ void RenderGraph::BuildDepthMap()
 	}
 }
 
-void RenderGraph::InjectStateBarriers(RenderDevice* device)
+void RenderGraph::InjectBarriers(RenderDevice* device, size_t passId)
 {
-	for (int i = 0; i < passes.size(); ++i)
+	auto& pass = passes[passId];
+	auto& list = passLists[passId];
+
+	const auto UAVBarrier = [&](auto handle)
 	{
-		auto& pass = passes[i];
-		auto& list = passLists[i];
-
-		for (const auto resource : pass->reads)
+		const auto& component = device->GetResourceManager().Get(handle);
+		if (component.state == D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
 		{
-			auto buffer = resourceManager->GetOptionalBuffer(resource);
-			auto texture = resourceManager->GetOptionalTexture(resource);
+			// We don't know if the previous pass wrote to this resource or not, so just be safe and emit a UAV barrier.
+			// We could figure out whether or not a write actually happened by looking at the correct pass, but that's
+			// unnecessary for now.
 
-			const auto Transition = [&](D3D12_RESOURCE_STATES state)
+			list->UAVBarrier(handle);
+		}
+	};
+
+	for (const auto resource : pass->reads)
+	{
+		auto buffer = resourceManager->GetOptionalBuffer(resource);
+		auto texture = resourceManager->GetOptionalTexture(resource);
+
+		if (buffer) UAVBarrier(*buffer);
+		else if (texture) UAVBarrier(*texture);
+
+		const auto Transition = [&](D3D12_RESOURCE_STATES state)
+		{
+			if (buffer)
 			{
-				if (buffer)
-				{
-					list->TransitionBarrier(*buffer, state);
-				}
+				list->TransitionBarrier(*buffer, state);
+			}
 
-				else if (texture)
-				{
-					list->TransitionBarrier(*texture, state);
-				}
-			};
-
-			switch (pass->bindInfo[resource])
+			else if (texture)
 			{
-			case ResourceBind::CBV: Transition(D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER); break;
-			case ResourceBind::SRV: Transition(D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE); break;
-			case ResourceBind::UAV: Transition(D3D12_RESOURCE_STATE_UNORDERED_ACCESS); break;
-			case ResourceBind::DSV: Transition(D3D12_RESOURCE_STATE_DEPTH_READ); break;
-			case ResourceBind::Indirect: Transition(D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT); break;
+				list->TransitionBarrier(*texture, state);
+			}
+		};
+
+		switch (pass->bindInfo[resource])
+		{
+		case ResourceBind::CBV: Transition(D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER); break;
+		case ResourceBind::SRV: Transition(D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE); break;
+		case ResourceBind::UAV: Transition(D3D12_RESOURCE_STATE_UNORDERED_ACCESS); break;
+		case ResourceBind::DSV: Transition(D3D12_RESOURCE_STATE_DEPTH_READ); break;
+		case ResourceBind::Indirect: Transition(D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT); break;
+		case ResourceBind::Common: Transition(D3D12_RESOURCE_STATE_COMMON); break;
+		}
+	}
+
+	for (const auto resource : pass->writes)
+	{
+		auto buffer = resourceManager->GetOptionalBuffer(resource);
+		auto texture = resourceManager->GetOptionalTexture(resource);
+
+		if (buffer) UAVBarrier(*buffer);
+		else if (texture) UAVBarrier(*texture);
+
+		const auto Transition = [&](D3D12_RESOURCE_STATES state)
+		{
+			if (buffer)
+			{
+				list->TransitionBarrier(*buffer, state);
+
+				if (state == D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+				{
+					// If we have a counter buffer, we need to make sure it's in the proper state.
+					auto& bufferComponent = device->GetResourceManager().Get(*buffer);
+					if (bufferComponent.description.uavCounter)
+					{
+						list->TransitionBarrier(bufferComponent.counterBuffer, state);
+					}
+				}
+			}
+
+			else if (texture)
+			{
+				list->TransitionBarrier(*texture, state);
+			}
+		};
+
+		if (pass->outputBindInfo.contains(resource))
+		{
+			switch (pass->outputBindInfo[resource].first)
+			{
+			case OutputBind::RTV: Transition(D3D12_RESOURCE_STATE_RENDER_TARGET); break;
+			case OutputBind::DSV: Transition(D3D12_RESOURCE_STATE_DEPTH_WRITE); break;
 			}
 		}
 
-		for (const auto resource : pass->writes)
+		else
 		{
-			auto buffer = resourceManager->GetOptionalBuffer(resource);
-			auto texture = resourceManager->GetOptionalTexture(resource);
-
-			const auto Transition = [&](D3D12_RESOURCE_STATES state)
+			switch (pass->bindInfo[resource])
 			{
-				if (buffer)
-				{
-					list->TransitionBarrier(*buffer, state);
-
-					if (state == D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
-					{
-						// If we have a counter buffer, we need to make sure it's in the proper state.
-						auto& bufferComponent = device->GetResourceManager().Get(*buffer);
-						if (bufferComponent.description.uavCounter)
-						{
-							list->TransitionBarrier(bufferComponent.counterBuffer, state);
-						}
-					}
-				}
-
-				else if (texture)
-				{
-					list->TransitionBarrier(*texture, state);
-				}
-			};
-
-			if (pass->outputBindInfo.contains(resource))
-			{
-				switch (pass->outputBindInfo[resource].first)
-				{
-				case OutputBind::RTV: Transition(D3D12_RESOURCE_STATE_RENDER_TARGET); break;
-				case OutputBind::DSV: Transition(D3D12_RESOURCE_STATE_DEPTH_WRITE); break;
-				}
-			}
-
-			else
-			{
-				switch (pass->bindInfo[resource])
-				{
-				case ResourceBind::UAV: Transition(D3D12_RESOURCE_STATE_UNORDERED_ACCESS); break;
-				}
+			case ResourceBind::UAV: Transition(D3D12_RESOURCE_STATE_UNORDERED_ACCESS); break;
 			}
 		}
 	}
@@ -192,8 +233,9 @@ void RenderGraph::Build()
 		pass->Validate();
 	}
 
-	BuildAdjacencyList();
+	BuildAdjacencyLists();
 	TopologicalSort();
+	BuildDepthMap();
 }
 
 void RenderGraph::Execute(RenderDevice* device)
@@ -207,15 +249,15 @@ void RenderGraph::Execute(RenderDevice* device)
 		passLists.emplace_back(std::move(device->AllocateFrameCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT)));
 	}
 
-	InjectStateBarriers(device);
-
-	for (int i = 0; i < passLists.size(); ++i)
+	for (const auto i : sorted)
 	{
 		auto& pass = passes[i];
 		auto& list = passLists[i];
 
 		VGScopedCPUTransientStat(pass->stableName.data());
 		VGScopedGPUTransientStat(pass->stableName.data(), device->GetDirectContext(), list->Native());
+
+		InjectBarriers(device, i);
 
 		list->BindDescriptorAllocator(device->GetDescriptorAllocator());
 
@@ -316,10 +358,6 @@ void RenderGraph::Execute(RenderDevice* device)
 		// #TODO: End render pass.
 	}
 
-	// Present the back buffer. #TODO: Implement as a present pass.
-	const auto backBuffer = resourceManager->GetTexture(taggedResources[ResourceTag::BackBuffer]);
-	passLists[passLists.size() - 1]->TransitionBarrier(backBuffer, D3D12_RESOURCE_STATE_PRESENT);
-
 	// Close and submit the command lists.
 
 	std::vector<ID3D12CommandList*> commandLists;
@@ -329,12 +367,15 @@ void RenderGraph::Execute(RenderDevice* device)
 	device->GetDirectList().Close();
 	commandLists.emplace_back(device->GetDirectList().Native());
 
-	for (auto& list : passLists)
+	for (const auto i : sorted)
 	{
+		auto& list = passLists[i];
+
 		list->FlushBarriers();
 		list->Close();
 		commandLists.emplace_back(list->Native());
 	}
 
+	// #TODO: Use the queue associated with the depth and execution type.
 	device->GetDirectQueue()->ExecuteCommandLists(commandLists.size(), commandLists.data());
 }

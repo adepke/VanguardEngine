@@ -399,6 +399,7 @@ void Renderer::Render(entt::registry& registry)
 
 	auto backBufferTag = graph.Import(device->GetBackBuffer());
 	auto cameraBufferTag = graph.Import(cameraBuffer);
+	auto lightBufferTag = graph.Import(lightBuffer);
 
 	graph.Tag(backBufferTag, ResourceTag::BackBuffer);
 	
@@ -417,16 +418,27 @@ void Renderer::Render(entt::registry& registry)
 	});
 
 	// #TODO: Don't have this here.
-	const auto clusterResources = clusteredCulling.Render(graph, registry, cameraBufferTag, depthStencilTag, lightBuffer);
+	const auto clusterResources = clusteredCulling.Render(graph, registry, cameraBufferTag, depthStencilTag, lightBufferTag);
 	
+	// #TODO: Don't have this here.
+	const auto atmosphereResources = atmosphere.ImportResources(graph);
+	const auto luminanceTexture = atmosphere.RenderEnvironmentMap(graph, atmosphereResources, cameraBufferTag);
+
+	// #TODO: Don't have this here.
+	const auto iblResources = ibl.UpdateLuts(graph, luminanceTexture, cameraBufferTag);
+
 	auto& forwardPass = graph.AddPass("Forward Pass", ExecutionQueue::Graphics);
 	const auto outputHDRTag = forwardPass.Create(TransientTextureDescription{
 		.format = DXGI_FORMAT_R16G16B16A16_FLOAT
 	}, VGText("Output HDR sRGB"));
 	forwardPass.Read(depthStencilTag, ResourceBind::DSV);
 	forwardPass.Read(cameraBufferTag, ResourceBind::CBV);
+	forwardPass.Read(lightBufferTag, ResourceBind::SRV);
 	forwardPass.Read(clusterResources.lightList, ResourceBind::SRV);
 	forwardPass.Read(clusterResources.lightInfo, ResourceBind::SRV);
+	forwardPass.Read(iblResources.irradianceTag, ResourceBind::SRV);
+	forwardPass.Read(iblResources.prefilterTag, ResourceBind::SRV);
+	forwardPass.Read(iblResources.brdfTag, ResourceBind::SRV);
 	forwardPass.Output(outputHDRTag, OutputBind::RTV, LoadType::Clear);
 	forwardPass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
 	{
@@ -436,7 +448,7 @@ void Renderer::Render(entt::registry& registry)
 		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
 		list.BindResourceTable("textureCubes", device->GetDescriptorAllocator().GetBindlessHeap());
 		list.BindResource("camera", resources.GetBuffer(cameraBufferTag));
-		list.BindResource("lights", lightBuffer);
+		list.BindResource("lights", resources.GetBuffer(lightBufferTag));
 		list.BindResource("clusteredLightList", resources.GetBuffer(clusterResources.lightList));
 		list.BindResource("clusteredLightInfo", resources.GetBuffer(clusterResources.lightInfo));
 
@@ -468,7 +480,7 @@ void Renderer::Render(entt::registry& registry)
 			uint32_t prefilterLevels;
 		} iblData;
 
-		const auto& irradianceComponent = device->GetResourceManager().Get(ibl.irradianceTexture);
+		const auto& irradianceComponent = device->GetResourceManager().Get(resources.GetTexture(iblResources.irradianceTag));
 		
 		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
 		srvDesc.Format = irradianceComponent.description.format;
@@ -481,7 +493,7 @@ void Renderer::Render(entt::registry& registry)
 		auto irradianceSRV = device->AllocateDescriptor(DescriptorType::Default);
 		device->Native()->CreateShaderResourceView(irradianceComponent.allocation->GetResource(), &srvDesc, irradianceSRV);
 
-		const auto& prefilterComponent = device->GetResourceManager().Get(ibl.prefilterTexture);
+		const auto& prefilterComponent = device->GetResourceManager().Get(resources.GetTexture(iblResources.prefilterTag));
 
 		srvDesc.Format = prefilterComponent.description.format;
 		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
@@ -493,7 +505,7 @@ void Renderer::Render(entt::registry& registry)
 		auto prefilterSRV = device->AllocateDescriptor(DescriptorType::Default);
 		device->Native()->CreateShaderResourceView(prefilterComponent.allocation->GetResource(), &srvDesc, prefilterSRV);
 
-		const auto& brdfComponent = device->GetResourceManager().Get(ibl.brdfTexture);
+		const auto& brdfComponent = device->GetResourceManager().Get(resources.GetTexture(iblResources.brdfTag));
 
 		srvDesc.Format = brdfComponent.description.format;
 		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
@@ -527,7 +539,7 @@ void Renderer::Render(entt::registry& registry)
 		list.BindPipelineState(pipelines["ForwardTransparent"]);
 		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
 		list.BindResource("camera", resources.GetBuffer(cameraBufferTag));
-		list.BindResource("lights", lightBuffer);
+		list.BindResource("lights", resources.GetBuffer(lightBufferTag));
 		list.BindResource("clusteredLightList", resources.GetBuffer(clusterResources.lightList));
 		list.BindResource("clusteredLightInfo", resources.GetBuffer(clusterResources.lightInfo));
 		list.BindConstants("clusterData", clusterBufferData);
@@ -542,10 +554,7 @@ void Renderer::Render(entt::registry& registry)
 	});
 
 	// #TODO: Don't have this here.
-	const auto luminanceTexture = atmosphere.Render(graph, pipelines, cameraBufferTag, depthStencilTag, outputHDRTag, registry);
-
-	// #TODO: Don't have this here.
-	ibl.UpdateLuts(graph, luminanceTexture, cameraBufferTag);
+	atmosphere.Render(graph, atmosphereResources, pipelines, cameraBufferTag, depthStencilTag, outputHDRTag, registry);
 
 	auto& postProcessPass = graph.AddPass("Post Process Pass", ExecutionQueue::Graphics);
 	const auto outputLDRTag = postProcessPass.Create(TransientTextureDescription{
@@ -570,12 +579,19 @@ void Renderer::Render(entt::registry& registry)
 	// #TODO: Don't have this here.
 	Editor::Get().Render(graph, *device, *this, registry, cameraBufferTag, depthStencilTag, outputLDRTag, backBufferTag, clusterResources);
 
+	auto& presentPass = graph.AddPass("Present", ExecutionQueue::Graphics);
+	presentPass.Read(backBufferTag, ResourceBind::Common);
+	presentPass.Bind([](CommandList& list, RenderGraphResourceManager& resources)
+	{
+		// We can't call present here since it would execute during pass recording.
+		// #TODO: Try to find a better solution for this.
+		//device->Present();
+	});
+
 	graph.Build();
 	graph.Execute(device.get());
 
-	// #TODO: Move to a present pass.
 	device->Present();
-
 	device->AdvanceGPU();
 
 	Editor::Get().Update();

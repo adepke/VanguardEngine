@@ -215,10 +215,9 @@ void ClusteredLightCulling::Initialize(RenderDevice* inDevice)
 	}
 }
 
-ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::registry& registry, RenderResource cameraBuffer, RenderResource depthStencil, BufferHandle lights)
+ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::registry& registry, RenderResource cameraBuffer, RenderResource depthStencil, RenderResource lightsBuffer)
 {
 	VGScopedCPUStat("Clustered Light Culling");
-	VGScopedGPUStat("Clustered Light Culling", device->GetDirectContext(), device->GetDirectList().Native());
 
 	gridInfo = ComputeGridInfo(registry);
 	if (gridInfo.x == 0 || gridInfo.y == 0 || gridInfo.z == 0)
@@ -330,12 +329,10 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 		list.Dispatch(1, 1, 1);
 	});
 
-	auto& lightsBufferComponent = device->GetResourceManager().Get(lights);
-
 	auto& binningPass = graph.AddPass("Light Binning", ExecutionQueue::Compute);
 	binningPass.Read(denseClustersTag, ResourceBind::SRV);
 	binningPass.Read(clusterBoundsTag, ResourceBind::SRV);
-	//binningPass.Read(lightsBuffer, ResourceBind::SRV);
+	binningPass.Read(lightsBuffer, ResourceBind::SRV);
 	const auto lightCounterTag = binningPass.Create(TransientBufferDescription{
 		.updateRate = ResourceFrequency::Static,
 		.size = 1,
@@ -355,10 +352,9 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 	}, VGText("Cluster grid light info"));
 	binningPass.Write(lightInfoTag, ResourceBind::UAV);
 	binningPass.Read(indirectBufferTag, ResourceBind::Indirect);
-	// #TEMP
-	binningPass.Read(cameraBuffer, ResourceBind::CBV);
-	binningPass.Bind([&, denseClustersTag, lightCounterTag,
-		lightListTag, lightInfoTag, lights, indirectBufferTag, cameraBuffer](CommandList& list, RenderGraphResourceManager& resources)
+	binningPass.Read(cameraBuffer, ResourceBind::CBV);  // #TODO: Precompute view space light positions.
+	binningPass.Bind([&, denseClustersTag, clusterBoundsTag, lightsBuffer, lightCounterTag,
+		lightListTag, lightInfoTag, indirectBufferTag, cameraBuffer](CommandList& list, RenderGraphResourceManager& resources)
 	{
 		RenderUtils::Get().ClearUAV(list, resources.GetBuffer(lightCounterTag));
 		RenderUtils::Get().ClearUAV(list, resources.GetBuffer(lightInfoTag));
@@ -369,16 +365,16 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 
 		list.BindPipelineState(binningState);
 		list.BindResource("denseClusterList", resources.GetBuffer(denseClustersTag));
-		list.BindResource("clusterBounds", clusterBounds);
-		list.BindResource("lights", lights);
+		list.BindResource("clusterBounds", resources.GetBuffer(clusterBoundsTag));
+		list.BindResource("lights", resources.GetBuffer(lightsBuffer));
 		list.BindResource("lightCounter", resources.GetBuffer(lightCounterTag));
 		list.BindResource("lightList", resources.GetBuffer(lightListTag));
 		list.BindResource("clusterLightInfo", resources.GetBuffer(lightInfoTag));
 
-		// #TEMP
+		// #TODO: Precompute view space light positions.
 		list.BindResource("camera", resources.GetBuffer(cameraBuffer));
 
-		auto& lightComponent = device->GetResourceManager().Get(lights);
+		auto& lightComponent = device->GetResourceManager().Get(resources.GetBuffer(lightsBuffer));
 		list.BindConstants("lightCount", { (uint32_t)lightComponent.description.size });
 
 		auto& indirectComponent = device->GetResourceManager().Get(resources.GetBuffer(indirectBufferTag));
@@ -396,7 +392,7 @@ RenderResource ClusteredLightCulling::RenderDebugOverlay(RenderGraph& graph, Ren
 	const auto clusterDebugOverlayTag = overlayPass.Create(TransientTextureDescription{
 		.format = DXGI_FORMAT_R16G16B16A16_FLOAT
 	}, VGText("Cluster debug overlay"));
-	overlayPass.Output(clusterDebugOverlayTag, OutputBind::RTV, LoadType::Ignore);
+	overlayPass.Output(clusterDebugOverlayTag, OutputBind::RTV, LoadType::Preserve);
 	overlayPass.Bind([&, lightInfoBuffer, clusterVisibilityBuffer](CommandList& list, RenderGraphResourceManager& resources)
 	{
 		list.BindPipelineState(debugOverlayState);

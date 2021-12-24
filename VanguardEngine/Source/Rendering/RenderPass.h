@@ -18,7 +18,8 @@ enum class ResourceBind
 	SRV,
 	UAV,
 	DSV,
-	Indirect
+	Indirect,
+	Common
 };
 
 enum class OutputBind
@@ -29,7 +30,7 @@ enum class OutputBind
 
 enum class LoadType
 {
-	Ignore,
+	Preserve,
 	Clear
 };
 

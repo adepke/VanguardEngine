@@ -93,7 +93,7 @@ void EngineBoot()
 #endif
 
 	auto device = std::make_unique<RenderDevice>(static_cast<HWND>(window->GetHandle()), false, enableDebugging);
-	Renderer::Get().Initialize(std::move(window), std::move(device));
+	Renderer::Get().Initialize(std::move(window), std::move(device), registry);
 
 	// The input requires the user interface to be created first.
 	Input::Initialize(Renderer::Get().window->GetHandle());
@@ -130,9 +130,11 @@ void EngineLoop()
 	//registry.emplace<MeshComponent>(sponza, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/PbrSpheres/scene.gltf"));
 	//registry.emplace<MeshComponent>(sponza, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/GoldKPM.glb"));
 	//registry.emplace<MeshComponent>(sponza, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/Bowl2.glb"));
+	//registry.emplace<MeshComponent>(sponza, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/3Spheres.glb"));
+	//registry.emplace<MeshComponent>(sponza, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/radio.glb"));
 
 	const auto light = registry.create();
-	registry.emplace<LightComponent>(light, LightComponent{ .color = { 1.f, 1.f, 1.f } });
+	registry.emplace<LightComponent>(light, LightComponent{ .type = LightType::Point, .color = { 1.f, 1.f, 1.f } });
 	registry.emplace<TransformComponent>(light, TransformComponent{ .scale = { 1.f, 1.f, 1.f }, .rotation = { 0.f, 0.f, 0.f }, .translation = { -15.f, 28.f, 3200.f } });
 
 	int lightCount = 0;//10000;
@@ -140,7 +142,7 @@ void EngineLoop()
 
 	for (int i = 0; i < lightCount; ++i)
 	{
-		LightComponent pointLight{ .color = { (float)Rand(0.2f, 1.f), (float)Rand(0.2f, 1.f), (float)Rand(0.2f, 1.f) } };
+		LightComponent pointLight{ .type = LightType::Point, .color = { (float)Rand(0.2f, 1.f), (float)Rand(0.2f, 1.f), (float)Rand(0.2f, 1.f) } };
 		// Sponza lights.
 		TransformComponent transform{
 			.scale = { 1.f, 1.f, 1.f },

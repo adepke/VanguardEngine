@@ -10,6 +10,7 @@
 #include <utility>
 #include <list>
 #include <optional>
+#include <algorithm>
 
 class RenderDevice;
 class RenderGraph;
@@ -63,6 +64,9 @@ public:
 
 inline const RenderResource RenderGraphResourceManager::AddResource(const BufferHandle resource)
 {
+	// #TODO: Resources can be re-imported, and this will just create a new entry to the same underlying resource, but with a different handle.
+	// This is probably an issue, will need to figure something out eventually.
+
 	RenderResource result{ counter++ };
 	bufferResources[result] = resource;
 
@@ -71,6 +75,8 @@ inline const RenderResource RenderGraphResourceManager::AddResource(const Buffer
 
 inline const RenderResource RenderGraphResourceManager::AddResource(const TextureHandle resource)
 {
+	// #TODO: See above todo.
+
 	RenderResource result{ counter++ };
 	textureResources[result] = resource;
 

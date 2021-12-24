@@ -63,7 +63,7 @@ public:
 
 	void Initialize(RenderDevice* inDevice);
 	const ClusterGridInfo& GetGridInfo() const { return gridInfo; }
-	ClusterResources Render(RenderGraph& graph, const entt::registry& registry, RenderResource cameraBuffer, RenderResource depthStencil, BufferHandle lights);
+	ClusterResources Render(RenderGraph& graph, const entt::registry& registry, RenderResource cameraBuffer, RenderResource depthStencil, RenderResource lightsBuffer);
 	RenderResource RenderDebugOverlay(RenderGraph& graph, RenderResource lightInfoBuffer, RenderResource clusterVisibilityBuffer);
 
 	void MarkDirty() { dirty = true; };
