@@ -3,7 +3,7 @@
 #ifndef __CUBEMAP_HLSLI__
 #define __CUBEMAP_HLSLI__
 
-// Utility for generating cubemaps in a computer shader.
+// Utility for generating cubemaps in a compute shader.
 float3 ComputeDirection(float2 uv, uint z)
 {
 	switch (z)
