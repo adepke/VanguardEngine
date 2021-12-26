@@ -44,7 +44,7 @@ Output main(Input input)
 	Texture3D scatteringLut = textures3D[bindData.scatteringTexture];
 	Texture2D irradianceLut = textures[bindData.irradianceTexture];
 	
-	float3 atmosphere = SampleAtmosphere(bindData.atmosphere, camera, rayDirection, sunDirection, planetCenter, transmittanceLut, scatteringLut, irradianceLut, lutSampler);
+	float3 atmosphere = SampleAtmosphere(bindData.atmosphere, camera, rayDirection, sunDirection, planetCenter, true, transmittanceLut, scatteringLut, irradianceLut, lutSampler);
 	
 	Output output;
 	output.color.rgb = atmosphere;

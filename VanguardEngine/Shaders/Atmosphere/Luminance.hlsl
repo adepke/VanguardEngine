@@ -59,6 +59,6 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	Texture3D scatteringLut = textures3D[bindData.scatteringTexture];
 	Texture2D irradianceLut = textures[bindData.irradianceTexture];
 	
-	float3 sample = SampleAtmosphere(bindData.atmosphere, camera, direction, sunDirection, planetCenter, transmittanceLut, scatteringLut, irradianceLut, lutSampler);
+	float3 sample = SampleAtmosphere(bindData.atmosphere, camera, direction, sunDirection, planetCenter, false, transmittanceLut, scatteringLut, irradianceLut, lutSampler);
 	luminanceMap[dispatchId] = float4(sample, 0.f);
 }

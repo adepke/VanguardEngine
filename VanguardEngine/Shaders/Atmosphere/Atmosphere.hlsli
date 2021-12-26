@@ -783,7 +783,7 @@ float4 GetPlanetSurfaceRadiance(AtmosphereData atmosphere, float3 planetCenter, 
 	return 0.f;
 }
 
-float3 SampleAtmosphere(AtmosphereData atmosphere, Camera camera, float3 direction, float3 sunDirection, float3 planetCenter, Texture2D transmittanceLut, Texture3D scatteringLut, Texture2D irradianceLut, SamplerState lutSampler)
+float3 SampleAtmosphere(AtmosphereData atmosphere, Camera camera, float3 direction, float3 sunDirection, float3 planetCenter, bool directSolarRadiance, Texture2D transmittanceLut, Texture3D scatteringLut, Texture2D irradianceLut, SamplerState lutSampler)
 {
 	static const float3 surfaceOffset = float3(0.f, 0.f, 1.f);  // The atmosphere looks better off of the surface.
 	float3 cameraPosition = camera.position.xyz / 1000.f + surfaceOffset;  // Atmosphere distances work in terms of kilometers due to floating point precision, so convert.
@@ -792,7 +792,10 @@ float3 SampleAtmosphere(AtmosphereData atmosphere, Camera camera, float3 directi
 	float3 radiance = GetSkyRadiance(atmosphere, transmittanceLut, scatteringLut, lutSampler, cameraPosition - planetCenter, direction, 0.f, sunDirection, transmittance);
 	
 	// If the ray intersects the sun, add solar radiance.
-	if (dot(direction, sunDirection) > cos(sunAngularRadius))
+	// We don't want this for specular IBL, since the sun has immense radiant energy that will not
+	// be represented properly in the prefilter map. Instead, the specular highlight of the sun is
+	// contributed by a directional light with matching radiance.
+	if (directSolarRadiance && dot(direction, sunDirection) > cos(sunAngularRadius))
 	{
 		radiance += transmittance * GetSolarRadiance(atmosphere);
 	}
@@ -800,7 +803,7 @@ float3 SampleAtmosphere(AtmosphereData atmosphere, Camera camera, float3 directi
 	float4 planetRadiance = GetPlanetSurfaceRadiance(atmosphere, planetCenter, cameraPosition, direction, sunDirection, transmittanceLut, scatteringLut, irradianceLut, lutSampler);
 	radiance = lerp(radiance, planetRadiance.xyz, planetRadiance.w);
 	
-	return 1.f - exp(-radiance * 10.f);
+	return radiance * 10.f;  // 10 is the default exposure used in Bruneton's demo.
 }
 
 #endif  // __ATMOSPHERE_HLSLI__
