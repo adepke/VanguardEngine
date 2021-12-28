@@ -21,7 +21,7 @@ float3 SRGBToLinear(float3 sRGBColor)
 }
 
 // Only for sRGB and Rec. 709 color space.
-float3 LinearToLuminance(float3 linearColor)
+float LinearToLuminance(float3 linearColor)
 {
 	return dot(linearColor, float3(0.2126f, 0.7152f, 0.0722f));  // CIE transport function.
 }
