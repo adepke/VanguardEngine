@@ -164,6 +164,7 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 			description.height = info.first.height;
 			description.depth = info.first.depth;
 			description.format = info.first.format;
+			description.mipMapping = info.first.mipMapping;
 
 			if (hasShaderResource) description.bindFlags |= BindFlag::ShaderResource;
 			if (hasUnorderedAccess) description.bindFlags |= BindFlag::UnorderedAccess;
