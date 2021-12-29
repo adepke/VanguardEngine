@@ -130,6 +130,7 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 			// which binding we need.
 
 			bool hasShaderResource = false;
+			bool hasUnorderedAccess = false;
 			bool hasRenderTarget = false;
 			bool hasDepthStencil = false;
 
@@ -137,8 +138,12 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 			{
 				if (pass->bindInfo.contains(resource))
 				{
-					if (pass->bindInfo[resource] == ResourceBind::SRV) hasShaderResource = true;
-					else if (pass->bindInfo[resource] == ResourceBind::DSV) hasDepthStencil = true;
+					switch (pass->bindInfo[resource])
+					{
+					case ResourceBind::SRV: hasShaderResource = true; break;
+					case ResourceBind::UAV: hasUnorderedAccess = true; break;
+					case ResourceBind::DSV: hasDepthStencil = true; break;
+					}
 				}
 
 				if (pass->outputBindInfo.contains(resource))
@@ -161,13 +166,14 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 			description.format = info.first.format;
 
 			if (hasShaderResource) description.bindFlags |= BindFlag::ShaderResource;
+			if (hasUnorderedAccess) description.bindFlags |= BindFlag::UnorderedAccess;
 			if (hasRenderTarget) description.bindFlags |= BindFlag::RenderTarget;
 			if (hasDepthStencil) description.bindFlags |= BindFlag::DepthStencil;
 
 			if (description.width == 0 || description.height == 0)
 			{
-				description.width = outputWidth;
-				description.height = outputHeight;
+				description.width = outputWidth * info.first.resolutionScale;
+				description.height = outputHeight * info.first.resolutionScale;
 			}
 
 			const auto texture = device->GetResourceManager().Create(description, info.second);

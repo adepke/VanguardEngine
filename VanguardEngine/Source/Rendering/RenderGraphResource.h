@@ -56,10 +56,11 @@ struct TransientTextureDescription
 	uint32_t width = 0;  // Will match back buffer resolution if left at 0.
 	uint32_t height = 0;  // Will match back buffer resolution if left at 0.
 	uint32_t depth = 1;
+	float resolutionScale = 1.f;  // Only applies if using back buffer resolution.
 	DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
 
 	bool operator==(const TransientTextureDescription& other) const noexcept
 	{
-		return width == other.width && height == other.height && depth == other.depth && format == other.format;
+		return width == other.width && height == other.height && depth == other.depth && resolutionScale == other.resolutionScale && format == other.format;
 	}
 };
