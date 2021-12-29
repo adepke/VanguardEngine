@@ -771,7 +771,7 @@ float4 GetPlanetSurfaceRadiance(AtmosphereData atmosphere, float3 planetCenter, 
 		
 		float sunVisibility = 1.f;  // Light shafts are not yet supported.
 		float skyVisibility = 1.f;  // Light shafts are not yet supported.
-		float3 radiance = atmosphere.surfaceColor * (1.f / pi) * (sunIrradiance * sunVisibility) + (skyIrradiance * skyVisibility);
+		float3 radiance = atmosphere.surfaceColor * (1.f / pi) * ((sunIrradiance * sunVisibility) + (skyIrradiance * skyVisibility));
 		
 		float shadowLength = 0.f;  // Light shafts are not yet supported.
 		float3 transmittance;
