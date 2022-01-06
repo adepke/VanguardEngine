@@ -56,7 +56,7 @@ float3 FilteredSample(Texture2D source, float2 uv, float2 texelSize)
 
 [RootSignature(RS)]
 [numthreads(8, 8, 1)]
-void Main(uint3 dispatchId : SV_DispatchThreadID, uint groupIndex : SV_GroupIndex)
+void Main(uint3 dispatchId : SV_DispatchThreadID)
 {
 	Texture2D<float4> input = textures[bindData.inputTexture];
 	RWTexture2D<float4> output = texturesRW[bindData.outputTexture];
