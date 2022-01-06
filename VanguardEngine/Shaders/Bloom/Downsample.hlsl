@@ -40,16 +40,16 @@ float3 QuadSample(Texture2D source, float2 uv, float2 texelSize)
 	return Average(a, b, c, d);
 }
 
-float3 FilteredSample(Texture2D source, float2 uv, float2 texelSize)
+float3 FilteredSample(Texture2D source, float2 location, float2 texelSize)
 {
 	// 36 tap filter, eliminates pulsating artifacts and temporal stability issues.
 	// See: http://advances.realtimerendering.com/s2014/sledgehammer/Next-Generation-Post-Processing-in-Call-of-Duty-Advanced-Warfare-v17.pptx
 	
-	float3 result = 0.5f * QuadSample(source, uv * texelSize, texelSize);  // Center.
-	result += 0.125f * QuadSample(source, (uv + float2(-1.f, -1.f)) * texelSize, texelSize);  // Top left.
-	result += 0.125f * QuadSample(source, (uv + float2(1.f, -1.f)) * texelSize, texelSize);  // Top right.
-	result += 0.125f * QuadSample(source, (uv + float2(-1.f, 1.f)) * texelSize, texelSize);  // Bottom left.
-	result += 0.125f * QuadSample(source, (uv + float2(1.f, 1.f)) * texelSize, texelSize);  // Bottom right.
+	float3 result = 0.5f * QuadSample(source, location * texelSize, texelSize);  // Center.
+	result += 0.125f * QuadSample(source, (location + float2(-1.f, -1.f)) * texelSize, texelSize);  // Top left.
+	result += 0.125f * QuadSample(source, (location + float2(1.f, -1.f)) * texelSize, texelSize);  // Top right.
+	result += 0.125f * QuadSample(source, (location + float2(-1.f, 1.f)) * texelSize, texelSize);  // Bottom left.
+	result += 0.125f * QuadSample(source, (location + float2(1.f, 1.f)) * texelSize, texelSize);  // Bottom right.
 	
 	return result;
 }
