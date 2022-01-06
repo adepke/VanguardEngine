@@ -71,7 +71,8 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 
 			if (hasConstantBuffer) description.bindFlags |= BindFlag::ConstantBuffer;
 			if (hasShaderResource) description.bindFlags |= BindFlag::ShaderResource;
-			if (hasUnorderedAccess) description.bindFlags |= BindFlag::UnorderedAccess;
+			// Some passes use SRV's of resources in UAV states, like mipmap generation.
+			if (hasUnorderedAccess) description.bindFlags |= BindFlag::UnorderedAccess | BindFlag::ShaderResource;
 
 			const auto buffer = device->GetResourceManager().Create(description, info.second);
 			bufferResources[resource] = buffer;
@@ -167,7 +168,8 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 			description.mipMapping = info.first.mipMapping;
 
 			if (hasShaderResource) description.bindFlags |= BindFlag::ShaderResource;
-			if (hasUnorderedAccess) description.bindFlags |= BindFlag::UnorderedAccess;
+			// Some passes use SRV's of resources in UAV states, like mipmap generation.
+			if (hasUnorderedAccess) description.bindFlags |= BindFlag::UnorderedAccess | BindFlag::ShaderResource;
 			if (hasRenderTarget) description.bindFlags |= BindFlag::RenderTarget;
 			if (hasDepthStencil) description.bindFlags |= BindFlag::DepthStencil;
 
