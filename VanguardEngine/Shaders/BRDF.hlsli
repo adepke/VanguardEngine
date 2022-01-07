@@ -19,7 +19,7 @@ float TrowbridgeReitzGGX(float3 normal, float3 halfway, float roughness)
 	const float roughness2 = roughness * roughness;
 	const float normalDotHalfway = saturate(dot(normal, halfway));
 	const float normalDotHalfway2 = normalDotHalfway * normalDotHalfway;
-	const float denominator = normalDotHalfway2 * (roughness2 - 1.0) + 1.0;
+	const float denominator = normalDotHalfway2 * (roughness2 - 1.0) + 1.0 + 0.001;  // Prevent division by 0.
 
 	return roughness2 / (pi * denominator * denominator);
 }
@@ -71,7 +71,7 @@ float3 CookTorranceSpecular(float3 normal, float3 view, float3 halfway, float3 l
 {
 	const float3 DFG = TrowbridgeReitzGGX(normal, halfway, roughness) * fresnel * SmithGeometry(normal, view, light, ComputeGeometryConstant(LightingType::Direct, roughness));
 
-	return DFG / max(4.0 * saturate(dot(view, normal)) * saturate(dot(light, normal)), 0.001);
+	return DFG / (4.0 * saturate(dot(view, normal)) * saturate(dot(light, normal)) + 0.001);  // Prevent division by 0.
 }
 
 float3 BRDF(float3 normal, float3 view, float3 halfway, float3 light, float3 baseColor, float metalness, float roughness, float3 radiance)
