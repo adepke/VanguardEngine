@@ -4,7 +4,7 @@
 
 #define RS \
 	"RootFlags(0)," \
-	"RootConstants(b0, num32BitConstants = 3)," \
+	"RootConstants(b0, num32BitConstants = 4)," \
 	"DescriptorTable(" \
 		"SRV(t0, space = 0, numDescriptors = unbounded, flags = DESCRIPTORS_VOLATILE))," \
 	"DescriptorTable(" \
@@ -19,17 +19,20 @@
 
 struct BindData
 {
-	uint hdrSource;
-	uint bloomSamples;
-	uint bloomMips;
+	uint inputTexture;
+	uint inputMip;
+	uint outputTexture;
+	float intensity;
 };
 
 ConstantBuffer<BindData> bindData : register(b0);
-SamplerState bilinearClampSampler : register(s0);
+SamplerState bilinearClampSampler : register(s0);  // Clamp to edge, see: https://www.froyok.fr/blog/2021-12-ue4-custom-bloom/
 
 float3 FilteredSample(Texture2D source, uint level, float2 uv, float2 texelSize)
-{
-	// 3x3 tent filter. See: http://advances.realtimerendering.com/s2014/sledgehammer/Next-Generation-Post-Processing-in-Call-of-Duty-Advanced-Warfare-v17.pptx
+{	
+	// 3x3 Bartlett filter.
+	// See: http://advances.realtimerendering.com/s2014/sledgehammer/Next-Generation-Post-Processing-in-Call-of-Duty-Advanced-Warfare-v17.pptx,
+	// https://www.researchgate.net/publication/220868865_Pyramid_filters_based_on_bilinear_interpolation
 
 	float3 result = 1.f * source.SampleLevel(bilinearClampSampler, uv + float2(-texelSize.x, -texelSize.y), level).rgb;
 	result += 2.f * source.SampleLevel(bilinearClampSampler, uv + float2(0.f, -texelSize.y), level).rgb;
@@ -48,27 +51,16 @@ float3 FilteredSample(Texture2D source, uint level, float2 uv, float2 texelSize)
 [numthreads(8, 8, 1)]
 void Main(uint3 dispatchId : SV_DispatchThreadID)
 {
-	RWTexture2D<float4> hdrSource = texturesRW[bindData.hdrSource];
-	Texture2D<float4> bloomSamples = textures[bindData.bloomSamples];
+	Texture2D<float4> input = textures[bindData.inputTexture];
+	RWTexture2D<float4> output = texturesRW[bindData.outputTexture];
 	
-	uint width, height;
-	bloomSamples.GetDimensions(width, height);
+	float2 outputDimensions;
+	output.GetDimensions(outputDimensions.x, outputDimensions.y);
 	
-	float2 uv = dispatchId.xy / (float2(width, height) * 2.f);
-	float3 pixel = 0.f;
+	float2 center = (dispatchId.xy + 0.5f) / outputDimensions;
+	float2 texelSize = 1.f / outputDimensions;
 	
-	// Progressive filtered upsample.
-	
-	for (int i = bindData.bloomMips; i >= 0; --i)
-	{
-		float mipWidth, mipHeight, mipLevels;
-		bloomSamples.GetDimensions(i, mipWidth, mipHeight, mipLevels);
-		
-		float2 texelSize = 1.f / float2(mipWidth, mipHeight);
-		
-		float3 mipSample = FilteredSample(bloomSamples, i, uv, texelSize);
-		pixel += mipSample;
-	}
-	
-	hdrSource[dispatchId.xy].rgb += pixel;
+	float3 current = output[dispatchId.xy].rgb;
+	float3 upsample = FilteredSample(input, bindData.inputMip, center, texelSize);
+	output[dispatchId.xy].rgb = lerp(current, upsample, bindData.intensity);  // See: https://www.froyok.fr/blog/2021-12-ue4-custom-bloom/
 }

@@ -12,9 +12,10 @@
 	"StaticSampler(" \
 		"s0," \
 		"filter = FILTER_MIN_MAG_LINEAR_MIP_POINT," \
-		"addressU = TEXTURE_ADDRESS_CLAMP," \
-		"addressV = TEXTURE_ADDRESS_CLAMP," \
-		"addressW = TEXTURE_ADDRESS_CLAMP)"
+		"addressU = TEXTURE_ADDRESS_BORDER," \
+		"addressV = TEXTURE_ADDRESS_BORDER," \
+		"addressW = TEXTURE_ADDRESS_BORDER," \
+		"borderColor = STATIC_BORDER_COLOR_OPAQUE_BLACK)"
 
 struct BindData
 {
@@ -23,7 +24,7 @@ struct BindData
 };
 
 ConstantBuffer<BindData> bindData : register(b0);
-SamplerState bilinearClampSampler : register(s0);
+SamplerState bilinearBorderSampler : register(s0);  // Black border color, see: https://www.froyok.fr/blog/2021-12-ue4-custom-bloom/
 
 float3 Average(float3 a, float3 b, float3 c, float3 d)
 {
@@ -32,10 +33,10 @@ float3 Average(float3 a, float3 b, float3 c, float3 d)
 
 float3 QuadSample(Texture2D source, float2 uv, float2 texelSize)
 {
-	float3 a = source.SampleLevel(bilinearClampSampler, uv + float2(-texelSize.x, -texelSize.y), 0).rgb;  // Top left.
-	float3 b = source.SampleLevel(bilinearClampSampler, uv + float2(texelSize.x, -texelSize.y), 0).rgb;  // Top right.
-	float3 c = source.SampleLevel(bilinearClampSampler, uv + float2(-texelSize.x, texelSize.y), 0).rgb;  // Bottom left.
-	float3 d = source.SampleLevel(bilinearClampSampler, uv + float2(texelSize.x, texelSize.y), 0).rgb;  // Bottom right.
+	float3 a = source.SampleLevel(bilinearBorderSampler, uv + float2(-texelSize.x, -texelSize.y), 0).rgb;  // Top left.
+	float3 b = source.SampleLevel(bilinearBorderSampler, uv + float2(texelSize.x, -texelSize.y), 0).rgb;  // Top right.
+	float3 c = source.SampleLevel(bilinearBorderSampler, uv + float2(-texelSize.x, texelSize.y), 0).rgb;  // Bottom left.
+	float3 d = source.SampleLevel(bilinearBorderSampler, uv + float2(texelSize.x, texelSize.y), 0).rgb; // Bottom right.
 	
 	return Average(a, b, c, d);
 }

@@ -5,7 +5,7 @@
 
 #define RS \
 	"RootFlags(0)," \
-	"RootConstants(b0, num32BitConstants = 3)," \
+	"RootConstants(b0, num32BitConstants = 2)," \
 	"DescriptorTable(" \
 		"SRV(t0, space = 0, numDescriptors = unbounded, flags = DESCRIPTORS_VOLATILE))," \
 	"DescriptorTable(" \
@@ -22,11 +22,22 @@ struct BindData
 {
 	uint inputTexture;
 	uint outputTexture;
-	float threshold;
 };
 
 ConstantBuffer<BindData> bindData : register(b0);
 SamplerState bilinearClampSampler : register(s0);
+
+float3 KarisAverage(float3 a, float3 b, float3 c, float3 d)
+{
+	// See: https://graphicrants.blogspot.com/2013/12/tone-mapping.html
+	
+	float3 weightA = 1.f / (1.f + LinearToLuminance(a));
+	float3 weightB = 1.f / (1.f + LinearToLuminance(b));
+	float3 weightC = 1.f / (1.f + LinearToLuminance(c));
+	float3 weightD = 1.f / (1.f + LinearToLuminance(d));
+	
+	return (a * weightA + b * weightB + c * weightC + d * weightD) / (weightA + weightB + weightC + weightD);
+}
 
 [RootSignature(RS)]
 [numthreads(8, 8, 1)]
@@ -35,30 +46,17 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	Texture2D<float4> input = textures[bindData.inputTexture];
 	RWTexture2D<float4> output = texturesRW[bindData.outputTexture];
 	
-	float2 outputDimensions;
-	output.GetDimensions(outputDimensions.x, outputDimensions.y);
+	float2 inputDimensions;
+	input.GetDimensions(inputDimensions.x, inputDimensions.y);
 	
-	float2 center = (dispatchId.xy + 0.5f);
-	float2 texelSize = 1.f / outputDimensions;
+	float2 center = (dispatchId.xy * 2.f + 1.f);
+	float2 texelSize = 1.f / inputDimensions;
 	
 	// 4 bilinear samples to prevent undersampling.
-	float3 a = input.Sample(bilinearClampSampler, (center + float2(-0.25f, -0.25f)) * texelSize).rgb;  // Top left.
-	float3 b = input.Sample(bilinearClampSampler, (center + float2(0.25f, -0.25f)) * texelSize).rgb;  // Top right.
-	float3 c = input.Sample(bilinearClampSampler, (center + float2(-0.25f, 0.25f)) * texelSize).rgb;  // Bottom left.
-	float3 d = input.Sample(bilinearClampSampler, (center + float2(0.25f, 0.25f)) * texelSize).rgb;  // Bottom right.
+	float3 a = input.Sample(bilinearClampSampler, (center + float2(-1.f, -1.f)) * texelSize).rgb;  // Top left.
+	float3 b = input.Sample(bilinearClampSampler, (center + float2(1.f, -1.f)) * texelSize).rgb;  // Top right.
+	float3 c = input.Sample(bilinearClampSampler, (center + float2(-1.f, 1.f)) * texelSize).rgb;  // Bottom left.
+	float3 d = input.Sample(bilinearClampSampler, (center + float2(1.f, 1.f)) * texelSize).rgb;  // Bottom right.
 	
-	const float luminanceA = LinearToLuminance(a);
-	const float luminanceB = LinearToLuminance(b);
-	const float luminanceC = LinearToLuminance(c);
-	const float luminanceD = LinearToLuminance(d);
-	
-	// Brightness filter pass, reduces contribution from fireflies.
-	// See: https://github.com/microsoft/DirectX-Graphics-Samples/blob/master/MiniEngine/Core/Shaders/BloomExtractAndDownsampleHdrCS.hlsl
-	const float epsilon = 0.0001f;
-	a *= max(epsilon, luminanceA - bindData.threshold) / (luminanceA + epsilon);
-	b *= max(epsilon, luminanceB - bindData.threshold) / (luminanceB + epsilon);
-	c *= max(epsilon, luminanceC - bindData.threshold) / (luminanceC + epsilon);
-	d *= max(epsilon, luminanceD - bindData.threshold) / (luminanceD + epsilon);
-	
-	output[dispatchId.xy] = float4((a + b + c + d) * 0.25f, 0.f);
+	output[dispatchId.xy].rgb = KarisAverage(a, b, c, d);
 }
