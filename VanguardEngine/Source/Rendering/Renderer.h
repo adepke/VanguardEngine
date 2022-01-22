@@ -16,6 +16,7 @@
 #include <Rendering/Atmosphere.h>
 #include <Rendering/ClusteredLightCulling.h>
 #include <Rendering/ImageBasedLighting.h>
+#include <Rendering/Bloom.h>
 
 #include <entt/entt.hpp>
 
@@ -45,6 +46,7 @@ public:
 	Atmosphere atmosphere;
 	ClusteredLightCulling clusteredCulling;
 	ImageBasedLighting ibl;
+	Bloom bloom;
 
 	BufferHandle instanceBuffer;
 	size_t instanceOffset = 0;

@@ -381,6 +381,7 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 	atmosphere.Initialize(device.get(), registry);
 	clusteredCulling.Initialize(device.get());
 	ibl.Initialize(device.get());
+	bloom.Initialize(device.get());
 }
 
 void Renderer::Render(entt::registry& registry)
@@ -555,6 +556,9 @@ void Renderer::Render(entt::registry& registry)
 
 	// #TODO: Don't have this here.
 	atmosphere.Render(graph, atmosphereResources, pipelines, cameraBufferTag, depthStencilTag, outputHDRTag, registry);
+
+	// #TODO: Don't have this here.
+	bloom.Render(graph, outputHDRTag);
 
 	auto& postProcessPass = graph.AddPass("Post Process Pass", ExecutionQueue::Graphics);
 	const auto outputLDRTag = postProcessPass.Create(TransientTextureDescription{

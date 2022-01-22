@@ -23,9 +23,9 @@ void Bloom::Initialize(RenderDevice* inDevice)
 	downsampleStateDesc.shader = { "Bloom/Downsample.hlsl", "Main" };
 	downsampleState.Build(*device, downsampleStateDesc);
 
-	ComputePipelineStateDescription compositionStateDesc;
-	compositionStateDesc.shader = { "Bloom/Composition.hlsl", "Main" };
-	compositionState.Build(*device, compositionStateDesc);
+	ComputePipelineStateDescription upsampleStateDesc;
+	upsampleStateDesc.shader = { "Bloom/Upsample.hlsl", "Main" };
+	upsampleState.Build(*device, upsampleStateDesc);
 }
 
 void Bloom::Render(RenderGraph& graph, RenderResource hdrSource)
@@ -62,12 +62,10 @@ void Bloom::Render(RenderGraph& graph, RenderResource hdrSource)
 		{
 			uint32_t inputTexture;
 			uint32_t outputTexture;
-			float threshold;
 		} bindData;
 
 		bindData.inputTexture = sourceTextureComponent.SRV->bindlessIndex;
 		bindData.outputTexture = extractUav.bindlessIndex;
-		bindData.threshold = 1.f;  // #TEMP
 		list.BindConstants("bindData", bindData);
 
 		uint32_t dispatchX = std::ceil(extractTextureComponent.description.width / 8.f);
@@ -150,12 +148,12 @@ void Bloom::Render(RenderGraph& graph, RenderResource hdrSource)
 		}
 	});
 
-	auto& compositionPass = graph.AddPass("Bloom Composition Pass", ExecutionQueue::Compute);
+	auto& compositionPass = graph.AddPass("Bloom Upsample Pass", ExecutionQueue::Compute);
 	compositionPass.Read(extractTexture, ResourceBind::SRV);
 	compositionPass.Write(hdrSource, ResourceBind::UAV);
 	compositionPass.Bind([this, extractTexture, hdrSource](CommandList& list, RenderGraphResourceManager& resources)
 	{
-		list.BindPipelineState(compositionState);
+		list.BindPipelineState(upsampleState);
 		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
 		list.BindResourceTable("texturesRW", device->GetDescriptorAllocator().GetBindlessHeap());
 
@@ -164,14 +162,49 @@ void Bloom::Render(RenderGraph& graph, RenderResource hdrSource)
 
 		struct BindData
 		{
-			uint32_t hdrSource;
-			uint32_t bloomSamples;
-			uint32_t bloomMips;
+			uint32_t inputTexture;
+			uint32_t inputMip;
+			uint32_t outputTexture;
+			float intensity;
 		} bindData;
 
-		bindData.bloomSamples = extractTextureComponent.SRV->bindlessIndex;
-		bindData.bloomMips = bloomPasses;
-		
+		bindData.inputTexture = extractTextureComponent.SRV->bindlessIndex;
+		bindData.intensity = internalBlend;
+
+		for (int i = 0; i < bloomPasses; ++i)
+		{
+			std::string zoneName = "Upsample pass " + std::to_string(i + 1);
+			VGScopedGPUTransientStat(zoneName.c_str(), device->GetDirectContext(), list.Native());
+
+			bindData.inputMip = bloomPasses - i;
+
+			D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
+			uavDesc.Format = extractTextureComponent.description.format;
+			uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
+			uavDesc.Texture2D.MipSlice = bindData.inputMip - 1;  // Write to the prior mip.
+			uavDesc.Texture2D.PlaneSlice = 0;
+
+			auto uav = device->AllocateDescriptor(DescriptorType::Default);
+			device->Native()->CreateUnorderedAccessView(extractTextureComponent.allocation->GetResource(), nullptr, &uavDesc, uav);
+
+			bindData.outputTexture = uav.bindlessIndex;
+
+			list.BindConstants("bindData", bindData);
+
+			const auto sizeFactor = std::pow(2.f, bloomPasses - i - 1);  // Dispatch in the dimensions of the output.
+			uint32_t dispatchX = std::ceil(extractTextureComponent.description.width / (8.f * sizeFactor));
+			uint32_t dispatchY = std::ceil(extractTextureComponent.description.height / (8.f * sizeFactor));
+
+			list.Dispatch(dispatchX, dispatchY, 1);
+
+			list.UAVBarrier(resources.GetTexture(extractTexture));
+			list.FlushBarriers();
+
+			device->GetResourceManager().AddFrameDescriptor(device->GetFrameIndex(), std::move(uav));
+		}
+
+		VGScopedGPUStat("Upsample composition", device->GetDirectContext(), list.Native());
+
 		D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc{};
 		uavDesc.Format = hdrTextureComponent.description.format;
 		uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
@@ -181,7 +214,9 @@ void Bloom::Render(RenderGraph& graph, RenderResource hdrSource)
 		auto uav = device->AllocateDescriptor(DescriptorType::Default);
 		device->Native()->CreateUnorderedAccessView(hdrTextureComponent.allocation->GetResource(), nullptr, &uavDesc, uav);
 
-		bindData.hdrSource = uav.bindlessIndex;
+		bindData.inputMip = 0;
+		bindData.outputTexture = uav.bindlessIndex;
+		bindData.intensity = intensity;
 
 		list.BindConstants("bindData", bindData);
 
