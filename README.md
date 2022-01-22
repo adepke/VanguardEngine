@@ -10,4 +10,4 @@ A Direct3D 12 real-time rendering sandbox for exploring evolving render tech.
 - Bloom
 - Simple editor
 
-![](https://user-images.githubusercontent.com/18013792/147163886-b9433e75-dcb3-4632-b2c6-e4bb23b31e2d.png)
+![](https://user-images.githubusercontent.com/18013792/150621644-213dfcb8-2dbc-4841-ae60-f68f263fb39a.png)
