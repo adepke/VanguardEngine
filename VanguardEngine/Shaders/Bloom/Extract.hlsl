@@ -58,5 +58,7 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	float3 c = input.Sample(bilinearClampSampler, (center + float2(-1.f, 1.f)) * texelSize).rgb;  // Bottom left.
 	float3 d = input.Sample(bilinearClampSampler, (center + float2(1.f, 1.f)) * texelSize).rgb;  // Bottom right.
 	
+	// Partial Karis average, applied in blocks of 4 samples.
+	// See: http://advances.realtimerendering.com/s2014/sledgehammer/Next-Generation-Post-Processing-in-Call-of-Duty-Advanced-Warfare-v17.pptx
 	output[dispatchId.xy].rgb = KarisAverage(a, b, c, d);
 }

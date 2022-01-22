@@ -36,7 +36,7 @@ float3 QuadSample(Texture2D source, float2 uv, float2 texelSize)
 	float3 a = source.SampleLevel(bilinearBorderSampler, uv + float2(-texelSize.x, -texelSize.y), 0).rgb;  // Top left.
 	float3 b = source.SampleLevel(bilinearBorderSampler, uv + float2(texelSize.x, -texelSize.y), 0).rgb;  // Top right.
 	float3 c = source.SampleLevel(bilinearBorderSampler, uv + float2(-texelSize.x, texelSize.y), 0).rgb;  // Bottom left.
-	float3 d = source.SampleLevel(bilinearBorderSampler, uv + float2(texelSize.x, texelSize.y), 0).rgb; // Bottom right.
+	float3 d = source.SampleLevel(bilinearBorderSampler, uv + float2(texelSize.x, texelSize.y), 0).rgb;  // Bottom right.
 	
 	return Average(a, b, c, d);
 }
