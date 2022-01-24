@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2021 Andrew Depke
+// Copyright (c) 2019-2022 Andrew Depke
 
 #ifndef __CONSTANTS_HLSLI__
 #define __CONSTANTS_HLSLI__

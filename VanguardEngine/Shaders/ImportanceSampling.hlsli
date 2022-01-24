@@ -1,4 +1,4 @@
-// Copyright (c) 2019-2021 Andrew Depke
+// Copyright (c) 2019-2022 Andrew Depke
 
 #ifndef __IMPORTANCE_SAMPLING_HLSLI__
 #define __IMPORTANCE_SAMPLING_HLSLI__
