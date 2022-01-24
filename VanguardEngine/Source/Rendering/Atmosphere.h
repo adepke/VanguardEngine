@@ -9,6 +9,8 @@
 
 #include <entt/entt.hpp>
 
+#include <utility>
+
 class PipelineBuilder;
 class RenderDevice;
 class RenderGraph;
@@ -87,6 +89,8 @@ private:
 
 	void Precompute(CommandList& list, TextureHandle transmittanceHandle, TextureHandle scatteringHandle, TextureHandle irradianceHandle);
 
+	PipelineState sunTransmittanceState;
+
 	static constexpr uint32_t luminanceTextureSize = 1024;
 	static_assert(luminanceTextureSize % 8 == 0, "luminanceTextureSize must be evenly divisible by 8.");
 
@@ -102,6 +106,6 @@ public:
 	AtmosphereResources ImportResources(RenderGraph& graph);
 	void Render(RenderGraph& graph, AtmosphereResources resourceHandles, PipelineBuilder& pipeline, RenderResource cameraBuffer,
 		RenderResource depthStencil, RenderResource outputHDRs, entt::registry& registry);
-	RenderResource RenderEnvironmentMap(RenderGraph& graph, AtmosphereResources resourceHandles, RenderResource cameraBuffer);
+	std::pair<RenderResource, RenderResource> RenderEnvironmentMap(RenderGraph& graph, AtmosphereResources resourceHandles, RenderResource cameraBuffer);
 	void MarkModelDirty() { dirty = true; }
 };

@@ -423,7 +423,7 @@ void Renderer::Render(entt::registry& registry)
 	
 	// #TODO: Don't have this here.
 	const auto atmosphereResources = atmosphere.ImportResources(graph);
-	const auto luminanceTexture = atmosphere.RenderEnvironmentMap(graph, atmosphereResources, cameraBufferTag);
+	const auto [luminanceTexture, sunTransmittance] = atmosphere.RenderEnvironmentMap(graph, atmosphereResources, cameraBufferTag);
 
 	// #TODO: Don't have this here.
 	const auto iblResources = ibl.UpdateLuts(graph, luminanceTexture, cameraBufferTag);
@@ -440,6 +440,7 @@ void Renderer::Render(entt::registry& registry)
 	forwardPass.Read(iblResources.irradianceTag, ResourceBind::SRV);
 	forwardPass.Read(iblResources.prefilterTag, ResourceBind::SRV);
 	forwardPass.Read(iblResources.brdfTag, ResourceBind::SRV);
+	forwardPass.Read(sunTransmittance, ResourceBind::SRV);
 	forwardPass.Output(outputHDRTag, OutputBind::RTV, LoadType::Clear);
 	forwardPass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
 	{
@@ -452,6 +453,7 @@ void Renderer::Render(entt::registry& registry)
 		list.BindResource("lights", resources.GetBuffer(lightBufferTag));
 		list.BindResource("clusteredLightList", resources.GetBuffer(clusterResources.lightList));
 		list.BindResource("clusteredLightInfo", resources.GetBuffer(clusterResources.lightInfo));
+		list.BindResource("sunTransmittance", resources.GetBuffer(sunTransmittance));
 
 		struct ClusterData
 		{
@@ -544,6 +546,7 @@ void Renderer::Render(entt::registry& registry)
 		list.BindResource("clusteredLightList", resources.GetBuffer(clusterResources.lightList));
 		list.BindResource("clusteredLightInfo", resources.GetBuffer(clusterResources.lightInfo));
 		list.BindConstants("clusterData", clusterBufferData);
+		list.BindResource("sunTransmittance", resources.GetBuffer(sunTransmittance));
 		list.BindConstants("iblData", iblData);
 
 		{

@@ -32,6 +32,7 @@ struct IblData
 };
 
 ConstantBuffer<IblData> iblData : register(b3);
+StructuredBuffer<float3> sunTransmittance : register(t3, space1);
 
 struct Input
 {
@@ -121,7 +122,15 @@ Output main(Input input)
 	for (uint i = 0; i < lightInfo.y; ++i)
 	{
 		uint lightIndex = clusteredLightList[lightInfo.x + i];
-		LightSample sample = SampleLight(lights[lightIndex], materialSample, camera, viewDirection, input.position, normalDirection);
+		Light light = lights[lightIndex];
+		// The sun needs to have atmospheric transmittance applied.
+		// This is a very hacky solution.
+		if (light.type == LightType::Directional)
+		{
+			light.color *= sunTransmittance[0];
+		}
+		
+		LightSample sample = SampleLight(light, materialSample, camera, viewDirection, input.position, normalDirection);
 		output.color.rgb += sample.diffuse.rgb;
 	}
 	

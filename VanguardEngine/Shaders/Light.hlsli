@@ -19,7 +19,7 @@ struct Light
 	LightType type;
 	// Boundary
 	float3 color;  // Combined diffuse and specular.
-	float luminance;
+	float luminance;  // Nits.
 	float3 direction;
 	float padding;
 };

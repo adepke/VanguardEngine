@@ -10,6 +10,7 @@
 	"SRV(t0, space = 1, visibility = SHADER_VISIBILITY_PIXEL)," \
 	"SRV(t1, space = 1, visibility = SHADER_VISIBILITY_PIXEL)," \
 	"SRV(t2, space = 1, visibility = SHADER_VISIBILITY_PIXEL)," \
+	"SRV(t3, space = 1, visibility = SHADER_VISIBILITY_PIXEL)," \
 	"DescriptorTable(" \
 		"SRV(t0, space = 0, numDescriptors = unbounded, flags = DESCRIPTORS_VOLATILE)," \
 		"visibility = SHADER_VISIBILITY_PIXEL)," \

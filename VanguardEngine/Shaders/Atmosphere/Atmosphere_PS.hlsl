@@ -36,15 +36,13 @@ struct Output
 Output main(Input input)
 {
 	float3 sunDirection = float3(sin(bindData.solarZenithAngle), 0.f, cos(bindData.solarZenithAngle));
-	float3 planetCenter = float3(0.f, 0.f, -bindData.atmosphere.radiusBottom);  // World origin is planet surface.
-	
 	float3 rayDirection = ComputeRayDirection(camera, input.uv);
 	
 	Texture2D transmittanceLut = textures[bindData.transmissionTexture];
 	Texture3D scatteringLut = textures3D[bindData.scatteringTexture];
 	Texture2D irradianceLut = textures[bindData.irradianceTexture];
 	
-	float3 atmosphere = SampleAtmosphere(bindData.atmosphere, camera, rayDirection, sunDirection, planetCenter, true, transmittanceLut, scatteringLut, irradianceLut, lutSampler);
+	float3 atmosphere = SampleAtmosphere(bindData.atmosphere, camera, rayDirection, sunDirection, true, transmittanceLut, scatteringLut, irradianceLut, lutSampler);
 	
 	Output output;
 	output.color.rgb = atmosphere;

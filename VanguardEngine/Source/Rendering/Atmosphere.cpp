@@ -319,6 +319,10 @@ void Atmosphere::Initialize(RenderDevice* inDevice, entt::registry& registry)
 	precomputeState.shader = { "Atmosphere/AtmospherePrecompute_CS", "MultipleScatteringLutMain" };
 	multipleScatteringPrecompute.Build(*device, precomputeState);
 
+	ComputePipelineStateDescription sunTransmittanceStateDesc;
+	sunTransmittanceStateDesc.shader = { "Atmosphere/SunTransmittance", "Main" };
+	sunTransmittanceState.Build(*device, sunTransmittanceStateDesc);
+
 	ComputePipelineStateDescription luminanceState;
 	luminanceState.shader = { "Atmosphere/Luminance", "Main" };
 	luminancePrecompute.Build(*device, luminanceState);
@@ -410,7 +414,7 @@ void Atmosphere::Initialize(RenderDevice* inDevice, entt::registry& registry)
 	sunLight = registry.create();
 	registry.emplace<TransformComponent>(sunLight);
 	// Hack while figuring out proper radiometry.
-	registry.emplace<LightComponent>(sunLight, LightComponent{ .type = LightType::Directional, .color = { 3.f, 3.f, 3.f } });
+	registry.emplace<LightComponent>(sunLight, LightComponent{ .type = LightType::Directional, .color = { 6.f, 6.f, 6.f } });
 }
 
 AtmosphereResources Atmosphere::ImportResources(RenderGraph& graph)
@@ -481,7 +485,7 @@ void Atmosphere::Render(RenderGraph& graph, AtmosphereResources resourceHandles,
 	lightTransform.rotation = { 0.f, solarZenithAngle + 3.14159f / 2.f, 0.f };
 }
 
-RenderResource Atmosphere::RenderEnvironmentMap(RenderGraph& graph, AtmosphereResources resourceHandles, RenderResource cameraBuffer)
+std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(RenderGraph& graph, AtmosphereResources resourceHandles, RenderResource cameraBuffer)
 {
 	const auto luminanceTag = graph.Import(luminanceTexture);
 
@@ -550,5 +554,42 @@ RenderResource Atmosphere::RenderEnvironmentMap(RenderGraph& graph, AtmosphereRe
 		device->GetResourceManager().GenerateMipmaps(list, luminanceTexture);
 	});
 
-	return luminanceTag;
+	auto& sunTransmittancePass = graph.AddPass("Sun Transmittance Pass", ExecutionQueue::Compute);
+	sunTransmittancePass.Read(cameraBuffer, ResourceBind::CBV);
+	sunTransmittancePass.Read(resourceHandles.transmittanceHandle, ResourceBind::SRV);
+	const auto sunTransmittance = sunTransmittancePass.Create(TransientBufferDescription{
+		.updateRate = ResourceFrequency::Static,  // Unordered access.
+		.size = 1,
+		.stride = sizeof(XMFLOAT3)
+	}, VGText("Sun transmittance"));
+	sunTransmittancePass.Write(sunTransmittance, ResourceBind::UAV);
+	sunTransmittancePass.Bind([&, cameraBuffer, resourceHandles, sunTransmittance](CommandList& list, RenderGraphResourceManager& resources)
+	{
+		const auto transmittanceHandle = resources.GetTexture(resourceHandles.transmittanceHandle);
+
+		struct BindData
+		{
+			AtmosphereData atmosphere;
+			uint32_t transmissionTexture;
+			uint32_t scatteringTexture;
+			uint32_t irradianceTexture;
+			float solarZenithAngle;
+		} bindData;
+
+		bindData.atmosphere = model;
+		bindData.transmissionTexture = device->GetResourceManager().Get(transmittanceHandle).SRV->bindlessIndex;
+		bindData.scatteringTexture = 0;  // Unused.
+		bindData.irradianceTexture = 0;  // Unused.
+		bindData.solarZenithAngle = solarZenithAngle;
+
+		list.BindPipelineState(sunTransmittanceState);
+		list.BindResource("camera", resources.GetBuffer(cameraBuffer));
+		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
+		list.BindConstants("bindData", bindData);
+		list.BindResource("sunTransmittance", resources.GetBuffer(sunTransmittance));
+
+		list.Dispatch(1, 1, 1);
+	});
+
+	return std::make_pair(luminanceTag, sunTransmittance);
 }

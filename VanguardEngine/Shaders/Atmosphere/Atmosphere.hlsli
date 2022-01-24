@@ -783,10 +783,21 @@ float4 GetPlanetSurfaceRadiance(AtmosphereData atmosphere, float3 planetCenter, 
 	return 0.f;
 }
 
-float3 SampleAtmosphere(AtmosphereData atmosphere, Camera camera, float3 direction, float3 sunDirection, float3 planetCenter, bool directSolarRadiance, Texture2D transmittanceLut, Texture3D scatteringLut, Texture2D irradianceLut, SamplerState lutSampler)
+float3 ComputeAtmosphereCameraPosition(Camera camera)
 {
 	static const float3 surfaceOffset = float3(0.f, 0.f, 1.f);  // The atmosphere looks better off of the surface.
-	float3 cameraPosition = camera.position.xyz / 1000.f + surfaceOffset;  // Atmosphere distances work in terms of kilometers due to floating point precision, so convert.
+	return camera.position.xyz / 1000.f + surfaceOffset;  // Atmosphere distances work in terms of kilometers due to floating point precision, so convert.
+}
+
+float3 ComputeAtmospherePlanetCenter(AtmosphereData atmosphere)
+{
+	return float3(0.f, 0.f, -atmosphere.radiusBottom);  // World origin is planet surface.
+}
+
+float3 SampleAtmosphere(AtmosphereData atmosphere, Camera camera, float3 direction, float3 sunDirection, bool directSolarRadiance, Texture2D transmittanceLut, Texture3D scatteringLut, Texture2D irradianceLut, SamplerState lutSampler)
+{
+	float3 cameraPosition = ComputeAtmosphereCameraPosition(camera);
+	float3 planetCenter = ComputeAtmospherePlanetCenter(atmosphere);
 	
 	float3 transmittance;
 	float3 radiance = GetSkyRadiance(atmosphere, transmittanceLut, scatteringLut, lutSampler, cameraPosition - planetCenter, direction, 0.f, sunDirection, transmittance);

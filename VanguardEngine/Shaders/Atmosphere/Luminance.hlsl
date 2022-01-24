@@ -45,7 +45,6 @@ ConstantBuffer<AtmosphereBindData> bindData : register(b1);
 void Main(uint3 dispatchId : SV_DispatchThreadID)
 {
 	float3 sunDirection = float3(sin(bindData.solarZenithAngle), 0.f, cos(bindData.solarZenithAngle));
-	float3 planetCenter = float3(0.f, 0.f, -bindData.atmosphere.radiusBottom);  // World origin is planet surface.
 	
 	RWTexture2DArray<float4> luminanceMap = textureArraysRW[bindData.luminanceTexture];
 	float width, height, depth;
@@ -59,6 +58,6 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	Texture3D scatteringLut = textures3D[bindData.scatteringTexture];
 	Texture2D irradianceLut = textures[bindData.irradianceTexture];
 	
-	float3 sample = SampleAtmosphere(bindData.atmosphere, camera, direction, sunDirection, planetCenter, false, transmittanceLut, scatteringLut, irradianceLut, lutSampler);
+	float3 sample = SampleAtmosphere(bindData.atmosphere, camera, direction, sunDirection, false, transmittanceLut, scatteringLut, irradianceLut, lutSampler);
 	luminanceMap[dispatchId] = float4(sample, 0.f);
 }
