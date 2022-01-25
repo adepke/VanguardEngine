@@ -90,3 +90,15 @@ void ComponentProperties::RenderCameraComponent(entt::registry& registry, entt::
 
 	ImGui::Text("Camera");
 }
+
+void ComponentProperties::RenderLightComponent(entt::registry& registry, entt::entity entity)
+{
+	auto& component = registry.get<LightComponent>(entity);
+
+	ImGui::Text("Light");
+
+	const char* lightTypes[] = { "Point", "Directional" };
+	ImGui::Combo("Light type", (int*)&component.type, lightTypes, std::size(lightTypes));
+
+	ImGui::InputFloat3("Color", (float*)&component.color);
+}
