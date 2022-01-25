@@ -8,6 +8,7 @@
 #include <Editor/EntityReflection.h>
 #include <Editor/ImGuiExtensions.h>
 #include <Rendering/Atmosphere.h>
+#include <Rendering/Bloom.h>
 #include <Rendering/ClusteredLightCulling.h>
 
 #include <imgui_internal.h>
@@ -26,6 +27,7 @@ void EditorUI::DrawMenu()
 			ImGui::MenuItem("Performance Metrics", nullptr, &performanceMetricsOpen);
 			ImGui::MenuItem("Render Graph", nullptr, &renderGraphOpen);
 			ImGui::MenuItem("Atmosphere Controls", nullptr, &atmosphereControlsOpen);
+			ImGui::MenuItem("Bloom Controls", nullptr, &bloomControlsOpen);
 			ImGui::MenuItem("Render Visualizer", nullptr, &renderVisualizerOpen);
 
 			ImGui::EndMenu();
@@ -389,6 +391,20 @@ void EditorUI::DrawAtmosphereControls(Atmosphere& atmosphere)
 			{
 				atmosphere.MarkModelDirty();
 			}
+		}
+
+		ImGui::End();
+	}
+}
+
+void EditorUI::DrawBloomControls(Bloom& bloom)
+{
+	if (bloomControlsOpen)
+	{
+		if (ImGui::Begin("Bloom", &bloomControlsOpen))
+		{
+			ImGui::DragFloat("Intensity", &bloom.intensity, 0.01f, 0.f, 1.f, "%.2f");
+			ImGui::DragFloat("Internal blend", &bloom.internalBlend, 0.01f, 0.f, 1.f, "%.2f");
 		}
 
 		ImGui::End();

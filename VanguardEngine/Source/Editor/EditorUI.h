@@ -17,6 +17,7 @@ enum class RenderOverlay
 
 class RenderDevice;
 class Atmosphere;
+class Bloom;
 class ClusteredLightCulling;
 
 class EditorUI
@@ -35,6 +36,7 @@ private:
 	bool performanceMetricsOpen = true;
 	bool renderGraphOpen = true;
 	bool atmosphereControlsOpen = true;
+	bool bloomControlsOpen = true;
 	bool renderVisualizerOpen = true;
 
 	// Focus states.
@@ -69,5 +71,6 @@ public:
 	void DrawPerformanceMetrics(float frameTimeMs);
 	void DrawRenderGraph(RenderDevice* device, TextureHandle depthStencil, TextureHandle scene);
 	void DrawAtmosphereControls(Atmosphere& atmosphere);
+	void DrawBloomControls(Bloom& bloom);
 	void DrawRenderVisualizer(RenderDevice* device, ClusteredLightCulling& clusteredCulling, TextureHandle overlay);
 };

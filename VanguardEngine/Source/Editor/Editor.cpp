@@ -82,6 +82,7 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 			ui->DrawPerformanceMetrics(renderer.lastFrameTime);
 			ui->DrawRenderGraph(&device, resources.GetTexture(depthStencil), resources.GetTexture(outputLDR));
 			ui->DrawAtmosphereControls(renderer.atmosphere);
+			ui->DrawBloomControls(renderer.bloom);
 			ui->DrawRenderVisualizer(&device, renderer.clusteredCulling, ui->activeOverlay != RenderOverlay::None ? resources.GetTexture(activeOverlayTag) : TextureHandle{});
 
 			renderer.userInterface->Render(list, resources.GetBuffer(cameraBuffer));
