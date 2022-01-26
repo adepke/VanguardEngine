@@ -33,7 +33,7 @@ private:
 	// Window states.
 	bool entityHierarchyOpen = true;
 	bool entityPropertyViewerOpen = true;
-	bool performanceMetricsOpen = true;
+	bool metricsOpen = true;
 	bool renderGraphOpen = true;
 	bool atmosphereControlsOpen = true;
 	bool bloomControlsOpen = true;
@@ -68,7 +68,7 @@ public:
 	void DrawScene(RenderDevice* device, entt::registry& registry, TextureHandle sceneTexture);
 	void DrawEntityHierarchy(entt::registry& registry);
 	void DrawEntityPropertyViewer(entt::registry& registry);
-	void DrawPerformanceMetrics(float frameTimeMs);
+	void DrawMetrics(RenderDevice* device, float frameTimeMs);
 	void DrawRenderGraph(RenderDevice* device, TextureHandle depthStencil, TextureHandle scene);
 	void DrawAtmosphereControls(Atmosphere& atmosphere);
 	void DrawBloomControls(Bloom& bloom);

@@ -16,6 +16,14 @@
 class RenderDevice;
 class CommandList;
 
+struct GpuMemoryInfo
+{
+	uint32_t bufferCount = 0;
+	uint32_t textureCount = 0;
+	uint64_t bufferBytes = 0;
+	uint64_t textureBytes = 0;
+};
+
 class ResourceManager
 {
 private:
@@ -42,6 +50,12 @@ private:
 	PipelineState mipmapPipeline;
 
 	void CreateMipmapTools();
+
+	GpuMemoryInfo memoryInfo;
+	void ReportBufferAllocation(const BufferHandle handle);
+	void ReportTextureAllocation(const TextureHandle handle);
+	void ReportBufferFree(const BufferHandle handle);
+	void ReportTextureFree(const TextureHandle handle);
 
 public:
 	ResourceManager() = default;
@@ -82,6 +96,8 @@ public:
 	void AddFrameDescriptor(size_t frameIndex, DescriptorHandle handle);
 
 	void CleanupFrameResources(size_t frame);
+
+	GpuMemoryInfo QueryMemoryInfo() const { return memoryInfo; }
 };
 
 inline void ResourceManager::NameResource(const BufferHandle handle, const std::wstring_view name)
@@ -122,6 +138,8 @@ inline void ResourceManager::Destroy(BufferHandle handle)
 {
 	VGAssert(registry.valid(handle.handle), "Destroying invalid buffer handle.");
 
+	ReportBufferFree(handle);
+
 	auto& component = Get(handle);
 	if (component.CBV) component.CBV->Free();
 	if (component.SRV) component.SRV->Free();
@@ -134,6 +152,8 @@ inline void ResourceManager::Destroy(BufferHandle handle)
 inline void ResourceManager::Destroy(TextureHandle handle)
 {
 	VGAssert(registry.valid(handle.handle), "Destroying invalid texture handle.");
+
+	ReportTextureFree(handle);
 
 	auto& component = Get(handle);
 	if (component.RTV) component.RTV->Free();

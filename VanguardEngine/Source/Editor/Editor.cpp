@@ -79,7 +79,7 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 			ui->DrawScene(&device, registry, resources.GetTexture(outputLDR));
 			ui->DrawEntityHierarchy(registry);
 			ui->DrawEntityPropertyViewer(registry);
-			ui->DrawPerformanceMetrics(renderer.lastFrameTime);
+			ui->DrawMetrics(&device, renderer.lastFrameTime);
 			ui->DrawRenderGraph(&device, resources.GetTexture(depthStencil), resources.GetTexture(outputLDR));
 			ui->DrawAtmosphereControls(renderer.atmosphere);
 			ui->DrawBloomControls(renderer.bloom);

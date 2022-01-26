@@ -238,6 +238,42 @@ void ResourceManager::CreateMipmapTools()
 	mipmapPipeline.Build(*device, mipmapDescription);
 }
 
+void ResourceManager::ReportBufferAllocation(const BufferHandle handle)
+{
+	const auto description = Get(handle).Native()->GetDesc();
+	const auto allocation = device->Native()->GetResourceAllocationInfo(0, 1, &description);
+
+	memoryInfo.bufferCount++;
+	memoryInfo.bufferBytes += allocation.SizeInBytes;
+}
+
+void ResourceManager::ReportTextureAllocation(const TextureHandle handle)
+{
+	const auto description = Get(handle).Native()->GetDesc();
+	const auto allocation = device->Native()->GetResourceAllocationInfo(0, 1, &description);
+
+	memoryInfo.textureCount++;
+	memoryInfo.textureBytes += allocation.SizeInBytes;
+}
+
+void ResourceManager::ReportBufferFree(const BufferHandle handle)
+{
+	const auto description = Get(handle).Native()->GetDesc();
+	const auto allocation = device->Native()->GetResourceAllocationInfo(0, 1, &description);
+
+	memoryInfo.bufferCount--;
+	memoryInfo.bufferBytes -= allocation.SizeInBytes;
+}
+
+void ResourceManager::ReportTextureFree(const TextureHandle handle)
+{
+	const auto description = Get(handle).Native()->GetDesc();
+	const auto allocation = device->Native()->GetResourceAllocationInfo(0, 1, &description);
+
+	memoryInfo.textureCount--;
+	memoryInfo.textureBytes -= allocation.SizeInBytes;
+}
+
 void ResourceManager::Initialize(RenderDevice* inDevice, size_t bufferedFrames)
 {
 	VGScopedCPUStat("Resource Manager Initialize");
@@ -382,6 +418,8 @@ const BufferHandle ResourceManager::Create(const BufferDescription& description,
 	CreateResourceViews(component);
 	NameResource(handle, name);
 
+	ReportBufferAllocation(handle);
+
 	return handle;
 }
 
@@ -516,6 +554,8 @@ const TextureHandle ResourceManager::Create(const TextureDescription& descriptio
 	CreateResourceViews(component);
 	NameResource(handle, name);
 
+	ReportTextureAllocation(handle);
+
 	return handle;
 }
 
@@ -545,6 +585,8 @@ const TextureHandle ResourceManager::CreateFromSwapChain(void* surface, const st
 
 	CreateResourceViews(component);
 	NameResource(handle, name);
+
+	ReportTextureAllocation(handle);
 
 	return handle;
 }
