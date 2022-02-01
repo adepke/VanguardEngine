@@ -4,6 +4,38 @@
 #include <Rendering/Device.h>
 #include <Rendering/PipelineState.h>
 
+void ValidateTransition(const BufferDescription& description, D3D12_RESOURCE_STATES newState)
+{
+#if !BUILD_RELEASE
+	if (description.updateRate == ResourceFrequency::Dynamic)
+	{
+		// Render graph can attempt to transition to nonpixel/pixel, which just gets discarded since generic read already
+		// covers that, so just make sure we're transitioning to a state that's covered by generic read.
+		VGAssert(newState & D3D12_RESOURCE_STATE_GENERIC_READ, "Dynamic buffers must always be in generic read state.");
+	}
+	else
+	{
+		VGAssert(newState != D3D12_RESOURCE_STATE_DEPTH_READ &&
+			newState != D3D12_RESOURCE_STATE_DEPTH_WRITE &&
+			newState != D3D12_RESOURCE_STATE_RENDER_TARGET,
+			"Incorrect state transition for a buffer.");
+	}
+#endif
+}
+
+void ValidateTransition(const TextureDescription& description, D3D12_RESOURCE_STATES newState)
+{
+#if !BUILD_RELEASE
+	VGAssert(newState != D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER &&
+		newState != D3D12_RESOURCE_STATE_INDEX_BUFFER &&
+		newState != D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT &&
+		newState != D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE &&
+		newState != D3D12_RESOURCE_STATE_GENERIC_READ,
+		"Incorrect state transition for a texture.");
+
+#endif
+}
+
 void CommandList::TransitionBarrierInternal(ID3D12Resource* resource, D3D12_RESOURCE_STATES oldState, D3D12_RESOURCE_STATES newState)
 {
 	VGScopedCPUStat("Transition Barrier");
@@ -121,6 +153,7 @@ void CommandList::TransitionBarrier(BufferHandle resource, D3D12_RESOURCE_STATES
 {
 	auto& component = device->GetResourceManager().Get(resource);
 
+	ValidateTransition(component.description, state);
 	TransitionBarrierInternal(component.Native(), component.state, state);
 	component.state = state;
 }
@@ -129,6 +162,7 @@ void CommandList::TransitionBarrier(TextureHandle resource, D3D12_RESOURCE_STATE
 {
 	auto& component = device->GetResourceManager().Get(resource);
 
+	ValidateTransition(component.description, state);
 	TransitionBarrierInternal(component.Native(), component.state, state);
 	component.state = state;
 }
