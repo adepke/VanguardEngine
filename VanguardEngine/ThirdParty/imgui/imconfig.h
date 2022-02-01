@@ -82,7 +82,8 @@
 
 //---- Override ImDrawCallback signature (will need to modify renderer back-ends accordingly)
 class CommandList;
-typedef void (*VanguardImDrawCallback)(CommandList* list);
+struct UserInterfaceState;
+typedef void (*VanguardImDrawCallback)(CommandList* list, UserInterfaceState& state);
 #define ImDrawCallback VanguardImDrawCallback
 
 //---- Debug Tools: Macro to break in Debugger

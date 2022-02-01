@@ -350,9 +350,9 @@ void EditorUI::DrawRenderGraph(RenderDevice* device, TextureHandle depthStencil,
 
 			if (linearizeDepth)
 			{
-				ImGui::GetWindowDrawList()->AddCallback([](auto* list)
+				ImGui::GetWindowDrawList()->AddCallback([](auto* list, auto& state)
 				{
-					list->BindConstants("drawData", { 1 });
+					state.linearizeDepth = true;
 				}, nullptr);
 			}
 
@@ -360,9 +360,9 @@ void EditorUI::DrawRenderGraph(RenderDevice* device, TextureHandle depthStencil,
 
 			if (linearizeDepth)
 			{
-				ImGui::GetWindowDrawList()->AddCallback([](auto* list)
+				ImGui::GetWindowDrawList()->AddCallback([](auto* list, auto& state)
 				{
-					list->BindConstants("drawData", { 0 });
+					state.linearizeDepth = false;
 				}, nullptr);
 			}
 

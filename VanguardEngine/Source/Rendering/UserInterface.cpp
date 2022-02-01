@@ -3,6 +3,8 @@
 #include <Rendering/UserInterface.h>
 #include <Rendering/Base.h>
 #include <Rendering/Device.h>
+#include <Rendering/Resource.h>
+#include <Rendering/ResourceManager.h>
 #include <Rendering/Renderer.h>
 #include <Rendering/PipelineState.h>
 #include <Core/Config.h>
@@ -18,50 +20,33 @@
 
 struct FrameResources
 {
-	ID3D12Resource* indexBuffer;
-	ID3D12Resource* vertexBuffer;
-	int indexBufferSize;
-	int vertexBufferSize;
+	BufferHandle indexBuffer;
+	BufferHandle vertexBuffer;
+	size_t indexBufferSize;
+	size_t vertexBufferSize;
 };
 
 static FrameResources* frameResources = NULL;
 static UINT numFramesInFlight = 0;
 static UINT frameIndex = UINT_MAX;
 
-template<typename T>
-static void SafeRelease(T*& res)
-{
-	if (res)
-		res->Release();
-	res = NULL;
-}
-
-struct VertexConstantBuffer
-{
-	float mvp[4][4];
-};
-
-void UserInterfaceManager::SetupRenderState(ImDrawData* drawData, CommandList& list, FrameResources* resources)
+XMMATRIX UserInterfaceManager::SetupRenderState(ImDrawData* drawData, CommandList& list, FrameResources* resources)
 {
 	VGScopedCPUStat("Setup Render State");
 
 	// Setup orthographic projection matrix into our constant buffer
 	// Our visible imgui space lies from draw_data->DisplayPos (top left) to draw_data->DisplayPos+data_data->DisplaySize (bottom right).
-	VertexConstantBuffer vertexConstantBuffer;
+	const float L = drawData->DisplayPos.x;
+	const float R = drawData->DisplayPos.x + drawData->DisplaySize.x;
+	const float T = drawData->DisplayPos.y;
+	const float B = drawData->DisplayPos.y + drawData->DisplaySize.y;
+	const float mvp[4][4] =
 	{
-		float L = drawData->DisplayPos.x;
-		float R = drawData->DisplayPos.x + drawData->DisplaySize.x;
-		float T = drawData->DisplayPos.y;
-		float B = drawData->DisplayPos.y + drawData->DisplaySize.y;
-		float mvp[4][4] =
-		{
-			{ 2.0f / (R - L),    0.0f,              0.0f, 0.0f },
-			{ 0.0f,              2.0f / (T - B),    0.0f, 0.0f },
-			{ 0.0f,              0.0f,              0.5f, 0.0f },
-			{ (R + L) / (L - R), (T + B) / (B - T), 0.5f, 1.0f },
-		};
-		memcpy(&vertexConstantBuffer.mvp, mvp, sizeof(mvp));
-	}
+		{ 2.0f / (R - L),    0.0f,              0.0f, 0.0f },
+		{ 0.0f,              2.0f / (T - B),    0.0f, 0.0f },
+		{ 0.0f,              0.0f,              0.5f, 0.0f },
+		{ (R + L) / (L - R), (T + B) / (B - T), 0.5f, 1.0f },
+	};
 
 	// Setup viewport
 	D3D12_VIEWPORT vp;
@@ -75,26 +60,22 @@ void UserInterfaceManager::SetupRenderState(ImDrawData* drawData, CommandList& l
 
 	list.BindPipelineState(*pipeline);
 
+	auto& indexBuffer = device->GetResourceManager().Get(resources->indexBuffer);
+
 	D3D12_INDEX_BUFFER_VIEW ibv;
 	memset(&ibv, 0, sizeof(D3D12_INDEX_BUFFER_VIEW));
-	ibv.BufferLocation = resources->indexBuffer->GetGPUVirtualAddress();
+	ibv.BufferLocation = indexBuffer.Native()->GetGPUVirtualAddress();
 	ibv.SizeInBytes = resources->indexBufferSize * sizeof(ImDrawIdx);
 	ibv.Format = sizeof(ImDrawIdx) == 2 ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
 	list.Native()->IASetIndexBuffer(&ibv);
 
-	std::vector<uint32_t> projectionData;
-	projectionData.resize(16);
-
-	std::memcpy(projectionData.data(), &vertexConstantBuffer.mvp, projectionData.size() * sizeof(float));
-
-	list.BindConstants("projections", projectionData);
 	list.BindDescriptorAllocator(device->GetDescriptorAllocator());
 
 	// Setup blend factor
 	const float blendFactor[4] = { 0.f, 0.f, 0.f, 0.f };
 	list.Native()->OMSetBlendFactor(blendFactor);
 
-	list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
+	return XMMATRIX{ (const float*)mvp };
 }
 
 void UserInterfaceManager::CreateFontTexture()
@@ -147,8 +128,8 @@ void UserInterfaceManager::CreateDeviceObjects()
 	pipeline = std::make_unique<PipelineState>();
 
 	GraphicsPipelineStateDescription description{};
-	description.vertexShader = { "UserInterface_VS", "main" };
-	description.pixelShader = { "UserInterface_PS", "main" };
+	description.vertexShader = { "UserInterface", "VSMain" };
+	description.pixelShader = { "UserInterface", "PSMain" };
 	description.blendDescription.AlphaToCoverageEnable = false;
 	description.blendDescription.RenderTarget[0].BlendEnable = true;
 	description.blendDescription.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
@@ -199,8 +180,10 @@ void UserInterfaceManager::InvalidateDeviceObjects()
 	for (UINT i = 0; i < numFramesInFlight; i++)
 	{
 		FrameResources* fr = &frameResources[i];
-		SafeRelease(fr->indexBuffer);
-		SafeRelease(fr->vertexBuffer);
+		if (fr->indexBuffer.handle != entt::null)
+			device->GetResourceManager().Destroy(fr->indexBuffer);
+		if (fr->vertexBuffer.handle != entt::null)
+			device->GetResourceManager().Destroy(fr->vertexBuffer);
 	}
 }
 
@@ -240,8 +223,8 @@ UserInterfaceManager::UserInterfaceManager(RenderDevice* inDevice) : device(inDe
 	for (uint32_t i = 0; i < numFramesInFlight; i++)
 	{
 		FrameResources* fr = &frameResources[i];
-		fr->indexBuffer = NULL;
-		fr->vertexBuffer = NULL;
+		fr->indexBuffer.handle = entt::null;
+		fr->vertexBuffer.handle = entt::null;
 		fr->indexBufferSize = 10000;
 		fr->vertexBufferSize = 5000;
 	}
@@ -297,78 +280,63 @@ void UserInterfaceManager::Render(CommandList& list, BufferHandle cameraBuffer)
 	FrameResources* resources = &frameResources[frameIndex % numFramesInFlight];
 
 	// Create and grow vertex/index buffers if needed
-	if (resources->vertexBuffer == NULL || resources->vertexBufferSize < drawData->TotalVtxCount)
+	if (resources->vertexBuffer.handle == entt::null || resources->vertexBufferSize < drawData->TotalVtxCount)
 	{
-		SafeRelease(resources->vertexBuffer);
+		if (resources->vertexBuffer.handle != entt::null)
+			device->GetResourceManager().Destroy(resources->vertexBuffer);
 		resources->vertexBufferSize = drawData->TotalVtxCount + 5000;
-		D3D12_HEAP_PROPERTIES props;
-		memset(&props, 0, sizeof(D3D12_HEAP_PROPERTIES));
-		props.Type = D3D12_HEAP_TYPE_UPLOAD;
-		props.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-		props.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-		D3D12_RESOURCE_DESC desc;
-		memset(&desc, 0, sizeof(D3D12_RESOURCE_DESC));
-		desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-		desc.Width = resources->vertexBufferSize * sizeof(ImDrawVert);
-		desc.Height = 1;
-		desc.DepthOrArraySize = 1;
-		desc.MipLevels = 1;
-		desc.Format = DXGI_FORMAT_UNKNOWN;
-		desc.SampleDesc.Count = 1;
-		desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-		desc.Flags = D3D12_RESOURCE_FLAG_NONE;
-		if (device->Native()->CreateCommittedResource(&props, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_GENERIC_READ, NULL, IID_PPV_ARGS(&resources->vertexBuffer)) < 0)
-			return;
+
+		BufferDescription vertexBufferDesc{
+			.updateRate = ResourceFrequency::Dynamic,
+			.bindFlags = BindFlag::ShaderResource,
+			.accessFlags = AccessFlag::CPUWrite,
+			.size = resources->vertexBufferSize,
+			.stride = sizeof(ImDrawVert)
+		};
+
+		resources->vertexBuffer = device->GetResourceManager().Create(vertexBufferDesc, VGText("UI vertex buffer"));
 	}
-	if (resources->indexBuffer == NULL || resources->indexBufferSize < drawData->TotalIdxCount)
+	if (resources->indexBuffer.handle == entt::null || resources->indexBufferSize < drawData->TotalIdxCount)
 	{
-		SafeRelease(resources->indexBuffer);
+		if (resources->indexBuffer.handle != entt::null)
+			device->GetResourceManager().Destroy(resources->indexBuffer);
 		resources->indexBufferSize = drawData->TotalIdxCount + 10000;
-		D3D12_HEAP_PROPERTIES props;
-		memset(&props, 0, sizeof(D3D12_HEAP_PROPERTIES));
-		props.Type = D3D12_HEAP_TYPE_UPLOAD;
-		props.CPUPageProperty = D3D12_CPU_PAGE_PROPERTY_UNKNOWN;
-		props.MemoryPoolPreference = D3D12_MEMORY_POOL_UNKNOWN;
-		D3D12_RESOURCE_DESC desc;
-		memset(&desc, 0, sizeof(D3D12_RESOURCE_DESC));
-		desc.Dimension = D3D12_RESOURCE_DIMENSION_BUFFER;
-		desc.Width = resources->indexBufferSize * sizeof(ImDrawIdx);
-		desc.Height = 1;
-		desc.DepthOrArraySize = 1;
-		desc.MipLevels = 1;
-		desc.Format = DXGI_FORMAT_UNKNOWN;
-		desc.SampleDesc.Count = 1;
-		desc.Layout = D3D12_TEXTURE_LAYOUT_ROW_MAJOR;
-		desc.Flags = D3D12_RESOURCE_FLAG_NONE;
-		if (device->Native()->CreateCommittedResource(&props, D3D12_HEAP_FLAG_NONE, &desc, D3D12_RESOURCE_STATE_GENERIC_READ, NULL, IID_PPV_ARGS(&resources->indexBuffer)) < 0)
-			return;
+
+		BufferDescription indexBufferDesc{
+			.updateRate = ResourceFrequency::Dynamic,
+			.bindFlags = BindFlag::IndexBuffer,
+			.accessFlags = AccessFlag::CPUWrite,
+			.size = resources->indexBufferSize,
+			.stride = sizeof(ImDrawIdx)
+		};
+
+		resources->indexBuffer = device->GetResourceManager().Create(indexBufferDesc, VGText("UI index buffer"));
 	}
 
 	// Upload vertex/index data into a single contiguous GPU buffer
-	void* vtx_resource, * idx_resource;
-	D3D12_RANGE range;
-	memset(&range, 0, sizeof(D3D12_RANGE));
-	if (resources->vertexBuffer->Map(0, &range, &vtx_resource) != S_OK)
-		return;
-	if (resources->indexBuffer->Map(0, &range, &idx_resource) != S_OK)
-		return;
-	ImDrawVert* vtx_dst = (ImDrawVert*)vtx_resource;
-	ImDrawIdx* idx_dst = (ImDrawIdx*)idx_resource;
+	std::vector<uint8_t> vertexData;
+	std::vector<uint8_t> indexData;
+	size_t vertexOffset = 0;
+	size_t indexOffset = 0;
 	for (int n = 0; n < drawData->CmdListsCount; n++)
 	{
 		const ImDrawList* cmd_list = drawData->CmdLists[n];
-		memcpy(vtx_dst, cmd_list->VtxBuffer.Data, cmd_list->VtxBuffer.Size * sizeof(ImDrawVert));
-		memcpy(idx_dst, cmd_list->IdxBuffer.Data, cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx));
-		vtx_dst += cmd_list->VtxBuffer.Size;
-		idx_dst += cmd_list->IdxBuffer.Size;
+		vertexData.resize(vertexData.size() + cmd_list->VtxBuffer.Size * sizeof(ImDrawVert));
+		indexData.resize(indexData.size() + cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx));
+		memcpy(vertexData.data() + vertexOffset, cmd_list->VtxBuffer.Data, cmd_list->VtxBuffer.Size * sizeof(ImDrawVert));
+		memcpy(indexData.data() + indexOffset, cmd_list->IdxBuffer.Data, cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx));
+		vertexOffset += cmd_list->VtxBuffer.Size * sizeof(ImDrawVert);
+		indexOffset += cmd_list->IdxBuffer.Size * sizeof(ImDrawIdx);
 	}
-	resources->vertexBuffer->Unmap(0, &range);
-	resources->indexBuffer->Unmap(0, &range);
+
+	device->GetResourceManager().Write(resources->vertexBuffer, vertexData);
+	device->GetResourceManager().Write(resources->indexBuffer, indexData);
 
 	// Setup desired DX state
-	SetupRenderState(drawData, list, resources);
+	XMMATRIX projectionMatrix = SetupRenderState(drawData, list, resources);
+	projectionMatrix = XMMatrixTranspose(projectionMatrix);
 
-	list.BindResource("camera", cameraBuffer);
+	UserInterfaceState drawState{};  // Reset each frame.
 
 	// Render command lists
 	// (Because we merged all buffers into a single one, we maintain our own offset into them)
@@ -388,15 +356,31 @@ void UserInterfaceManager::Render(CommandList& list, BufferHandle cameraBuffer)
 				if (pcmd->UserCallback == ImDrawCallback_ResetRenderState)
 					SetupRenderState(drawData, list, resources);
 				else
-					pcmd->UserCallback(&list);
+					pcmd->UserCallback(&list, drawState);
 			}
 			else
 			{
-				// Apply Scissor, Bind texture, Draw
 				const D3D12_RECT r = { (LONG)(pcmd->ClipRect.x - clip_off.x), (LONG)(pcmd->ClipRect.y - clip_off.y), (LONG)(pcmd->ClipRect.z - clip_off.x), (LONG)(pcmd->ClipRect.w - clip_off.y) };
-				list.BindConstants("bindlessTexture", { *(uint32_t*)&pcmd->TextureId });
 				list.Native()->RSSetScissorRects(1, &r);
-				list.Native()->SetGraphicsRootShaderResourceView(4, resources->vertexBuffer->GetGPUVirtualAddress() + (pcmd->VtxOffset + global_vtx_offset) * sizeof(ImDrawVert));
+
+				struct Data
+				{
+					XMMATRIX projectionMatrix;
+					uint32_t cameraBuffer;
+					uint32_t vertexBuffer;
+					uint32_t vertexOffset;
+					uint32_t texture;
+					uint32_t depthLinearization;
+				} data;
+
+				data.projectionMatrix = projectionMatrix;
+				data.cameraBuffer = device->GetResourceManager().Get(cameraBuffer).SRV->bindlessIndex;
+				data.vertexBuffer = device->GetResourceManager().Get(resources->vertexBuffer).SRV->bindlessIndex;
+				data.vertexOffset = pcmd->VtxOffset + global_vtx_offset;
+				data.texture = *(uint32_t*)&pcmd->TextureId;
+				data.depthLinearization = drawState.linearizeDepth;
+				list.BindConstants("data", data);
+
 				list.Native()->DrawIndexedInstanced(pcmd->ElemCount, 1, pcmd->IdxOffset + global_idx_offset, 0, 0);
 			}
 		}

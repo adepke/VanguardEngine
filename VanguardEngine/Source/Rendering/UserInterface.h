@@ -15,6 +15,11 @@ struct ImDrawData;
 class CommandList;
 struct FrameResources;
 
+struct UserInterfaceState
+{
+	bool linearizeDepth = false;
+};
+
 class UserInterfaceManager
 {
 private:
@@ -25,7 +30,7 @@ private:
 	std::unique_ptr<PipelineState> pipeline;
 
 private:
-	void SetupRenderState(ImDrawData* drawData, CommandList& list, FrameResources* resources);
+	XMMATRIX SetupRenderState(ImDrawData* drawData, CommandList& list, FrameResources* resources);
 	void CreateFontTexture();
 	void CreateDeviceObjects();
 	void InvalidateDeviceObjects();
