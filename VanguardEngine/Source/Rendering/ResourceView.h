@@ -67,6 +67,8 @@ inline BufferView& BufferView::SRV(const std::string& name, size_t start, size_t
 	desc.start = start;
 	desc.count = count;
 	descriptorRequests[name] = ShaderResourceViewDescription{ desc, ShaderResourceViewDescription::Bind::SRV };
+
+	return *this;
 }
 
 inline BufferView& BufferView::UAV(const std::string& name, size_t start, size_t count)
@@ -76,6 +78,8 @@ inline BufferView& BufferView::UAV(const std::string& name, size_t start, size_t
 	desc.start = start;
 	desc.count = count;
 	descriptorRequests[name] = ShaderResourceViewDescription{ desc, ShaderResourceViewDescription::Bind::UAV };
+
+	return *this;
 }
 
 inline TextureView& TextureView::SRV(const std::string& name, uint32_t firstMip, int32_t mipLevels)
@@ -85,6 +89,8 @@ inline TextureView& TextureView::SRV(const std::string& name, uint32_t firstMip,
 	desc.firstMip = firstMip;
 	desc.mipLevels = mipLevels;
 	descriptorRequests[name] = ShaderResourceViewDescription{ desc, ShaderResourceViewDescription::Bind::SRV };
+
+	return *this;
 }
 
 inline TextureView& TextureView::UAV(const std::string& name, uint32_t mip)
@@ -93,4 +99,6 @@ inline TextureView& TextureView::UAV(const std::string& name, uint32_t mip)
 	ShaderResourceViewDescription::TextureDesc desc;
 	desc.mip = mip;
 	descriptorRequests[name] = ShaderResourceViewDescription{ desc, ShaderResourceViewDescription::Bind::UAV };
+
+	return *this;
 }
