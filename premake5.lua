@@ -11,7 +11,6 @@ function IncludeThirdParty()
 	includedirs "VanguardEngine/ThirdParty/entt/single_include"
 	includedirs "VanguardEngine/ThirdParty/json/single_include/nlohmann"
 	includedirs "VanguardEngine/ThirdParty/imgui"
-	includedirs "VanguardEngine/ThirdParty/Jobs/Jobs/Include"
 	includedirs "VanguardEngine/ThirdParty/Tracy"
 	includedirs "VanguardEngine/ThirdParty/D3D12MemoryAllocator/src"
 	includedirs "VanguardEngine/ThirdParty/DirectXShaderCompiler"
@@ -24,7 +23,6 @@ end
 
 function LinkThirdParty()
 	libdirs "Build/ThirdParty/imgui/Bin/*"
-	libdirs "Build/ThirdParty/Jobs/Bin/*"
 	libdirs "Build/ThirdParty/Tracy/Bin/*"
 	libdirs "Build/ThirdParty/D3D12MemoryAllocator/Bin/*"
 	libdirs "Build/ThirdParty/spdlog/Bin/*"
@@ -32,7 +30,6 @@ function LinkThirdParty()
 	libdirs "VanguardEngine/ThirdParty/PIX"
 	
 	links "imgui"
-	links "Jobs"
 	links "TracyClient"
 	links "D3D12MemoryAllocator"
 	links "spdlog"
@@ -43,7 +40,6 @@ end
 function RunThirdParty()
 	group "ThirdParty"
 	include "VanguardEngine/ThirdParty/imgui"
-	include "VanguardEngine/ThirdParty/Jobs"
 	include "VanguardEngine/ThirdParty/Tracy"
 	include "VanguardEngine/ThirdParty/D3D12MemoryAllocator"
 	include "VanguardEngine/ThirdParty/spdlog"
@@ -119,7 +115,7 @@ project "Engine"
 		if EnableLogging then
 			defines { "ENABLE_LOGGING=1" }
 		else
-			defines { "ENABLE_LOGGING=0", "JOBS_DISABLE_LOGGING", "SPDLOG_ACTIVE_LEVEL=6" }  -- Level 6 is off
+			defines { "ENABLE_LOGGING=0", "SPDLOG_ACTIVE_LEVEL=6" }  -- Level 6 is off
 		end
 		
 		if EnableProfiling then
