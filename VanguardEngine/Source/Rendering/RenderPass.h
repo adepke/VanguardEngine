@@ -3,7 +3,9 @@
 #pragma once
 
 #include <Rendering/RenderGraphResource.h>
+#include <Rendering/ResourceBind.h>
 #include <Rendering/RenderGraphResourceManager.h>
+#include <Rendering/ResourceView.h>
 
 #include <set>
 #include <functional>
@@ -11,22 +13,7 @@
 #include <string_view>
 
 class CommandList;
-
-enum class ResourceBind
-{
-	CBV,
-	SRV,
-	UAV,
-	DSV,
-	Indirect,
-	Common
-};
-
-enum class OutputBind
-{
-	RTV,
-	DSV
-};
+class RenderPassResources;
 
 enum class LoadType
 {
@@ -51,10 +38,11 @@ public:
 
 	std::unordered_map<RenderResource, ResourceBind> bindInfo;
 	std::unordered_map<RenderResource, std::pair<OutputBind, LoadType>> outputBindInfo;
+	std::unordered_map<RenderResource, ResourceViewRequest> descriptorInfo;
 
 private:
 	RenderGraphResourceManager* resourceManager;
-	std::function<void(CommandList&, RenderGraphResourceManager&)> binding;
+	std::function<void(CommandList&, RenderPassResources&)> binding;
 
 #if !BUILD_RELEASE
 	// Used for validation.
@@ -67,18 +55,35 @@ public:
 
 	const RenderResource Create(TransientBufferDescription description, const std::wstring& name);
 	const RenderResource Create(TransientTextureDescription description, const std::wstring& name);
-	void Read(const RenderResource resource, ResourceBind bind);
-	void Write(const RenderResource resource, ResourceBind bind);
+	void Read(const RenderResource resource, ResourceBind bind);  // Default view.
+	void Read(const RenderResource resource, ResourceViewRequest view);  // Custom view.
+	void Write(const RenderResource resource, ResourceBind bind);  // Default view.
+	void Write(const RenderResource resource, ResourceViewRequest view);  // Custom view.
 	void Output(const RenderResource resource, OutputBind bind, LoadType load);
-	void Bind(std::function<void(CommandList&, RenderGraphResourceManager&)>&& function) noexcept;
+	void Bind(std::function<void(CommandList&, RenderPassResources&)>&& function) noexcept;
 
 	void Validate() const;  // Internal validation invoked from the graph. Checks for conditions after completing the pass setup.
-	void Execute(CommandList& list, RenderGraphResourceManager& resources) const;
+	void Execute(CommandList& list, RenderPassResources& resources) const;
+};
+
+class RenderPassResources
+{
+	friend class RenderGraph;
+
+private:
+	RenderGraphResourceManager* resources;
+	size_t passIndex;
+
+public:
+	const uint32_t Get(const RenderResource resource, const std::string& name = "") const;
+
+	// Only used for getting the actual resource handle, ideally we never need to do that in pass code.
+	const BufferHandle GetBuffer(const RenderResource resource) const;
+	const TextureHandle GetTexture(const RenderResource resource) const;
 };
 
 inline RenderPass::RenderPass(RenderGraphResourceManager* inResourceManager, std::string_view name, ExecutionQueue execution)
-	: resourceManager(inResourceManager), stableName(name), queue(execution)
-	{}
+	: resourceManager(inResourceManager), stableName(name), queue(execution) {}
 
 inline const RenderResource RenderPass::Create(TransientBufferDescription description, const std::wstring& name)
 {
@@ -108,12 +113,28 @@ inline void RenderPass::Read(const RenderResource resource, ResourceBind bind)
 {
 	reads.emplace(resource);
 	bindInfo[resource] = bind;
+	descriptorInfo.emplace(std::make_pair(resource, ResourceViewRequest{}));  // Insert default view.
+}
+
+inline void RenderPass::Read(const RenderResource resource, ResourceViewRequest view)
+{
+	reads.emplace(resource);
+	bindInfo[resource] = view.descriptorRequests.begin()->second.bind;
+	descriptorInfo[resource] = view;
 }
 
 inline void RenderPass::Write(const RenderResource resource, ResourceBind bind)
 {
 	writes.emplace(resource);
 	bindInfo[resource] = bind;
+	descriptorInfo.emplace(std::make_pair(resource, ResourceViewRequest{}));  // Insert default view.
+}
+
+inline void RenderPass::Write(const RenderResource resource, ResourceViewRequest view)
+{
+	writes.emplace(resource);
+	bindInfo[resource] = view.descriptorRequests.begin()->second.bind;
+	descriptorInfo[resource] = view;
 }
 
 inline void RenderPass::Output(const RenderResource resource, OutputBind bind, LoadType load)
@@ -126,7 +147,7 @@ inline void RenderPass::Output(const RenderResource resource, OutputBind bind, L
 #endif
 }
 
-inline void RenderPass::Bind(std::function<void(CommandList&, RenderGraphResourceManager&)>&& function) noexcept
+inline void RenderPass::Bind(std::function<void(CommandList&, RenderPassResources&)>&& function) noexcept
 {
 	binding = std::move(function);
 }
@@ -180,10 +201,42 @@ inline void RenderPass::Validate() const
 
 	VGAssert(renderTargetCount <= D3D12_SIMULTANEOUS_RENDER_TARGET_COUNT, "Pass validation failed in '%s': Attempted to output to more render targets than supported.", stableName.data());
 	VGAssert(depthStencilCount <= 1, "Pass validation failed in '%s': Cannot have more than one depth stencil output.", stableName.data());
+
+	// Verify all custom descriptors for a given resource are all of the same bind type. This is an unnecessary
+	// restriction that can be lifted without too much work if needed.
+	for (const auto& [resource, info] : descriptorInfo)
+	{
+		if (info.descriptorRequests.size() == 0)
+			continue;  // Default descriptor.
+
+		auto iter = info.descriptorRequests.begin();
+		ResourceBind firstBind = iter->second.bind;
+		++iter;
+		while (iter != info.descriptorRequests.end())
+		{
+			VGAssert(iter->second.bind != firstBind, "Pass validation failed in '%s': Cannot have multiple descriptors with different bind types (SRV, UAV, etc.) for a single resource.", stableName.data());
+			++iter;
+		}
+	}
 #endif
 }
 
-inline void RenderPass::Execute(CommandList& list, RenderGraphResourceManager& resources) const
+inline void RenderPass::Execute(CommandList& list, RenderPassResources& resources) const
 {
 	binding(list, resources);
+}
+
+inline const uint32_t RenderPassResources::Get(const RenderResource resource, const std::string& name) const
+{
+	return resources->GetDescriptor(passIndex, resource, name);
+}
+
+inline const BufferHandle RenderPassResources::GetBuffer(const RenderResource resource) const
+{
+	return resources->GetBuffer(resource);
+}
+
+inline const TextureHandle RenderPassResources::GetTexture(const RenderResource resource) const
+{
+	return resources->GetTexture(resource);
 }

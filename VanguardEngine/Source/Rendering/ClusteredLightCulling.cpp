@@ -232,7 +232,7 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 		auto& computeClusterGridPass = graph.AddPass("Compute Cluster Grid", ExecutionQueue::Compute);
 		computeClusterGridPass.Read(cameraBuffer, ResourceBind::CBV);
 		computeClusterGridPass.Write(clusterBoundsTag, ResourceBind::UAV);
-		computeClusterGridPass.Bind([&, cameraBuffer, clusterBoundsTag](CommandList& list, RenderGraphResourceManager& resources)
+		computeClusterGridPass.Bind([&, cameraBuffer, clusterBoundsTag](CommandList& list, RenderPassResources& resources)
 		{
 			ComputeClusterGrid(list, resources.GetBuffer(cameraBuffer), resources.GetBuffer(clusterBoundsTag));
 		});
@@ -249,7 +249,7 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 		.stride = sizeof(bool) * 4  // Structured buffers pad each element out to 4 bytes.
 	}, VGText("Cluster visibility"));
 	clusterDepthCullingPass.Write(clusterVisibilityTag, ResourceBind::UAV);
-	clusterDepthCullingPass.Bind([&, cameraBuffer, clusterVisibilityTag](CommandList& list, RenderGraphResourceManager& resources)
+	clusterDepthCullingPass.Bind([&, cameraBuffer, clusterVisibilityTag](CommandList& list, RenderPassResources& resources)
 	{
 		RenderUtils::Get().ClearUAV(list, resources.GetBuffer(clusterVisibilityTag));
 
@@ -293,7 +293,7 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 		.stride = sizeof(D3D12_DISPATCH_ARGUMENTS)
 	}, VGText("Cluster binning indirect argument buffer"));
 	clusterCompaction.Write(indirectBufferTag, ResourceBind::UAV);
-	clusterCompaction.Bind([&, clusterVisibilityTag, denseClustersTag, indirectBufferTag](CommandList& list, RenderGraphResourceManager& resources)
+	clusterCompaction.Bind([&, clusterVisibilityTag, denseClustersTag, indirectBufferTag](CommandList& list, RenderPassResources& resources)
 	{
 		auto& denseClustersComponent = device->GetResourceManager().Get(resources.GetBuffer(denseClustersTag));
 
@@ -354,7 +354,7 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 	binningPass.Read(indirectBufferTag, ResourceBind::Indirect);
 	binningPass.Read(cameraBuffer, ResourceBind::CBV);  // #TODO: Precompute view space light positions.
 	binningPass.Bind([&, denseClustersTag, clusterBoundsTag, lightsBuffer, lightCounterTag,
-		lightListTag, lightInfoTag, indirectBufferTag, cameraBuffer](CommandList& list, RenderGraphResourceManager& resources)
+		lightListTag, lightInfoTag, indirectBufferTag, cameraBuffer](CommandList& list, RenderPassResources& resources)
 	{
 		RenderUtils::Get().ClearUAV(list, resources.GetBuffer(lightCounterTag));
 		RenderUtils::Get().ClearUAV(list, resources.GetBuffer(lightInfoTag));
@@ -393,7 +393,7 @@ RenderResource ClusteredLightCulling::RenderDebugOverlay(RenderGraph& graph, Ren
 		.format = DXGI_FORMAT_R16G16B16A16_FLOAT
 	}, VGText("Cluster debug overlay"));
 	overlayPass.Output(clusterDebugOverlayTag, OutputBind::RTV, LoadType::Preserve);
-	overlayPass.Bind([&, lightInfoBuffer, clusterVisibilityBuffer](CommandList& list, RenderGraphResourceManager& resources)
+	overlayPass.Bind([&, lightInfoBuffer, clusterVisibilityBuffer](CommandList& list, RenderPassResources& resources)
 	{
 		list.BindPipelineState(debugOverlayState);
 		list.BindResource("clusterLightInfo", resources.GetBuffer(lightInfoBuffer));

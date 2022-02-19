@@ -435,7 +435,7 @@ void Atmosphere::Render(RenderGraph& graph, AtmosphereResources resourceHandles,
 		precomputePass.Write(resourceHandles.transmittanceHandle, ResourceBind::UAV);
 		precomputePass.Write(resourceHandles.scatteringHandle, ResourceBind::UAV);
 		precomputePass.Write(resourceHandles.irradianceHandle, ResourceBind::UAV);
-		precomputePass.Bind([&, resourceHandles](CommandList& list, RenderGraphResourceManager& resources)
+		precomputePass.Bind([&, resourceHandles](CommandList& list, RenderPassResources& resources)
 		{
 			Precompute(list, resources.GetTexture(resourceHandles.transmittanceHandle), resources.GetTexture(resourceHandles.scatteringHandle), resources.GetTexture(resourceHandles.irradianceHandle));
 		});
@@ -450,7 +450,7 @@ void Atmosphere::Render(RenderGraph& graph, AtmosphereResources resourceHandles,
 	atmospherePass.Read(resourceHandles.scatteringHandle, ResourceBind::SRV);
 	atmospherePass.Read(resourceHandles.irradianceHandle, ResourceBind::SRV);
 	atmospherePass.Output(outputHDR, OutputBind::RTV, LoadType::Preserve);
-	atmospherePass.Bind([&, cameraBuffer, depthStencil, resourceHandles, outputHDR](CommandList& list, RenderGraphResourceManager& resources)
+	atmospherePass.Bind([&, cameraBuffer, depthStencil, resourceHandles, outputHDR](CommandList& list, RenderPassResources& resources)
 	{
 		const auto transmittanceHandle = resources.GetTexture(resourceHandles.transmittanceHandle);
 		const auto scatteringHandle = resources.GetTexture(resourceHandles.scatteringHandle);
@@ -495,7 +495,7 @@ std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(Rende
 	luminancePass.Read(resourceHandles.scatteringHandle, ResourceBind::SRV);
 	luminancePass.Read(resourceHandles.irradianceHandle, ResourceBind::SRV);
 	luminancePass.Write(luminanceTag, ResourceBind::UAV);
-	luminancePass.Bind([&, cameraBuffer, resourceHandles, luminanceTag](CommandList& list, RenderGraphResourceManager& resources)
+	luminancePass.Bind([&, cameraBuffer, resourceHandles, luminanceTag](CommandList& list, RenderPassResources& resources)
 	{
 		const auto transmittanceHandle = resources.GetTexture(resourceHandles.transmittanceHandle);
 		const auto scatteringHandle = resources.GetTexture(resourceHandles.scatteringHandle);
@@ -563,7 +563,7 @@ std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(Rende
 		.stride = sizeof(XMFLOAT3)
 	}, VGText("Sun transmittance"));
 	sunTransmittancePass.Write(sunTransmittance, ResourceBind::UAV);
-	sunTransmittancePass.Bind([&, cameraBuffer, resourceHandles, sunTransmittance](CommandList& list, RenderGraphResourceManager& resources)
+	sunTransmittancePass.Bind([&, cameraBuffer, resourceHandles, sunTransmittance](CommandList& list, RenderPassResources& resources)
 	{
 		const auto transmittanceHandle = resources.GetTexture(resourceHandles.transmittanceHandle);
 

@@ -253,6 +253,7 @@ void RenderGraph::Execute(RenderDevice* device)
 	VGScopedCPUStat("Render Graph Execute");
 
 	resourceManager->BuildTransients(device, this);
+	resourceManager->BuildDescriptors(device, this);
 
 	passLists.reserve(passes.size());
 
@@ -365,7 +366,11 @@ void RenderGraph::Execute(RenderDevice* device)
 			list->Native()->OMSetStencilRef(0);
 		}
 
-		pass->Execute(*list, *resourceManager);
+		RenderPassResources resources{};
+		resources.resources = resourceManager;
+		resources.passIndex = i;
+
+		pass->Execute(*list, resources);
 
 		// #TODO: End render pass.
 	}

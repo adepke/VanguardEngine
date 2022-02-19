@@ -187,6 +187,15 @@ void ResourceManager::CreateResourceViews(TextureComponent& target)
 				break;
 			}
 
+			else if (target.description.depth == 6)
+			{
+				viewDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+				viewDesc.TextureCube.MostDetailedMip = 0;
+				viewDesc.TextureCube.MipLevels = -1;
+				viewDesc.TextureCube.ResourceMinLODClamp = 0.f;
+				break;
+			}
+
 			else
 			{
 				viewDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;

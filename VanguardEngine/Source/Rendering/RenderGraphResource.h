@@ -55,7 +55,7 @@ struct TransientTextureDescription
 {
 	uint32_t width = 0;  // Will match back buffer resolution if left at 0.
 	uint32_t height = 0;  // Will match back buffer resolution if left at 0.
-	uint32_t depth = 1;
+	uint32_t depth = 1;  // Special values: 6 implies texture cube.
 	float resolutionScale = 1.f;  // Only applies if using back buffer resolution.
 	DXGI_FORMAT format = DXGI_FORMAT_UNKNOWN;
 	bool mipMapping = false;

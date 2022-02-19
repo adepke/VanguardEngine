@@ -356,7 +356,7 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 
 	BufferDescription cameraBufferDesc{};
 	cameraBufferDesc.updateRate = ResourceFrequency::Static;
-	cameraBufferDesc.bindFlags = BindFlag::ConstantBuffer;
+	cameraBufferDesc.bindFlags = BindFlag::ConstantBuffer | BindFlag::ShaderResource;
 	cameraBufferDesc.accessFlags = AccessFlag::CPUWrite;
 	cameraBufferDesc.size = 1;  // #TODO: Support multiple cameras.
 	cameraBufferDesc.stride = sizeof(Camera);
@@ -410,7 +410,7 @@ void Renderer::Render(entt::registry& registry)
 	}, VGText("Depth stencil"));
 	prePass.Read(cameraBufferTag, ResourceBind::CBV);
 	prePass.Output(depthStencilTag, OutputBind::DSV, LoadType::Clear);
-	prePass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
+	prePass.Bind([&](CommandList& list, RenderPassResources& resources)
 	{
 		list.BindPipelineState(pipelines["Prepass"]);
 		list.BindResource("camera", resources.GetBuffer(cameraBufferTag));
@@ -442,7 +442,7 @@ void Renderer::Render(entt::registry& registry)
 	forwardPass.Read(iblResources.brdfTag, ResourceBind::SRV);
 	forwardPass.Read(sunTransmittance, ResourceBind::SRV);
 	forwardPass.Output(outputHDRTag, OutputBind::RTV, LoadType::Clear);
-	forwardPass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
+	forwardPass.Bind([&](CommandList& list, RenderPassResources& resources)
 	{
 		// Opaque
 
@@ -483,53 +483,11 @@ void Renderer::Render(entt::registry& registry)
 			uint32_t prefilterLevels;
 		} iblData;
 
-		const auto& irradianceComponent = device->GetResourceManager().Get(resources.GetTexture(iblResources.irradianceTag));
-		
-		D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
-		srvDesc.Format = irradianceComponent.description.format;
-		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
-		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-		srvDesc.TextureCube.MostDetailedMip = 0;
-		srvDesc.TextureCube.MipLevels = -1;
-		srvDesc.TextureCube.ResourceMinLODClamp = 0.f;
-
-		auto irradianceSRV = device->AllocateDescriptor(DescriptorType::Default);
-		device->Native()->CreateShaderResourceView(irradianceComponent.allocation->GetResource(), &srvDesc, irradianceSRV);
-
-		const auto& prefilterComponent = device->GetResourceManager().Get(resources.GetTexture(iblResources.prefilterTag));
-
-		srvDesc.Format = prefilterComponent.description.format;
-		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
-		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-		srvDesc.TextureCube.MostDetailedMip = 0;
-		srvDesc.TextureCube.MipLevels = -1;
-		srvDesc.TextureCube.ResourceMinLODClamp = 0.f;
-
-		auto prefilterSRV = device->AllocateDescriptor(DescriptorType::Default);
-		device->Native()->CreateShaderResourceView(prefilterComponent.allocation->GetResource(), &srvDesc, prefilterSRV);
-
-		const auto& brdfComponent = device->GetResourceManager().Get(resources.GetTexture(iblResources.brdfTag));
-
-		srvDesc.Format = brdfComponent.description.format;
-		srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-		srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-		srvDesc.Texture2D.MostDetailedMip = 0;
-		srvDesc.Texture2D.MipLevels = -1;
-		srvDesc.Texture2D.PlaneSlice = 0;
-		srvDesc.Texture2D.ResourceMinLODClamp = 0.f;
-
-		auto brdfSRV = device->AllocateDescriptor(DescriptorType::Default);
-		device->Native()->CreateShaderResourceView(brdfComponent.allocation->GetResource(), &srvDesc, brdfSRV);
-
-		iblData.irradianceTexture = irradianceSRV.bindlessIndex;
-		iblData.prefilterTexture = prefilterSRV.bindlessIndex;
-		iblData.brdfTexture = brdfSRV.bindlessIndex;
+		iblData.irradianceTexture = resources.Get(iblResources.irradianceTag);
+		iblData.prefilterTexture = resources.Get(iblResources.prefilterTag);
+		iblData.brdfTexture = resources.Get(iblResources.brdfTag);
 		iblData.prefilterLevels = ibl.GetPrefilterLevels();
 		list.BindConstants("iblData", iblData);
-
-		device->GetResourceManager().AddFrameDescriptor(device->GetFrameIndex(), std::move(irradianceSRV));
-		device->GetResourceManager().AddFrameDescriptor(device->GetFrameIndex(), std::move(prefilterSRV));
-		device->GetResourceManager().AddFrameDescriptor(device->GetFrameIndex(), std::move(brdfSRV));
 
 		{
 			VGScopedGPUStat("Opaque", device->GetDirectContext(), list.Native());
@@ -569,16 +527,13 @@ void Renderer::Render(entt::registry& registry)
 	}, VGText("Output LDR sRGB"));
 	postProcessPass.Read(outputHDRTag, ResourceBind::SRV);
 	postProcessPass.Output(outputLDRTag, OutputBind::RTV, LoadType::Clear);
-	postProcessPass.Bind([&](CommandList& list, RenderGraphResourceManager& resources)
+	postProcessPass.Bind([&](CommandList& list, RenderPassResources& resources)
 	{
 		list.BindPipelineState(pipelines["PostProcess"]);
 		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
 
-		auto outputHDR = resources.GetTexture(outputHDRTag);
-		auto& outputHDRComponent = device->GetResourceManager().Get(outputHDR);
-
 		// Set the output texture index.
-		list.BindConstants("inputTextures", { outputHDRComponent.SRV->bindlessIndex });
+		list.BindConstants("inputTextures", { resources.Get(outputHDRTag) });
 
 		list.DrawFullscreenQuad();
 	});
@@ -588,7 +543,7 @@ void Renderer::Render(entt::registry& registry)
 
 	auto& presentPass = graph.AddPass("Present", ExecutionQueue::Graphics);
 	presentPass.Read(backBufferTag, ResourceBind::Common);
-	presentPass.Bind([](CommandList& list, RenderGraphResourceManager& resources)
+	presentPass.Bind([](CommandList& list, RenderPassResources& resources)
 	{
 		// We can't call present here since it would execute during pass recording.
 		// #TODO: Try to find a better solution for this.

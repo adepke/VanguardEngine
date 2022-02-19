@@ -53,10 +53,10 @@ struct TextureDescription
 	uint32_t accessFlags = 0;
 	uint32_t width = 1;
 	uint32_t height = 1;
-	uint32_t depth = 1;
+	uint32_t depth = 1;  // Special values: 6 implies texture cube.
 	DXGI_FORMAT format;
 	bool mipMapping = false;  // Enables support for multiple mip levels, does not automatically generate mips.
-	bool array = false;  // Determines if this texture is 3D or an array, depth must be >0.
+	bool array = false;  // Determines if this texture is 3D or an array, depth must be >0. Texture cubes must be arrays.
 };
 
 struct BufferComponent

@@ -4,11 +4,14 @@
 
 #include <Rendering/Base.h>
 #include <Rendering/ResourceHandle.h>
+#include <Rendering/ResourceBind.h>
 #include <Rendering/RenderGraphResource.h>
+#include <Rendering/ResourceView.h>
 
 #include <unordered_map>
 #include <utility>
 #include <list>
+#include <vector>
 #include <optional>
 #include <algorithm>
 
@@ -29,6 +32,11 @@ struct TransientTexture
 	TransientTextureDescription description;
 };
 
+struct RenderPassViews
+{
+	std::unordered_map<RenderResource, ResourceView> views;
+};
+
 class RenderGraphResourceManager
 {
 private:
@@ -45,6 +53,13 @@ private:
 	std::list<TransientBuffer> transientBuffers;
 	std::list<TransientTexture> transientTextures;
 
+	std::unordered_map<size_t, RenderPassViews> passViews;
+	std::vector<DescriptorHandle> transientDescriptors;
+
+private:
+	DescriptorHandle CreateDescriptorFromView(RenderDevice* device, const RenderResource resource, ShaderResourceViewDescription viewDesc);
+	uint32_t GetDefaultDescriptor(RenderDevice* device, const RenderResource resource, ResourceBind bind);
+
 public:
 	const RenderResource AddResource(const BufferHandle resource);
 	const RenderResource AddResource(const TextureHandle resource);
@@ -52,9 +67,12 @@ public:
 	const RenderResource AddResource(const TransientTextureDescription& description, const std::wstring& name);
 
 	void BuildTransients(RenderDevice* device, RenderGraph* graph);
+	void BuildDescriptors(RenderDevice* device, RenderGraph* graph);
 	void DiscardTransients(RenderDevice* device);
 
 public:
+	const uint32_t GetDescriptor(size_t passIndex, const RenderResource resource, const std::string& name);
+
 	const BufferHandle GetBuffer(const RenderResource resource);
 	const TextureHandle GetTexture(const RenderResource resource);
 
@@ -97,6 +115,20 @@ inline const RenderResource RenderGraphResourceManager::AddResource(const Transi
 	transientTextureResources[result] = std::make_pair(description, name);
 
 	return result;
+}
+
+inline const uint32_t RenderGraphResourceManager::GetDescriptor(size_t passIndex, const RenderResource resource, const std::string& name)
+{
+	VGAssert(passViews.contains(passIndex), "No descriptors requested by pass index %zu", passIndex);
+	auto& passView = passViews[passIndex].views;
+	VGAssert(passView.contains(resource), "No descriptors created for resource.");
+	auto& descriptors = passView[resource].descriptors;
+	if (name.size() > 0)
+		VGAssert(descriptors.contains(name), "Failed to get descriptor with name '%s' from resource.", name.data());
+	else
+		VGAssert(descriptors.contains(name), "Failed to get default descriptor from resource.");
+
+	return descriptors[name];
 }
 
 inline const BufferHandle RenderGraphResourceManager::GetBuffer(const RenderResource resource)
