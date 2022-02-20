@@ -36,7 +36,7 @@ void Bloom::Render(RenderGraph& graph, const RenderResource hdrSource)
 		.width = 0,
 		.height = 0,
 		.resolutionScale = 0.5f,
-		.format = DXGI_FORMAT_R16G16B16A16_FLOAT,  // #TODO: Remove alpha component.
+		.format = DXGI_FORMAT_R11G11B10_FLOAT,
 		.mipMapping = true
 	}, VGText("Bloom extraction output"));
 	extractPass.Write(extractTexture, TextureView{}

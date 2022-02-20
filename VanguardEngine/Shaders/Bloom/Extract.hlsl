@@ -28,7 +28,7 @@ float3 KarisAverage(float3 a, float3 b, float3 c, float3 d)
 void Main(uint3 dispatchId : SV_DispatchThreadID)
 {
 	Texture2D<float4> input = ResourceDescriptorHeap[bindData.inputTexture];
-	RWTexture2D<float4> output = ResourceDescriptorHeap[bindData.outputTexture];
+	RWTexture2D<float3> output = ResourceDescriptorHeap[bindData.outputTexture];
 	
 	float2 inputDimensions;
 	input.GetDimensions(inputDimensions.x, inputDimensions.y);
@@ -44,5 +44,5 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	
 	// Partial Karis average, applied in blocks of 4 samples.
 	// See: http://advances.realtimerendering.com/s2014/sledgehammer/Next-Generation-Post-Processing-in-Call-of-Duty-Advanced-Warfare-v17.pptx
-	output[dispatchId.xy].rgb = KarisAverage(a, b, c, d);
+	output[dispatchId.xy] = KarisAverage(a, b, c, d);
 }

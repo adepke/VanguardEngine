@@ -15,7 +15,8 @@ float3 Average(float3 a, float3 b, float3 c, float3 d)
 	return (a + b + c + d) * 0.25f;
 }
 
-float3 QuadSample(Texture2D source, float2 uv, float2 texelSize)
+template <typename T>
+float3 QuadSample(T source, float2 uv, float2 texelSize)
 {
 	float3 a = source.SampleLevel(downsampleBorder, uv + float2(-texelSize.x, -texelSize.y), 0).rgb;  // Top left.
 	float3 b = source.SampleLevel(downsampleBorder, uv + float2(texelSize.x, -texelSize.y), 0).rgb;  // Top right.
@@ -25,7 +26,8 @@ float3 QuadSample(Texture2D source, float2 uv, float2 texelSize)
 	return Average(a, b, c, d);
 }
 
-float3 FilteredSample(Texture2D source, float2 location, float2 texelSize)
+template <typename T>
+float3 FilteredSample(T source, float2 location, float2 texelSize)
 {
 	// 36 tap filter, eliminates pulsating artifacts and temporal stability issues.
 	// See: http://advances.realtimerendering.com/s2014/sledgehammer/Next-Generation-Post-Processing-in-Call-of-Duty-Advanced-Warfare-v17.pptx
@@ -43,8 +45,8 @@ float3 FilteredSample(Texture2D source, float2 location, float2 texelSize)
 [numthreads(8, 8, 1)]
 void Main(uint3 dispatchId : SV_DispatchThreadID)
 {
-	Texture2D<float4> input = ResourceDescriptorHeap[bindData.inputTexture];
-	RWTexture2D<float4> output = ResourceDescriptorHeap[bindData.outputTexture];
+	Texture2D<float3> input = ResourceDescriptorHeap[bindData.inputTexture];
+	RWTexture2D<float3> output = ResourceDescriptorHeap[bindData.outputTexture];
 	
 	float2 inputDimensions;
 	input.GetDimensions(inputDimensions.x, inputDimensions.y);
@@ -52,5 +54,5 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	float2 center = (dispatchId.xy * 2.f + 1.f);
 	float2 texelSize = 1.f / inputDimensions;
 	
-	output[dispatchId.xy].rgb = FilteredSample(input, center, texelSize);
+	output[dispatchId.xy] = FilteredSample(input, center, texelSize);
 }

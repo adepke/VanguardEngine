@@ -12,7 +12,8 @@ struct BindData
 
 ConstantBuffer<BindData> bindData : register(b0);
 
-float3 FilteredSample(Texture2D source, uint level, float2 uv, float2 texelSize)
+template <typename T>
+float3 FilteredSample(T source, uint level, float2 uv, float2 texelSize)
 {	
 	// 3x3 Bartlett filter.
 	// See: http://advances.realtimerendering.com/s2014/sledgehammer/Next-Generation-Post-Processing-in-Call-of-Duty-Advanced-Warfare-v17.pptx,
@@ -36,8 +37,8 @@ float3 FilteredSample(Texture2D source, uint level, float2 uv, float2 texelSize)
 [numthreads(8, 8, 1)]
 void Main(uint3 dispatchId : SV_DispatchThreadID)
 {
-	Texture2D<float4> input = ResourceDescriptorHeap[bindData.inputTexture];
-	RWTexture2D<float4> output = ResourceDescriptorHeap[bindData.outputTexture];
+	Texture2D<float3> input = ResourceDescriptorHeap[bindData.inputTexture];
+	RWTexture2D<float3> output = ResourceDescriptorHeap[bindData.outputTexture];
 	
 	float2 outputDimensions;
 	output.GetDimensions(outputDimensions.x, outputDimensions.y);
@@ -47,5 +48,5 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	
 	float3 current = output[dispatchId.xy].rgb;
 	float3 upsample = FilteredSample(input, bindData.inputMip, center, texelSize);
-	output[dispatchId.xy].rgb = lerp(current, upsample, bindData.intensity);  // See: https://www.froyok.fr/blog/2021-12-ue4-custom-bloom/
+	output[dispatchId.xy] = lerp(current, upsample, bindData.intensity);  // See: https://www.froyok.fr/blog/2021-12-ue4-custom-bloom/
 }
