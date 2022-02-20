@@ -44,8 +44,6 @@ void Bloom::Render(RenderGraph& graph, const RenderResource hdrSource)
 	extractPass.Bind([&, hdrSource, extractTexture](CommandList& list, RenderPassResources& resources)
 	{
 		list.BindPipelineState(extractState);
-		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
-		list.BindResourceTable("texturesRW", device->GetDescriptorAllocator().GetBindlessHeap());
 
 		struct BindData
 		{
@@ -84,8 +82,6 @@ void Bloom::Render(RenderGraph& graph, const RenderResource hdrSource)
 	downsamplePass.Bind([this, extractTexture, downsampleExtractViewNames](CommandList& list, RenderPassResources& resources)
 	{
 		list.BindPipelineState(downsampleState);
-		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
-		list.BindResourceTable("texturesRW", device->GetDescriptorAllocator().GetBindlessHeap());
 
 		auto& extractTextureComponent = device->GetResourceManager().Get(resources.GetTexture(extractTexture));
 
@@ -132,8 +128,6 @@ void Bloom::Render(RenderGraph& graph, const RenderResource hdrSource)
 	compositionPass.Bind([this, extractTexture, hdrSource, upsampleExtractViewNames](CommandList& list, RenderPassResources& resources)
 	{
 		list.BindPipelineState(upsampleState);
-		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
-		list.BindResourceTable("texturesRW", device->GetDescriptorAllocator().GetBindlessHeap());
 
 		auto& extractTextureComponent = device->GetResourceManager().Get(resources.GetTexture(extractTexture));
 		auto& hdrTextureComponent = device->GetResourceManager().Get(resources.GetTexture(hdrSource));

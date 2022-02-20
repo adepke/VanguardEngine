@@ -1,22 +1,7 @@
 // Copyright (c) 2019-2022 Andrew Depke
 
-#include "Base.hlsli"
+#include "RootSignature.hlsli"
 #include "Color.hlsli"
-
-#define RS \
-	"RootFlags(0)," \
-	"RootConstants(b0, num32BitConstants = 2)," \
-	"DescriptorTable(" \
-		"SRV(t0, space = 0, numDescriptors = unbounded, flags = DESCRIPTORS_VOLATILE))," \
-	"DescriptorTable(" \
-		"UAV(u0, space = 0, numDescriptors = unbounded, flags = DESCRIPTORS_VOLATILE))," \
-	"StaticSampler(" \
-		"s0," \
-		"filter = FILTER_MIN_MAG_LINEAR_MIP_POINT," \
-		"addressU = TEXTURE_ADDRESS_CLAMP," \
-		"addressV = TEXTURE_ADDRESS_CLAMP," \
-		"addressW = TEXTURE_ADDRESS_CLAMP," \
-		"comparisonFunc = COMPARISON_ALWAYS)"
 
 struct BindData
 {
@@ -25,7 +10,6 @@ struct BindData
 };
 
 ConstantBuffer<BindData> bindData : register(b0);
-SamplerState bilinearClampSampler : register(s0);
 
 float3 KarisAverage(float3 a, float3 b, float3 c, float3 d)
 {
@@ -43,8 +27,8 @@ float3 KarisAverage(float3 a, float3 b, float3 c, float3 d)
 [numthreads(8, 8, 1)]
 void Main(uint3 dispatchId : SV_DispatchThreadID)
 {
-	Texture2D<float4> input = textures[bindData.inputTexture];
-	RWTexture2D<float4> output = texturesRW[bindData.outputTexture];
+	Texture2D<float4> input = ResourceDescriptorHeap[bindData.inputTexture];
+	RWTexture2D<float4> output = ResourceDescriptorHeap[bindData.outputTexture];
 	
 	float2 inputDimensions;
 	input.GetDimensions(inputDimensions.x, inputDimensions.y);
@@ -53,10 +37,10 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	float2 texelSize = 1.f / inputDimensions;
 	
 	// 4 bilinear samples to prevent undersampling.
-	float3 a = input.Sample(bilinearClampSampler, (center + float2(-1.f, -1.f)) * texelSize).rgb;  // Top left.
-	float3 b = input.Sample(bilinearClampSampler, (center + float2(1.f, -1.f)) * texelSize).rgb;  // Top right.
-	float3 c = input.Sample(bilinearClampSampler, (center + float2(-1.f, 1.f)) * texelSize).rgb;  // Bottom left.
-	float3 d = input.Sample(bilinearClampSampler, (center + float2(1.f, 1.f)) * texelSize).rgb;  // Bottom right.
+	float3 a = input.Sample(linearMipPointClamp, (center + float2(-1.f, -1.f)) * texelSize).rgb;  // Top left.
+	float3 b = input.Sample(linearMipPointClamp, (center + float2(1.f, -1.f)) * texelSize).rgb;  // Top right.
+	float3 c = input.Sample(linearMipPointClamp, (center + float2(-1.f, 1.f)) * texelSize).rgb;  // Bottom left.
+	float3 d = input.Sample(linearMipPointClamp, (center + float2(1.f, 1.f)) * texelSize).rgb;  // Bottom right.
 	
 	// Partial Karis average, applied in blocks of 4 samples.
 	// See: http://advances.realtimerendering.com/s2014/sledgehammer/Next-Generation-Post-Processing-in-Call-of-Duty-Advanced-Warfare-v17.pptx

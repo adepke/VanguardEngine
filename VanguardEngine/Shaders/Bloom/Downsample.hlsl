@@ -1,21 +1,6 @@
 // Copyright (c) 2019-2022 Andrew Depke
 
-#include "Base.hlsli"
-
-#define RS \
-	"RootFlags(0)," \
-	"RootConstants(b0, num32BitConstants = 2)," \
-	"DescriptorTable(" \
-		"SRV(t0, space = 0, numDescriptors = unbounded, flags = DESCRIPTORS_VOLATILE))," \
-	"DescriptorTable(" \
-		"UAV(u0, space = 0, numDescriptors = unbounded, flags = DESCRIPTORS_VOLATILE))," \
-	"StaticSampler(" \
-		"s0," \
-		"filter = FILTER_MIN_MAG_LINEAR_MIP_POINT," \
-		"addressU = TEXTURE_ADDRESS_BORDER," \
-		"addressV = TEXTURE_ADDRESS_BORDER," \
-		"addressW = TEXTURE_ADDRESS_BORDER," \
-		"borderColor = STATIC_BORDER_COLOR_OPAQUE_BLACK)"
+#include "RootSignature.hlsli"
 
 struct BindData
 {
@@ -24,7 +9,6 @@ struct BindData
 };
 
 ConstantBuffer<BindData> bindData : register(b0);
-SamplerState bilinearBorderSampler : register(s0);  // Black border color, see: https://www.froyok.fr/blog/2021-12-ue4-custom-bloom/
 
 float3 Average(float3 a, float3 b, float3 c, float3 d)
 {
@@ -33,10 +17,10 @@ float3 Average(float3 a, float3 b, float3 c, float3 d)
 
 float3 QuadSample(Texture2D source, float2 uv, float2 texelSize)
 {
-	float3 a = source.SampleLevel(bilinearBorderSampler, uv + float2(-texelSize.x, -texelSize.y), 0).rgb;  // Top left.
-	float3 b = source.SampleLevel(bilinearBorderSampler, uv + float2(texelSize.x, -texelSize.y), 0).rgb;  // Top right.
-	float3 c = source.SampleLevel(bilinearBorderSampler, uv + float2(-texelSize.x, texelSize.y), 0).rgb;  // Bottom left.
-	float3 d = source.SampleLevel(bilinearBorderSampler, uv + float2(texelSize.x, texelSize.y), 0).rgb;  // Bottom right.
+	float3 a = source.SampleLevel(downsampleBorder, uv + float2(-texelSize.x, -texelSize.y), 0).rgb;  // Top left.
+	float3 b = source.SampleLevel(downsampleBorder, uv + float2(texelSize.x, -texelSize.y), 0).rgb;  // Top right.
+	float3 c = source.SampleLevel(downsampleBorder, uv + float2(-texelSize.x, texelSize.y), 0).rgb;  // Bottom left.
+	float3 d = source.SampleLevel(downsampleBorder, uv + float2(texelSize.x, texelSize.y), 0).rgb;  // Bottom right.
 	
 	return Average(a, b, c, d);
 }
@@ -59,8 +43,8 @@ float3 FilteredSample(Texture2D source, float2 location, float2 texelSize)
 [numthreads(8, 8, 1)]
 void Main(uint3 dispatchId : SV_DispatchThreadID)
 {
-	Texture2D<float4> input = textures[bindData.inputTexture];
-	RWTexture2D<float4> output = texturesRW[bindData.outputTexture];
+	Texture2D<float4> input = ResourceDescriptorHeap[bindData.inputTexture];
+	RWTexture2D<float4> output = ResourceDescriptorHeap[bindData.outputTexture];
 	
 	float2 inputDimensions;
 	input.GetDimensions(inputDimensions.x, inputDimensions.y);
