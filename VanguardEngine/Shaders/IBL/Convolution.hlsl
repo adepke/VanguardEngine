@@ -134,7 +134,7 @@ void PrefilterMain(uint3 dispatchId : SV_DispatchThreadID)
 [numthreads(8, 8, 1)]
 void BRDFMain(uint3 dispatchId : SV_DispatchThreadID)
 {
-	RWTexture2D<float4> brdfLut = ResourceDescriptorHeap[bindData.brdfTexture];
+	RWTexture2D<float2> brdfLut = ResourceDescriptorHeap[bindData.brdfTexture];
 	float width, height;
 	brdfLut.GetDimensions(width, height);
 	
@@ -168,5 +168,5 @@ void BRDFMain(uint3 dispatchId : SV_DispatchThreadID)
 		}
 	}
 	
-	brdfLut[dispatchId.xy] = float4(a / (float)steps, b / (float)steps, 0.f, 0.f);
+	brdfLut[dispatchId.xy] = float2(a / (float)steps, b / (float)steps);
 }

@@ -61,7 +61,7 @@ void ImageBasedLighting::Initialize(RenderDevice* inDevice)
 		.width = brdfTextureSize,
 		.height = brdfTextureSize,
 		.depth = 1,
-		.format = DXGI_FORMAT_R16G16B16A16_FLOAT,
+		.format = DXGI_FORMAT_R16G16_FLOAT,
 		.mipMapping = false
 	};
 
