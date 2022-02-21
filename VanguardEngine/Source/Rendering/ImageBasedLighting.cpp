@@ -81,6 +81,8 @@ IBLResources ImageBasedLighting::UpdateLuts(RenderGraph& graph, RenderResource l
 			.UAV("", 0));
 		brdfPass.Bind([&, brdfTag](CommandList& list, RenderPassResources& resources)
 		{
+			list.BindPipelineState(brdfPrecompute);
+
 			struct BindData
 			{
 				uint32_t luminanceTexture;
@@ -91,16 +93,7 @@ IBLResources ImageBasedLighting::UpdateLuts(RenderGraph& graph, RenderResource l
 			} bindData;
 
 			bindData.brdfTexture = resources.Get(brdfTag);
-			std::vector<uint8_t> bindBytes;
-			bindBytes.resize(sizeof(bindData));
-			std::memcpy(bindBytes.data(), &bindData, bindBytes.size());
-
-			const auto [handle, offset] = device->FrameAllocate(bindBytes.size());
-			device->GetResourceManager().Write(handle, bindBytes, offset);
-
-			list.BindPipelineState(brdfPrecompute);
-			list.BindResource("bindData", handle, offset);
-			list.BindResourceTable("texturesRW", device->GetDescriptorAllocator().GetBindlessHeap());
+			list.BindConstants("bindData", bindData);
 
 			list.Dispatch(brdfTextureSize / 8, brdfTextureSize / 8, 1);
 		});
@@ -114,6 +107,8 @@ IBLResources ImageBasedLighting::UpdateLuts(RenderGraph& graph, RenderResource l
 		.UAV("array", 0));
 	irradiancePass.Bind([&, luminanceTexture, irradianceTag](CommandList& list, RenderPassResources& resources)
 	{
+		list.BindPipelineState(irradiancePrecompute);
+
 		struct BindData
 		{
 			uint32_t luminanceTexture;
@@ -125,46 +120,27 @@ IBLResources ImageBasedLighting::UpdateLuts(RenderGraph& graph, RenderResource l
 		
 		bindData.luminanceTexture = resources.Get(luminanceTexture);
 		bindData.irradianceTexture = resources.Get(irradianceTag, "array");
-		std::vector<uint8_t> bindBytes;
-		bindBytes.resize(sizeof(bindData));
-		std::memcpy(bindBytes.data(), &bindData, bindBytes.size());
-
-		const auto [handle, offset] = device->FrameAllocate(bindBytes.size());
-		device->GetResourceManager().Write(handle, bindBytes, offset);
-
-		list.BindPipelineState(irradiancePrecompute);
-		list.BindResource("bindData", handle, offset);
-		list.BindResourceTable("textureCubes", device->GetDescriptorAllocator().GetBindlessHeap());
-		list.BindResourceTable("textureArraysRW", device->GetDescriptorAllocator().GetBindlessHeap());
+		list.BindConstants("bindData", bindData);
 
 		list.Dispatch(irradianceTextureSize / 8, irradianceTextureSize / 8, 6);
 	});
 
+	TextureView prefilterView{};
+	std::vector<std::string> prefilterViewNames;
+	prefilterViewNames.resize(prefilterLevels);
+	for (int i = 0; i < prefilterLevels; ++i)
+	{
+		prefilterViewNames[i] = std::to_string(i);
+		prefilterView.UAV(prefilterViewNames[i], i);
+	}
+
 	auto& prefilterPass = graph.AddPass("IBL Prefilter Pass", ExecutionQueue::Compute);
 	prefilterPass.Read(luminanceTexture, ResourceBind::SRV);
-	prefilterPass.Write(prefilterTag, ResourceBind::UAV);
-	prefilterPass.Bind([&, luminanceTexture, prefilterTag](CommandList& list, RenderPassResources& resources)
+	prefilterPass.Write(prefilterTag, prefilterView);
+	prefilterPass.Bind([&, luminanceTexture, prefilterTag, prefilterViewNames](CommandList& list, RenderPassResources& resources)
 	{
-		const auto& prefilterComponent = device->GetResourceManager().Get(resources.GetTexture(prefilterTag));
-
-		std::vector<DescriptorHandle> prefilterDescriptors;
-		prefilterDescriptors.reserve(prefilterLevels);
-
-		D3D12_UNORDERED_ACCESS_VIEW_DESC prefilterDesc{};
-		prefilterDesc.Format = prefilterComponent.description.format;
-		prefilterDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
-		prefilterDesc.Texture2DArray.FirstArraySlice = 0;
-		prefilterDesc.Texture2DArray.ArraySize = prefilterComponent.description.depth;
-		prefilterDesc.Texture2DArray.PlaneSlice = 0;
-
-		for (int i = 0; i < prefilterLevels; ++i)
-		{
-			prefilterDesc.Texture2DArray.MipSlice = i;
-			auto uav = device->AllocateDescriptor(DescriptorType::Default);
-			device->Native()->CreateUnorderedAccessView(prefilterComponent.allocation->GetResource(), nullptr, &prefilterDesc, uav);
-			prefilterDescriptors.emplace_back(std::move(uav));
-		}
-
+		list.BindPipelineState(prefilterPrecompute);
+			
 		struct BindData
 		{
 			uint32_t luminanceTexture;
@@ -179,27 +155,12 @@ IBLResources ImageBasedLighting::UpdateLuts(RenderGraph& graph, RenderResource l
 		slice = (slice + 1) % 6;
 		for (int i = 0; i < prefilterLevels; ++i)
 		{
-			bindData.prefilterMips[i] = prefilterDescriptors[i].bindlessIndex;
+			bindData.prefilterMips[i] = resources.Get(prefilterTag, prefilterViewNames[i]);
 		}
 
-		std::vector<uint8_t> bindBytes;
-		bindBytes.resize(sizeof(bindData));
-		std::memcpy(bindBytes.data(), &bindData, bindBytes.size());
-
-		const auto [handle, offset] = device->FrameAllocate(bindBytes.size());
-		device->GetResourceManager().Write(handle, bindBytes, offset);
-
-		list.BindPipelineState(prefilterPrecompute);
-		list.BindResource("bindData", handle, offset);
-		list.BindResourceTable("textureCubes", device->GetDescriptorAllocator().GetBindlessHeap());
-		list.BindResourceTable("textureArraysRW", device->GetDescriptorAllocator().GetBindlessHeap());
+		list.BindConstants("bindData", bindData);
 
 		list.Dispatch(prefilterTextureSize / 8, prefilterTextureSize / 8, 6);
-
-		for (auto&& descriptor : prefilterDescriptors)
-		{
-			device->GetResourceManager().AddFrameDescriptor(device->GetFrameIndex(), std::move(descriptor));
-		}
 	});
 
 	return { irradianceTag, prefilterTag, brdfTag };

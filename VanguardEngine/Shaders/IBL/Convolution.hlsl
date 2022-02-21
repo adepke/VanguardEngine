@@ -1,28 +1,10 @@
 // Copyright (c) 2019-2022 Andrew Depke
 
-#include "Base.hlsli"
+#include "RootSignature.hlsli"
 #include "Constants.hlsli"
 #include "ImportanceSampling.hlsli"
 #include "BRDF.hlsli"
 #include "CubeMap.hlsli"
-
-#define RS \
-	"RootFlags(0)," \
-	"CBV(b0)," \
-	"DescriptorTable(" \
-		"SRV(t0, space = 3, numDescriptors = unbounded, flags = DESCRIPTORS_VOLATILE))," \
-	"DescriptorTable(" \
-		"UAV(u0, space = 0, numDescriptors = unbounded, flags = DESCRIPTORS_VOLATILE))," \
-	"DescriptorTable(" \
-		"UAV(u0, space = 2, numDescriptors = unbounded, flags = DESCRIPTORS_VOLATILE))," \
-	"StaticSampler(" \
-		"s0," \
-		"filter = FILTER_MIN_MAG_MIP_LINEAR," \
-		"addressU = TEXTURE_ADDRESS_CLAMP," \
-		"addressV = TEXTURE_ADDRESS_CLAMP," \
-		"addressW = TEXTURE_ADDRESS_CLAMP)"
-
-SamplerState lutSampler : register(s0);
 
 struct BindData
 {
@@ -42,8 +24,8 @@ ConstantBuffer<BindData> bindData : register(b0);
 [numthreads(8, 8, 1)]
 void IrradianceMain(uint3 dispatchId : SV_DispatchThreadID)
 {
-	RWTexture2DArray<float4> irradianceMap = textureArraysRW[bindData.irradianceTexture];
-	TextureCube luminanceMap = textureCubes[bindData.luminanceTexture];
+	RWTexture2DArray<float4> irradianceMap = ResourceDescriptorHeap[bindData.irradianceTexture];
+	TextureCube<float4> luminanceMap = ResourceDescriptorHeap[bindData.luminanceTexture];
 	
 	float width, height, elements;
 	irradianceMap.GetDimensions(width, height, elements);
@@ -69,7 +51,7 @@ void IrradianceMain(uint3 dispatchId : SV_DispatchThreadID)
 			float phi = 0.5f * pi * ((float)j / float(steps - 1.f));
 			float3 tangentSpace = normalize(float3(sin(phi) * cos(theta), sin(phi) * sin(theta), cos(phi)));
 			float3 worldSpace = tangentSpace.x * left + tangentSpace.y * up + tangentSpace.z * forward;
-			float3 value = luminanceMap.SampleLevel(lutSampler, worldSpace, 0.f).rgb;
+			float3 value = luminanceMap.SampleLevel(bilinearClamp, worldSpace, 0.f).rgb;
 			irradianceSum += value * cos(phi) * sin(phi);  // Scaling improves light distribution.
 		}
 	}
@@ -84,7 +66,7 @@ void PrefilterMain(uint3 dispatchId : SV_DispatchThreadID)
 {
 	// Uses split sum approximation by Epic Games, see: https://blog.selfshadow.com/publications/s2013-shading-course/karis/s2013_pbs_epic_notes_v2.pdf
 	
-	RWTexture2DArray<float4> baseMip = textureArraysRW[bindData.prefilterMips[0]];
+	RWTexture2DArray<float4> baseMip = ResourceDescriptorHeap[bindData.prefilterMips[0]];
 	float width, height, depth;
 	baseMip.GetDimensions(width, height, depth);
 	const float baseMipSize = width;
@@ -93,11 +75,11 @@ void PrefilterMain(uint3 dispatchId : SV_DispatchThreadID)
 	const uint maskShift = log2(width);
 	const uint xyIndex = dispatchId.y * width + dispatchId.x;
 	
-	TextureCube luminanceMap = textureCubes[bindData.luminanceTexture];
+	TextureCube<float4> luminanceMap = ResourceDescriptorHeap[bindData.luminanceTexture];
 	
 	for (int i = 0; i < PREFILTER_LEVELS; ++i)
 	{
-		RWTexture2DArray<float4> prefilterMap = textureArraysRW[bindData.prefilterMips[i]];
+		RWTexture2DArray<float4> prefilterMap = ResourceDescriptorHeap[bindData.prefilterMips[i]];
 		prefilterMap.GetDimensions(width, height, depth);
 		
 		uint groupMask = (1u << i) - 1;
@@ -139,7 +121,7 @@ void PrefilterMain(uint3 dispatchId : SV_DispatchThreadID)
 					float mip = roughness == 0.f ? 0.f : 0.5f * log2(saSample / saTexel);
 					
 					sumWeight += normalDotLight;
-					sumSamples += luminanceMap.SampleLevel(lutSampler, light, mip).rgb * normalDotLight;
+					sumSamples += luminanceMap.SampleLevel(bilinearClamp, light, mip).rgb * normalDotLight;
 				}
 			}
 	
@@ -152,7 +134,7 @@ void PrefilterMain(uint3 dispatchId : SV_DispatchThreadID)
 [numthreads(8, 8, 1)]
 void BRDFMain(uint3 dispatchId : SV_DispatchThreadID)
 {
-	RWTexture2D<float4> brdfLut = texturesRW[bindData.brdfTexture];
+	RWTexture2D<float4> brdfLut = ResourceDescriptorHeap[bindData.brdfTexture];
 	float width, height;
 	brdfLut.GetDimensions(width, height);
 	
