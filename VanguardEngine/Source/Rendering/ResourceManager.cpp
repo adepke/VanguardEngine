@@ -242,7 +242,7 @@ void ResourceManager::SetResourceName(ResourcePtr<D3D12MA::Allocation>& target, 
 void ResourceManager::CreateMipmapTools()
 {
 	ComputePipelineStateDescription mipmapDescription;
-	mipmapDescription.shader = { "GenerateMipmaps_CS", "main" };
+	mipmapDescription.shader = { "GenerateMipmaps", "main" };
 
 	mipmapPipeline.Build(*device, mipmapDescription);
 }
@@ -742,7 +742,7 @@ void ResourceManager::GenerateMipmaps(CommandList& list, TextureHandle texture)
 			const auto baseMipWidth = NextPowerOf2(textureComponent.description.width) >> j * 4;
 			const auto baseMipHeight = NextPowerOf2(textureComponent.description.height) >> j * 4;
 
-			struct MipmapData
+			struct BindData
 			{
 				uint32_t mipBase;
 				uint32_t mipCount;
@@ -754,18 +754,18 @@ void ResourceManager::GenerateMipmaps(CommandList& list, TextureHandle texture)
 				uint32_t sRGB;
 				uint32_t array;
 				uint32_t layer;
-			} mipmapData;
+			} bindData;
 
-			mipmapData.mipBase = j * 4;  // Starting mip.
-			mipmapData.mipCount = std::min(mipLevels - mipmapData.mipBase - 1, 4u);  // How many mips to generate (0, 4].
-			mipmapData.sRGB = IsResourceFormatSRGB(textureComponent.description.format);
-			mipmapData.texelSize = { 2.f / baseMipWidth, 2.f / baseMipHeight };
-			mipmapData.inputTextureIndex = textureComponent.SRV->bindlessIndex;
-			mipmapData.array = layers > 1;
-			mipmapData.layer = i;
+			bindData.mipBase = j * 4;  // Starting mip.
+			bindData.mipCount = std::min(mipLevels - bindData.mipBase - 1, 4u);  // How many mips to generate (0, 4].
+			bindData.sRGB = IsResourceFormatSRGB(textureComponent.description.format);
+			bindData.texelSize = { 2.f / baseMipWidth, 2.f / baseMipHeight };
+			bindData.inputTextureIndex = textureComponent.SRV->bindlessIndex;
+			bindData.array = layers > 1;
+			bindData.layer = i;
 
 			// Allocate UAVs.
-			for (int k = 0; k < mipmapData.mipCount; ++k)
+			for (int k = 0; k < bindData.mipCount; ++k)
 			{
 				auto descriptor = device->AllocateDescriptor(DescriptorType::Default);
 
@@ -789,24 +789,15 @@ void ResourceManager::GenerateMipmaps(CommandList& list, TextureHandle texture)
 
 				device->Native()->CreateUnorderedAccessView(textureComponent.allocation->GetResource(), nullptr, &viewDesc, descriptor);
 
-				mipmapData.outputTextureIndices[k] = descriptor.bindlessIndex;
+				bindData.outputTextureIndices[k] = descriptor.bindlessIndex;
 
 				uavDescriptors.emplace_back(std::move(descriptor));
 			}
 
-			std::vector<uint32_t> constantData;
-			constantData.resize(12);
-			std::memcpy(constantData.data(), &mipmapData, constantData.size() * sizeof(uint32_t));
-
 			list.BindPipelineState(mipmapPipeline);
 			list.BindDescriptorAllocator(device->GetDescriptorAllocator());
-			list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
-			list.BindResourceTable("textureArrays", device->GetDescriptorAllocator().GetBindlessHeap());
-			list.BindResourceTable("texturesRW", device->GetDescriptorAllocator().GetBindlessHeap());
-			list.BindResourceTable("textureArraysRW", device->GetDescriptorAllocator().GetBindlessHeap());
-			list.BindConstants("mipmapData", constantData);
+			list.BindConstants("bindData", bindData);
 
-			// Dispatch the compute shader.
 			list.Dispatch(std::max((uint32_t)std::ceil(baseMipWidth / (2.f * 8.f)), 1u), std::max((uint32_t)std::ceil(baseMipHeight / (2.f * 8.f)), 1u), 1);
 
 			list.UAVBarrier(texture);

@@ -1,12 +1,9 @@
 // Copyright (c) 2019-2022 Andrew Depke
 
-#include "GenerateMipmaps_RS.hlsli"
-#include "Base.hlsli"
+#include "RootSignature.hlsli"
 #include "Color.hlsli"
 
-SamplerState clampSampler : register(s0);
-
-struct MipmapData
+struct BindData
 {
 	uint mipBase;
 	uint mipCount;
@@ -20,7 +17,7 @@ struct MipmapData
 	uint layer;
 };
 
-ConstantBuffer<MipmapData> mipmapData : register(b0);
+ConstantBuffer<BindData> bindData : register(b0);
 
 // Separated channels to reduce bank conflicts.
 groupshared float groupRed[64];
@@ -43,7 +40,7 @@ float4 LoadGroupColor(uint index)
 
 float4 SRGBAdjustedColor(float4 sample)
 {
-	if (mipmapData.sRGB)
+	if (bindData.sRGB)
 	{
 		sample.rgb = LinearToSRGB(sample.rgb);
 	}
@@ -61,51 +58,51 @@ struct Input
 [numthreads(8, 8, 1)]
 void main(Input input)
 { 
-	float2 offset = mipmapData.texelSize * 0.5;
+	float2 offset = bindData.texelSize * 0.5;
 	
 	float4 sourceSample;
 	
-	if (!mipmapData.array)
+	if (!bindData.array)
 	{
-		Texture2D inputTexture = textures[mipmapData.inputTextureIndex];
+		Texture2D<float4> inputTexture = ResourceDescriptorHeap[bindData.inputTextureIndex];
 		
-		float2 uv = mipmapData.texelSize * (input.dispatchId.xy + float2(0.25, 0.25));
+		float2 uv = bindData.texelSize * (input.dispatchId.xy + float2(0.25, 0.25));
 	
 		// Perform 4 samples to prevent undersampling non power of two textures.
-		sourceSample = inputTexture.SampleLevel(clampSampler, uv, mipmapData.mipBase);
-		sourceSample += inputTexture.SampleLevel(clampSampler, uv + float2(offset.x, 0.0), mipmapData.mipBase);
-		sourceSample += inputTexture.SampleLevel(clampSampler, uv + float2(0.0, offset.y), mipmapData.mipBase);
-		sourceSample += inputTexture.SampleLevel(clampSampler, uv + float2(offset.x, offset.y), mipmapData.mipBase);
+		sourceSample = inputTexture.SampleLevel(bilinearClamp, uv, bindData.mipBase);
+		sourceSample += inputTexture.SampleLevel(bilinearClamp, uv + float2(offset.x, 0.0), bindData.mipBase);
+		sourceSample += inputTexture.SampleLevel(bilinearClamp, uv + float2(0.0, offset.y), bindData.mipBase);
+		sourceSample += inputTexture.SampleLevel(bilinearClamp, uv + float2(offset.x, offset.y), bindData.mipBase);
 	}
 	
 	else
 	{
-		Texture2DArray inputTexture = textureArrays[mipmapData.inputTextureIndex];
+		Texture2DArray<float4> inputTexture = ResourceDescriptorHeap[bindData.inputTextureIndex];
 		
-		float3 uv = float3(mipmapData.texelSize * (input.dispatchId.xy + float2(0.25, 0.25)), mipmapData.layer);
+		float3 uv = float3(bindData.texelSize * (input.dispatchId.xy + float2(0.25, 0.25)), bindData.layer);
 	
 		// Perform 4 samples to prevent undersampling non power of two textures.
-		sourceSample = inputTexture.SampleLevel(clampSampler, uv, mipmapData.mipBase);
-		sourceSample += inputTexture.SampleLevel(clampSampler, uv + float3(offset.x, 0.0, 0.0), mipmapData.mipBase);
-		sourceSample += inputTexture.SampleLevel(clampSampler, uv + float3(0.0, offset.y, 0.0), mipmapData.mipBase);
-		sourceSample += inputTexture.SampleLevel(clampSampler, uv + float3(offset.x, offset.y, 0.0), mipmapData.mipBase);
+		sourceSample = inputTexture.SampleLevel(bilinearClamp, uv, bindData.mipBase);
+		sourceSample += inputTexture.SampleLevel(bilinearClamp, uv + float3(offset.x, 0.0, 0.0), bindData.mipBase);
+		sourceSample += inputTexture.SampleLevel(bilinearClamp, uv + float3(0.0, offset.y, 0.0), bindData.mipBase);
+		sourceSample += inputTexture.SampleLevel(bilinearClamp, uv + float3(offset.x, offset.y, 0.0), bindData.mipBase);
 	}
 	
 	sourceSample *= 0.25;
 	
-	if (!mipmapData.array)
+	if (!bindData.array)
 	{
-		RWTexture2D<float4> outputMip0 = texturesRW[mipmapData.outputTextureIndices[0]];
+		RWTexture2D<float4> outputMip0 = ResourceDescriptorHeap[bindData.outputTextureIndices[0]];
 		outputMip0[input.dispatchId.xy] = SRGBAdjustedColor(sourceSample);
 	}
 	
 	else
 	{
-		RWTexture2DArray<float4> outputMip0 = textureArraysRW[mipmapData.outputTextureIndices[0]];
-		outputMip0[uint3(input.dispatchId.xy, mipmapData.layer)] = SRGBAdjustedColor(sourceSample);
+		RWTexture2DArray<float4> outputMip0 = ResourceDescriptorHeap[bindData.outputTextureIndices[0]];
+		outputMip0[uint3(input.dispatchId.xy, bindData.layer)] = SRGBAdjustedColor(sourceSample);
 	}
 	
-	if (mipmapData.mipCount == 1)
+	if (bindData.mipCount == 1)
 	{
 		return;
 	}
@@ -123,22 +120,22 @@ void main(Input input)
 		
 		sourceSample *= 0.25;
 		
-		if (!mipmapData.array)
+		if (!bindData.array)
 		{
-			RWTexture2D<float4> outputMip1 = texturesRW[mipmapData.outputTextureIndices[1]];
+			RWTexture2D<float4> outputMip1 = ResourceDescriptorHeap[bindData.outputTextureIndices[1]];
 			outputMip1[input.dispatchId.xy / 2] = SRGBAdjustedColor(sourceSample);
 		}
 		
 		else
 		{
-			RWTexture2DArray<float4> outputMip1 = textureArraysRW[mipmapData.outputTextureIndices[1]];
-			outputMip1[uint3(input.dispatchId.xy / 2, mipmapData.layer)] = SRGBAdjustedColor(sourceSample);
+			RWTexture2DArray<float4> outputMip1 = ResourceDescriptorHeap[bindData.outputTextureIndices[1]];
+			outputMip1[uint3(input.dispatchId.xy / 2, bindData.layer)] = SRGBAdjustedColor(sourceSample);
 		}
 
 		StoreGroupColor(input.groupIndex, sourceSample);
 	}
 	
-	if (mipmapData.mipCount == 2)
+	if (bindData.mipCount == 2)
 	{
 		return;
 	}
@@ -154,22 +151,22 @@ void main(Input input)
 		
 		sourceSample *= 0.25;
 		
-		if (!mipmapData.array)
+		if (!bindData.array)
 		{
-			RWTexture2D<float4> outputMip2 = texturesRW[mipmapData.outputTextureIndices[2]];
+			RWTexture2D<float4> outputMip2 = ResourceDescriptorHeap[bindData.outputTextureIndices[2]];
 			outputMip2[input.dispatchId.xy / 4] = SRGBAdjustedColor(sourceSample);
 		}
 		
 		else
 		{
-			RWTexture2DArray<float4> outputMip2 = textureArraysRW[mipmapData.outputTextureIndices[2]];
-			outputMip2[uint3(input.dispatchId.xy / 4, mipmapData.layer)] = SRGBAdjustedColor(sourceSample);
+			RWTexture2DArray<float4> outputMip2 = ResourceDescriptorHeap[bindData.outputTextureIndices[2]];
+			outputMip2[uint3(input.dispatchId.xy / 4, bindData.layer)] = SRGBAdjustedColor(sourceSample);
 		}
 		
 		StoreGroupColor(input.groupIndex, sourceSample);
 	}
 	
-	if (mipmapData.mipCount == 3)
+	if (bindData.mipCount == 3)
 	{
 		return;
 	}
@@ -185,16 +182,16 @@ void main(Input input)
 		
 		sourceSample *= 0.25;
 		
-		if (!mipmapData.array)
+		if (!bindData.array)
 		{
-			RWTexture2D<float4> outputMip3 = texturesRW[mipmapData.outputTextureIndices[3]];
+			RWTexture2D<float4> outputMip3 = ResourceDescriptorHeap[bindData.outputTextureIndices[3]];
 			outputMip3[input.dispatchId.xy / 8] = SRGBAdjustedColor(sourceSample);
 		}
 		
 		else
 		{
-			RWTexture2DArray<float4> outputMip3 = textureArraysRW[mipmapData.outputTextureIndices[3]];
-			outputMip3[uint3(input.dispatchId.xy / 8, mipmapData.layer)] = SRGBAdjustedColor(sourceSample);
+			RWTexture2DArray<float4> outputMip3 = ResourceDescriptorHeap[bindData.outputTextureIndices[3]];
+			outputMip3[uint3(input.dispatchId.xy / 8, bindData.layer)] = SRGBAdjustedColor(sourceSample);
 		}
 	}
 }
