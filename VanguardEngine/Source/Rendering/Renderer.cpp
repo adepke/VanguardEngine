@@ -212,8 +212,8 @@ void Renderer::CreatePipelines()
 
 	GraphicsPipelineStateDescription postProcessStateDesc;
 
-	postProcessStateDesc.vertexShader = { "PostProcess_VS", "main" };
-	postProcessStateDesc.pixelShader = { "PostProcess_PS", "main" };
+	postProcessStateDesc.vertexShader = { "PostProcess", "VSMain" };
+	postProcessStateDesc.pixelShader = { "PostProcess", "PSMain" };
 
 	postProcessStateDesc.blendDescription.AlphaToCoverageEnable = false;
 	postProcessStateDesc.blendDescription.IndependentBlendEnable = false;
@@ -530,10 +530,7 @@ void Renderer::Render(entt::registry& registry)
 	postProcessPass.Bind([&](CommandList& list, RenderPassResources& resources)
 	{
 		list.BindPipelineState(pipelines["PostProcess"]);
-		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
-
-		// Set the output texture index.
-		list.BindConstants("inputTextures", { resources.Get(outputHDRTag) });
+		list.BindConstants("bindData", { resources.Get(outputHDRTag) });
 
 		list.DrawFullscreenQuad();
 	});
