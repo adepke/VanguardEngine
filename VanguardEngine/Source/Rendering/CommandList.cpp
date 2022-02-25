@@ -9,9 +9,8 @@ void ValidateTransition(const BufferDescription& description, D3D12_RESOURCE_STA
 #if !BUILD_RELEASE
 	if (description.updateRate == ResourceFrequency::Dynamic)
 	{
-		// Render graph can attempt to transition to nonpixel/pixel, which just gets discarded since generic read already
-		// covers that, so just make sure we're transitioning to a state that's covered by generic read.
-		VGAssert(newState & D3D12_RESOURCE_STATE_GENERIC_READ, "Dynamic buffers must always be in generic read state.");
+		// Dynamic resources must always be in generic read state.
+		VGAssert(newState == D3D12_RESOURCE_STATE_GENERIC_READ, "Dynamic buffers must always be in generic read state.");
 	}
 	else
 	{
@@ -44,11 +43,14 @@ void CommandList::TransitionBarrierInternal(ID3D12Resource* resource, D3D12_RESO
 	// or combine these read states before a flush.
 
 	// Make sure we don't discard transitions to common. Special case since it's 0.
-	if (newState == D3D12_RESOURCE_STATE_COMMON && oldState == D3D12_RESOURCE_STATE_COMMON)
-		return;
+	if (newState == D3D12_RESOURCE_STATE_COMMON || oldState == D3D12_RESOURCE_STATE_COMMON)
+	{
+		if (newState == oldState)
+			return;
+	}
 
 	// No need to transition if we're in a state that covers the new state.
-	else if ((newState & oldState) != 0)
+	else if ((newState & oldState) == newState)
 		return;
 
 	D3D12_RESOURCE_BARRIER barrier;
@@ -152,6 +154,12 @@ void CommandList::SetName(std::wstring_view name)
 void CommandList::TransitionBarrier(BufferHandle resource, D3D12_RESOURCE_STATES state)
 {
 	auto& component = device->GetResourceManager().Get(resource);
+
+	// Special case: discard all transitions for dynamic buffers. They must always be in generic read.
+	if (component.description.updateRate == ResourceFrequency::Dynamic)
+	{
+		return;
+	}
 
 	ValidateTransition(component.description, state);
 	TransitionBarrierInternal(component.Native(), component.state, state);
