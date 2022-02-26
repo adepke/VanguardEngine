@@ -48,13 +48,12 @@ MeshFactory::MeshFactory(RenderDevice* inDevice, size_t maxVertices, size_t maxI
 
 	BufferDescription vertexDescription{};
 	vertexDescription.size = maxVertices;
-	vertexDescription.stride = sizeof(float) * 3;
+	vertexDescription.stride = sizeof(float);  // Indexed by 32 bit chunks (floats, usually).
 	vertexDescription.updateRate = ResourceFrequency::Static;
 	vertexDescription.bindFlags = BindFlag::ShaderResource;
 	vertexDescription.accessFlags = AccessFlag::CPUWrite;
 	vertexPositionBuffer = device->GetResourceManager().Create(vertexDescription, VGText("Vertex position buffer"));
 
-	vertexDescription.stride = 1;
 	vertexDescription.size *= 8;  // One attribute per element, so increase the size a bit.
 	vertexExtraBuffer = device->GetResourceManager().Create(vertexDescription, VGText("Vertex extra attributes buffer"));
 

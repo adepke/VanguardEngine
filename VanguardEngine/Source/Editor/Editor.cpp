@@ -62,7 +62,7 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 		}
 
 		auto& editorPass = graph.AddPass("Editor Pass", ExecutionQueue::Graphics);
-		editorPass.Read(cameraBuffer, ResourceBind::CBV);
+		editorPass.Read(cameraBuffer, ResourceBind::SRV);
 		editorPass.Read(depthStencil, ResourceBind::SRV);
 		editorPass.Read(outputLDR, ResourceBind::SRV);
 		if (ui->activeOverlay != RenderOverlay::None)

@@ -34,9 +34,8 @@ private:
 
 	PipelineBuilder pipelines;  // Manages all the pipelines.
 
+	BufferHandle instanceBuffer;
 	BufferHandle cameraBuffer;
-
-	DescriptorHandle nullDescriptor;
 
 public:
 	float lastFrameTime = -1.f;
@@ -48,13 +47,10 @@ public:
 	ImageBasedLighting ibl;
 	Bloom bloom;
 
-	BufferHandle instanceBuffer;
-	size_t instanceOffset = 0;
-
 private:
+	void UpdateInstanceBuffer(const entt::registry& registry);
 	void UpdateCameraBuffer(const entt::registry& registry);
 	void CreatePipelines();
-	std::pair<BufferHandle, size_t> CreateInstanceBuffer(const entt::registry& registry);
 	BufferHandle CreateLightBuffer(const entt::registry& registry);
 
 public:

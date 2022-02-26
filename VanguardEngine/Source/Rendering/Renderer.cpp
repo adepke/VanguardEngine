@@ -18,6 +18,35 @@
 #include <cstring>
 #include <cmath>
 
+void Renderer::UpdateInstanceBuffer(const entt::registry& registry)
+{
+	VGScopedCPUStat("Update Instance Buffer");
+
+	const auto instanceView = registry.view<const TransformComponent, const MeshComponent>();
+	
+	size_t index = 0;
+	instanceView.each([&](auto entity, const auto& transform, const auto&)
+	{
+		const auto scaling = XMVectorSet(transform.scale.x, transform.scale.y, transform.scale.z, 0.f);
+		const auto translation = XMVectorSet(transform.translation.x, transform.translation.y, transform.translation.z, 0.f);
+
+		const auto scalingMat = XMMatrixScalingFromVector(scaling);
+		const auto rotationMat = XMMatrixRotationX(-transform.rotation.x) * XMMatrixRotationY(-transform.rotation.y) * XMMatrixRotationZ(-transform.rotation.z);
+		const auto translationMat = XMMatrixTranslationFromVector(translation);
+
+		EntityInstance instance;
+		instance.worldMatrix = scalingMat * rotationMat * translationMat;
+
+		std::vector<uint8_t> instanceData{};
+		instanceData.resize(sizeof(EntityInstance));
+		std::memcpy(instanceData.data(), &instance, instanceData.size());
+
+		device->GetResourceManager().Write(instanceBuffer, instanceData, index * sizeof(EntityInstance));
+
+		++index;
+	});
+}
+
 void Renderer::UpdateCameraBuffer(const entt::registry& registry)
 {
 	VGScopedCPUStat("Update Camera Buffer");
@@ -59,7 +88,7 @@ void Renderer::CreatePipelines()
 {
 	GraphicsPipelineStateDescription prepassStateDesc;
 
-	prepassStateDesc.vertexShader = { "Prepass_VS", "main" };
+	prepassStateDesc.vertexShader = { "Prepass", "VSMain" };
 
 	prepassStateDesc.blendDescription.AlphaToCoverageEnable = false;
 	prepassStateDesc.blendDescription.IndependentBlendEnable = false;
@@ -101,8 +130,8 @@ void Renderer::CreatePipelines()
 
 	GraphicsPipelineStateDescription forwardStateDesc;
 
-	forwardStateDesc.vertexShader = { "Default_VS", "main" };
-	forwardStateDesc.pixelShader = { "Default_PS", "main" };
+	forwardStateDesc.vertexShader = { "Forward", "VSMain" };
+	forwardStateDesc.pixelShader = { "Forward", "PSMain" };
 	forwardStateDesc.macros.emplace_back("FROXEL_SIZE", clusteredCulling.froxelSize);
 
 	forwardStateDesc.blendDescription.AlphaToCoverageEnable = false;
@@ -254,41 +283,6 @@ void Renderer::CreatePipelines()
 	pipelines.AddGraphicsState(device.get(), "PostProcess", postProcessStateDesc, true);
 }
 
-std::pair<BufferHandle, size_t> Renderer::CreateInstanceBuffer(const entt::registry& registry)
-{
-	VGScopedCPUStat("Create Instance Buffer");
-
-	const auto instanceView = registry.view<const TransformComponent, const MeshComponent>();
-	const auto viewSize = instanceView.size_hint();
-	const auto [bufferHandle, bufferOffset] = device->FrameAllocate(sizeof(EntityInstance) * viewSize);
-
-	size_t index = 0;
-	instanceView.each([&](auto entity, const auto& transform, const auto&)
-	{
-		const auto scaling = XMVectorSet(transform.scale.x, transform.scale.y, transform.scale.z, 0.f);
-		const auto translation = XMVectorSet(transform.translation.x, transform.translation.y, transform.translation.z, 0.f);
-
-		const auto scalingMat = XMMatrixScalingFromVector(scaling);
-		const auto rotationMat = XMMatrixRotationX(-transform.rotation.x) * XMMatrixRotationY(-transform.rotation.y) * XMMatrixRotationZ(-transform.rotation.z);
-		const auto translationMat = XMMatrixTranslationFromVector(translation);
-
-		EntityInstance instance;
-		instance.worldMatrix = scalingMat * rotationMat * translationMat;
-
-		std::vector<uint8_t> instanceData{};
-		instanceData.resize(sizeof(EntityInstance));
-		std::memcpy(instanceData.data(), &instance, instanceData.size());
-
-		device->GetResourceManager().Write(bufferHandle, instanceData, bufferOffset + (index * sizeof(EntityInstance)));
-
-		++index;
-	});
-
-	VGAssert(viewSize == index, "Mismatched entity count during buffer creation.");
-
-	return std::make_pair(bufferHandle, bufferOffset);
-}
-
 BufferHandle Renderer::CreateLightBuffer(const entt::registry& registry)
 {
 	VGScopedCPUStat("Create Light Buffer");
@@ -354,6 +348,15 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 
 	device->CheckFeatureSupport();
 
+	BufferDescription instanceBufferDesc{};
+	instanceBufferDesc.updateRate = ResourceFrequency::Dynamic;
+	instanceBufferDesc.bindFlags = BindFlag::ShaderResource;
+	instanceBufferDesc.accessFlags = AccessFlag::CPUWrite;
+	instanceBufferDesc.size = 1024 * 64;
+	instanceBufferDesc.stride = sizeof(EntityInstance);
+
+	instanceBuffer = device->GetResourceManager().Create(instanceBufferDesc, VGText("Instance buffer"));
+
 	BufferDescription cameraBufferDesc{};
 	cameraBufferDesc.updateRate = ResourceFrequency::Static;
 	cameraBufferDesc.bindFlags = BindFlag::ConstantBuffer | BindFlag::ShaderResource;
@@ -364,15 +367,6 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 	cameraBuffer = device->GetResourceManager().Create(cameraBufferDesc, VGText("Camera buffer"));
 
 	userInterface = std::make_unique<UserInterfaceManager>(device.get());
-
-	nullDescriptor = device->AllocateDescriptor(DescriptorType::Default);
-
-	D3D12_SHADER_RESOURCE_VIEW_DESC nullViewDesc{};
-	nullViewDesc.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-	nullViewDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-	nullViewDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-
-	device->Native()->CreateShaderResourceView(nullptr, &nullViewDesc, nullDescriptor);
 
 	CreatePipelines();
 
@@ -388,18 +382,20 @@ void Renderer::Render(entt::registry& registry)
 {
 	VGScopedCPUStat("Render");
 
-	// Update the camera buffer immediately.
+	UpdateInstanceBuffer(registry);
 	UpdateCameraBuffer(registry);
 
 	RenderGraph graph{ &renderGraphResources };
 	
-	const auto instanceData = CreateInstanceBuffer(registry);
-	instanceBuffer = instanceData.first;
-	instanceOffset = instanceData.second;
 	const auto lightBuffer = CreateLightBuffer(registry);
+
+	MeshResources meshResources;
+	meshResources.positionTag = graph.Import(meshFactory->vertexPositionBuffer);
+	meshResources.extraTag = graph.Import(meshFactory->vertexExtraBuffer);
 
 	auto backBufferTag = graph.Import(device->GetBackBuffer());
 	auto cameraBufferTag = graph.Import(cameraBuffer);
+	auto instanceBufferTag = graph.Import(instanceBuffer);
 	auto lightBufferTag = graph.Import(lightBuffer);
 
 	graph.Tag(backBufferTag, ResourceTag::BackBuffer);
@@ -408,18 +404,26 @@ void Renderer::Render(entt::registry& registry)
 	auto depthStencilTag = prePass.Create(TransientTextureDescription{
 		.format = DXGI_FORMAT_R24G8_TYPELESS
 	}, VGText("Depth stencil"));
-	prePass.Read(cameraBufferTag, ResourceBind::CBV);
+	prePass.Read(instanceBufferTag, ResourceBind::SRV);
+	prePass.Read(cameraBufferTag, ResourceBind::SRV);
+	prePass.Read(meshResources.positionTag, ResourceBind::SRV);
+	prePass.Read(meshResources.extraTag, ResourceBind::SRV);
 	prePass.Output(depthStencilTag, OutputBind::DSV, LoadType::Clear);
 	prePass.Bind([&](CommandList& list, RenderPassResources& resources)
 	{
-		list.BindPipelineState(pipelines["Prepass"]);
-		list.BindResource("camera", resources.GetBuffer(cameraBufferTag));
+		PrePassBindData bindData;
+		bindData.objectBuffer = resources.Get(instanceBufferTag);
+		bindData.cameraBuffer = resources.Get(cameraBufferTag);
+		bindData.vertexAssemblyData.positionBuffer = resources.Get(meshResources.positionTag);
+		bindData.vertexAssemblyData.extraBuffer = resources.Get(meshResources.extraTag);
 
-		MeshSystem::Render(Renderer::Get(), registry, list, false);
+		list.BindPipelineState(pipelines["Prepass"]);
+
+		MeshSystem::Render(Renderer::Get(), registry, list, false, bindData);
 	});
 
 	// #TODO: Don't have this here.
-	const auto clusterResources = clusteredCulling.Render(graph, registry, cameraBufferTag, depthStencilTag, lightBufferTag);
+	const auto clusterResources = clusteredCulling.Render(graph, registry, cameraBufferTag, depthStencilTag, lightBufferTag, instanceBufferTag, meshResources);
 	
 	// #TODO: Don't have this here.
 	const auto atmosphereResources = atmosphere.ImportResources(graph);
@@ -433,8 +437,11 @@ void Renderer::Render(entt::registry& registry)
 		.format = DXGI_FORMAT_R16G16B16A16_FLOAT
 	}, VGText("Output HDR sRGB"));
 	forwardPass.Read(depthStencilTag, ResourceBind::DSV);
-	forwardPass.Read(cameraBufferTag, ResourceBind::CBV);
+	forwardPass.Read(instanceBufferTag, ResourceBind::SRV);
+	forwardPass.Read(cameraBufferTag, ResourceBind::SRV);
 	forwardPass.Read(lightBufferTag, ResourceBind::SRV);
+	forwardPass.Read(meshResources.positionTag, ResourceBind::SRV);
+	forwardPass.Read(meshResources.extraTag, ResourceBind::SRV);
 	forwardPass.Read(clusterResources.lightList, ResourceBind::SRV);
 	forwardPass.Read(clusterResources.lightInfo, ResourceBind::SRV);
 	forwardPass.Read(iblResources.irradianceTag, ResourceBind::SRV);
@@ -444,74 +451,46 @@ void Renderer::Render(entt::registry& registry)
 	forwardPass.Output(outputHDRTag, OutputBind::RTV, LoadType::Clear);
 	forwardPass.Bind([&](CommandList& list, RenderPassResources& resources)
 	{
-		// Opaque
-
-		list.BindPipelineState(pipelines["ForwardOpaque"]);
-		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
-		list.BindResourceTable("textureCubes", device->GetDescriptorAllocator().GetBindlessHeap());
-		list.BindResource("camera", resources.GetBuffer(cameraBufferTag));
-		list.BindResource("lights", resources.GetBuffer(lightBufferTag));
-		list.BindResource("clusteredLightList", resources.GetBuffer(clusterResources.lightList));
-		list.BindResource("clusteredLightInfo", resources.GetBuffer(clusterResources.lightInfo));
-		list.BindResource("sunTransmittance", resources.GetBuffer(sunTransmittance));
-
-		struct ClusterData
-		{
-			uint32_t dimensionsX;
-			uint32_t dimensionsY;
-			uint32_t dimensionsZ;
-			float logY;
-		} clusterData;
-
+		ClusterData clusterData;
 		auto& gridInfo = clusteredCulling.GetGridInfo();
-
-		clusterData.dimensionsX = gridInfo.x;
-		clusterData.dimensionsY = gridInfo.y;
-		clusterData.dimensionsZ = gridInfo.z;
+		clusterData.lightListBuffer = resources.Get(clusterResources.lightList);
+		clusterData.lightInfoBuffer = resources.Get(clusterResources.lightInfo);
+		clusterData.dimensions[0] = gridInfo.x;
+		clusterData.dimensions[1] = gridInfo.y;
+		clusterData.dimensions[2] = gridInfo.z;
 		clusterData.logY = 1.f / std::log(gridInfo.depthFactor);
 
-		std::vector<uint32_t> clusterBufferData;
-		clusterBufferData.resize(sizeof(clusterData) / 4);
-		std::memcpy(clusterBufferData.data(), &clusterData, clusterBufferData.size() * sizeof(uint32_t));
-		list.BindConstants("clusterData", clusterBufferData);
-
-		struct IblData
-		{
-			uint32_t irradianceTexture;
-			uint32_t prefilterTexture;
-			uint32_t brdfTexture;
-			uint32_t prefilterLevels;
-		} iblData;
-
+		IblData iblData;
 		iblData.irradianceTexture = resources.Get(iblResources.irradianceTag);
 		iblData.prefilterTexture = resources.Get(iblResources.prefilterTag);
 		iblData.brdfTexture = resources.Get(iblResources.brdfTag);
 		iblData.prefilterLevels = ibl.GetPrefilterLevels();
-		list.BindConstants("iblData", iblData);
+
+		ForwardBindData bindData;
+		bindData.objectBuffer = resources.Get(instanceBufferTag);
+		bindData.cameraBuffer = resources.Get(cameraBufferTag);
+		bindData.vertexAssemblyData.positionBuffer = resources.Get(meshResources.positionTag);
+		bindData.vertexAssemblyData.extraBuffer = resources.Get(meshResources.extraTag);
+		bindData.lightBuffer = resources.Get(lightBufferTag);
+		bindData.clusterData = clusterData;
+		bindData.iblData = iblData;
+		bindData.sunTransmittanceBuffer = resources.Get(sunTransmittance);
 
 		{
 			VGScopedGPUStat("Opaque", device->GetDirectContext(), list.Native());
 
-			MeshSystem::Render(Renderer::Get(), registry, list, false);
+			list.BindPipelineState(pipelines["ForwardOpaque"]);
+
+			MeshSystem::Render(Renderer::Get(), registry, list, false, bindData);
 		}
-
-		// Transparent
-
-		list.BindPipelineState(pipelines["ForwardTransparent"]);
-		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
-		list.BindResource("camera", resources.GetBuffer(cameraBufferTag));
-		list.BindResource("lights", resources.GetBuffer(lightBufferTag));
-		list.BindResource("clusteredLightList", resources.GetBuffer(clusterResources.lightList));
-		list.BindResource("clusteredLightInfo", resources.GetBuffer(clusterResources.lightInfo));
-		list.BindConstants("clusterData", clusterBufferData);
-		list.BindResource("sunTransmittance", resources.GetBuffer(sunTransmittance));
-		list.BindConstants("iblData", iblData);
 
 		{
 			VGScopedGPUStat("Transparent", device->GetDirectContext(), list.Native());
 
+			list.BindPipelineState(pipelines["ForwardTransparent"]);
+
 			// #TODO: Sort transparent mesh components by distance.
-			MeshSystem::Render(Renderer::Get(), registry, list, true);
+			MeshSystem::Render(Renderer::Get(), registry, list, true, bindData);
 		}
 	});
 

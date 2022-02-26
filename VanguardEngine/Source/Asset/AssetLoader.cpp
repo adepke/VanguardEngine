@@ -30,7 +30,7 @@ namespace AssetLoader
 		// #TODO: Single buffer for all materials.
 		BufferDescription tableDesc{
 			.updateRate = ResourceFrequency::Static,
-			.bindFlags = BindFlag::ConstantBuffer,
+			.bindFlags = BindFlag::ShaderResource,
 			.accessFlags = AccessFlag::CPUWrite,
 			.size = 1,
 			.stride = sizeof(MaterialData)

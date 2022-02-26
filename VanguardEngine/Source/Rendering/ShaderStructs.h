@@ -59,17 +59,43 @@ static const uint32_t vertexChannels = 6;
 
 struct uint128_t
 {
-	uint64_t low;
-	uint64_t high;
+	uint32_t values[4];
 
-	// The upper 96 bits are unused for the time being, since this struct is only used for arrays.
-	uint128_t& operator=(uint32_t other) { low = static_cast<uint64_t>(other); return *this; }
+	uint128_t& operator=(uint32_t other) { values[0] = other; return *this; }
+	uint32_t& operator[](int idx) { return values[idx]; }
+	void AddAll(uint32_t value) { std::for_each(std::begin(values), std::end(values), [value](auto& v) { v += value; }); }
 };
 
 struct VertexMetadata
 {
 	uint32_t activeChannels;  // Bit mask of vertex attributes.
 	uint32_t padding[3];
-	uint128_t channelStrides[vertexChannels];
-	uint128_t channelOffsets[vertexChannels];
+	uint128_t channelStrides[vertexChannels / 4 + 1];
+	uint128_t channelOffsets[vertexChannels / 4 + 1];
+};
+
+struct VertexAssemblyData
+{
+	uint32_t positionBuffer;
+	uint32_t extraBuffer;
+	XMFLOAT2 padding;
+	VertexMetadata metadata;
+};
+
+struct ClusterData
+{
+	uint32_t lightListBuffer;
+	uint32_t lightInfoBuffer;
+	float logY;
+	uint32_t padding1;
+	uint32_t dimensions[3];
+	uint32_t padding2;
+};
+
+struct IblData
+{
+	uint32_t irradianceTexture;
+	uint32_t prefilterTexture;
+	uint32_t brdfTexture;
+	uint32_t prefilterLevels;
 };

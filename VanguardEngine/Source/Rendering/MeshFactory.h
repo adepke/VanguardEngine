@@ -81,8 +81,11 @@ inline MeshComponent MeshFactory::CreateMeshComponent(const std::vector<Primitiv
 
 	VGAssert(offsets[vertexChannelPosition] == 0, "Incorrect vertex position offset.");
 	component.metadata.activeChannels = channelMask;
-	std::copy(std::begin(strides), std::end(strides), std::begin(component.metadata.channelStrides));
-	std::copy(std::begin(offsets), std::end(offsets), std::begin(component.metadata.channelOffsets));
+	for (int i = 0; i < vertexChannels; ++i)
+	{
+		component.metadata.channelStrides[i / 4][i % 4] = strides[i];
+		component.metadata.channelOffsets[i / 4][i % 4] = offsets[i];
+	}
 
 	component.subsets.reserve(assemblies.size());
 
