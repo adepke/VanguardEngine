@@ -30,9 +30,9 @@ struct Output
 Output VSMain(Input input)
 {
 	StructuredBuffer<PerObject> objectBuffer = ResourceDescriptorHeap[bindData.objectBuffer];
-    PerObject perObject = objectBuffer[bindData.objectIndex];
-    StructuredBuffer<Camera> cameraBuffer = ResourceDescriptorHeap[bindData.cameraBuffer];
-    Camera camera = cameraBuffer[bindData.cameraIndex];
+	PerObject perObject = objectBuffer[bindData.objectIndex];
+	StructuredBuffer<Camera> cameraBuffer = ResourceDescriptorHeap[bindData.cameraBuffer];
+	Camera camera = cameraBuffer[bindData.cameraIndex];
 
 	Output output;
 	output.positionCS = LoadVertexPosition(bindData.vertexAssemblyData, input.vertexID);

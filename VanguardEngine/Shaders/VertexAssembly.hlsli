@@ -22,10 +22,10 @@ struct VertexMetadata
 
 struct VertexAssemblyData
 {
-    uint positionBuffer;
-    uint extraBuffer;
-    float2 padding;
-    VertexMetadata metadata;
+	uint positionBuffer;
+	uint extraBuffer;
+	float2 padding;
+	VertexMetadata metadata;
 };
 
 ConstantBuffer<VertexMetadata> vertexMetadata : register(b0, space3);
@@ -52,7 +52,7 @@ uint GetVertexChannelIndex(VertexMetadata metadata, uint vertexId, uint channel)
 
 float4 LoadVertexPosition(VertexAssemblyData assembly, uint vertexId)
 {
-    ByteAddressBuffer positions = ResourceDescriptorHeap[assembly.positionBuffer];
+	ByteAddressBuffer positions = ResourceDescriptorHeap[assembly.positionBuffer];
 	
 	return HasVertexAttribute(assembly.metadata, vertexChannelPosition) ?
 		float4(positions.Load<float3>(GetVertexChannelIndex(assembly.metadata, vertexId, vertexChannelPosition)), 1) :
@@ -61,7 +61,7 @@ float4 LoadVertexPosition(VertexAssemblyData assembly, uint vertexId)
 
 float3 LoadVertexNormal(VertexAssemblyData assembly, uint vertexId)
 {
-    ByteAddressBuffer extras = ResourceDescriptorHeap[assembly.extraBuffer];
+	ByteAddressBuffer extras = ResourceDescriptorHeap[assembly.extraBuffer];
 	
 	return HasVertexAttribute(assembly.metadata, vertexChannelNormal) ?
 		extras.Load<float3>(GetVertexChannelIndex(assembly.metadata, vertexId, vertexChannelNormal)) :
@@ -70,7 +70,7 @@ float3 LoadVertexNormal(VertexAssemblyData assembly, uint vertexId)
 
 float2 LoadVertexTexcoord(VertexAssemblyData assembly, uint vertexId)
 {
-    ByteAddressBuffer extras = ResourceDescriptorHeap[assembly.extraBuffer];
+	ByteAddressBuffer extras = ResourceDescriptorHeap[assembly.extraBuffer];
 	
 	return HasVertexAttribute(assembly.metadata, vertexChannelTexcoord) ?
 		extras.Load<float2>(GetVertexChannelIndex(assembly.metadata, vertexId, vertexChannelTexcoord)) :
@@ -79,7 +79,7 @@ float2 LoadVertexTexcoord(VertexAssemblyData assembly, uint vertexId)
 
 float4 LoadVertexTangent(VertexAssemblyData assembly, uint vertexId)
 {
-    ByteAddressBuffer extras = ResourceDescriptorHeap[assembly.extraBuffer];
+	ByteAddressBuffer extras = ResourceDescriptorHeap[assembly.extraBuffer];
 	
 	return HasVertexAttribute(assembly.metadata, vertexChannelTangent) ?
 		extras.Load<float4>(GetVertexChannelIndex(assembly.metadata, vertexId, vertexChannelTangent)) :
@@ -88,9 +88,9 @@ float4 LoadVertexTangent(VertexAssemblyData assembly, uint vertexId)
 
 float4 LoadVertexBitangent(VertexAssemblyData assembly, uint vertexId)
 {
-    if (HasVertexAttribute(assembly.metadata, vertexChannelBitangent))
+	if (HasVertexAttribute(assembly.metadata, vertexChannelBitangent))
 	{
-        ByteAddressBuffer extras = ResourceDescriptorHeap[assembly.extraBuffer];
+		ByteAddressBuffer extras = ResourceDescriptorHeap[assembly.extraBuffer];
 		
 		return extras.Load<float4>(GetVertexChannelIndex(assembly.metadata, vertexId, vertexChannelBitangent));
 	}
@@ -105,7 +105,7 @@ float4 LoadVertexBitangent(VertexAssemblyData assembly, uint vertexId)
 
 float4 LoadVertexColor(VertexAssemblyData assembly, uint vertexId)
 {
-    ByteAddressBuffer extras = ResourceDescriptorHeap[assembly.extraBuffer];
+	ByteAddressBuffer extras = ResourceDescriptorHeap[assembly.extraBuffer];
 	
 	return HasVertexAttribute(assembly.metadata, vertexChannelColor) ?
 		extras.Load<float4>(GetVertexChannelIndex(assembly.metadata, vertexId, vertexChannelColor)) :
