@@ -1,35 +1,23 @@
 // Copyright (c) 2019-2022 Andrew Depke
 
+#include "RootSignature.hlsli"
 #include "Light.hlsli"
 #include "Geometry.hlsli"
 
-#define RS \
-	"RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT)," \
-	"RootConstants(b0, num32BitConstants = 1)," \
-	"SRV(t0)," \
-	"SRV(t1)," \
-	"SRV(t2)," \
-	"UAV(u0)," \
-	"UAV(u1)," \
-	"UAV(u2)," \
-	"UAV(u3)," \
-	"CBV(b1)"
-
-struct LightCount
+struct BindData
 {
-	uint count;
+	uint cameraBuffer;
+	uint cameraIndex;
+	uint denseClusterListBuffer;
+	uint clusterBoundsBuffer;
+	uint lightsBuffer;
+	uint lightCount;
+	uint lightCounterBuffer;
+	uint lightListBuffer;
+	uint lightInfoBuffer;
 };
 
-// #TODO: Precompute view space light positions.
-ConstantBuffer<Camera> camera : register(b1);
-
-StructuredBuffer<uint> denseClusterList : register(t0);
-StructuredBuffer<AABB> clusterBounds : register(t1);
-ConstantBuffer<LightCount> lightCount : register(b0);
-StructuredBuffer<Light> lights : register(t2);
-RWStructuredBuffer<uint> lightCounter : register(u0);
-RWStructuredBuffer<uint> lightList : register(u1);
-RWStructuredBuffer<uint2> clusterLightInfo : register(u2);
+ConstantBuffer<BindData> bindData : register(b0);
 
 static const uint threadGroupSize = 64;
 
@@ -38,7 +26,7 @@ groupshared uint localLightCount;
 groupshared uint localLightList[MAX_LIGHTS_PER_FROXEL];
 groupshared uint globalLightListOffset;
 
-bool LightInFroxel(Light light, AABB aabb)
+bool LightInFroxel(Camera camera, Light light, AABB aabb)
 {
 	switch (light.type)
 	{
@@ -58,8 +46,17 @@ bool LightInFroxel(Light light, AABB aabb)
 // Bins all lights into froxels. One thread group per froxel.
 [RootSignature(RS)]
 [numthreads(threadGroupSize, 1, 1)]
-void ComputeLightBinsMain(uint3 dispatchId : SV_DispatchThreadID, uint3 groupId : SV_GroupID, uint groupIndex : SV_GroupIndex)
-{ 
+void Main(uint3 dispatchId : SV_DispatchThreadID, uint3 groupId : SV_GroupID, uint groupIndex : SV_GroupIndex)
+{
+	StructuredBuffer<Camera> cameraBuffer = ResourceDescriptorHeap[bindData.cameraBuffer];
+	Camera camera = cameraBuffer[bindData.cameraIndex];
+	StructuredBuffer<uint> denseClusterList = ResourceDescriptorHeap[bindData.denseClusterListBuffer];
+	StructuredBuffer<AABB> clusterBounds = ResourceDescriptorHeap[bindData.clusterBoundsBuffer];
+	StructuredBuffer<Light> lights = ResourceDescriptorHeap[bindData.lightsBuffer];
+	RWStructuredBuffer<uint> lightCounter = ResourceDescriptorHeap[bindData.lightCounterBuffer];
+	RWStructuredBuffer<uint> lightList = ResourceDescriptorHeap[bindData.lightListBuffer];
+	RWStructuredBuffer<uint2> clusterLightInfo = ResourceDescriptorHeap[bindData.lightInfoBuffer];
+
 	// Only one thread in the group needs to initialize group variables and find the froxel bounds.
 	if (groupIndex == 0)
 	{
@@ -72,9 +69,9 @@ void ComputeLightBinsMain(uint3 dispatchId : SV_DispatchThreadID, uint3 groupId 
 	GroupMemoryBarrierWithGroupSync();
 	
 	// Interleaved iteration between all threads in the group. Divides the work evenly.
-	for (uint i = groupIndex; i < lightCount.count; i += threadGroupSize)
+	for (uint i = groupIndex; i < bindData.lightCount; i += threadGroupSize)
 	{
-		if (LightInFroxel(lights[i], froxelBounds))
+		if (LightInFroxel(camera, lights[i], froxelBounds))
 		{
 			uint index;
 			InterlockedAdd(localLightCount, 1, index);

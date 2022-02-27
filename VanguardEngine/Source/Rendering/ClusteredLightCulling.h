@@ -9,6 +9,13 @@
 
 #include <entt/entt.hpp>
 
+// #TEMP
+struct MeshResources
+{
+	RenderResource positionTag;
+	RenderResource extraTag;
+};
+
 class RenderDevice;
 class CommandList;
 class RenderGraph;
@@ -56,14 +63,14 @@ private:
 
 	ClusterGridInfo ComputeGridInfo(const entt::registry& registry) const;
 	// Needs to be called every time the camera resolution or FOV changes.
-	void ComputeClusterGrid(CommandList& list, BufferHandle cameraBuffer, BufferHandle clusterBoundsBuffer) const;
+	void ComputeClusterGrid(CommandList& list, uint32_t cameraBuffer, uint32_t clusterBoundsBuffer) const;
 
 public:
 	~ClusteredLightCulling();
 
 	void Initialize(RenderDevice* inDevice);
 	const ClusterGridInfo& GetGridInfo() const { return gridInfo; }
-	ClusterResources Render(RenderGraph& graph, const entt::registry& registry, RenderResource cameraBuffer, RenderResource depthStencil, RenderResource lightsBuffer);
+	ClusterResources Render(RenderGraph& graph, const entt::registry& registry, RenderResource cameraBuffer, RenderResource depthStencil, RenderResource lightsBuffer, RenderResource instanceBuffer, MeshResources meshResources);
 	RenderResource RenderDebugOverlay(RenderGraph& graph, RenderResource lightInfoBuffer, RenderResource clusterVisibilityBuffer);
 
 	void MarkDirty() { dirty = true; };
