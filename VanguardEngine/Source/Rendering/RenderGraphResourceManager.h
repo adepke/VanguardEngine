@@ -22,6 +22,7 @@ struct TransientBuffer
 {
 	RenderResource resource;
 	uint8_t counter = 1;
+	uint32_t binds;
 	TransientBufferDescription description;
 };
 
@@ -29,6 +30,7 @@ struct TransientTexture
 {
 	RenderResource resource;
 	uint8_t counter = 1;
+	uint32_t binds;
 	TransientTextureDescription description;
 };
 

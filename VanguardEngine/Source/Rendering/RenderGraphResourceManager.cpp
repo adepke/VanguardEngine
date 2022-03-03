@@ -174,11 +174,36 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 	{
 		bool foundReusable = false;
 
+		bool hasConstantBuffer = false;
+		bool hasShaderResource = false;
+		bool hasUnorderedAccess = false;
+
+		for (const auto& pass : graph->passes)
+		{
+			if (pass->bindInfo.contains(resource))
+			{
+				switch (pass->bindInfo[resource])
+				{
+				case ResourceBind::CBV: hasConstantBuffer = true; break;
+				case ResourceBind::SRV: hasShaderResource = true; break;
+				case ResourceBind::UAV: hasUnorderedAccess = true; break;
+				}
+			}
+		}
+
 		// Attempt to reuse an existing transient.
 		for (auto& transientBuffer : transientBuffers)
 		{
 			if (transientBuffer.counter > 0 && info.first == transientBuffer.description)
 			{
+				// Verify the bind flags at least cover all the states we need in this pass.
+				if ((hasConstantBuffer && !(transientBuffer.binds & BindFlag::ConstantBuffer)) ||
+					(hasShaderResource && !(transientBuffer.binds & BindFlag::ShaderResource)) ||
+					(hasUnorderedAccess && !(transientBuffer.binds & BindFlag::UnorderedAccess)))
+				{
+					continue;
+				}
+
 				foundReusable = true;
 				--transientBuffer.counter;
 				bufferResources[resource] = bufferResources[transientBuffer.resource];  // Duplicate the resource handle.
@@ -201,23 +226,6 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 			// Fallback to creating a new buffer.
 			VGLog(logRendering, "Did not find a suitable buffer for transient reuse, creating a new buffer for '{}'.", info.second);
 
-			bool hasConstantBuffer = false;
-			bool hasShaderResource = false;
-			bool hasUnorderedAccess = false;
-
-			for (const auto& pass : graph->passes)
-			{
-				if (pass->bindInfo.contains(resource))
-				{
-					switch (pass->bindInfo[resource])
-					{
-					case ResourceBind::CBV: hasConstantBuffer = true; break;
-					case ResourceBind::SRV: hasShaderResource = true; break;
-					case ResourceBind::UAV: hasUnorderedAccess = true; break;
-					}
-				}
-			}
-
 			BufferDescription description{};
 			description.updateRate = info.first.updateRate;
 			description.bindFlags = 0;
@@ -235,7 +243,7 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 			const auto buffer = device->GetResourceManager().Create(description, info.second);
 			bufferResources[resource] = buffer;
 
-			transientBuffers.emplace_front(resource, 0, info.first);
+			transientBuffers.emplace_front(resource, 0, description.bindFlags, info.first);
 		}
 	}
 
@@ -245,16 +253,16 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 	auto i = transientBuffers.begin();
 	while (i != transientBuffers.end())
 	{
-		// If the transient wasn't reused, discard it.
+		// If the transient wasn't reused recently, discard it.
 		if (i->counter > 1)
 		{
 			device->GetResourceManager().AddFrameResource(device->GetFrameIndex(), bufferResources[i->resource]);
-			transientBuffers.erase(i++);
+			i = transientBuffers.erase(i++);
 		}
 
 		else
 		{
-			i->counter = 1;
+			++i->counter;
 			++i;
 		}
 	}
@@ -265,11 +273,51 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 	{
 		bool foundReusable = false;
 
+		// We can't have both depth stencil and render target, so brute force search all passes to determine
+		// which binding we need.
+
+		bool hasShaderResource = false;
+		bool hasUnorderedAccess = false;
+		bool hasRenderTarget = false;
+		bool hasDepthStencil = false;
+
+		for (const auto& pass : graph->passes)
+		{
+			if (pass->bindInfo.contains(resource))
+			{
+				switch (pass->bindInfo[resource])
+				{
+				case ResourceBind::SRV: hasShaderResource = true; break;
+				case ResourceBind::UAV: hasUnorderedAccess = true; break;
+				case ResourceBind::DSV: hasDepthStencil = true; break;
+				}
+			}
+
+			if (pass->outputBindInfo.contains(resource))
+			{
+				const auto [bind, clear] = pass->outputBindInfo[resource];
+
+				if (bind == OutputBind::RTV) hasRenderTarget = true;
+				else if (bind == OutputBind::DSV) hasDepthStencil = true;
+			}
+		}
+
+		VGAssert(!(hasRenderTarget && hasDepthStencil), "Texture cannot have render target and depth stencil bindings!");
+
 		// Attempt to reuse an existing transient.
 		for (auto& transientTexture : transientTextures)
 		{
 			if (transientTexture.counter > 0 && info.first == transientTexture.description)
 			{
+				// Verify the bind flags at least cover all the states we need in this pass.
+				if ((hasShaderResource && !(transientTexture.binds & BindFlag::ShaderResource)) ||
+					(hasUnorderedAccess && !(transientTexture.binds & BindFlag::UnorderedAccess)) ||
+					(hasRenderTarget && !(transientTexture.binds & BindFlag::RenderTarget)) ||
+					(hasDepthStencil && !(transientTexture.binds & BindFlag::DepthStencil)))
+				{
+					continue;
+				}
+
 				foundReusable = true;
 				--transientTexture.counter;
 				textureResources[resource] = textureResources[transientTexture.resource];  // Duplicate the resource handle.
@@ -284,37 +332,6 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 		{
 			// Fallback to creating a new texture.
 			VGLog(logRendering, "Did not find a suitable texture for transient reuse, creating a new texture for '{}'.", info.second);
-
-			// We can't have both depth stencil and render target, so brute force search all passes to determine
-			// which binding we need.
-
-			bool hasShaderResource = false;
-			bool hasUnorderedAccess = false;
-			bool hasRenderTarget = false;
-			bool hasDepthStencil = false;
-
-			for (const auto& pass : graph->passes)
-			{
-				if (pass->bindInfo.contains(resource))
-				{
-					switch (pass->bindInfo[resource])
-					{
-					case ResourceBind::SRV: hasShaderResource = true; break;
-					case ResourceBind::UAV: hasUnorderedAccess = true; break;
-					case ResourceBind::DSV: hasDepthStencil = true; break;
-					}
-				}
-
-				if (pass->outputBindInfo.contains(resource))
-				{
-					const auto [bind, clear] = pass->outputBindInfo[resource];
-
-					if (bind == OutputBind::RTV) hasRenderTarget = true;
-					else if (bind == OutputBind::DSV) hasDepthStencil = true;
-				}
-			}
-
-			VGAssert(!(hasRenderTarget && hasDepthStencil), "Texture cannot have render target and depth stencil bindings!");
 
 			TextureDescription description{};
 			description.bindFlags = 0;  // Can't always assume SRV, depth stencils must be in a special state for that.
@@ -340,7 +357,7 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 			const auto texture = device->GetResourceManager().Create(description, info.second);
 			textureResources[resource] = texture;
 
-			transientTextures.emplace_front(resource, 0, info.first);
+			transientTextures.emplace_front(resource, 0, description.bindFlags, info.first);
 		}
 	}
 
@@ -350,16 +367,16 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 	auto j = transientTextures.begin();
 	while (j != transientTextures.end())
 	{
-		// If the transient wasn't reused, discard it.
+		// If the transient wasn't reused recently, discard it.
 		if (j->counter > 1)
 		{
 			device->GetResourceManager().AddFrameResource(device->GetFrameIndex(), textureResources[j->resource]);
-			transientTextures.erase(j++);
+			j = transientTextures.erase(j++);
 		}
 
 		else
 		{
-			j->counter = 1;
+			++j->counter;
 			++j;
 		}
 	}
