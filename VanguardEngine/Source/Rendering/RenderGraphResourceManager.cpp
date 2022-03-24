@@ -257,12 +257,12 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 		if (i->counter > 1)
 		{
 			device->GetResourceManager().AddFrameResource(device->GetFrameIndex(), bufferResources[i->resource]);
-			i = transientBuffers.erase(i++);
+			i = transientBuffers.erase(i);
 		}
 
 		else
 		{
-			++i->counter;
+			i->counter++;
 			++i;
 		}
 	}
@@ -371,12 +371,12 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 		if (j->counter > 1)
 		{
 			device->GetResourceManager().AddFrameResource(device->GetFrameIndex(), textureResources[j->resource]);
-			j = transientTextures.erase(j++);
+			j = transientTextures.erase(j);
 		}
 
 		else
 		{
-			++j->counter;
+			j->counter++;
 			++j;
 		}
 	}
