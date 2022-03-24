@@ -114,11 +114,13 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 		else
 		{
 			debugController->EnableDebugLayer();
+			VGLog(logRendering, "Enabled D3D12 debug layer.");
 
 			// Limit GPU-based validation to debug builds only, as it has far greater performance impacts than
 			// the debug layer. Development builds shouldn't be slowed down by this.
 #if BUILD_DEBUG
 			debugController->SetEnableGPUBasedValidation(true);
+			VGLog(logRendering, "Enabled GPU-based validation.");
 #endif
 		}
 
@@ -149,6 +151,7 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 			dredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
 			dredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
 			dredSettings->SetBreadcrumbContextEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+			VGLog(logRendering, "Enabled all DRED debugging features.");
 		}
 	}
 #endif

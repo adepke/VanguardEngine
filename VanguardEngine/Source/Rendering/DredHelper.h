@@ -142,15 +142,34 @@ std::wstringstream GetDredInfo(ID3D12Device5* device, ID3D12DeviceRemovedExtende
 				contextMap[node->pBreadcrumbContexts[i].BreadcrumbIndex] = node->pBreadcrumbContexts[i].pContextString;
 			}
 
+			int stack = 0;
 			for (int i = 0; i < count; ++i)
 			{
 				auto command = node->pCommandHistory[i];
 
-				output << VGText("\t\t[") << i << VGText("]: ") << DredBreadcrumbOpName(command);
+				output << VGText("\t\t[") << i << VGText("]: ");
+
+				if (i < 10)
+					output << VGText("  ");
+				else if (i < 100)
+					output << VGText(" ");
+
+				if (command == D3D12_AUTO_BREADCRUMB_OP_ENDEVENT)
+					--stack;
+
+				for (int j = 0; j < stack; ++j)
+				{
+					output << "  ";
+				}
+
+				output << DredBreadcrumbOpName(command);
 				if (contextMap.contains(i))
 				{
-					output << VGText(", ") << contextMap[i];
+					output << VGText(": \"") << contextMap[i] << VGText("\"");
 				}
+
+				if (command == D3D12_AUTO_BREADCRUMB_OP_BEGINEVENT)
+					++stack;
 
 				output << "\n";
 			}
@@ -160,6 +179,8 @@ std::wstringstream GetDredInfo(ID3D12Device5* device, ID3D12DeviceRemovedExtende
 		}
 	}
 
+	output << "\n";
+
 	result = dred->GetPageFaultAllocationOutput1(&pageFault);
 	if (FAILED(result))
 	{
@@ -168,7 +189,50 @@ std::wstringstream GetDredInfo(ID3D12Device5* device, ID3D12DeviceRemovedExtende
 
 	else
 	{
-		// #TODO: Page fault output.
+		output << VGText("GPU page fault virtual address: 0x") << std::hex << pageFault.PageFaultVA << "\n";
+
+		const auto printAllocation = [&output](auto* node, auto id)
+		{
+			if (id < 10)
+				output << VGText("  ");
+			else if (id < 100)
+				output << VGText(" ");
+
+			output << VGText("\t[") << id << VGText("]: \"") <<
+				(node->ObjectNameW ? node->ObjectNameW : VGText("Unnamed")) <<
+				VGText("\": (") << DredAllocationName(node->AllocationType) <<
+				VGText(") ptr: 0x") << std::hex << node->pObject << VGText("\n");
+		};
+
+		output << VGText("Relevant existing runtime objects:\n");
+		auto* node = pageFault.pHeadExistingAllocationNode;
+		if (!node)
+		{
+			output << VGText("No DRED page fault existing objects available.\n");
+		}
+
+		int nodeId = 0;
+		while (node)
+		{
+			printAllocation(node, nodeId);
+			++nodeId;
+			node = node->pNext;
+		}
+
+		output << VGText("\nRelevant recently freed runtime objects:\n");
+		node = pageFault.pHeadRecentFreedAllocationNode;
+		if (!node)
+		{
+			output << VGText("No DRED page fault recently freed objects available.\n");
+		}
+
+		nodeId = 0;
+		while (node)
+		{
+			printAllocation(node, nodeId);
+			++nodeId;
+			node = node->pNext;
+		}
 	}
 
 	return std::move(output);
