@@ -12,7 +12,7 @@ function IncludeThirdParty()
 	includedirs "VanguardEngine/ThirdParty/json/single_include/nlohmann"
 	includedirs "VanguardEngine/ThirdParty/imgui"
 	includedirs "VanguardEngine/ThirdParty/Tracy"
-	includedirs "VanguardEngine/ThirdParty/D3D12MemoryAllocator/src"
+	includedirs "VanguardEngine/ThirdParty/D3D12MemoryAllocator/include"
 	includedirs "VanguardEngine/ThirdParty/DirectXShaderCompiler"
 	includedirs "VanguardEngine/ThirdParty/stb"
 	includedirs "VanguardEngine/ThirdParty/IconFontCppHeaders"

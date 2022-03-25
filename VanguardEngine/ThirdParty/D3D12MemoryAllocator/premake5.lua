@@ -9,4 +9,11 @@ project "D3D12MemoryAllocator"
 	
 	targetname "D3D12MemoryAllocator"
 	
-	files { "src/*.h", "src/*.cpp" }
+	includedirs "include"
+	files { "include/*.h", "src/*.h", "src/*.cpp" }
+	
+	-- Don't build the sample or tests.
+	filter "files:**Sample.*"
+		buildaction "None"
+	filter "files:**Tests.*"
+		buildaction "None"

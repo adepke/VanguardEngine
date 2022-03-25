@@ -585,7 +585,7 @@ const TextureHandle ResourceManager::CreateFromSwapChain(void* surface, const st
 	description.format = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;  // SRGB swap chain.
 
 	TextureComponent textureComponent;
-	textureComponent.allocation.Reset(new D3D12MA::Allocation);
+	textureComponent.allocation.Reset(new D3D12MA::Allocation{ device->allocator->m_Pimpl, 0, 0, false });
 	textureComponent.state = D3D12_RESOURCE_STATE_COMMON;  // Swap chain back buffers always start out in the common state.
 	textureComponent.description = description;
 
