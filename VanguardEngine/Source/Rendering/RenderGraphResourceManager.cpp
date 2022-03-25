@@ -466,4 +466,6 @@ void RenderGraphResourceManager::DiscardDescriptors(RenderDevice* device)
 			}
 		}
 	}
+
+	passViews.clear();
 }
