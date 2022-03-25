@@ -14,6 +14,7 @@
 #include <string_view>
 
 class CommandList;
+class Renderer;
 
 enum class ResourceTag
 {
@@ -23,6 +24,7 @@ enum class ResourceTag
 class RenderGraph
 {
 	friend class RenderGraphResourceManager;
+	friend class Renderer;
 
 private:
 	std::vector<std::unique_ptr<RenderPass>> passes;

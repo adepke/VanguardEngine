@@ -206,33 +206,36 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 		if (info.first.uavCounter)
 			hasUnorderedAccess = true;
 
-		// Attempt to reuse an existing transient.
-		for (auto& transientBuffer : transientBuffers)
+		if (transientReuse)
 		{
-			if (transientBuffer.counter > 0 && info.first == transientBuffer.description)
+			// Attempt to reuse an existing transient.
+			for (auto& transientBuffer : transientBuffers)
 			{
-				// Verify the bind flags at least cover all the states we need in this pass.
-				if ((hasConstantBuffer && !(transientBuffer.binds & BindFlag::ConstantBuffer)) ||
-					(hasShaderResource && !(transientBuffer.binds & BindFlag::ShaderResource)) ||
-					(hasUnorderedAccess && !(transientBuffer.binds & BindFlag::UnorderedAccess)))
+				if (transientBuffer.counter > 0 && info.first == transientBuffer.description)
 				{
-					continue;
+					// Verify the bind flags at least cover all the states we need in this pass.
+					if ((hasConstantBuffer && !(transientBuffer.binds & BindFlag::ConstantBuffer)) ||
+						(hasShaderResource && !(transientBuffer.binds & BindFlag::ShaderResource)) ||
+						(hasUnorderedAccess && !(transientBuffer.binds & BindFlag::UnorderedAccess)))
+					{
+						continue;
+					}
+
+					foundReusable = true;
+					--transientBuffer.counter;
+					bufferResources[resource] = bufferResources[transientBuffer.resource];  // Duplicate the resource handle.
+
+					// If we have a UAV counter, we need to reset it.
+					if (transientBuffer.description.uavCounter)
+					{
+						auto& bufferComponent = device->GetResourceManager().Get(bufferResources[resource]);
+						device->GetResourceManager().Write(bufferComponent.counterBuffer, { 0, 0, 0, 0 });  // #TODO: Use CopyBufferRegion with a clear buffer created once at startup.
+					}
+
+					device->GetResourceManager().NameResource(bufferResources[resource], info.second);
+
+					break;
 				}
-
-				foundReusable = true;
-				--transientBuffer.counter;
-				bufferResources[resource] = bufferResources[transientBuffer.resource];  // Duplicate the resource handle.
-
-				// If we have a UAV counter, we need to reset it.
-				if (transientBuffer.description.uavCounter)
-				{
-					auto& bufferComponent = device->GetResourceManager().Get(bufferResources[resource]);
-					device->GetResourceManager().Write(bufferComponent.counterBuffer, { 0, 0, 0, 0 });  // #TODO: Use CopyBufferRegion with a clear buffer created once at startup.
-				}
-
-				device->GetResourceManager().NameResource(bufferResources[resource], info.second);
-
-				break;
 			}
 		}
 
@@ -319,27 +322,30 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 
 		VGAssert(!(hasRenderTarget && hasDepthStencil), "Texture cannot have render target and depth stencil bindings!");
 
-		// Attempt to reuse an existing transient.
-		for (auto& transientTexture : transientTextures)
+		if (transientReuse)
 		{
-			if (transientTexture.counter > 0 && info.first == transientTexture.description)
+			// Attempt to reuse an existing transient.
+			for (auto& transientTexture : transientTextures)
 			{
-				// Verify the bind flags at least cover all the states we need in this pass.
-				if ((hasShaderResource && !(transientTexture.binds & BindFlag::ShaderResource)) ||
-					(hasUnorderedAccess && !(transientTexture.binds & BindFlag::UnorderedAccess)) ||
-					(hasRenderTarget && !(transientTexture.binds & BindFlag::RenderTarget)) ||
-					(hasDepthStencil && !(transientTexture.binds & BindFlag::DepthStencil)))
+				if (transientTexture.counter > 0 && info.first == transientTexture.description)
 				{
-					continue;
+					// Verify the bind flags at least cover all the states we need in this pass.
+					if ((hasShaderResource && !(transientTexture.binds & BindFlag::ShaderResource)) ||
+						(hasUnorderedAccess && !(transientTexture.binds & BindFlag::UnorderedAccess)) ||
+						(hasRenderTarget && !(transientTexture.binds & BindFlag::RenderTarget)) ||
+						(hasDepthStencil && !(transientTexture.binds & BindFlag::DepthStencil)))
+					{
+						continue;
+					}
+
+					foundReusable = true;
+					--transientTexture.counter;
+					textureResources[resource] = textureResources[transientTexture.resource];  // Duplicate the resource handle.
+
+					device->GetResourceManager().NameResource(textureResources[resource], info.second);
+
+					break;
 				}
-
-				foundReusable = true;
-				--transientTexture.counter;
-				textureResources[resource] = textureResources[transientTexture.resource];  // Duplicate the resource handle.
-
-				device->GetResourceManager().NameResource(textureResources[resource], info.second);
-
-				break;
 			}
 		}
 

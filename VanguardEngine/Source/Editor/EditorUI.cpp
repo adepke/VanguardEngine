@@ -3,6 +3,7 @@
 #include <Editor/EditorUI.h>
 #include <Rendering/Device.h>
 #include <Rendering/Renderer.h>
+#include <Rendering/RenderGraphResourceManager.h>
 #include <Core/CoreComponents.h>
 #include <Rendering/RenderComponents.h>
 #include <Editor/EntityReflection.h>
@@ -340,13 +341,17 @@ void EditorUI::DrawMetrics(RenderDevice* device, float frameTimeMs)
 	}
 }
 
-void EditorUI::DrawRenderGraph(RenderDevice* device, TextureHandle depthStencil, TextureHandle scene)
+void EditorUI::DrawRenderGraph(RenderDevice* device, RenderGraphResourceManager& resourceManager, TextureHandle depthStencil, TextureHandle scene)
 {
 	if (renderGraphOpen)
 	{
 		if (ImGui::Begin("Render Graph", &renderGraphOpen))
 		{
-			ImGui::Checkbox("Linearize depth", &linearizeDepth);
+			if (ImGui::CollapsingHeader("Settings", ImGuiTreeNodeFlags_DefaultOpen))
+			{
+				ImGui::Checkbox("Linearize depth", &linearizeDepth);
+				ImGui::Checkbox("Allow transient resource reuse", &resourceManager.transientReuse);
+			}
 
 			if (linearizeDepth)
 			{

@@ -41,6 +41,9 @@ struct RenderPassViews
 
 class RenderGraphResourceManager
 {
+public:
+	bool transientReuse = true;
+
 private:
 	size_t counter = 0;
 

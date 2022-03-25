@@ -30,8 +30,8 @@ void Editor::Update()
 	ui->Update();
 }
 
-void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer, entt::registry& registry, RenderResource cameraBuffer, RenderResource depthStencil,
-	RenderResource outputLDR, RenderResource backBuffer, const ClusterResources& clusterResources)
+void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer, RenderGraphResourceManager& resourceManager, entt::registry& registry,
+	RenderResource cameraBuffer, RenderResource depthStencil, RenderResource outputLDR, RenderResource backBuffer, const ClusterResources& clusterResources)
 {
 #if ENABLE_EDITOR
 	// Allow toggling the editor rendering entirely with F1.
@@ -80,7 +80,7 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 			ui->DrawEntityHierarchy(registry);
 			ui->DrawEntityPropertyViewer(registry);
 			ui->DrawMetrics(&device, renderer.lastFrameTime);
-			ui->DrawRenderGraph(&device, resources.GetTexture(depthStencil), resources.GetTexture(outputLDR));
+			ui->DrawRenderGraph(&device, resourceManager, resources.GetTexture(depthStencil), resources.GetTexture(outputLDR));
 			ui->DrawAtmosphereControls(renderer.atmosphere);
 			ui->DrawBloomControls(renderer.bloom);
 			ui->DrawRenderVisualizer(&device, renderer.clusteredCulling, ui->activeOverlay != RenderOverlay::None ? resources.GetTexture(activeOverlayTag) : TextureHandle{});
