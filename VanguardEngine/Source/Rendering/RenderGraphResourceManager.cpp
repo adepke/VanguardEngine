@@ -202,6 +202,10 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 			}
 		}
 
+		// UAV counter implies UAV.
+		if (info.first.uavCounter)
+			hasUnorderedAccess = true;
+
 		// Attempt to reuse an existing transient.
 		for (auto& transientBuffer : transientBuffers)
 		{
