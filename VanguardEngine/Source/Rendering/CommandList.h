@@ -46,7 +46,7 @@ public:
 	void FlushBarriers();
 
 	void BindPipelineState(const PipelineState& state);
-	void BindDescriptorAllocator(DescriptorAllocator& allocator);
+	void BindDescriptorAllocator(DescriptorAllocator& allocator, bool visibleHeap = true);
 	void BindConstants(const std::string& bindName, const std::vector<uint32_t>& data, size_t offset = 0);
 	template <typename T>
 	void BindConstants(const std::string& bindName, const T& data, size_t offset = 0);

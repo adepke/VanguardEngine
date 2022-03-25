@@ -33,14 +33,12 @@ void DescriptorHeapBase::Create(RenderDevice* device, DescriptorType type, size_
 	}
 
 	cpuHeapStart = heap->GetCPUDescriptorHandleForHeapStart().ptr;
-	gpuHeapStart = std::numeric_limits<size_t>::max();  // Non-visible heaps cannot call GetGPUDescriptorHandleForHeapStart().
+	if (visible)
+		gpuHeapStart = heap->GetGPUDescriptorHandleForHeapStart().ptr;
+	else
+		gpuHeapStart = cpuHeapStart;
 	descriptorSize = device->Native()->GetDescriptorHandleIncrementSize(heapType);
 	totalDescriptors = descriptors;
-
-	if (visible)
-	{
-		gpuHeapStart = heap->GetGPUDescriptorHandleForHeapStart().ptr;
-	}
 }
 
 DescriptorHandle FreeQueueDescriptorHeap::Allocate()

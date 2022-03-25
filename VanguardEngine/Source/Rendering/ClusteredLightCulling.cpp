@@ -241,6 +241,10 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 		dirty = false;
 	}
 
+	BufferView clusterVisibilityView{};
+	clusterVisibilityView.UAV("uav_visible");
+	clusterVisibilityView.UAV("uav_nonvisible", 0, 0, HeapType::NonVisible);
+
 	auto& clusterDepthCullingPass = graph.AddPass("Cluster Depth Culling", ExecutionQueue::Graphics);
 	clusterDepthCullingPass.Read(cameraBuffer, ResourceBind::SRV);
 	clusterDepthCullingPass.Read(depthStencil, ResourceBind::DSV);
@@ -252,10 +256,10 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 		.size = gridInfo.x * gridInfo.y * gridInfo.z,
 		.format = DXGI_FORMAT_R8_UINT
 	}, VGText("Cluster visibility"));
-	clusterDepthCullingPass.Write(clusterVisibilityTag, ResourceBind::UAV);
+	clusterDepthCullingPass.Write(clusterVisibilityTag, clusterVisibilityView);
 	clusterDepthCullingPass.Bind([&, cameraBuffer, instanceBuffer, meshResources, clusterVisibilityTag](CommandList& list, RenderPassResources& resources)
 	{
-		RenderUtils::Get().ClearUAV(list, resources.GetBuffer(clusterVisibilityTag));
+		RenderUtils::Get().ClearUAV(list, resources.GetBuffer(clusterVisibilityTag), resources.GetDescriptor(clusterVisibilityTag, "uav_nonvisible"));
 
 		list.UAVBarrier(resources.GetBuffer(clusterVisibilityTag));
 		list.FlushBarriers();
@@ -265,7 +269,7 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 		bindData.cameraBuffer = resources.Get(cameraBuffer);
 		bindData.vertexAssemblyData.positionBuffer = resources.Get(meshResources.positionTag);
 		bindData.vertexAssemblyData.extraBuffer = resources.Get(meshResources.extraTag);
-		bindData.visibilityBuffer = resources.Get(clusterVisibilityTag);
+		bindData.visibilityBuffer = resources.Get(clusterVisibilityTag, "uav_visible");
 		bindData.dimensions[0] = gridInfo.x;
 		bindData.dimensions[1] = gridInfo.y;
 		bindData.dimensions[2] = gridInfo.z;
@@ -336,6 +340,13 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 		list.Dispatch(1, 1, 1);
 	});
 
+	BufferView lightCounterView;
+	lightCounterView.UAV("uav_visible");
+	lightCounterView.UAV("uav_nonvisible", 0, 0, HeapType::NonVisible);
+	BufferView lightInfoView;
+	lightInfoView.UAV("uav_visible");
+	lightInfoView.UAV("uav_nonvisible", 0, 0, HeapType::NonVisible);
+
 	auto& binningPass = graph.AddPass("Light Binning", ExecutionQueue::Compute);
 	binningPass.Read(denseClustersTag, ResourceBind::SRV);
 	binningPass.Read(clusterBoundsTag, ResourceBind::SRV);
@@ -345,7 +356,7 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 		.size = 1,
 		.stride = sizeof(uint32_t)
 	}, VGText("Cluster binning light counter"));
-	binningPass.Write(lightCounterTag, ResourceBind::UAV);
+	binningPass.Write(lightCounterTag, lightCounterView);
 	const auto lightListTag = binningPass.Create(TransientBufferDescription{
 		.updateRate = ResourceFrequency::Static,
 		.size = gridInfo.x * gridInfo.y * gridInfo.z * maxLightsPerFroxel,
@@ -357,14 +368,14 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 		.size = gridInfo.x * gridInfo.y * gridInfo.z,
 		.stride = sizeof(uint32_t) * 2
 	}, VGText("Cluster grid light info"));
-	binningPass.Write(lightInfoTag, ResourceBind::UAV);
+	binningPass.Write(lightInfoTag, lightInfoView);
 	binningPass.Read(indirectBufferTag, ResourceBind::Indirect);
 	binningPass.Read(cameraBuffer, ResourceBind::SRV);  // #TODO: Precompute view space light positions.
 	binningPass.Bind([&, denseClustersTag, clusterBoundsTag, lightsBuffer, lightCounterTag,
 		lightListTag, lightInfoTag, indirectBufferTag, cameraBuffer](CommandList& list, RenderPassResources& resources)
 	{
-		RenderUtils::Get().ClearUAV(list, resources.GetBuffer(lightCounterTag));
-		RenderUtils::Get().ClearUAV(list, resources.GetBuffer(lightInfoTag));
+		RenderUtils::Get().ClearUAV(list, resources.GetBuffer(lightCounterTag), resources.GetDescriptor(lightCounterTag, "uav_nonvisible"));
+		RenderUtils::Get().ClearUAV(list, resources.GetBuffer(lightInfoTag), resources.GetDescriptor(lightInfoTag, "uav_nonvisible"));
 
 		list.UAVBarrier(resources.GetBuffer(lightCounterTag));
 		list.UAVBarrier(resources.GetBuffer(lightInfoTag));
@@ -393,9 +404,9 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 		bindData.clusterBoundsBuffer = resources.Get(clusterBoundsTag);
 		bindData.lightsBuffer = resources.Get(lightsBuffer);
 		bindData.lightCount = lightComponent.description.size;
-		bindData.lightCounterBuffer = resources.Get(lightCounterTag);
+		bindData.lightCounterBuffer = resources.Get(lightCounterTag, "uav_visible");
 		bindData.lightListBuffer = resources.Get(lightListTag);
-		bindData.lightInfoBuffer = resources.Get(lightInfoTag);
+		bindData.lightInfoBuffer = resources.Get(lightInfoTag, "uav_visible");
 
 		list.BindConstants("bindData", bindData);
 

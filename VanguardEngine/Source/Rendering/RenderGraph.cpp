@@ -375,6 +375,9 @@ void RenderGraph::Execute(RenderDevice* device)
 		// #TODO: End render pass.
 	}
 
+	// After recording, we can get rid of the descriptors.
+	resourceManager->DiscardDescriptors(device);
+
 	// Close and submit the command lists.
 
 	std::vector<ID3D12CommandList*> commandLists;

@@ -9,7 +9,16 @@ DescriptorHandle RenderGraphResourceManager::CreateDescriptorFromView(RenderDevi
 {
 	VGScopedCPUStat("Create Descriptor From View");
 
-	DescriptorHandle handle = device->AllocateDescriptor(DescriptorType::Default);
+	DescriptorHandle handle;
+	switch (viewDesc.heap)
+	{
+	case HeapType::Visible:
+		handle = device->AllocateDescriptor(DescriptorType::Default);
+		break;
+	case HeapType::NonVisible:
+		handle = device->GetDescriptorAllocator().AllocateNonVisible();
+		break;
+	}
 
 	ID3D12Resource* allocation = nullptr;
 	D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc{};
@@ -161,6 +170,8 @@ uint32_t RenderGraphResourceManager::GetDefaultDescriptor(RenderDevice* device, 
 		}
 		break;
 	}
+
+	return -1;
 }
 
 void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGraph* graph)
@@ -395,31 +406,26 @@ void RenderGraphResourceManager::BuildDescriptors(RenderDevice* device, RenderGr
 			// Check if we want a default descriptor or a custom set.
 			if (requests.descriptorRequests.size() == 0)
 			{
-				passViews[i].views[resource].descriptors[""] = GetDefaultDescriptor(device, resource, pass->bindInfo[resource]);
+				passViews[i].views[resource].descriptorIndices[""] = GetDefaultDescriptor(device, resource, pass->bindInfo[resource]);
 			}
 
 			else
 			{
 				for (const auto& [name, request] : requests.descriptorRequests)
 				{
+					// #TODO: Don't recreate descriptors every frame.
 					auto descriptor = CreateDescriptorFromView(device, resource, request);
-					passViews[i].views[resource].descriptors[name] = descriptor.bindlessIndex;
-					transientDescriptors.emplace_back(std::move(descriptor));
+					passViews[i].views[resource].descriptorIndices[name] = descriptor.bindlessIndex;
+					passViews[i].views[resource].fullDescriptors[name] = std::move(descriptor);
 				}
 			}
 		}
 	}
-
-	// #TODO: Don't recreate descriptors every frame.
-	for (auto&& descriptor : transientDescriptors)
-	{
-		device->GetResourceManager().AddFrameDescriptor(device->GetFrameIndex(), std::move(descriptor));
-	}
-
-	transientDescriptors.clear();
 }
 void RenderGraphResourceManager::DiscardTransients(RenderDevice* device)
 {
+	VGScopedCPUStat("Render Graph Discard Transients");
+
 	for (const auto& transient : transientBuffers)
 	{
 		device->GetResourceManager().AddFrameResource(device->GetFrameIndex(), bufferResources[transient.resource]);
@@ -433,4 +439,21 @@ void RenderGraphResourceManager::DiscardTransients(RenderDevice* device)
 	}
 
 	transientTextures.clear();
+}
+
+void RenderGraphResourceManager::DiscardDescriptors(RenderDevice* device)
+{
+	VGScopedCPUStat("Render Graph Discard Descriptors");
+
+	for (auto& [pass, views] : passViews)
+	{
+		for (auto& [resource, view] : views.views)
+		{
+			for (auto it = view.fullDescriptors.begin(); it != view.fullDescriptors.end();)
+			{
+				device->GetResourceManager().AddFrameDescriptor(device->GetFrameIndex(), std::move(it->second));
+				it = view.fullDescriptors.erase(it);
+			}
+		}
+	}
 }

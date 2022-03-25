@@ -1,6 +1,7 @@
 // Copyright (c) 2019-2022 Andrew Depke
 
 #include <Rendering/RenderUtils.h>
+#include <Rendering/Base.h>
 #include <Rendering/Device.h>
 #include <Rendering/CommandList.h>
 
@@ -17,25 +18,35 @@ void RenderUtils::Initialize(RenderDevice* inDevice)
 	clearUAVState.Build(*device, clearUAVStateDesc);
 }
 
-void RenderUtils::ClearUAV(CommandList& list, BufferHandle buffer)
+void RenderUtils::ClearUAV(CommandList& list, BufferHandle buffer, const DescriptorHandle& descriptor)
 {
-	list.BindPipelineState(clearUAVState);
-	list.BindResource("bufferUint", buffer);
-
-	struct ClearUAVInfo
-	{
-		uint32_t bufferSize;
-		XMFLOAT3 padding;
-	} clearUAVInfo;
+	VGScopedGPUStat("Clear UAV", device->GetDirectContext(), list.Native());
 
 	auto& bufferComponent = device->GetResourceManager().Get(buffer);
-	clearUAVInfo.bufferSize = bufferComponent.description.size;
-	std::vector<uint32_t> clearUAVInfoData;
-	clearUAVInfoData.resize(sizeof(ClearUAVInfo) / 4);
-	std::memcpy(clearUAVInfoData.data(), &clearUAVInfo, clearUAVInfoData.size() * sizeof(uint32_t));
 
-	list.BindConstants("clearUAVInfo", clearUAVInfoData);
+	// Only non-structured buffers can benefit from hardware fast path for clears.
+	if (bufferComponent.description.format)
+	{
+		constexpr uint32_t clearValues[4] = { 0 };
+		// Pass the shader-visible descriptor in as the GPU handle, but the non-visible descriptor for the CPU handle.
+		list.Native()->ClearUnorderedAccessViewUint(*bufferComponent.UAV, descriptor, bufferComponent.Native(), clearValues, 0, nullptr);
+	}
 
-	uint32_t dispatchSize = static_cast<uint32_t>(std::ceil(bufferComponent.description.size / 64.f));
-	list.Dispatch(dispatchSize, 1, 1);
+	else
+	{
+		list.BindPipelineState(clearUAVState);
+		list.BindResource("bufferUint", buffer);
+
+		struct ClearUAVInfo
+		{
+			uint32_t bufferSize;
+			XMFLOAT3 padding;
+		} clearUAVInfo;
+		clearUAVInfo.bufferSize = bufferComponent.description.size;
+
+		list.BindConstants("clearUAVInfo", clearUAVInfo);
+
+		uint32_t dispatchSize = static_cast<uint32_t>(std::ceil(bufferComponent.description.size / 64.f));
+		list.Dispatch(dispatchSize, 1, 1);
+	}
 }

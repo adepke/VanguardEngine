@@ -6,6 +6,7 @@
 #include <Utility/Singleton.h>
 #include <Rendering/PipelineState.h>
 #include <Rendering/ResourceHandle.h>
+#include <Rendering/DescriptorHeap.h>
 
 class RenderDevice;
 class CommandList;
@@ -19,5 +20,5 @@ private:
 public:
 	void Initialize(RenderDevice* inDevice);
 
-	void ClearUAV(CommandList& list, BufferHandle buffer);
+	void ClearUAV(CommandList& list, BufferHandle buffer, const DescriptorHandle& descriptor);
 };

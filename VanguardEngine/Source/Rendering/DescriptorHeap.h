@@ -24,11 +24,11 @@ struct DescriptorHandle
 
 private:
 	FreeQueueDescriptorHeap* parentHeap = nullptr;  // Optional heap, if we were allocated from a free queue heap.
-	uint64_t cpuPointer;
-	uint64_t gpuPointer;
+	uint64_t cpuPointer = 0;
+	uint64_t gpuPointer = 0;
 
 public:
-	uint32_t bindlessIndex;
+	uint32_t bindlessIndex = 0;
 
 public:
 	DescriptorHandle() = default;
@@ -38,8 +38,8 @@ public:
 	DescriptorHandle& operator=(const DescriptorHandle&) = delete;
 	DescriptorHandle& operator=(DescriptorHandle&&) noexcept = default;
 
-	operator D3D12_CPU_DESCRIPTOR_HANDLE() noexcept { return { cpuPointer }; }
-	operator D3D12_GPU_DESCRIPTOR_HANDLE() noexcept { return { gpuPointer }; }
+	operator D3D12_CPU_DESCRIPTOR_HANDLE() const noexcept { return { cpuPointer }; }
+	operator D3D12_GPU_DESCRIPTOR_HANDLE() const noexcept { return { gpuPointer }; }
 
 	void Free();
 };

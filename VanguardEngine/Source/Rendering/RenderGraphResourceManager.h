@@ -56,7 +56,6 @@ private:
 	std::list<TransientTexture> transientTextures;
 
 	std::unordered_map<size_t, RenderPassViews> passViews;
-	std::vector<DescriptorHandle> transientDescriptors;
 
 private:
 	DescriptorHandle CreateDescriptorFromView(RenderDevice* device, const RenderResource resource, ShaderResourceViewDescription viewDesc);
@@ -71,9 +70,11 @@ public:
 	void BuildTransients(RenderDevice* device, RenderGraph* graph);
 	void BuildDescriptors(RenderDevice* device, RenderGraph* graph);
 	void DiscardTransients(RenderDevice* device);
+	void DiscardDescriptors(RenderDevice* device);
 
 public:
 	const uint32_t GetDescriptor(size_t passIndex, const RenderResource resource, const std::string& name);
+	const DescriptorHandle& GetFullDescriptor(size_t passIndex, const RenderResource resource, const std::string& name);
 
 	const BufferHandle GetBuffer(const RenderResource resource);
 	const TextureHandle GetTexture(const RenderResource resource);
@@ -124,11 +125,23 @@ inline const uint32_t RenderGraphResourceManager::GetDescriptor(size_t passIndex
 	VGAssert(passViews.contains(passIndex), "No descriptors requested by pass index %zu", passIndex);
 	auto& passView = passViews[passIndex].views;
 	VGAssert(passView.contains(resource), "No descriptors created for resource.");
-	auto& descriptors = passView[resource].descriptors;
+	auto& descriptors = passView[resource].descriptorIndices;
 	if (name.size() > 0)
 		VGAssert(descriptors.contains(name), "Failed to get descriptor with name '%s' from resource.", name.data());
 	else
 		VGAssert(descriptors.contains(name), "Failed to get default descriptor from resource.");
+
+	return descriptors[name];
+}
+
+inline const DescriptorHandle& RenderGraphResourceManager::GetFullDescriptor(size_t passIndex, const RenderResource resource, const std::string& name)
+{
+	VGAssert(name.length() > 0, "Full descriptors must be named.");
+	VGAssert(passViews.contains(passIndex), "No descriptors requested by pass index %zu", passIndex);
+	auto& passView = passViews[passIndex].views;
+	VGAssert(passView.contains(resource), "No descriptors created for resource.");
+	auto& descriptors = passView[resource].fullDescriptors;
+	VGAssert(descriptors.contains(name), "Failed to get full descriptor with name '%s' from resource.", name.data());
 
 	return descriptors[name];
 }

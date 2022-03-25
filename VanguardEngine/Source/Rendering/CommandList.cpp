@@ -231,11 +231,16 @@ void CommandList::BindPipelineState(const PipelineState& state)
 	list->SetPipelineState(state.Native());
 }
 
-void CommandList::BindDescriptorAllocator(DescriptorAllocator& allocator)
+void CommandList::BindDescriptorAllocator(DescriptorAllocator& allocator, bool visibleHeap)
 {
 	VGScopedCPUStat("Bind Descriptor Allocator");
 
-	auto* descriptorHeap = allocator.defaultHeap.Native();
+	ID3D12DescriptorHeap* descriptorHeap;
+	if (visibleHeap)
+		descriptorHeap = allocator.defaultHeap.Native();
+	else
+		descriptorHeap = allocator.defaultNonVisibleHeap.Native();
+
 	list->SetDescriptorHeaps(1, &descriptorHeap);
 }
 

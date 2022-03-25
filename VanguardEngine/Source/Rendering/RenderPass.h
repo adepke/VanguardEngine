@@ -80,6 +80,10 @@ public:
 	// Only used for getting the actual resource handle, ideally we never need to do that in pass code.
 	const BufferHandle GetBuffer(const RenderResource resource) const;
 	const TextureHandle GetTexture(const RenderResource resource) const;
+
+	// Only used for manually retrieving the descriptor, when the bindless index isn't enough.
+	// The only usecase for this right now is ClearUAV().
+	const DescriptorHandle& GetDescriptor(const RenderResource resource, const std::string& name = "") const;
 };
 
 inline RenderPass::RenderPass(RenderGraphResourceManager* inResourceManager, std::string_view name, ExecutionQueue execution)
@@ -239,4 +243,9 @@ inline const BufferHandle RenderPassResources::GetBuffer(const RenderResource re
 inline const TextureHandle RenderPassResources::GetTexture(const RenderResource resource) const
 {
 	return resources->GetTexture(resource);
+}
+
+inline const DescriptorHandle& RenderPassResources::GetDescriptor(const RenderResource resource, const std::string& name) const
+{
+	return resources->GetFullDescriptor(passIndex, resource, name);
 }
