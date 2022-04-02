@@ -1,24 +1,22 @@
 // Copyright (c) 2019-2022 Andrew Depke
 
-#define RS \
-	"RootFlags(ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT)," \
-	"RootConstants(b0, num32BitConstants = 4)," \
-	"UAV(u0)"
+#include "RootSignature.hlsli"
 
-struct ClearUAVInfo
+struct BindData
 {
+	uint bufferHandle;
 	uint bufferSize;
-	float3 padding;
 };
 
-ConstantBuffer<ClearUAVInfo> clearUAVInfo : register(b0);
-RWStructuredBuffer<uint> bufferUint : register(u0);
+ConstantBuffer<BindData> bindData : register(b0);
 
 [RootSignature(RS)]
 [numthreads(64, 1, 1)]
-void ClearUAVMain(uint3 dispatchId : SV_DispatchThreadID)
+void Main(uint3 dispatchId : SV_DispatchThreadID)
 {
-	if (dispatchId.x < clearUAVInfo.bufferSize)
+	RWStructuredBuffer<uint> bufferUint = ResourceDescriptorHeap[bindData.bufferHandle];
+
+	if (dispatchId.x < bindData.bufferSize)
 	{
 		bufferUint[dispatchId.x] = 0;
 	}

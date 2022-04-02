@@ -14,11 +14,11 @@ void RenderUtils::Initialize(RenderDevice* inDevice)
 	device = inDevice;
 
 	ComputePipelineStateDescription clearUAVStateDesc{};
-	clearUAVStateDesc.shader = { "ClearUAV.hlsl", "ClearUAVMain" };
+	clearUAVStateDesc.shader = { "ClearUAV.hlsl", "Main" };
 	clearUAVState.Build(*device, clearUAVStateDesc);
 }
 
-void RenderUtils::ClearUAV(CommandList& list, BufferHandle buffer, const DescriptorHandle& descriptor)
+void RenderUtils::ClearUAV(CommandList& list, BufferHandle buffer, uint32_t bufferHandle, const DescriptorHandle& nonVisibleDescriptor)
 {
 	VGScopedGPUStat("Clear UAV", device->GetDirectContext(), list.Native());
 
@@ -29,22 +29,22 @@ void RenderUtils::ClearUAV(CommandList& list, BufferHandle buffer, const Descrip
 	{
 		constexpr uint32_t clearValues[4] = { 0 };
 		// Pass the shader-visible descriptor in as the GPU handle, but the non-visible descriptor for the CPU handle.
-		list.Native()->ClearUnorderedAccessViewUint(*bufferComponent.UAV, descriptor, bufferComponent.Native(), clearValues, 0, nullptr);
+		list.Native()->ClearUnorderedAccessViewUint(*bufferComponent.UAV, nonVisibleDescriptor, bufferComponent.Native(), clearValues, 0, nullptr);
 	}
 
 	else
 	{
 		list.BindPipelineState(clearUAVState);
-		list.BindResource("bufferUint", buffer);
 
-		struct ClearUAVInfo
+		struct BindData
 		{
+			uint32_t bufferHandle;
 			uint32_t bufferSize;
-			XMFLOAT3 padding;
-		} clearUAVInfo;
-		clearUAVInfo.bufferSize = bufferComponent.description.size;
+		} bindData;
+		bindData.bufferHandle = bufferHandle;
+		bindData.bufferSize = bufferComponent.description.size;
 
-		list.BindConstants("clearUAVInfo", clearUAVInfo);
+		list.BindConstants("bindData", bindData);
 
 		uint32_t dispatchSize = static_cast<uint32_t>(std::ceil(bufferComponent.description.size / 64.f));
 		list.Dispatch(dispatchSize, 1, 1);

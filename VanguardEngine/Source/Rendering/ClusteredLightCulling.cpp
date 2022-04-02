@@ -259,7 +259,7 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 	clusterDepthCullingPass.Write(clusterVisibilityTag, clusterVisibilityView);
 	clusterDepthCullingPass.Bind([&, cameraBuffer, instanceBuffer, meshResources, clusterVisibilityTag](CommandList& list, RenderPassResources& resources)
 	{
-		RenderUtils::Get().ClearUAV(list, resources.GetBuffer(clusterVisibilityTag), resources.GetDescriptor(clusterVisibilityTag, "uav_nonvisible"));
+		RenderUtils::Get().ClearUAV(list, resources.GetBuffer(clusterVisibilityTag), resources.Get(clusterVisibilityTag, "uav_visible"), resources.GetDescriptor(clusterVisibilityTag, "uav_nonvisible"));
 
 		list.UAVBarrier(resources.GetBuffer(clusterVisibilityTag));
 		list.FlushBarriers();
@@ -374,8 +374,8 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 	binningPass.Bind([&, denseClustersTag, clusterBoundsTag, lightsBuffer, lightCounterTag,
 		lightListTag, lightInfoTag, indirectBufferTag, cameraBuffer](CommandList& list, RenderPassResources& resources)
 	{
-		RenderUtils::Get().ClearUAV(list, resources.GetBuffer(lightCounterTag), resources.GetDescriptor(lightCounterTag, "uav_nonvisible"));
-		RenderUtils::Get().ClearUAV(list, resources.GetBuffer(lightInfoTag), resources.GetDescriptor(lightInfoTag, "uav_nonvisible"));
+		RenderUtils::Get().ClearUAV(list, resources.GetBuffer(lightCounterTag), resources.Get(lightCounterTag, "uav_visible"), resources.GetDescriptor(lightCounterTag, "uav_nonvisible"));
+		RenderUtils::Get().ClearUAV(list, resources.GetBuffer(lightInfoTag), resources.Get(lightInfoTag, "uav_visible"), resources.GetDescriptor(lightInfoTag, "uav_nonvisible"));
 
 		list.UAVBarrier(resources.GetBuffer(lightCounterTag));
 		list.UAVBarrier(resources.GetBuffer(lightInfoTag));

@@ -20,5 +20,5 @@ private:
 public:
 	void Initialize(RenderDevice* inDevice);
 
-	void ClearUAV(CommandList& list, BufferHandle buffer, const DescriptorHandle& descriptor);
+	void ClearUAV(CommandList& list, BufferHandle buffer, uint32_t bufferHandle, const DescriptorHandle& nonVisibleDescriptor);
 };
