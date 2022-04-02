@@ -444,7 +444,7 @@ void Atmosphere::Render(RenderGraph& graph, AtmosphereResources resourceHandles,
 	}
 
 	auto& atmospherePass = graph.AddPass("Atmosphere Pass", ExecutionQueue::Graphics);
-	atmospherePass.Read(cameraBuffer, ResourceBind::CBV);
+	atmospherePass.Read(cameraBuffer, ResourceBind::SRV);
 	atmospherePass.Read(depthStencil, ResourceBind::DSV);
 	atmospherePass.Read(resourceHandles.transmittanceHandle, ResourceBind::SRV);
 	atmospherePass.Read(resourceHandles.scatteringHandle, ResourceBind::SRV);
@@ -452,10 +452,6 @@ void Atmosphere::Render(RenderGraph& graph, AtmosphereResources resourceHandles,
 	atmospherePass.Output(outputHDR, OutputBind::RTV, LoadType::Preserve);
 	atmospherePass.Bind([&, cameraBuffer, depthStencil, resourceHandles, outputHDR](CommandList& list, RenderPassResources& resources)
 	{
-		const auto transmittanceHandle = resources.GetTexture(resourceHandles.transmittanceHandle);
-		const auto scatteringHandle = resources.GetTexture(resourceHandles.scatteringHandle);
-		const auto irradianceHandle = resources.GetTexture(resourceHandles.irradianceHandle);
-
 		struct BindData
 		{
 			AtmosphereData atmosphere;
@@ -463,18 +459,19 @@ void Atmosphere::Render(RenderGraph& graph, AtmosphereResources resourceHandles,
 			uint32_t scatteringTexture;
 			uint32_t irradianceTexture;
 			float solarZenithAngle;
+			uint32_t cameraBuffer;
+			uint32_t cameraIndex;
 		} bindData;
 		
 		bindData.atmosphere = model;
-		bindData.transmissionTexture = device->GetResourceManager().Get(transmittanceHandle).SRV->bindlessIndex;
-		bindData.scatteringTexture = device->GetResourceManager().Get(scatteringHandle).SRV->bindlessIndex;
-		bindData.irradianceTexture = device->GetResourceManager().Get(irradianceHandle).SRV->bindlessIndex;
+		bindData.transmissionTexture = resources.Get(resourceHandles.transmittanceHandle);
+		bindData.scatteringTexture = resources.Get(resourceHandles.scatteringHandle);
+		bindData.irradianceTexture = resources.Get(resourceHandles.irradianceHandle);
 		bindData.solarZenithAngle = solarZenithAngle;
+		bindData.cameraBuffer = resources.Get(cameraBuffer);
+		bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
 
-		list.BindPipelineState(pipelines["Atmosphere"]);
-		list.BindResource("camera", resources.GetBuffer(cameraBuffer));
-		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
-		list.BindResourceTable("textures3D", device->GetDescriptorAllocator().GetBindlessHeap());
+		list.BindPipelineState(pipelines["AtmosphereRender"]);
 		list.BindConstants("bindData", bindData);
 
 		list.DrawFullscreenQuad();
@@ -489,30 +486,17 @@ std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(Rende
 {
 	const auto luminanceTag = graph.Import(luminanceTexture);
 
+	TextureView luminanceView{};
+	luminanceView.UAV("", 0);
+
 	auto& luminancePass = graph.AddPass("Atmosphere Luminance Pass", ExecutionQueue::Compute);
-	luminancePass.Read(cameraBuffer, ResourceBind::CBV);
+	luminancePass.Read(cameraBuffer, ResourceBind::SRV);
 	luminancePass.Read(resourceHandles.transmittanceHandle, ResourceBind::SRV);
 	luminancePass.Read(resourceHandles.scatteringHandle, ResourceBind::SRV);
 	luminancePass.Read(resourceHandles.irradianceHandle, ResourceBind::SRV);
-	luminancePass.Write(luminanceTag, ResourceBind::UAV);
+	luminancePass.Write(luminanceTag, luminanceView);
 	luminancePass.Bind([&, cameraBuffer, resourceHandles, luminanceTag](CommandList& list, RenderPassResources& resources)
 	{
-		const auto transmittanceHandle = resources.GetTexture(resourceHandles.transmittanceHandle);
-		const auto scatteringHandle = resources.GetTexture(resourceHandles.scatteringHandle);
-		const auto irradianceHandle = resources.GetTexture(resourceHandles.irradianceHandle);
-		const auto& luminanceComponent = device->GetResourceManager().Get(resources.GetTexture(luminanceTag));
-
-		D3D12_UNORDERED_ACCESS_VIEW_DESC luminanceDesc{};
-		luminanceDesc.Format = luminanceComponent.description.format;
-		luminanceDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
-		luminanceDesc.Texture2DArray.MipSlice = 0;
-		luminanceDesc.Texture2DArray.FirstArraySlice = 0;
-		luminanceDesc.Texture2DArray.ArraySize = luminanceComponent.description.depth;
-		luminanceDesc.Texture2DArray.PlaneSlice = 0;
-
-		auto luminanceUAV = device->AllocateDescriptor(DescriptorType::Default);
-		device->Native()->CreateUnorderedAccessView(luminanceComponent.allocation->GetResource(), nullptr, &luminanceDesc, luminanceUAV);
-
 		struct BindData
 		{
 			AtmosphereData atmosphere;
@@ -521,32 +505,23 @@ std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(Rende
 			uint32_t irradianceTexture;
 			float solarZenithAngle;
 			uint32_t luminanceTexture;
-			XMFLOAT3 padding;
+			uint32_t cameraBuffer;
+			uint32_t cameraIndex;
 		} bindData;
 
 		bindData.atmosphere = model;
-		bindData.transmissionTexture = device->GetResourceManager().Get(transmittanceHandle).SRV->bindlessIndex;
-		bindData.scatteringTexture = device->GetResourceManager().Get(scatteringHandle).SRV->bindlessIndex;
-		bindData.irradianceTexture = device->GetResourceManager().Get(irradianceHandle).SRV->bindlessIndex;
+		bindData.transmissionTexture = resources.Get(resourceHandles.transmittanceHandle);
+		bindData.scatteringTexture = resources.Get(resourceHandles.scatteringHandle);
+		bindData.irradianceTexture = resources.Get(resourceHandles.irradianceHandle);
 		bindData.solarZenithAngle = solarZenithAngle;
-		bindData.luminanceTexture = luminanceUAV.bindlessIndex;
-		std::vector<uint8_t> bindBytes;
-		bindBytes.resize(sizeof(bindData));
-		std::memcpy(bindBytes.data(), &bindData, bindBytes.size());
-
-		const auto [handle, offset] = device->FrameAllocate(bindBytes.size());
-		device->GetResourceManager().Write(handle, bindBytes, offset);
+		bindData.luminanceTexture = resources.Get(luminanceTag);
+		bindData.cameraBuffer = resources.Get(cameraBuffer);
+		bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
 
 		list.BindPipelineState(luminancePrecompute);
-		list.BindResource("camera", resources.GetBuffer(cameraBuffer));
-		list.BindResource("bindData", handle, offset);
-		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
-		list.BindResourceTable("textures3D", device->GetDescriptorAllocator().GetBindlessHeap());
-		list.BindResourceTable("textureArraysRW", device->GetDescriptorAllocator().GetBindlessHeap());
+		list.BindConstants("bindData", bindData);
 
 		list.Dispatch(luminanceTextureSize / 8, luminanceTextureSize / 8, 6);
-
-		device->GetResourceManager().AddFrameDescriptor(device->GetFrameIndex(), std::move(luminanceUAV));
 
 		list.UAVBarrier(luminanceTexture);
 		list.FlushBarriers();
@@ -555,7 +530,7 @@ std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(Rende
 	});
 
 	auto& sunTransmittancePass = graph.AddPass("Sun Transmittance Pass", ExecutionQueue::Compute);
-	sunTransmittancePass.Read(cameraBuffer, ResourceBind::CBV);
+	sunTransmittancePass.Read(cameraBuffer, ResourceBind::SRV);
 	sunTransmittancePass.Read(resourceHandles.transmittanceHandle, ResourceBind::SRV);
 	const auto sunTransmittance = sunTransmittancePass.Create(TransientBufferDescription{
 		.updateRate = ResourceFrequency::Static,  // Unordered access.
@@ -565,28 +540,25 @@ std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(Rende
 	sunTransmittancePass.Write(sunTransmittance, ResourceBind::UAV);
 	sunTransmittancePass.Bind([&, cameraBuffer, resourceHandles, sunTransmittance](CommandList& list, RenderPassResources& resources)
 	{
-		const auto transmittanceHandle = resources.GetTexture(resourceHandles.transmittanceHandle);
-
 		struct BindData
 		{
 			AtmosphereData atmosphere;
 			uint32_t transmissionTexture;
-			uint32_t scatteringTexture;
-			uint32_t irradianceTexture;
 			float solarZenithAngle;
+			uint32_t sunTransmittanceBuffer;
+			uint32_t cameraBuffer;
+			uint32_t cameraIndex;
 		} bindData;
 
 		bindData.atmosphere = model;
-		bindData.transmissionTexture = device->GetResourceManager().Get(transmittanceHandle).SRV->bindlessIndex;
-		bindData.scatteringTexture = 0;  // Unused.
-		bindData.irradianceTexture = 0;  // Unused.
+		bindData.transmissionTexture = resources.Get(resourceHandles.transmittanceHandle);
 		bindData.solarZenithAngle = solarZenithAngle;
+		bindData.sunTransmittanceBuffer = resources.Get(sunTransmittance);
+		bindData.cameraBuffer = resources.Get(cameraBuffer);
+		bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
 
 		list.BindPipelineState(sunTransmittanceState);
-		list.BindResource("camera", resources.GetBuffer(cameraBuffer));
-		list.BindResourceTable("textures", device->GetDescriptorAllocator().GetBindlessHeap());
 		list.BindConstants("bindData", bindData);
-		list.BindResource("sunTransmittance", resources.GetBuffer(sunTransmittance));
 
 		list.Dispatch(1, 1, 1);
 	});

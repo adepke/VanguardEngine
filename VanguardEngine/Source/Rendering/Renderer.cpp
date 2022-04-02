@@ -198,8 +198,8 @@ void Renderer::CreatePipelines()
 
 	GraphicsPipelineStateDescription atmosphereStateDesc;
 
-	atmosphereStateDesc.vertexShader = { "Atmosphere/Atmosphere_VS", "main" };
-	atmosphereStateDesc.pixelShader = { "Atmosphere/Atmosphere_PS", "main" };
+	atmosphereStateDesc.vertexShader = { "Atmosphere/AtmosphereRender", "VSMain" };
+	atmosphereStateDesc.pixelShader = { "Atmosphere/AtmosphereRender", "PSMain" };
 
 	atmosphereStateDesc.blendDescription.AlphaToCoverageEnable = false;
 	atmosphereStateDesc.blendDescription.IndependentBlendEnable = false;
@@ -237,7 +237,7 @@ void Renderer::CreatePipelines()
 
 	atmosphereStateDesc.topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
 
-	pipelines.AddGraphicsState(device.get(), "Atmosphere", atmosphereStateDesc, false);
+	pipelines.AddGraphicsState(device.get(), "AtmosphereRender", atmosphereStateDesc, false);
 
 	GraphicsPipelineStateDescription postProcessStateDesc;
 

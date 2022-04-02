@@ -1,31 +1,11 @@
 // Copyright (c) 2019-2022 Andrew Depke
 
-#include "Base.hlsli"
+#include "RootSignature.hlsli"
 #include "Atmosphere/Atmosphere.hlsli"
 #include "Camera.hlsli"
 #include "CubeMap.hlsli"
 
-#define RS \
-	"RootFlags(0)," \
-	"CBV(b0)," \
-	"CBV(b1)," \
-	"DescriptorTable(" \
-		"SRV(t0, space = 0, numDescriptors = unbounded, flags = DESCRIPTORS_VOLATILE))," \
-	"DescriptorTable(" \
-		"SRV(t0, space = 1, numDescriptors = unbounded, flags = DESCRIPTORS_VOLATILE))," \
-	"DescriptorTable(" \
-		"UAV(u0, space = 2, numDescriptors = unbounded, flags = DESCRIPTORS_VOLATILE))," \
-	"StaticSampler(" \
-		"s0," \
-		"filter = FILTER_MIN_MAG_MIP_LINEAR," \
-		"addressU = TEXTURE_ADDRESS_CLAMP," \
-		"addressV = TEXTURE_ADDRESS_CLAMP," \
-		"addressW = TEXTURE_ADDRESS_CLAMP)"
-
-ConstantBuffer<Camera> camera : register(b0);
-SamplerState lutSampler : register(s0);
-
-struct AtmosphereBindData
+struct BindData
 {
 	AtmosphereData atmosphere;
 	// Boundary
@@ -35,10 +15,11 @@ struct AtmosphereBindData
 	float solarZenithAngle;
 	// Boundary
 	uint luminanceTexture;
-	float3 padding;
+	uint cameraBuffer;
+	uint cameraIndex;
 };
 
-ConstantBuffer<AtmosphereBindData> bindData : register(b1);
+ConstantBuffer<BindData> bindData : register(b0);
 
 [RootSignature(RS)]
 [numthreads(8, 8, 1)]
@@ -46,7 +27,7 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 {
 	float3 sunDirection = float3(sin(bindData.solarZenithAngle), 0.f, cos(bindData.solarZenithAngle));
 	
-	RWTexture2DArray<float4> luminanceMap = textureArraysRW[bindData.luminanceTexture];
+	RWTexture2DArray<float4> luminanceMap = ResourceDescriptorHeap[bindData.luminanceTexture];
 	float width, height, depth;
 	luminanceMap.GetDimensions(width, height, depth);
 	
@@ -54,10 +35,13 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	uv = uv * 2.f - 1.f;
 	float3 direction = normalize(ComputeDirection(uv, dispatchId.z));
 	
-	Texture2D transmittanceLut = textures[bindData.transmissionTexture];
-	Texture3D scatteringLut = textures3D[bindData.scatteringTexture];
-	Texture2D irradianceLut = textures[bindData.irradianceTexture];
+	Texture2D<float4> transmittanceLut = ResourceDescriptorHeap[bindData.transmissionTexture];
+	Texture3D<float4> scatteringLut = ResourceDescriptorHeap[bindData.scatteringTexture];
+	Texture2D<float4> irradianceLut = ResourceDescriptorHeap[bindData.irradianceTexture];
+
+	StructuredBuffer<Camera> cameraBuffer = ResourceDescriptorHeap[bindData.cameraBuffer];
+	Camera camera = cameraBuffer[bindData.cameraIndex];
 	
-	float3 sample = SampleAtmosphere(bindData.atmosphere, camera, direction, sunDirection, false, transmittanceLut, scatteringLut, irradianceLut, lutSampler);
+	float3 sample = SampleAtmosphere(bindData.atmosphere, camera, direction, sunDirection, false, transmittanceLut, scatteringLut, irradianceLut, bilinearClamp);
 	luminanceMap[dispatchId] = float4(sample, 0.f);
 }
