@@ -30,7 +30,7 @@ private:
 	{
 		if (auto* value = std::get_if<GraphicsDesc>(&description); !value)
 		{
-			description = GraphicsDesc{
+			auto desc = GraphicsDesc{
 				.blendDescription = {
 					.AlphaToCoverageEnable = false,
 					.IndependentBlendEnable = false
@@ -69,6 +69,21 @@ private:
 					}
 				}
 			};
+
+			desc.blendDescription.RenderTarget[0] = {
+				.BlendEnable = false,
+				.LogicOpEnable = false,
+				.SrcBlend = D3D12_BLEND_ONE,
+				.DestBlend = D3D12_BLEND_ZERO,
+				.BlendOp = D3D12_BLEND_OP_ADD,
+				.SrcBlendAlpha = D3D12_BLEND_ONE,
+				.DestBlendAlpha = D3D12_BLEND_ZERO,
+				.BlendOpAlpha = D3D12_BLEND_OP_ADD,
+				.LogicOp = D3D12_LOGIC_OP_NOOP,
+				.RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL
+			};
+
+			description = desc;
 		}
 	}
 
