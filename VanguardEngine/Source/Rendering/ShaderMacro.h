@@ -20,3 +20,15 @@ struct ShaderMacro
 		macro = std::string{ define } + "=" + std::to_string(value);
 	}
 };
+
+namespace std
+{
+	template <>
+	struct hash<ShaderMacro>
+	{
+		size_t operator()(const ShaderMacro& description) const
+		{
+			return hash<decltype(description.macro)>{}(description.macro);
+		}
+	};
+}
