@@ -127,11 +127,7 @@ void ResourceManager::CreateResourceViews(TextureComponent& target)
 		viewDesc.Format = target.description.format;
 
 		// If the given format isn't a depth format, we need to convert.
-		switch (viewDesc.Format)
-		{
-		case DXGI_FORMAT_R32_TYPELESS: viewDesc.Format = DXGI_FORMAT_D32_FLOAT; break;
-		case DXGI_FORMAT_R24G8_TYPELESS: viewDesc.Format = DXGI_FORMAT_D24_UNORM_S8_UINT; break;
-		}
+		viewDesc.Format = ConvertResourceFormatToTypedDepth(viewDesc.Format);
 
 		switch (target.Native()->GetDesc().Dimension)  // #TODO: Support texture arrays and multi-sample textures.
 		{
@@ -161,11 +157,7 @@ void ResourceManager::CreateResourceViews(TextureComponent& target)
 		// Using a depth stencil via SRV requires special formatting.
 		if (target.description.bindFlags & BindFlag::DepthStencil)
 		{
-			switch (viewDesc.Format)
-			{
-			case DXGI_FORMAT_R32_TYPELESS: viewDesc.Format = DXGI_FORMAT_R32_FLOAT; break;
-			case DXGI_FORMAT_R24G8_TYPELESS: viewDesc.Format = DXGI_FORMAT_R24_UNORM_X8_TYPELESS; break;
-			}
+			viewDesc.Format = ConvertResourceFormatToTypedNonDepth(viewDesc.Format);
 		}
 
 		switch (target.Native()->GetDesc().Dimension)  // #TODO: Support texture arrays and multi-sample textures.

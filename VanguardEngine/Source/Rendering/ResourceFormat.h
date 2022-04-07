@@ -5,7 +5,7 @@
 #include <dxgiformat.h>
 
 // Returns the format size in bits.
-uint32_t GetResourceFormatSize(DXGI_FORMAT format)
+inline uint32_t GetResourceFormatSize(DXGI_FORMAT format)
 {
 	switch (format)
 	{
@@ -119,7 +119,7 @@ uint32_t GetResourceFormatSize(DXGI_FORMAT format)
 	return 0;
 }
 
-bool IsResourceFormatSRGB(DXGI_FORMAT format)
+inline bool IsResourceFormatSRGB(DXGI_FORMAT format)
 {
 	switch (format)
 	{
@@ -136,7 +136,7 @@ bool IsResourceFormatSRGB(DXGI_FORMAT format)
 	}
 }
 
-DXGI_FORMAT ConvertResourceFormatToSRGB(DXGI_FORMAT linearFormat)
+inline DXGI_FORMAT ConvertResourceFormatToSRGB(DXGI_FORMAT linearFormat)
 {
 	switch (linearFormat)
 	{
@@ -152,7 +152,7 @@ DXGI_FORMAT ConvertResourceFormatToSRGB(DXGI_FORMAT linearFormat)
 	return DXGI_FORMAT_UNKNOWN;
 }
 
-DXGI_FORMAT ConvertResourceFormatToLinear(DXGI_FORMAT sRGBFormat)
+inline DXGI_FORMAT ConvertResourceFormatToLinear(DXGI_FORMAT sRGBFormat)
 {
 	switch (sRGBFormat)
 	{
@@ -166,4 +166,26 @@ DXGI_FORMAT ConvertResourceFormatToLinear(DXGI_FORMAT sRGBFormat)
 	}
 
 	return DXGI_FORMAT_UNKNOWN;
+}
+
+inline DXGI_FORMAT ConvertResourceFormatToTypedDepth(DXGI_FORMAT typelessDepthFormat)
+{
+	// If the given format is typeless, we need to convert it to typed depth.
+	switch (typelessDepthFormat)
+	{
+	case DXGI_FORMAT_R32_TYPELESS: return DXGI_FORMAT_D32_FLOAT;
+	case DXGI_FORMAT_R24G8_TYPELESS: return DXGI_FORMAT_D24_UNORM_S8_UINT;
+	default: return typelessDepthFormat;
+	}
+}
+
+inline DXGI_FORMAT ConvertResourceFormatToTypedNonDepth(DXGI_FORMAT typelessDepthFormat)
+{
+	// If the given format is typeless, we need to convert it to typed non-depth.
+	switch (typelessDepthFormat)
+	{
+	case DXGI_FORMAT_R32_TYPELESS: return DXGI_FORMAT_R32_FLOAT;
+	case DXGI_FORMAT_R24G8_TYPELESS: return DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+	default: return typelessDepthFormat;
+	}
 }
