@@ -91,7 +91,7 @@ public:
 	std::pair<BufferHandle, size_t> FrameAllocate(size_t size);
 
 	// Allocate a per-frame command list, disposed of automatically.
-	std::shared_ptr<CommandList> AllocateFrameCommandList(D3D12_COMMAND_LIST_TYPE type);
+	std::shared_ptr<CommandList> AllocateFrameCommandList(RenderGraph* graph, D3D12_COMMAND_LIST_TYPE type, size_t passIndex);
 
 	DescriptorHandle AllocateDescriptor(DescriptorType type);
 

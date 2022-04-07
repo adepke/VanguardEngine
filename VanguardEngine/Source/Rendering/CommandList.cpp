@@ -2,6 +2,7 @@
 
 #include <Rendering/CommandList.h>
 #include <Rendering/Device.h>
+#include <Rendering/RenderGraph.h>
 #include <Rendering/PipelineState.h>
 
 void ValidateTransition(const BufferDescription& description, D3D12_RESOURCE_STATES newState)
@@ -126,11 +127,13 @@ void CommandList::BindResourceInternal(const std::string& bindName, BufferHandle
 	}
 }
 
-void CommandList::Create(RenderDevice* inDevice, D3D12_COMMAND_LIST_TYPE type)
+void CommandList::Create(RenderDevice* inDevice, RenderGraph* inGraph, D3D12_COMMAND_LIST_TYPE type, size_t pass)
 {
 	VGScopedCPUStat("Command List Create");
 
 	device = inDevice;
+	graph = inGraph;
+	passIndex = pass;
 
 	auto result = device->Native()->CreateCommandAllocator(type, IID_PPV_ARGS(allocator.Indirect()));
 	if (FAILED(result))
@@ -229,6 +232,12 @@ void CommandList::BindPipelineState(const PipelineState& state)
 	}
 
 	list->SetPipelineState(state.Native());
+}
+
+void CommandList::BindPipeline(const RenderPipelineLayout& layout)
+{
+	const auto& pipeline = graph->RequestPipelineState(device, layout, passIndex);
+	BindPipelineState(pipeline);
 }
 
 void CommandList::BindDescriptorAllocator(DescriptorAllocator& allocator, bool visibleHeap)

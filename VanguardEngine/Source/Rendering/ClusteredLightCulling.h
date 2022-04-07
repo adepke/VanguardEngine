@@ -5,7 +5,7 @@
 #include <Rendering/Base.h>
 #include <Rendering/ResourceHandle.h>
 #include <Rendering/RenderGraphResource.h>
-#include <Rendering/PipelineState.h>
+#include <Rendering/RenderPipeline.h>
 
 #include <entt/entt.hpp>
 
@@ -48,15 +48,15 @@ private:
 	ClusterGridInfo gridInfo;
 	BufferHandle clusterBounds;
 
-	PipelineState boundsState;
-	PipelineState depthCullState;
-	PipelineState compactionState;
-	PipelineState binningState;
-	PipelineState indirectGenerationState;
+	RenderPipelineLayout boundsLayout;
+	RenderPipelineLayout depthCullLayout;
+	RenderPipelineLayout compactionLayout;
+	RenderPipelineLayout binningLayout;
+	RenderPipelineLayout indirectGenerationLayout;
 
 #if ENABLE_EDITOR
 	// Debugging visualizations.
-	PipelineState debugOverlayState;
+	RenderPipelineLayout debugOverlayLayout;
 #endif
 
 	ResourcePtr<ID3D12CommandSignature> binningIndirectSignature;

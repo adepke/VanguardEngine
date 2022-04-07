@@ -15,17 +15,14 @@ void Bloom::Initialize(RenderDevice* inDevice)
 {
 	device = inDevice;
 
-	ComputePipelineStateDescription extractStateDesc;
-	extractStateDesc.shader = { "Bloom/Extract.hlsl", "Main" };
-	extractState.Build(*device, extractStateDesc);
+	extractLayout = RenderPipelineLayout{}
+		.ComputeShader({ "Bloom/Extract.hlsl", "Main" });
 
-	ComputePipelineStateDescription downsampleStateDesc;
-	downsampleStateDesc.shader = { "Bloom/Downsample.hlsl", "Main" };
-	downsampleState.Build(*device, downsampleStateDesc);
+	downsampleLayout = RenderPipelineLayout{}
+		.ComputeShader({ "Bloom/Downsample.hlsl", "Main" });
 
-	ComputePipelineStateDescription upsampleStateDesc;
-	upsampleStateDesc.shader = { "Bloom/Upsample.hlsl", "Main" };
-	upsampleState.Build(*device, upsampleStateDesc);
+	upsampleLayout = RenderPipelineLayout{}
+		.ComputeShader({ "Bloom/Upsample.hlsl", "Main" });
 }
 
 void Bloom::Render(RenderGraph& graph, const RenderResource hdrSource)
@@ -43,7 +40,7 @@ void Bloom::Render(RenderGraph& graph, const RenderResource hdrSource)
 		.UAV("", 0));
 	extractPass.Bind([&, hdrSource, extractTexture](CommandList& list, RenderPassResources& resources)
 	{
-		list.BindPipelineState(extractState);
+		list.BindPipeline(extractLayout);
 
 		struct BindData
 		{
@@ -81,7 +78,7 @@ void Bloom::Render(RenderGraph& graph, const RenderResource hdrSource)
 	downsamplePass.Write(extractTexture, downsampleExtractView);
 	downsamplePass.Bind([this, extractTexture, downsampleExtractViewNames](CommandList& list, RenderPassResources& resources)
 	{
-		list.BindPipelineState(downsampleState);
+		list.BindPipeline(downsampleLayout);
 
 		auto& extractTextureComponent = device->GetResourceManager().Get(resources.GetTexture(extractTexture));
 
@@ -127,7 +124,7 @@ void Bloom::Render(RenderGraph& graph, const RenderResource hdrSource)
 		.UAV("", 0));
 	compositionPass.Bind([this, extractTexture, hdrSource, upsampleExtractViewNames](CommandList& list, RenderPassResources& resources)
 	{
-		list.BindPipelineState(upsampleState);
+		list.BindPipeline(upsampleLayout);
 
 		auto& extractTextureComponent = device->GetResourceManager().Get(resources.GetTexture(extractTexture));
 		auto& hdrTextureComponent = device->GetResourceManager().Get(resources.GetTexture(hdrSource));

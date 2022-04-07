@@ -177,7 +177,7 @@ void PipelineState::CreateRootSignature(RenderDevice& device)
 	ReflectRootSignature();
 }
 
-void PipelineState::Build(RenderDevice& device, const GraphicsPipelineStateDescription& inDescription, bool backBufferOutput)
+void PipelineState::Build(RenderDevice& device, const GraphicsPipelineStateDescription& inDescription)
 {
 	VGScopedCPUStat("Build Pipeline");
 
@@ -214,9 +214,9 @@ void PipelineState::Build(RenderDevice& device, const GraphicsPipelineStateDescr
 	case D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST:
 	case D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP: graphicsDesc.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE; break;
 	}
-	graphicsDesc.NumRenderTargets = 1;  // #TODO: Pull from render graph.
-	graphicsDesc.RTVFormats[0] = backBufferOutput ? DXGI_FORMAT_R8G8B8A8_UNORM_SRGB : DXGI_FORMAT_R16G16B16A16_FLOAT;  // #TODO: Pull from render graph.
-	graphicsDesc.DSVFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;
+	graphicsDesc.NumRenderTargets = inDescription.renderTargetCount;
+	std::copy(std::begin(inDescription.renderTargetFormats), std::end(inDescription.renderTargetFormats), std::begin(graphicsDesc.RTVFormats));
+	graphicsDesc.DSVFormat = inDescription.depthStencilFormat;
 	graphicsDesc.SampleDesc = { 1, 0 };  // #TODO: Support multi-sampling.
 	graphicsDesc.NodeMask = 0;
 	graphicsDesc.CachedPSO = { nullptr, 0 };  // #TODO: Pipeline caching.

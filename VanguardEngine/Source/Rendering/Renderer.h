@@ -8,11 +8,11 @@
 #include <Rendering/Device.h>
 #include <Rendering/MeshFactory.h>
 #include <Rendering/ResourceHandle.h>
-#include <Rendering/PipelineBuilder.h>
 #include <Rendering/Material.h>
 #include <Rendering/UserInterface.h>
 #include <Rendering/DescriptorAllocator.h>
 #include <Rendering/RenderGraphResourceManager.h>
+#include <Rendering/RenderPipeline.h>
 #include <Rendering/Atmosphere.h>
 #include <Rendering/ClusteredLightCulling.h>
 #include <Rendering/ImageBasedLighting.h>
@@ -32,10 +32,12 @@ public:
 private:
 	RenderGraphResourceManager renderGraphResources;
 
-	PipelineBuilder pipelines;  // Manages all the pipelines.
-
 	BufferHandle instanceBuffer;
 	BufferHandle cameraBuffer;
+
+	RenderPipelineLayout prepassLayout;
+	RenderPipelineLayout forwardOpaqueLayout;
+	RenderPipelineLayout postProcessLayout;
 
 public:
 	float lastFrameTime = -1.f;

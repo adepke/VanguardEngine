@@ -14,6 +14,14 @@
 #include <string>
 #include <string_view>
 
+// Don't provide less function since we have an inverse depth buffer.
+enum class DepthTestFunction
+{
+	Equal,
+	Greater,
+	GreaterEqual
+};
+
 class RenderPipelineLayout
 {
 	friend class RenderGraph;
@@ -126,12 +134,17 @@ public:
 		std::get<GraphicsDesc>(description).rasterizerDescription.CullMode = mode;
 		return *this;
 	}
-	RenderPipelineLayout& DepthEnabled(bool value, bool write = false, bool testEqual = false)
+	RenderPipelineLayout& DepthEnabled(bool value, bool write = false, DepthTestFunction function = DepthTestFunction::Greater)
 	{
 		InitDefaultGraphics();
 		std::get<GraphicsDesc>(description).depthStencilDescription.DepthEnable = true;
 		std::get<GraphicsDesc>(description).depthStencilDescription.DepthWriteMask = write ? D3D12_DEPTH_WRITE_MASK_ALL : D3D12_DEPTH_WRITE_MASK_ZERO;
-		std::get<GraphicsDesc>(description).depthStencilDescription.DepthFunc = testEqual ? D3D12_COMPARISON_FUNC_GREATER_EQUAL : D3D12_COMPARISON_FUNC_GREATER;  // Inverse depth buffer.
+		switch (function)
+		{
+		case DepthTestFunction::Equal: std::get<GraphicsDesc>(description).depthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_EQUAL; break;
+		case DepthTestFunction::Greater: std::get<GraphicsDesc>(description).depthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_GREATER; break;
+		case DepthTestFunction::GreaterEqual: std::get<GraphicsDesc>(description).depthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL; break;
+		}
 		return *this;
 	}
 	RenderPipelineLayout& StencilEnabled(bool value, bool write, uint8_t mask = D3D12_DEFAULT_STENCIL_READ_MASK)

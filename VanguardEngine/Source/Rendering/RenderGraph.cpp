@@ -3,6 +3,10 @@
 #include <Rendering/RenderGraph.h>
 #include <Rendering/RenderPass.h>
 #include <Rendering/Device.h>
+#include <Rendering/RenderPipeline.h>
+#include <Rendering/PipelineState.h>
+#include <Utility/StringTools.h>
+#include <Rendering/ResourceFormat.h>
 
 #include <algorithm>
 
@@ -229,6 +233,79 @@ std::pair<uint32_t, uint32_t> RenderGraph::GetBackBufferResolution(RenderDevice*
 	return std::make_pair(buffer.description.width, buffer.description.height);
 }
 
+PipelineState& RenderGraph::RequestPipelineState(RenderDevice* device, const RenderPipelineLayout& layout, size_t passIndex)
+{
+	std::vector<DXGI_FORMAT> renderTargetFormats;
+	DXGI_FORMAT depthStencilFormat = DXGI_FORMAT_UNKNOWN;
+	renderTargetFormats.reserve(passes[passIndex]->outputBindInfo.size());
+
+	for (const auto& [resource, bindInfo] : passes[passIndex]->outputBindInfo)
+	{
+		const auto& texture = device->GetResourceManager().Get(resourceManager->GetTexture(resource));
+		const auto format = texture.description.format;
+
+		if (bindInfo.first == OutputBind::RTV)
+			renderTargetFormats.emplace_back(format);
+		else
+		{
+			depthStencilFormat = ConvertResourceFormatToTypedDepth(format);
+		}
+	}
+
+	// If we don't have an output depth bind, we could still read from depth.
+	if (depthStencilFormat == DXGI_FORMAT_UNKNOWN)
+	{
+		for (const auto& [resource, bind] : passes[passIndex]->bindInfo)
+		{
+			if (bind == ResourceBind::DSV)
+			{
+				const auto& texture = device->GetResourceManager().Get(resourceManager->GetTexture(resource));
+				const auto format = texture.description.format;
+				depthStencilFormat = ConvertResourceFormatToTypedDepth(format);
+				break;
+			}
+		}
+	}
+
+	auto hash = std::hash<RenderPipelineLayout>{}(layout);
+	for (const auto format : renderTargetFormats)
+	{
+		HashCombine(hash, format);
+	}
+	HashCombine(hash, depthStencilFormat);
+
+	if (const auto it = resourceManager->passPipelines.find(hash); it != resourceManager->passPipelines.end())
+	{
+		return it->second;
+	}
+
+	else
+	{
+		VGLog(logRendering, "Compiling new pipeline layout request for pass: '{}'", Str2WideStr(passes[passIndex]->stableName.data()));
+
+		PipelineState state{};
+		std::visit([device, &state, &renderTargetFormats, &depthStencilFormat](auto&& description)
+		{
+			// Modified description for just this pass. Note that this doesn't affect the hash!
+			auto passDescription = description;
+
+			using T = std::decay_t<decltype(description)>;
+			if constexpr (std::is_same_v<T, GraphicsPipelineStateDescription>)
+			{
+				passDescription.renderTargetCount = renderTargetFormats.size();
+				std::memset(passDescription.renderTargetFormats, DXGI_FORMAT_UNKNOWN, std::size(passDescription.renderTargetFormats) * sizeof(DXGI_FORMAT));
+				std::copy(renderTargetFormats.begin(), renderTargetFormats.end(), std::begin(passDescription.renderTargetFormats));
+				passDescription.depthStencilFormat = depthStencilFormat;
+			}
+
+			if constexpr (!std::is_same_v<T, std::monostate>)
+				state.Build(*device, passDescription);
+		}, layout.description);
+
+		return resourceManager->passPipelines.emplace(std::move(hash), std::move(state)).first->second;
+	}
+}
+
 RenderPass& RenderGraph::AddPass(std::string_view stableName, ExecutionQueue execution)
 {
 	return *passes.emplace_back(std::make_unique<RenderPass>(resourceManager, stableName, execution));
@@ -259,7 +336,7 @@ void RenderGraph::Execute(RenderDevice* device)
 
 	for (int i = 0; i < passes.size(); ++i)
 	{
-		passLists.emplace_back(std::move(device->AllocateFrameCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT)));
+		passLists.emplace_back(std::move(device->AllocateFrameCommandList(this, D3D12_COMMAND_LIST_TYPE_DIRECT, i)));
 	}
 
 	for (const auto i : sorted)

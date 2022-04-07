@@ -7,6 +7,7 @@
 #include <Rendering/ResourceBind.h>
 #include <Rendering/RenderGraphResource.h>
 #include <Rendering/ResourceView.h>
+#include <Rendering/PipelineState.h>
 
 #include <unordered_map>
 #include <utility>
@@ -41,6 +42,8 @@ struct RenderPassViews
 
 class RenderGraphResourceManager
 {
+	friend class RenderGraph;
+
 public:
 	bool transientReuse = true;
 
@@ -59,6 +62,8 @@ private:
 	std::list<TransientTexture> transientTextures;
 
 	std::unordered_map<size_t, RenderPassViews> passViews;
+
+	std::unordered_map<size_t, PipelineState> passPipelines;
 
 private:
 	DescriptorHandle CreateDescriptorFromView(RenderDevice* device, const RenderResource resource, ShaderResourceViewDescription viewDesc);

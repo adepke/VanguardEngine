@@ -22,6 +22,9 @@ struct GraphicsPipelineStateDescription
 	D3D12_RASTERIZER_DESC rasterizerDescription;
 	D3D12_DEPTH_STENCIL_DESC depthStencilDescription;
 	D3D12_PRIMITIVE_TOPOLOGY topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
+	uint32_t renderTargetCount = 1;  // #TEMP, dont init!
+	DXGI_FORMAT renderTargetFormats[8] = { DXGI_FORMAT_R16G16B16A16_FLOAT };  // #TEMP, dont init!
+	DXGI_FORMAT depthStencilFormat = DXGI_FORMAT_D24_UNORM_S8_UINT;  // #TEMP, dont init!
 };
 
 struct ComputePipelineStateDescription
@@ -76,6 +79,6 @@ public:
 
 	auto* GetReflectionData() const noexcept { return &reflection; }
 
-	void Build(RenderDevice& device, const GraphicsPipelineStateDescription& inDescription, bool backBufferOutput);
+	void Build(RenderDevice& device, const GraphicsPipelineStateDescription& inDescription);
 	void Build(RenderDevice& device, const ComputePipelineStateDescription& inDescription);
 };

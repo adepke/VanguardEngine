@@ -237,7 +237,7 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 
 	for (int i = 0; i < frameCount; ++i)
 	{
-		directCommandList[i].Create(this, D3D12_COMMAND_LIST_TYPE_DIRECT);
+		directCommandList[i].Create(this, nullptr, D3D12_COMMAND_LIST_TYPE_DIRECT, -1);
 
 		// Close all lists except the current frame's list.
 		if (i > 0)
@@ -503,13 +503,13 @@ std::pair<BufferHandle, size_t> RenderDevice::FrameAllocate(size_t size)
 	return { frameBuffers[frameIndex], frameBufferOffsets[frameIndex] - size };
 }
 
-std::shared_ptr<CommandList> RenderDevice::AllocateFrameCommandList(D3D12_COMMAND_LIST_TYPE type)
+std::shared_ptr<CommandList> RenderDevice::AllocateFrameCommandList(RenderGraph* graph, D3D12_COMMAND_LIST_TYPE type, size_t passIndex)
 {
 	const auto frameIndex = GetFrameIndex();
 	const auto size = frameCommandLists[frameIndex].size();
 
 	frameCommandLists[frameIndex].emplace_back(std::make_shared<CommandList>());
-	frameCommandLists[frameIndex][size]->Create(this, type);
+	frameCommandLists[frameIndex][size]->Create(this, graph, type, passIndex);
 	frameCommandLists[frameIndex][size]->SetName(VGText("Frame command list"));
 
 	return frameCommandLists[frameIndex][size];

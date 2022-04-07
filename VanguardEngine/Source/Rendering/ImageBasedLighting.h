@@ -4,7 +4,7 @@
 
 #include <Rendering/Base.h>
 #include <Rendering/ResourceHandle.h>
-#include <Rendering/PipelineState.h>
+#include <Rendering/RenderPipeline.h>
 #include <Rendering/RenderGraphResource.h>
 
 class RenderDevice;
@@ -36,9 +36,9 @@ public:
 	TextureHandle brdfTexture;
 
 private:
-	PipelineState irradiancePrecompute;
-	PipelineState prefilterPrecompute;
-	PipelineState brdfPrecompute;
+	RenderPipelineLayout irradiancePrecomputeLayout;
+	RenderPipelineLayout prefilterPrecomputeLayout;
+	RenderPipelineLayout brdfPrecomputeLayout;
 
 	RenderDevice* device = nullptr;
 	bool brdfRendered = false;

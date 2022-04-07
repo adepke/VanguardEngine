@@ -5,7 +5,6 @@
 #include <Rendering/RenderGraph.h>
 #include <Rendering/RenderPass.h>
 #include <Rendering/ResourceManager.h>
-#include <Rendering/PipelineBuilder.h>
 #include <Rendering/ShaderStructs.h>
 #include <Core/CoreComponents.h>
 #include <Rendering/RenderComponents.h>
@@ -112,7 +111,7 @@ void Atmosphere::Precompute(CommandList& list, TextureHandle transmittanceHandle
 	list.TransitionBarrier(transmittanceHandle, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	list.FlushBarriers();
 
-	list.BindPipelineState(transmissionPrecompute);
+	list.BindPipeline(transmissionPrecomputeLayout);
 	list.BindDescriptorAllocator(device->GetDescriptorAllocator());
 	list.BindConstants("bindData", bindData);
 	list.Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
@@ -137,7 +136,7 @@ void Atmosphere::Precompute(CommandList& list, TextureHandle transmittanceHandle
 	list.TransitionBarrier(deltaIrradianceTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	list.FlushBarriers();
 
-	list.BindPipelineState(directIrradiancePrecompute);
+	list.BindPipeline(directIrradiancePrecomputeLayout);
 	list.BindDescriptorAllocator(device->GetDescriptorAllocator());
 	list.BindConstants("bindData", bindData);
 	list.Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
@@ -164,7 +163,7 @@ void Atmosphere::Precompute(CommandList& list, TextureHandle transmittanceHandle
 	list.TransitionBarrier(deltaMieTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	list.FlushBarriers();
 
-	list.BindPipelineState(singleScatteringPrecompute);
+	list.BindPipeline(singleScatteringPrecomputeLayout);
 	list.BindDescriptorAllocator(device->GetDescriptorAllocator());
 	list.BindConstants("bindData", bindData);
 	list.Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
@@ -199,7 +198,7 @@ void Atmosphere::Precompute(CommandList& list, TextureHandle transmittanceHandle
 		list.TransitionBarrier(deltaIrradianceTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		list.FlushBarriers();
 
-		list.BindPipelineState(scatteringDensityPrecompute);
+		list.BindPipeline(scatteringDensityPrecomputeLayout);
 		list.BindDescriptorAllocator(device->GetDescriptorAllocator());
 		list.BindConstants("bindData", bindData);
 		list.Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
@@ -226,7 +225,7 @@ void Atmosphere::Precompute(CommandList& list, TextureHandle transmittanceHandle
 		list.TransitionBarrier(deltaIrradianceTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		list.FlushBarriers();
 
-		list.BindPipelineState(indirectIrradiancePrecompute);
+		list.BindPipeline(indirectIrradiancePrecomputeLayout);
 		list.BindDescriptorAllocator(device->GetDescriptorAllocator());
 		list.BindConstants("bindData", bindData);
 		list.Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
@@ -253,7 +252,7 @@ void Atmosphere::Precompute(CommandList& list, TextureHandle transmittanceHandle
 		list.TransitionBarrier(deltaScatteringDensityTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		list.FlushBarriers();
 
-		list.BindPipelineState(multipleScatteringPrecompute);
+		list.BindPipeline(multipleScatteringPrecomputeLayout);
 		list.BindDescriptorAllocator(device->GetDescriptorAllocator());
 		list.BindConstants("bindData", bindData);
 		list.Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
@@ -288,32 +287,34 @@ void Atmosphere::Initialize(RenderDevice* inDevice, entt::registry& registry)
 {
 	device = inDevice;
 
-	ComputePipelineStateDescription precomputeState;
-	precomputeState.shader = { "Atmosphere/AtmospherePrecompute", "TransmittanceLutMain" };
-	transmissionPrecompute.Build(*device, precomputeState);
+	transmissionPrecomputeLayout = RenderPipelineLayout{}
+		.ComputeShader({ "Atmosphere/AtmospherePrecompute", "TransmittanceLutMain" });
 
-	precomputeState.shader = { "Atmosphere/AtmospherePrecompute", "DirectIrradianceLutMain" };
-	directIrradiancePrecompute.Build(*device, precomputeState);
+	directIrradiancePrecomputeLayout = RenderPipelineLayout{}
+		.ComputeShader({ "Atmosphere/AtmospherePrecompute", "DirectIrradianceLutMain" });
 
-	precomputeState.shader = { "Atmosphere/AtmospherePrecompute", "SingleScatteringLutMain" };
-	singleScatteringPrecompute.Build(*device, precomputeState);
+	singleScatteringPrecomputeLayout = RenderPipelineLayout{}
+		.ComputeShader({ "Atmosphere/AtmospherePrecompute", "SingleScatteringLutMain" });
 
-	precomputeState.shader = { "Atmosphere/AtmospherePrecompute", "ScatteringDensityLutMain" };
-	scatteringDensityPrecompute.Build(*device, precomputeState);
+	scatteringDensityPrecomputeLayout = RenderPipelineLayout{}
+		.ComputeShader({ "Atmosphere/AtmospherePrecompute", "ScatteringDensityLutMain" });
 
-	precomputeState.shader = { "Atmosphere/AtmospherePrecompute", "IndirectIrradianceLutMain" };
-	indirectIrradiancePrecompute.Build(*device, precomputeState);
+	indirectIrradiancePrecomputeLayout = RenderPipelineLayout{}
+		.ComputeShader({ "Atmosphere/AtmospherePrecompute", "IndirectIrradianceLutMain" });
 
-	precomputeState.shader = { "Atmosphere/AtmospherePrecompute", "MultipleScatteringLutMain" };
-	multipleScatteringPrecompute.Build(*device, precomputeState);
+	multipleScatteringPrecomputeLayout = RenderPipelineLayout{}
+		.ComputeShader({ "Atmosphere/AtmospherePrecompute", "MultipleScatteringLutMain" });
 
-	ComputePipelineStateDescription sunTransmittanceStateDesc;
-	sunTransmittanceStateDesc.shader = { "Atmosphere/SunTransmittance", "Main" };
-	sunTransmittanceState.Build(*device, sunTransmittanceStateDesc);
+	renderLayout = RenderPipelineLayout{}
+		.VertexShader({ "Atmosphere/AtmosphereRender", "VSMain" })
+		.PixelShader({ "Atmosphere/AtmosphereRender", "PSMain" })
+		.DepthEnabled(true, false, DepthTestFunction::GreaterEqual);  // Draw where the depth buffer is at the clear value.
 
-	ComputePipelineStateDescription luminanceState;
-	luminanceState.shader = { "Atmosphere/Luminance", "Main" };
-	luminancePrecompute.Build(*device, luminanceState);
+	sunTransmittanceLayout = RenderPipelineLayout{}
+		.ComputeShader({ "Atmosphere/SunTransmittance", "Main" });
+
+	luminancePrecomputeLayout = RenderPipelineLayout{}
+		.ComputeShader({ "Atmosphere/Luminance", "Main" });
 
 	TextureDescription transmittanceDesc{
 		.bindFlags = BindFlag::ShaderResource | BindFlag::UnorderedAccess,
@@ -414,7 +415,7 @@ AtmosphereResources Atmosphere::ImportResources(RenderGraph& graph)
 	return { transmittanceTag, scatteringTag, irradianceTag };
 }
 
-void Atmosphere::Render(RenderGraph& graph, AtmosphereResources resourceHandles, PipelineBuilder& pipelines, RenderResource cameraBuffer,
+void Atmosphere::Render(RenderGraph& graph, AtmosphereResources resourceHandles, RenderResource cameraBuffer,
 	RenderResource depthStencil, RenderResource outputHDR, entt::registry& registry)
 {
 	if (dirty)
@@ -459,7 +460,7 @@ void Atmosphere::Render(RenderGraph& graph, AtmosphereResources resourceHandles,
 		bindData.cameraBuffer = resources.Get(cameraBuffer);
 		bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
 
-		list.BindPipelineState(pipelines["AtmosphereRender"]);
+		list.BindPipeline(renderLayout);
 		list.BindConstants("bindData", bindData);
 
 		list.DrawFullscreenQuad();
@@ -506,7 +507,7 @@ std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(Rende
 		bindData.cameraBuffer = resources.Get(cameraBuffer);
 		bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
 
-		list.BindPipelineState(luminancePrecompute);
+		list.BindPipeline(luminancePrecomputeLayout);
 		list.BindConstants("bindData", bindData);
 
 		list.Dispatch(luminanceTextureSize / 8, luminanceTextureSize / 8, 6);
@@ -545,7 +546,7 @@ std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(Rende
 		bindData.cameraBuffer = resources.Get(cameraBuffer);
 		bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
 
-		list.BindPipelineState(sunTransmittanceState);
+		list.BindPipeline(sunTransmittanceLayout);
 		list.BindConstants("bindData", bindData);
 
 		list.Dispatch(1, 1, 1);

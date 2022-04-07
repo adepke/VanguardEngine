@@ -2,7 +2,7 @@
 
 #pragma once
 
-#include <Rendering/PipelineState.h>
+#include <Rendering/RenderPipeline.h>
 #include <Rendering/RenderGraphResource.h>
 
 class RenderDevice;
@@ -13,9 +13,9 @@ class Bloom
 private:
 	RenderDevice* device;
 
-	PipelineState extractState;
-	PipelineState downsampleState;
-	PipelineState upsampleState;
+	RenderPipelineLayout extractLayout;
+	RenderPipelineLayout downsampleLayout;
+	RenderPipelineLayout upsampleLayout;
 
 	uint32_t bloomPasses = 0;
 

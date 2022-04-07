@@ -5,7 +5,7 @@
 #include <Rendering/Base.h>
 #include <Rendering/ResourceHandle.h>
 #include <Rendering/RenderGraphResource.h>
-#include <Rendering/PipelineState.h>
+#include <Rendering/RenderPipeline.h>
 
 #include <entt/entt.hpp>
 
@@ -80,22 +80,23 @@ private:
 	TextureHandle deltaScatteringDensityTexture;
 	TextureHandle deltaIrradianceTexture;
 
-	PipelineState transmissionPrecompute;
-	PipelineState directIrradiancePrecompute;
-	PipelineState singleScatteringPrecompute;
-	PipelineState scatteringDensityPrecompute;
-	PipelineState indirectIrradiancePrecompute;
-	PipelineState multipleScatteringPrecompute;
+	RenderPipelineLayout transmissionPrecomputeLayout;
+	RenderPipelineLayout directIrradiancePrecomputeLayout;
+	RenderPipelineLayout singleScatteringPrecomputeLayout;
+	RenderPipelineLayout scatteringDensityPrecomputeLayout;
+	RenderPipelineLayout indirectIrradiancePrecomputeLayout;
+	RenderPipelineLayout multipleScatteringPrecomputeLayout;
 
 	void Precompute(CommandList& list, TextureHandle transmittanceHandle, TextureHandle scatteringHandle, TextureHandle irradianceHandle);
 
-	PipelineState sunTransmittanceState;
+	RenderPipelineLayout renderLayout;
+	RenderPipelineLayout sunTransmittanceLayout;
 
 	static constexpr uint32_t luminanceTextureSize = 1024;
 	static_assert(luminanceTextureSize % 8 == 0, "luminanceTextureSize must be evenly divisible by 8.");
 
 	TextureHandle luminanceTexture;
-	PipelineState luminancePrecompute;
+	RenderPipelineLayout luminancePrecomputeLayout;
 
 	entt::entity sunLight;  // Directional light entity for direct solar illumination.
 
@@ -104,7 +105,7 @@ public:
 	void Initialize(RenderDevice* inDevice, entt::registry& registry);
 
 	AtmosphereResources ImportResources(RenderGraph& graph);
-	void Render(RenderGraph& graph, AtmosphereResources resourceHandles, PipelineBuilder& pipeline, RenderResource cameraBuffer,
+	void Render(RenderGraph& graph, AtmosphereResources resourceHandles, RenderResource cameraBuffer,
 		RenderResource depthStencil, RenderResource outputHDRs, entt::registry& registry);
 	std::pair<RenderResource, RenderResource> RenderEnvironmentMap(RenderGraph& graph, AtmosphereResources resourceHandles, RenderResource cameraBuffer);
 	void MarkModelDirty() { dirty = true; }

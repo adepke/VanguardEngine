@@ -15,6 +15,8 @@
 
 class CommandList;
 class Renderer;
+class RenderPipelineLayout;
+class PipelineState;
 
 enum class ResourceTag
 {
@@ -53,11 +55,9 @@ public:
 
 	const RenderResource Import(const BufferHandle resource);
 	const RenderResource Import(const TextureHandle resource);
-
 	void Tag(const RenderResource resource, ResourceTag tag);
-
+	PipelineState& RequestPipelineState(RenderDevice* device, const RenderPipelineLayout& layout, size_t passIndex);
 	RenderPass& AddPass(std::string_view stableName, ExecutionQueue execution);
-
 	void Build();
 	void Execute(RenderDevice* device);
 };

@@ -86,201 +86,20 @@ void Renderer::UpdateCameraBuffer(const entt::registry& registry)
 
 void Renderer::CreatePipelines()
 {
-	GraphicsPipelineStateDescription prepassStateDesc;
+	prepassLayout = RenderPipelineLayout{}
+		.VertexShader({ "Prepass", "VSMain" })
+		.DepthEnabled(true, true);
 
-	prepassStateDesc.vertexShader = { "Prepass", "VSMain" };
+	forwardOpaqueLayout = RenderPipelineLayout{}
+		.VertexShader({ "Forward", "VSMain" })
+		.PixelShader({ "Forward", "PSMain" })
+		.DepthEnabled(true, false, DepthTestFunction::Equal)  // Prepass provides depth.
+		.Macro({ "FROXEL_SIZE", clusteredCulling.froxelSize });
 
-	prepassStateDesc.blendDescription.AlphaToCoverageEnable = false;
-	prepassStateDesc.blendDescription.IndependentBlendEnable = false;
-	prepassStateDesc.blendDescription.RenderTarget[0].BlendEnable = false;
-	prepassStateDesc.blendDescription.RenderTarget[0].LogicOpEnable = false;
-	prepassStateDesc.blendDescription.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
-	prepassStateDesc.blendDescription.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;
-	prepassStateDesc.blendDescription.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-	prepassStateDesc.blendDescription.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-	prepassStateDesc.blendDescription.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
-	prepassStateDesc.blendDescription.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
-	prepassStateDesc.blendDescription.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;
-	prepassStateDesc.blendDescription.RenderTarget[0].RenderTargetWriteMask = 0;
-
-	prepassStateDesc.rasterizerDescription.FillMode = D3D12_FILL_MODE_SOLID;
-	prepassStateDesc.rasterizerDescription.CullMode = D3D12_CULL_MODE_BACK;
-	prepassStateDesc.rasterizerDescription.FrontCounterClockwise = false;
-	prepassStateDesc.rasterizerDescription.DepthBias = 0;
-	prepassStateDesc.rasterizerDescription.DepthBiasClamp = 0.f;
-	prepassStateDesc.rasterizerDescription.SlopeScaledDepthBias = 0.f;
-	prepassStateDesc.rasterizerDescription.DepthClipEnable = true;
-	prepassStateDesc.rasterizerDescription.MultisampleEnable = false;
-	prepassStateDesc.rasterizerDescription.AntialiasedLineEnable = false;
-	prepassStateDesc.rasterizerDescription.ForcedSampleCount = 0;
-	prepassStateDesc.rasterizerDescription.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
-
-	prepassStateDesc.depthStencilDescription.DepthEnable = true;  // Enable depth.
-	prepassStateDesc.depthStencilDescription.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ALL;  // Write to the depth buffer.
-	prepassStateDesc.depthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_GREATER;  // Inverse depth buffer.
-	prepassStateDesc.depthStencilDescription.StencilEnable = false;
-	prepassStateDesc.depthStencilDescription.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
-	prepassStateDesc.depthStencilDescription.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
-	prepassStateDesc.depthStencilDescription.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
-	prepassStateDesc.depthStencilDescription.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
-
-	prepassStateDesc.topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-
-	pipelines.AddGraphicsState(device.get(), "Prepass", prepassStateDesc, false);
-
-	GraphicsPipelineStateDescription forwardStateDesc;
-
-	forwardStateDesc.vertexShader = { "Forward", "VSMain" };
-	forwardStateDesc.pixelShader = { "Forward", "PSMain" };
-	forwardStateDesc.macros.emplace_back("FROXEL_SIZE", clusteredCulling.froxelSize);
-
-	forwardStateDesc.blendDescription.AlphaToCoverageEnable = false;
-	forwardStateDesc.blendDescription.IndependentBlendEnable = false;
-	forwardStateDesc.blendDescription.RenderTarget[0].BlendEnable = false;
-	forwardStateDesc.blendDescription.RenderTarget[0].LogicOpEnable = false;
-	forwardStateDesc.blendDescription.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
-	forwardStateDesc.blendDescription.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;
-	forwardStateDesc.blendDescription.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-	forwardStateDesc.blendDescription.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-	forwardStateDesc.blendDescription.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
-	forwardStateDesc.blendDescription.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
-	forwardStateDesc.blendDescription.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;
-	forwardStateDesc.blendDescription.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-
-	forwardStateDesc.rasterizerDescription.FillMode = D3D12_FILL_MODE_SOLID;
-	forwardStateDesc.rasterizerDescription.CullMode = D3D12_CULL_MODE_BACK;
-	forwardStateDesc.rasterizerDescription.FrontCounterClockwise = false;
-	forwardStateDesc.rasterizerDescription.DepthBias = 0;
-	forwardStateDesc.rasterizerDescription.DepthBiasClamp = 0.f;
-	forwardStateDesc.rasterizerDescription.SlopeScaledDepthBias = 0.f;
-	forwardStateDesc.rasterizerDescription.DepthClipEnable = true;
-	forwardStateDesc.rasterizerDescription.MultisampleEnable = false;
-	forwardStateDesc.rasterizerDescription.AntialiasedLineEnable = false;
-	forwardStateDesc.rasterizerDescription.ForcedSampleCount = 0;
-	forwardStateDesc.rasterizerDescription.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
-
-	// Prepass depth.
-	forwardStateDesc.depthStencilDescription.DepthEnable = true;
-	forwardStateDesc.depthStencilDescription.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-	forwardStateDesc.depthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_EQUAL;
-	forwardStateDesc.depthStencilDescription.StencilEnable = false;
-	forwardStateDesc.depthStencilDescription.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
-	forwardStateDesc.depthStencilDescription.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
-	forwardStateDesc.depthStencilDescription.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
-	forwardStateDesc.depthStencilDescription.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
-
-	forwardStateDesc.topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-
-	pipelines.AddGraphicsState(device.get(), "ForwardOpaque", forwardStateDesc, false);
-
-	// Disable back face culling.
-	forwardStateDesc.rasterizerDescription.CullMode = D3D12_CULL_MODE_NONE;
-
-	// Transparency blending.
-	forwardStateDesc.blendDescription.AlphaToCoverageEnable = false;  // Not using MSAA.
-	forwardStateDesc.blendDescription.IndependentBlendEnable = false;  // Only rendering to a single render target, discard others.
-	forwardStateDesc.blendDescription.RenderTarget[0].BlendEnable = true;
-	forwardStateDesc.blendDescription.RenderTarget[0].LogicOpEnable = false;  // No special blend logic.
-	forwardStateDesc.blendDescription.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
-	forwardStateDesc.blendDescription.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
-	forwardStateDesc.blendDescription.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-	forwardStateDesc.blendDescription.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_SRC_ALPHA;
-	forwardStateDesc.blendDescription.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
-	forwardStateDesc.blendDescription.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
-	forwardStateDesc.blendDescription.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;
-	forwardStateDesc.blendDescription.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-
-	// Test against the prepass depth, but don't use EQUAL operation since we're not writing transparent object data
-	// into the buffer, so it would result in transparent pixels only being drawn when overlapping with an opaque pixel.
-	forwardStateDesc.depthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_GREATER;
-
-	pipelines.AddGraphicsState(device.get(), "ForwardTransparent", forwardStateDesc, false);
-
-	GraphicsPipelineStateDescription atmosphereStateDesc;
-
-	atmosphereStateDesc.vertexShader = { "Atmosphere/AtmosphereRender", "VSMain" };
-	atmosphereStateDesc.pixelShader = { "Atmosphere/AtmosphereRender", "PSMain" };
-
-	atmosphereStateDesc.blendDescription.AlphaToCoverageEnable = false;
-	atmosphereStateDesc.blendDescription.IndependentBlendEnable = false;
-	atmosphereStateDesc.blendDescription.RenderTarget[0].BlendEnable = false;
-	atmosphereStateDesc.blendDescription.RenderTarget[0].LogicOpEnable = false;
-	atmosphereStateDesc.blendDescription.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
-	atmosphereStateDesc.blendDescription.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;
-	atmosphereStateDesc.blendDescription.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-	atmosphereStateDesc.blendDescription.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-	atmosphereStateDesc.blendDescription.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
-	atmosphereStateDesc.blendDescription.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
-	atmosphereStateDesc.blendDescription.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;
-	atmosphereStateDesc.blendDescription.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-
-	atmosphereStateDesc.rasterizerDescription.FillMode = D3D12_FILL_MODE_SOLID;
-	atmosphereStateDesc.rasterizerDescription.CullMode = D3D12_CULL_MODE_BACK;
-	atmosphereStateDesc.rasterizerDescription.FrontCounterClockwise = false;
-	atmosphereStateDesc.rasterizerDescription.DepthBias = 0;
-	atmosphereStateDesc.rasterizerDescription.DepthBiasClamp = 0.f;
-	atmosphereStateDesc.rasterizerDescription.SlopeScaledDepthBias = 0.f;
-	atmosphereStateDesc.rasterizerDescription.DepthClipEnable = true;
-	atmosphereStateDesc.rasterizerDescription.MultisampleEnable = false;
-	atmosphereStateDesc.rasterizerDescription.AntialiasedLineEnable = false;
-	atmosphereStateDesc.rasterizerDescription.ForcedSampleCount = 0;
-	atmosphereStateDesc.rasterizerDescription.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
-
-	atmosphereStateDesc.depthStencilDescription.DepthEnable = true;
-	atmosphereStateDesc.depthStencilDescription.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-	atmosphereStateDesc.depthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL;  // Draw where the depth buffer is at the clear value.
-	atmosphereStateDesc.depthStencilDescription.StencilEnable = false;
-	atmosphereStateDesc.depthStencilDescription.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
-	atmosphereStateDesc.depthStencilDescription.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
-	atmosphereStateDesc.depthStencilDescription.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
-	atmosphereStateDesc.depthStencilDescription.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
-
-	atmosphereStateDesc.topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-
-	pipelines.AddGraphicsState(device.get(), "AtmosphereRender", atmosphereStateDesc, false);
-
-	GraphicsPipelineStateDescription postProcessStateDesc;
-
-	postProcessStateDesc.vertexShader = { "PostProcess", "VSMain" };
-	postProcessStateDesc.pixelShader = { "PostProcess", "PSMain" };
-
-	postProcessStateDesc.blendDescription.AlphaToCoverageEnable = false;
-	postProcessStateDesc.blendDescription.IndependentBlendEnable = false;
-	postProcessStateDesc.blendDescription.RenderTarget[0].BlendEnable = false;
-	postProcessStateDesc.blendDescription.RenderTarget[0].LogicOpEnable = false;
-	postProcessStateDesc.blendDescription.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
-	postProcessStateDesc.blendDescription.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;
-	postProcessStateDesc.blendDescription.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-	postProcessStateDesc.blendDescription.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-	postProcessStateDesc.blendDescription.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
-	postProcessStateDesc.blendDescription.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
-	postProcessStateDesc.blendDescription.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;
-	postProcessStateDesc.blendDescription.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-
-	postProcessStateDesc.rasterizerDescription.FillMode = D3D12_FILL_MODE_SOLID;
-	postProcessStateDesc.rasterizerDescription.CullMode = D3D12_CULL_MODE_BACK;
-	postProcessStateDesc.rasterizerDescription.FrontCounterClockwise = false;
-	postProcessStateDesc.rasterizerDescription.DepthBias = 0;
-	postProcessStateDesc.rasterizerDescription.DepthBiasClamp = 0.f;
-	postProcessStateDesc.rasterizerDescription.SlopeScaledDepthBias = 0.f;
-	postProcessStateDesc.rasterizerDescription.DepthClipEnable = true;
-	postProcessStateDesc.rasterizerDescription.MultisampleEnable = false;
-	postProcessStateDesc.rasterizerDescription.AntialiasedLineEnable = false;
-	postProcessStateDesc.rasterizerDescription.ForcedSampleCount = 0;
-	postProcessStateDesc.rasterizerDescription.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
-
-	postProcessStateDesc.depthStencilDescription.DepthEnable = false;
-	postProcessStateDesc.depthStencilDescription.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-	postProcessStateDesc.depthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_NEVER;
-	postProcessStateDesc.depthStencilDescription.StencilEnable = false;
-	postProcessStateDesc.depthStencilDescription.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
-	postProcessStateDesc.depthStencilDescription.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
-	postProcessStateDesc.depthStencilDescription.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
-	postProcessStateDesc.depthStencilDescription.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
-
-	postProcessStateDesc.topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-
-	pipelines.AddGraphicsState(device.get(), "PostProcess", postProcessStateDesc, true);
+	postProcessLayout = RenderPipelineLayout{}
+		.VertexShader({ "PostProcess", "VSMain" })
+		.PixelShader({ "PostProcess", "PSMain" })
+		.DepthEnabled(false);
 }
 
 BufferHandle Renderer::CreateLightBuffer(const entt::registry& registry)
@@ -417,7 +236,7 @@ void Renderer::Render(entt::registry& registry)
 		bindData.vertexAssemblyData.positionBuffer = resources.Get(meshResources.positionTag);
 		bindData.vertexAssemblyData.extraBuffer = resources.Get(meshResources.extraTag);
 
-		list.BindPipelineState(pipelines["Prepass"]);
+		list.BindPipeline(prepassLayout);
 
 		MeshSystem::Render(Renderer::Get(), registry, list, false, bindData);
 	});
@@ -479,23 +298,14 @@ void Renderer::Render(entt::registry& registry)
 		{
 			VGScopedGPUStat("Opaque", device->GetDirectContext(), list.Native());
 
-			list.BindPipelineState(pipelines["ForwardOpaque"]);
+			list.BindPipeline(forwardOpaqueLayout);
 
 			MeshSystem::Render(Renderer::Get(), registry, list, false, bindData);
-		}
-
-		{
-			VGScopedGPUStat("Transparent", device->GetDirectContext(), list.Native());
-
-			list.BindPipelineState(pipelines["ForwardTransparent"]);
-
-			// #TODO: Sort transparent mesh components by distance.
-			MeshSystem::Render(Renderer::Get(), registry, list, true, bindData);
 		}
 	});
 
 	// #TODO: Don't have this here.
-	atmosphere.Render(graph, atmosphereResources, pipelines, cameraBufferTag, depthStencilTag, outputHDRTag, registry);
+	atmosphere.Render(graph, atmosphereResources, cameraBufferTag, depthStencilTag, outputHDRTag, registry);
 
 	// #TODO: Don't have this here.
 	bloom.Render(graph, outputHDRTag);
@@ -508,7 +318,7 @@ void Renderer::Render(entt::registry& registry)
 	postProcessPass.Output(outputLDRTag, OutputBind::RTV, LoadType::Clear);
 	postProcessPass.Bind([&](CommandList& list, RenderPassResources& resources)
 	{
-		list.BindPipelineState(pipelines["PostProcess"]);
+		list.BindPipeline(postProcessLayout);
 		list.BindConstants("bindData", { resources.Get(outputHDRTag) });
 
 		list.DrawFullscreenQuad();

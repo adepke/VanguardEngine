@@ -18,16 +18,17 @@ void ImageBasedLighting::Initialize(RenderDevice* inDevice)
 {
 	device = inDevice;
 
-	ComputePipelineStateDescription convolutionState;
-	convolutionState.shader = { "IBL/Convolution", "IrradianceMain" };
-	convolutionState.macros.emplace_back("PREFILTER_LEVELS", prefilterLevels);
-	irradiancePrecompute.Build(*device, convolutionState);
+	irradiancePrecomputeLayout = RenderPipelineLayout{}
+		.ComputeShader({ "IBL/Convolution", "IrradianceMain" })
+		.Macro({ "PREFILTER_LEVELS", prefilterLevels });
 
-	convolutionState.shader = { "IBL/Convolution", "PrefilterMain" };
-	prefilterPrecompute.Build(*device, convolutionState);
+	prefilterPrecomputeLayout = RenderPipelineLayout{}
+		.ComputeShader({ "IBL/Convolution", "PrefilterMain" })
+		.Macro({ "PREFILTER_LEVELS", prefilterLevels });
 
-	convolutionState.shader = { "IBL/Convolution", "BRDFMain" };
-	brdfPrecompute.Build(*device, convolutionState);
+	brdfPrecomputeLayout = RenderPipelineLayout{}
+		.ComputeShader({ "IBL/Convolution", "BRDFMain" })
+		.Macro({ "PREFILTER_LEVELS", prefilterLevels });
 
 	TextureDescription irradianceDesc{
 		.bindFlags = BindFlag::ShaderResource | BindFlag::UnorderedAccess,
@@ -81,7 +82,7 @@ IBLResources ImageBasedLighting::UpdateLuts(RenderGraph& graph, RenderResource l
 			.UAV("", 0));
 		brdfPass.Bind([&, brdfTag](CommandList& list, RenderPassResources& resources)
 		{
-			list.BindPipelineState(brdfPrecompute);
+			list.BindPipeline(brdfPrecomputeLayout);
 
 			struct BindData
 			{
@@ -107,7 +108,7 @@ IBLResources ImageBasedLighting::UpdateLuts(RenderGraph& graph, RenderResource l
 		.UAV("array", 0));
 	irradiancePass.Bind([&, luminanceTexture, irradianceTag](CommandList& list, RenderPassResources& resources)
 	{
-		list.BindPipelineState(irradiancePrecompute);
+		list.BindPipeline(irradiancePrecomputeLayout);
 
 		struct BindData
 		{
@@ -139,7 +140,7 @@ IBLResources ImageBasedLighting::UpdateLuts(RenderGraph& graph, RenderResource l
 	prefilterPass.Write(prefilterTag, prefilterView);
 	prefilterPass.Bind([&, luminanceTexture, prefilterTag, prefilterViewNames](CommandList& list, RenderPassResources& resources)
 	{
-		list.BindPipelineState(prefilterPrecompute);
+		list.BindPipeline(prefilterPrecomputeLayout);
 			
 		struct BindData
 		{

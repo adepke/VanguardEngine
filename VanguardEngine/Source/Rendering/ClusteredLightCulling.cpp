@@ -71,7 +71,7 @@ void ClusteredLightCulling::ComputeClusterGrid(CommandList& list, uint32_t camer
 	bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
 	bindData.boundsBuffer = clusterBoundsBuffer;
 
-	list.BindPipelineState(boundsState);
+	list.BindPipeline(boundsLayout);
 	list.BindConstants("bindData", bindData);
 	list.Dispatch(std::ceil(gridInfo.x * gridInfo.y * gridInfo.z / 64.f), 1, 1);
 }
@@ -83,7 +83,7 @@ ClusteredLightCulling::~ClusteredLightCulling()
 
 void ClusteredLightCulling::Initialize(RenderDevice* inDevice)
 {
-	VGScopedCPUStat("Clustered Light Culling Initialize")
+	VGScopedCPUStat("Clustered Light Culling Initialize");
 
 	device = inDevice;
 
@@ -101,101 +101,34 @@ void ClusteredLightCulling::Initialize(RenderDevice* inDevice)
 
 	clusterBounds = device->GetResourceManager().Create(clusterBoundsDesc, VGText("Cluster bounds"));
 
-	ComputePipelineStateDescription boundsStateDesc;
-	boundsStateDesc.shader = { "Clusters/ClusterBounds.hlsl", "Main" };
-	boundsStateDesc.macros.emplace_back("FROXEL_SIZE", froxelSize);
-	boundsState.Build(*device, boundsStateDesc);
+	boundsLayout = RenderPipelineLayout{}
+		.ComputeShader({ "Clusters/ClusterBounds.hlsl", "Main" })
+		.Macro({ "FROXEL_SIZE", froxelSize });
 
-	GraphicsPipelineStateDescription depthCullStateDesc;
-	depthCullStateDesc.vertexShader = { "Clusters/ClusterDepthCulling.hlsl", "VSMain" };
-	depthCullStateDesc.pixelShader = { "Clusters/ClusterDepthCulling.hlsl", "PSMain" };
-	depthCullStateDesc.macros.emplace_back("FROXEL_SIZE", froxelSize);
-	depthCullStateDesc.blendDescription.AlphaToCoverageEnable = false;
-	depthCullStateDesc.blendDescription.IndependentBlendEnable = false;
-	depthCullStateDesc.blendDescription.RenderTarget[0].BlendEnable = false;
-	depthCullStateDesc.blendDescription.RenderTarget[0].LogicOpEnable = false;
-	depthCullStateDesc.blendDescription.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
-	depthCullStateDesc.blendDescription.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;
-	depthCullStateDesc.blendDescription.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-	depthCullStateDesc.blendDescription.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-	depthCullStateDesc.blendDescription.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
-	depthCullStateDesc.blendDescription.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
-	depthCullStateDesc.blendDescription.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;
-	depthCullStateDesc.blendDescription.RenderTarget[0].RenderTargetWriteMask = 0;
-	depthCullStateDesc.rasterizerDescription.FillMode = D3D12_FILL_MODE_SOLID;
-	depthCullStateDesc.rasterizerDescription.CullMode = D3D12_CULL_MODE_NONE;  // Transparents can't have back culling.
-	depthCullStateDesc.rasterizerDescription.FrontCounterClockwise = false;
-	depthCullStateDesc.rasterizerDescription.DepthBias = 0;
-	depthCullStateDesc.rasterizerDescription.DepthBiasClamp = 0.f;
-	depthCullStateDesc.rasterizerDescription.SlopeScaledDepthBias = 0.f;
-	depthCullStateDesc.rasterizerDescription.DepthClipEnable = true;
-	depthCullStateDesc.rasterizerDescription.MultisampleEnable = false;
-	depthCullStateDesc.rasterizerDescription.AntialiasedLineEnable = false;
-	depthCullStateDesc.rasterizerDescription.ForcedSampleCount = 0;
-	depthCullStateDesc.rasterizerDescription.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
-	depthCullStateDesc.depthStencilDescription.DepthEnable = true;
-	depthCullStateDesc.depthStencilDescription.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-	depthCullStateDesc.depthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL;  // Opaque and transparents receive lighting, so they cannot be culled.
-	depthCullStateDesc.depthStencilDescription.StencilEnable = false;
-	depthCullStateDesc.depthStencilDescription.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
-	depthCullStateDesc.depthStencilDescription.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
-	depthCullStateDesc.depthStencilDescription.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
-	depthCullStateDesc.depthStencilDescription.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
-	depthCullStateDesc.topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-	depthCullState.Build(*device, depthCullStateDesc, false);
+	depthCullLayout = RenderPipelineLayout{}
+		.VertexShader({ "Clusters/ClusterDepthCulling.hlsl", "VSMain" })
+		.PixelShader({ "Clusters/ClusterDepthCulling.hlsl", "PSMain" })
+		.CullMode(D3D12_CULL_MODE_NONE)  // Transparents can't have back culling.
+		.DepthEnabled(true, false, DepthTestFunction::GreaterEqual)  // Opaque and transparents receive lighting, so they cannot be culled.
+		.Macro({ "FROXEL_SIZE", froxelSize });
 
-	ComputePipelineStateDescription compactionStateDesc;
-	compactionStateDesc.shader = { "Clusters/ClusterCompaction.hlsl", "Main" };
-	compactionState.Build(*device, compactionStateDesc);
+	compactionLayout = RenderPipelineLayout{}
+		.ComputeShader({ "Clusters/ClusterCompaction.hlsl", "Main" });
 
-	ComputePipelineStateDescription binningStateDesc;
-	binningStateDesc.shader = { "Clusters/ClusterLightBinning.hlsl", "Main" };
-	binningStateDesc.macros.emplace_back("MAX_LIGHTS_PER_FROXEL", maxLightsPerFroxel);
-	binningState.Build(*device, binningStateDesc);
+	binningLayout = RenderPipelineLayout{}
+		.ComputeShader({ "Clusters/ClusterLightBinning.hlsl", "Main" })
+		.Macro({ "MAX_LIGHTS_PER_FROXEL", maxLightsPerFroxel });
 
-	ComputePipelineStateDescription indirectGenerationStateDesc;
-	indirectGenerationStateDesc.shader = { "Clusters/ClusterIndirectBufferGeneration.hlsl", "Main" };
-	indirectGenerationState.Build(*device, indirectGenerationStateDesc);
+	indirectGenerationLayout = RenderPipelineLayout{}
+		.ComputeShader({ "Clusters/ClusterIndirectBufferGeneration.hlsl", "Main" });
 
 #if ENABLE_EDITOR
-	GraphicsPipelineStateDescription debugOverlayStateDesc{};
-	debugOverlayStateDesc.vertexShader = { "Clusters/ClusterDebugOverlay.hlsl", "VSMain" };
-	debugOverlayStateDesc.pixelShader = { "Clusters/ClusterDebugOverlay.hlsl", "PSMain" };
-	debugOverlayStateDesc.macros.emplace_back("FROXEL_SIZE", froxelSize);
-	debugOverlayStateDesc.macros.emplace_back("MAX_LIGHTS_PER_FROXEL", maxLightsPerFroxel);
-	debugOverlayStateDesc.blendDescription.AlphaToCoverageEnable = false;
-	debugOverlayStateDesc.blendDescription.IndependentBlendEnable = false;
-	debugOverlayStateDesc.blendDescription.RenderTarget[0].BlendEnable = false;
-	debugOverlayStateDesc.blendDescription.RenderTarget[0].LogicOpEnable = false;
-	debugOverlayStateDesc.blendDescription.RenderTarget[0].SrcBlend = D3D12_BLEND_ONE;
-	debugOverlayStateDesc.blendDescription.RenderTarget[0].DestBlend = D3D12_BLEND_ZERO;
-	debugOverlayStateDesc.blendDescription.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-	debugOverlayStateDesc.blendDescription.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-	debugOverlayStateDesc.blendDescription.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_ZERO;
-	debugOverlayStateDesc.blendDescription.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
-	debugOverlayStateDesc.blendDescription.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;
-	debugOverlayStateDesc.blendDescription.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-	debugOverlayStateDesc.rasterizerDescription.FillMode = D3D12_FILL_MODE_SOLID;
-	debugOverlayStateDesc.rasterizerDescription.CullMode = D3D12_CULL_MODE_BACK;
-	debugOverlayStateDesc.rasterizerDescription.FrontCounterClockwise = false;
-	debugOverlayStateDesc.rasterizerDescription.DepthBias = 0;
-	debugOverlayStateDesc.rasterizerDescription.DepthBiasClamp = 0.f;
-	debugOverlayStateDesc.rasterizerDescription.SlopeScaledDepthBias = 0.f;
-	debugOverlayStateDesc.rasterizerDescription.DepthClipEnable = true;
-	debugOverlayStateDesc.rasterizerDescription.MultisampleEnable = false;
-	debugOverlayStateDesc.rasterizerDescription.AntialiasedLineEnable = false;
-	debugOverlayStateDesc.rasterizerDescription.ForcedSampleCount = 0;
-	debugOverlayStateDesc.rasterizerDescription.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
-	debugOverlayStateDesc.depthStencilDescription.DepthEnable = false;
-	debugOverlayStateDesc.depthStencilDescription.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-	debugOverlayStateDesc.depthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_NEVER;  // Opaque and transparents receive lighting, so they cannot be culled.
-	debugOverlayStateDesc.depthStencilDescription.StencilEnable = false;
-	debugOverlayStateDesc.depthStencilDescription.StencilReadMask = D3D12_DEFAULT_STENCIL_READ_MASK;
-	debugOverlayStateDesc.depthStencilDescription.StencilWriteMask = D3D12_DEFAULT_STENCIL_WRITE_MASK;
-	debugOverlayStateDesc.depthStencilDescription.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
-	debugOverlayStateDesc.depthStencilDescription.BackFace.StencilFunc = D3D12_COMPARISON_FUNC_NEVER;
-	debugOverlayStateDesc.topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-	debugOverlayState.Build(*device, debugOverlayStateDesc, false);
+	debugOverlayLayout = RenderPipelineLayout{}
+		.VertexShader({ "Clusters/ClusterDebugOverlay.hlsl", "VSMain" })
+		.PixelShader({ "Clusters/ClusterDebugOverlay.hlsl", "PSMain" })
+		.DepthEnabled(false)
+		.Macro({ "FROXEL_SIZE", froxelSize })
+		.Macro({ "MAX_LIGHTS_PER_FROXEL", maxLightsPerFroxel });
 #endif
 
 	std::vector<D3D12_INDIRECT_ARGUMENT_DESC> binningIndirectArgDescs;
@@ -275,7 +208,7 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 		bindData.dimensions[2] = gridInfo.z;
 		bindData.logY = 1.f / std::log(gridInfo.depthFactor);
 
-		list.BindPipelineState(depthCullState);
+		list.BindPipeline(depthCullLayout);
 
 		MeshSystem::Render(Renderer::Get(), registry, list, false, bindData);
 	});
@@ -299,7 +232,7 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 	{
 		auto& denseClustersComponent = device->GetResourceManager().Get(resources.GetBuffer(denseClustersTag));
 
-		list.BindPipelineState(compactionState);
+		list.BindPipeline(compactionLayout);
 
 		struct BindData
 		{
@@ -335,7 +268,7 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 		indirectBindData.indirectBuffer = resources.Get(indirectBufferTag);
 
 		// Generate the indirect argument buffer.
-		list.BindPipelineState(indirectGenerationState);
+		list.BindPipeline(indirectGenerationLayout);
 		list.BindConstants("bindData", indirectBindData);
 		list.Dispatch(1, 1, 1);
 	});
@@ -381,7 +314,7 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 		list.UAVBarrier(resources.GetBuffer(lightInfoTag));
 		list.FlushBarriers();
 
-		list.BindPipelineState(binningState);
+		list.BindPipeline(binningLayout);
 
 		auto& lightComponent = device->GetResourceManager().Get(resources.GetBuffer(lightsBuffer));
 
@@ -429,7 +362,7 @@ RenderResource ClusteredLightCulling::RenderDebugOverlay(RenderGraph& graph, Ren
 	overlayPass.Output(clusterDebugOverlayTag, OutputBind::RTV, LoadType::Preserve);
 	overlayPass.Bind([&, lightInfoBuffer, clusterVisibilityBuffer](CommandList& list, RenderPassResources& resources)
 	{
-		list.BindPipelineState(debugOverlayState);
+		list.BindPipeline(debugOverlayLayout);
 
 		struct BindData
 		{
