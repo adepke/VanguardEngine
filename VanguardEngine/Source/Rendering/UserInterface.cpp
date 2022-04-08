@@ -6,7 +6,6 @@
 #include <Rendering/Resource.h>
 #include <Rendering/ResourceManager.h>
 #include <Rendering/Renderer.h>
-#include <Rendering/PipelineState.h>
 #include <Core/Config.h>
 #include <Core/Input.h>
 #include <Window/WindowFrame.h>
@@ -58,7 +57,7 @@ XMMATRIX UserInterfaceManager::SetupRenderState(ImDrawData* drawData, CommandLis
 	vp.TopLeftX = vp.TopLeftY = 0.0f;
 	list.Native()->RSSetViewports(1, &vp);
 
-	list.BindPipelineState(*pipeline);
+	list.BindPipeline(pipelineLayout);
 
 	auto& indexBuffer = device->GetResourceManager().Get(resources->indexBuffer);
 
@@ -122,57 +121,34 @@ void UserInterfaceManager::CreateDeviceObjects()
 {
 	VGScopedCPUStat("Create Device Objects");
 
-	if (pipeline)
+	if (initialized)
 		InvalidateDeviceObjects();
 
-	pipeline = std::make_unique<PipelineState>();
-
-	GraphicsPipelineStateDescription description{};
-	description.vertexShader = { "UserInterface", "VSMain" };
-	description.pixelShader = { "UserInterface", "PSMain" };
-	description.blendDescription.AlphaToCoverageEnable = false;
-	description.blendDescription.RenderTarget[0].BlendEnable = true;
-	description.blendDescription.RenderTarget[0].SrcBlend = D3D12_BLEND_SRC_ALPHA;
-	description.blendDescription.RenderTarget[0].DestBlend = D3D12_BLEND_INV_SRC_ALPHA;
-	description.blendDescription.RenderTarget[0].BlendOp = D3D12_BLEND_OP_ADD;
-	description.blendDescription.RenderTarget[0].SrcBlendAlpha = D3D12_BLEND_ONE;
-	description.blendDescription.RenderTarget[0].DestBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA;
-	description.blendDescription.RenderTarget[0].BlendOpAlpha = D3D12_BLEND_OP_ADD;
-	description.blendDescription.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
-	description.rasterizerDescription.FillMode = D3D12_FILL_MODE_SOLID;
-	description.rasterizerDescription.CullMode = D3D12_CULL_MODE_NONE;
-	description.rasterizerDescription.FrontCounterClockwise = false;
-	description.rasterizerDescription.DepthBias = D3D12_DEFAULT_DEPTH_BIAS;
-	description.rasterizerDescription.DepthBiasClamp = D3D12_DEFAULT_DEPTH_BIAS_CLAMP;
-	description.rasterizerDescription.SlopeScaledDepthBias = D3D12_DEFAULT_SLOPE_SCALED_DEPTH_BIAS;
-	description.rasterizerDescription.DepthClipEnable = true;
-	description.rasterizerDescription.MultisampleEnable = false;
-	description.rasterizerDescription.AntialiasedLineEnable = false;
-	description.rasterizerDescription.ForcedSampleCount = 0;
-	description.rasterizerDescription.ConservativeRaster = D3D12_CONSERVATIVE_RASTERIZATION_MODE_OFF;
-	description.depthStencilDescription.DepthEnable = false;
-	description.depthStencilDescription.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;
-	description.depthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-	description.depthStencilDescription.StencilEnable = false;
-	description.depthStencilDescription.FrontFace.StencilFailOp = D3D12_STENCIL_OP_KEEP;
-	description.depthStencilDescription.FrontFace.StencilDepthFailOp = D3D12_STENCIL_OP_KEEP;
-	description.depthStencilDescription.FrontFace.StencilPassOp = D3D12_STENCIL_OP_KEEP;
-	description.depthStencilDescription.FrontFace.StencilFunc = D3D12_COMPARISON_FUNC_ALWAYS;
-	description.depthStencilDescription.BackFace = description.depthStencilDescription.FrontFace;
-	description.topology = D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST;
-
-	pipeline->Build(*device, description, true);
+	pipelineLayout = RenderPipelineLayout{}
+		.VertexShader({ "UserInterface", "VSMain" })
+		.PixelShader({ "UserInterface", "PSMain" })
+		.BlendMode(true, {
+			.srcBlend = D3D12_BLEND_SRC_ALPHA,
+			.destBlend = D3D12_BLEND_INV_SRC_ALPHA,
+			.blendOp = D3D12_BLEND_OP_ADD,
+			.srcBlendAlpha = D3D12_BLEND_ONE,
+			.destBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA,
+			.blendOpAlpha = D3D12_BLEND_OP_ADD
+		})
+		.DepthEnabled(false);
 
 	CreateFontTexture();
+
+	initialized = true;
 }
 
 void UserInterfaceManager::InvalidateDeviceObjects()
 {
 	VGScopedCPUStat("Invalidate Device Objects");
 
+	initialized = false;
 	vertexShaderBlob = {};
 	pixelShaderBlob = {};
-	pipeline.reset();
 
 	ImGuiIO& io = ImGui::GetIO();
 	io.Fonts->TexID = NULL; // We copied g_pFontTextureView to io.Fonts->TexID so let's clear that as well.
@@ -248,7 +224,7 @@ void UserInterfaceManager::NewFrame()
 {
 	VGScopedCPUStat("UI New Frame");
 
-	if (!pipeline)
+	if (!initialized)
 		CreateDeviceObjects();
 
 	auto& io = ImGui::GetIO();

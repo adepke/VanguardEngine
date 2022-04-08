@@ -4,7 +4,7 @@
 
 #include <Rendering/Base.h>
 #include <Rendering/ResourceHandle.h>
-#include <Rendering/PipelineState.h>
+#include <Rendering/RenderPipeline.h>
 
 #include <Core/Windows/DirectX12Minimal.h>
 
@@ -23,11 +23,12 @@ struct UserInterfaceState
 class UserInterfaceManager
 {
 private:
+	bool initialized = false;
 	RenderDevice* device;
 
 	ResourcePtr<ID3D10Blob> vertexShaderBlob;
 	ResourcePtr<ID3D10Blob> pixelShaderBlob;
-	std::unique_ptr<PipelineState> pipeline;
+	RenderPipelineLayout pipelineLayout;
 
 private:
 	XMMATRIX SetupRenderState(ImDrawData* drawData, CommandList& list, FrameResources* resources);
