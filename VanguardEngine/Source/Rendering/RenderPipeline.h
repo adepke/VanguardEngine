@@ -14,6 +14,16 @@
 #include <string>
 #include <string_view>
 
+struct BlendMode
+{
+	D3D12_BLEND srcBlend = D3D12_BLEND_ONE;
+	D3D12_BLEND destBlend = D3D12_BLEND_ZERO;
+	D3D12_BLEND_OP blendOp = D3D12_BLEND_OP_ADD;
+	D3D12_BLEND srcBlendAlpha = D3D12_BLEND_ONE;
+	D3D12_BLEND destBlendAlpha = D3D12_BLEND_ZERO;
+	D3D12_BLEND_OP blendOpAlpha = D3D12_BLEND_OP_ADD;
+};
+
 // Don't provide less function since we have an inverse depth buffer.
 enum class DepthTestFunction
 {
@@ -120,6 +130,22 @@ public:
 	{
 		InitDefaultCompute();
 		std::get<ComputeDesc>(description).shader = shader;
+		return *this;
+	}
+	RenderPipelineLayout& BlendMode(bool enabled, BlendMode mode)
+	{
+		InitDefaultGraphics();
+		auto& desc = std::get<GraphicsDesc>(description).blendDescription;
+		desc.RenderTarget[0].BlendEnable = enabled;
+		desc.RenderTarget[0].LogicOpEnable = false;
+		desc.RenderTarget[0].SrcBlend = mode.srcBlend;
+		desc.RenderTarget[0].DestBlend = mode.destBlend;
+		desc.RenderTarget[0].BlendOp = mode.blendOp;
+		desc.RenderTarget[0].SrcBlendAlpha = mode.srcBlendAlpha;
+		desc.RenderTarget[0].DestBlendAlpha = mode.destBlendAlpha;
+		desc.RenderTarget[0].BlendOpAlpha = mode.blendOpAlpha;
+		desc.RenderTarget[0].LogicOp = D3D12_LOGIC_OP_NOOP;
+		desc.RenderTarget[0].RenderTargetWriteMask = D3D12_COLOR_WRITE_ENABLE_ALL;
 		return *this;
 	}
 	RenderPipelineLayout& FillMode(D3D12_FILL_MODE mode)
