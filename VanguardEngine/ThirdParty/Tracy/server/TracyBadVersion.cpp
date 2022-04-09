@@ -3,6 +3,7 @@
 #include "IconsFontAwesome5.h"
 #include "TracyBadVersion.hpp"
 #include "TracyImGui.hpp"
+#include "TracyWeb.hpp"
 
 namespace tracy
 {
@@ -10,7 +11,7 @@ namespace tracy
 namespace detail
 {
 
-void BadVersionImpl( BadVersionState& badVer )
+void BadVersionImpl( BadVersionState& badVer, ImFont* big )
 {
     assert( badVer.state != BadVersionState::Ok );
 
@@ -34,8 +35,10 @@ void BadVersionImpl( BadVersionState& badVer )
     }
     if( ImGui::BeginPopupModal( "Bad file", nullptr, ImGuiWindowFlags_AlwaysAutoResize ) )
     {
+        if( big ) ImGui::PushFont( big );
         TextCentered( ICON_FA_EXCLAMATION_TRIANGLE );
-        ImGui::Text( "The file you are trying to open is not a tracy dump." );
+        if( big ) ImGui::PopFont();
+        ImGui::Text( "The file you are trying to open is not a Tracy dump." );
         ImGui::Separator();
         if( ImGui::Button( "Oops" ) )
         {
@@ -46,7 +49,9 @@ void BadVersionImpl( BadVersionState& badVer )
     }
     if( ImGui::BeginPopupModal( "File read error", nullptr, ImGuiWindowFlags_AlwaysAutoResize ) )
     {
+        if( big ) ImGui::PushFont( big );
         TextCentered( ICON_FA_EXCLAMATION_TRIANGLE );
+        if( big ) ImGui::PopFont();
         ImGui::Text( "The file you are trying to open cannot be mapped to memory." );
         ImGui::Separator();
         if( ImGui::Button( "OK" ) )
@@ -58,10 +63,19 @@ void BadVersionImpl( BadVersionState& badVer )
     }
     if( ImGui::BeginPopupModal( "Unsupported file version", nullptr, ImGuiWindowFlags_AlwaysAutoResize ) )
     {
+        if( big ) ImGui::PushFont( big );
         TextCentered( ICON_FA_CLOUD_DOWNLOAD_ALT );
-        ImGui::Text( "The file you are trying to open is unsupported.\nYou should update to tracy %i.%i.%i or newer and try again.", badVer.version >> 16, ( badVer.version >> 8 ) & 0xFF, badVer.version & 0xFF );
+        if( big ) ImGui::PopFont();
+        ImGui::Text( "The file you are trying to open is unsupported.\nYou should update to Tracy %i.%i.%i or newer and try again.", badVer.version >> 16, ( badVer.version >> 8 ) & 0xFF, badVer.version & 0xFF );
         ImGui::Separator();
-        if( ImGui::Button( "I understand" ) )
+        if( ImGui::Button( ICON_FA_DOWNLOAD " Download update" ) )
+        {
+            tracy::OpenWebpage( "https://github.com/wolfpld/tracy/releases" );
+            ImGui::CloseCurrentPopup();
+            badVer.state = BadVersionState::Ok;
+        }
+        ImGui::SameLine();
+        if( ImGui::Button( "Maybe later" ) )
         {
             ImGui::CloseCurrentPopup();
             badVer.state = BadVersionState::Ok;
@@ -70,7 +84,9 @@ void BadVersionImpl( BadVersionState& badVer )
     }
     if( ImGui::BeginPopupModal( "Legacy file version", nullptr, ImGuiWindowFlags_AlwaysAutoResize ) )
     {
+        if( big ) ImGui::PushFont( big );
         TextCentered( ICON_FA_GHOST );
+        if( big ) ImGui::PopFont();
         ImGui::Text( "You are trying to open a file which was created by legacy version %i.%i.%i.\nUse the update utility from an older version of the profiler to convert the file to a supported version.", badVer.version >> 16, ( badVer.version >> 8 ) & 0xFF, badVer.version & 0xFF );
         ImGui::Separator();
         if( ImGui::Button( "Maybe I don't need it" ) )

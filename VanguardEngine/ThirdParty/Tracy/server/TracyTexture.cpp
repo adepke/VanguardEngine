@@ -1,5 +1,6 @@
-#include <GL/gl3w.h>
+#include <inttypes.h>
 
+#include "../profiler/src/imgui_impl_opengl3_loader.h"
 #include "TracyTexture.hpp"
 
 #ifndef COMPRESSED_RGB_S3TC_DXT1_EXT
@@ -21,10 +22,10 @@ void* MakeTexture()
     return (void*)(intptr_t)tex;
 }
 
-void FreeTexture( void* _tex, void(*runOnMainThread)(std::function<void()>) )
+void FreeTexture( void* _tex, void(*runOnMainThread)(std::function<void()>, bool) )
 {
     auto tex = (GLuint)(intptr_t)_tex;
-    runOnMainThread( [tex] { glDeleteTextures( 1, &tex ); } );
+    runOnMainThread( [tex] { glDeleteTextures( 1, &tex ); }, false );
 }
 
 void UpdateTexture( void* _tex, const char* data, int w, int h )

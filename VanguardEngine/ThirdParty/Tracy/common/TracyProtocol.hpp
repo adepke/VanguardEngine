@@ -9,7 +9,7 @@ namespace tracy
 
 constexpr unsigned Lz4CompressBound( unsigned isize ) { return isize + ( isize / 255 ) + 16; }
 
-enum : uint32_t { ProtocolVersion = 46 };
+enum : uint32_t { ProtocolVersion = 55 };
 enum : uint16_t { BroadcastVersion = 2 };
 
 using lz4sz_t = uint32_t;
@@ -54,7 +54,8 @@ enum ServerQuery : uint8_t
     ServerQueryCodeLocation,
     ServerQuerySourceCode,
     ServerQueryDataTransfer,
-    ServerQueryDataTransferPart
+    ServerQueryDataTransferPart,
+    ServerQueryFiberName
 };
 
 struct ServerQueryPacket
@@ -77,6 +78,18 @@ enum CpuArchitecture : uint8_t
 };
 
 
+struct WelcomeFlag
+{
+    enum _t : uint8_t
+    {
+        OnDemand        = 1 << 0,
+        IsApple         = 1 << 1,
+        CodeTransfer    = 1 << 2,
+        CombineSamples  = 1 << 3,
+        IdentifySamples = 1 << 4,
+    };
+};
+
 struct WelcomeMessage
 {
     double timerMul;
@@ -88,10 +101,8 @@ struct WelcomeMessage
     uint64_t exectime;
     uint64_t pid;
     int64_t samplingPeriod;
-    uint8_t onDemand;
-    uint8_t isApple;
+    uint8_t flags;
     uint8_t cpuArch;
-    uint8_t codeTransfer;
     char cpuManufacturer[12];
     uint32_t cpuId;
     char programName[WelcomeMessageProgramNameSize];

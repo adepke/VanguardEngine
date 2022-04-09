@@ -49,6 +49,12 @@ static const ImVec4 SyntaxColorsDimmed[] = {
     { 0.21f, 0.69f, 0.89f, 0.6f },    // special
 };
 
+
+[[maybe_unused]] static inline float GetScale()
+{
+    return ImGui::GetTextLineHeight() / 15.f;
+}
+
 [[maybe_unused]] static inline void TextCentered( const char* text )
 {
     const auto tw = ImGui::CalcTextSize( text ).x;
@@ -89,7 +95,7 @@ static const ImVec4 SyntaxColorsDimmed[] = {
     ImGui::TextUnformatted( "" );
     auto draw = ImGui::GetWindowDrawList();
     const auto wpos = ImGui::GetWindowPos();
-    const auto ty = ImGui::GetFontSize();
+    const auto ty = ImGui::GetTextLineHeight();
     const auto h = ImGui::GetCursorPosY() - ty * 0.5f;
     const auto w = ImGui::GetWindowWidth();
     draw->AddCircleFilled( wpos + ImVec2( w * 0.5f - ty, h ), ty * ( 0.15f + 0.2f * ( pow( cos( time * 3.5f + 0.3f ), 16.f ) ) ), 0xFFBBBBBB, 12 );
@@ -116,9 +122,9 @@ static const ImVec4 SyntaxColorsDimmed[] = {
 {
     if( disabled )
     {
-        ImGui::PushStyleColor( ImGuiCol_Button, (ImVec4)ImColor( 0.3f, 0.3f, 0.3f, 1.0f ) );
-        ImGui::ButtonEx( label, ImVec2( 0, 0 ), ImGuiButtonFlags_Disabled );
-        ImGui::PopStyleColor( 1 );
+        ImGui::BeginDisabled();
+        ImGui::Button( label );
+        ImGui::EndDisabled();
         return false;
     }
     else
@@ -131,13 +137,9 @@ static const ImVec4 SyntaxColorsDimmed[] = {
 {
     if( disabled )
     {
-        ImGui::PushStyleColor( ImGuiCol_Button, (ImVec4)ImColor( 0.3f, 0.3f, 0.3f, 1.0f ) );
-        ImGuiContext& g = *GImGui;
-        float backup_padding_y = g.Style.FramePadding.y;
-        g.Style.FramePadding.y = 0.0f;
-        ImGui::ButtonEx( label, ImVec2( 0, 0 ), ImGuiButtonFlags_Disabled | ImGuiButtonFlags_AlignTextBaseLine );
-        g.Style.FramePadding.y = backup_padding_y;
-        ImGui::PopStyleColor( 1 );
+        ImGui::BeginDisabled();
+        ImGui::SmallButton( label );
+        ImGui::EndDisabled();
         return false;
     }
     else
@@ -148,7 +150,8 @@ static const ImVec4 SyntaxColorsDimmed[] = {
 
 [[maybe_unused]] static inline void DrawTextContrast( ImDrawList* draw, const ImVec2& pos, uint32_t color, const char* text )
 {
-    draw->AddText( pos + ImVec2( 1, 1 ), 0xAA000000, text );
+    const auto scale = round( GetScale() );
+    draw->AddText( pos + ImVec2( scale, scale ), 0xAA000000, text );
     draw->AddText( pos, color, text );
 }
 
@@ -243,6 +246,20 @@ static const ImVec4 SyntaxColorsDimmed[] = {
 {
     const ImVec2 data[2] = { v1, v2 };
     draw->AddPolyline( data, 2, col, 0, thickness );
+}
+
+[[maybe_unused]] static tracy_force_inline void DrawLine( ImDrawList* draw, const ImVec2& v1, const ImVec2& v2, const ImVec2& v3, uint32_t col, float thickness = 1.0f )
+{
+    const ImVec2 data[3] = { v1, v2, v3 };
+    draw->AddPolyline( data, 3, col, 0, thickness );
+}
+
+[[maybe_unused]] static tracy_force_inline void TooltipIfHovered( const char* text )
+{
+    if( !ImGui::IsItemHovered() ) return;
+    ImGui::BeginTooltip();
+    ImGui::TextUnformatted( text );
+    ImGui::EndTooltip();
 }
 
 }

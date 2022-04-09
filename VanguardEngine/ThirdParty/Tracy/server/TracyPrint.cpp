@@ -1,5 +1,5 @@
 #ifdef _MSC_VER
-#  pragma warning( disable: 4244 )  // conversion from don't care to whatever, possible loss of data 
+#  pragma warning( disable: 4244 )  // conversion from don't care to whatever, possible loss of data
 #endif
 #ifdef __MINGW32__
 #  define __STDC_FORMAT_MACROS
@@ -257,9 +257,16 @@ const char* TimeToStringExact( int64_t _ns )
         const auto h = int64_t( ns / ( 1000ll * 1000 * 1000 * 60 * 60 ) - d * 24 );
         const auto m = int64_t( ns / ( 1000ll * 1000 * 1000 * 60 ) - d * ( 60 * 24 ) - h * 60 );
         const auto s = int64_t( ns / ( 1000ll * 1000 * 1000 ) - d * ( 60 * 60 * 24 ) - h * ( 60 * 60 ) - m * 60 );
-        assert( d < 100 );
-        PrintTinyInt( buf, d );
-        *buf++ = 'd';
+        if( d < 100 )
+        {
+            PrintTinyInt( buf, d );
+            *buf++ = 'd';
+        }
+        else
+        {
+            memcpy( buf, "100+d", 5 );
+            buf += 5;
+        }
         PrintTinyInt0( buf, h );
         *buf++ = ':';
         PrintTinyInt0( buf, m );
@@ -408,6 +415,20 @@ const char* MemSizeToString( int64_t val )
     *ptr++ = 'B';
     *ptr++ = '\0';
 
+    return buf;
+}
+
+const char* LocationToString( const char* fn, uint32_t line )
+{
+    if( line == 0 ) return fn;
+
+    enum { Pool = 8 };
+    static char bufpool[Pool][4096];
+    static int bufsel = 0;
+    char* buf = bufpool[bufsel];
+    bufsel = ( bufsel + 1 ) % Pool;
+
+    sprintf( buf, "%s:%i", fn, line );
     return buf;
 }
 

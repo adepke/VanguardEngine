@@ -14,10 +14,10 @@
 #include <sys/stat.h>
 
 #include "../../common/TracyProtocol.hpp"
+#include "../../common/TracyStackFrames.hpp"
 #include "../../server/TracyFileWrite.hpp"
 #include "../../server/TracyMemory.hpp"
 #include "../../server/TracyPrint.hpp"
-#include "../../server/TracyStackFrames.hpp"
 #include "../../server/TracyWorker.hpp"
 
 #ifdef _WIN32
@@ -34,7 +34,7 @@ void SigInt( int )
 
 [[noreturn]] void Usage()
 {
-    printf( "Usage: capture -o output.tracy [-a address] [-p port] [-f]\n" );
+    printf( "Usage: capture -o output.tracy [-a address] [-p port] [-f] [-s seconds]\n" );
     exit( 1 );
 }
 
@@ -52,9 +52,10 @@ int main( int argc, char** argv )
     const char* address = "127.0.0.1";
     const char* output = nullptr;
     int port = 8086;
+    int seconds = -1;
 
     int c;
-    while( ( c = getopt( argc, argv, "a:o:p:f" ) ) != -1 )
+    while( ( c = getopt( argc, argv, "a:o:p:fs:" ) ) != -1 )
     {
         switch( c )
         {
@@ -69,6 +70,9 @@ int main( int argc, char** argv )
             break;
         case 'f':
             overwrite = true;
+            break;
+        case 's':
+            seconds = atoi (optarg);
             break;
         default:
             Usage();
@@ -137,6 +141,7 @@ int main( int argc, char** argv )
         {
             worker.Disconnect();
             disconnect = false;
+            break;
         }
 
         lock.lock();
@@ -153,7 +158,7 @@ int main( int argc, char** argv )
         {
             printf( "\33[2K\r\033[36;1m%7.2f Mbps", mbps );
         }
-        printf( " \033[0m /\033[36;1m%5.1f%% \033[0m=\033[33;1m%7.2f Mbps \033[0m| \033[33mNet: \033[32m%s \033[0m| \033[33mMem: \033[31;1m%s\033[0m | \033[33mTime: %s\033[0m",
+        printf( " \033[0m /\033[36;1m%5.1f%% \033[0m=\033[33;1m%7.2f Mbps \033[0m| \033[33mTx: \033[32m%s \033[0m| \033[31;1m%s\033[0m | \033[33m%s\033[0m",
             compRatio * 100.f,
             mbps / compRatio,
             tracy::MemSizeToString( netTotal ),
@@ -162,6 +167,14 @@ int main( int argc, char** argv )
         fflush( stdout );
 
         std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
+        if( seconds != -1 )
+        {
+            const auto dur = std::chrono::high_resolution_clock::now() - t0;
+            if( std::chrono::duration_cast<std::chrono::seconds>(dur).count() >= seconds )
+            {
+                disconnect = true;
+            }
+        }
     }
     const auto t1 = std::chrono::high_resolution_clock::now();
 
@@ -170,6 +183,10 @@ int main( int argc, char** argv )
     {
         printf( "\n\033[31;1mInstrumentation failure: %s\033[0m", tracy::Worker::GetFailureString( failure ) );
         auto& fd = worker.GetFailureData();
+        if( !fd.message.empty() )
+        {
+            printf( "\nContext: %s", fd.message.c_str() );
+        }
         if( fd.callstack != 0 )
         {
             printf( "\n\033[1mFailure callstack:\033[0m\n" );

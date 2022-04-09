@@ -95,6 +95,22 @@ private:
     uint8_t m_idx[3];
 };
 
+struct StringIdxHasher
+{
+    size_t operator()( const StringIdx& key ) const
+    {
+        return charutil::hash( (const char*)&key, sizeof( StringIdx ) );
+    }
+};
+
+struct StringIdxComparator
+{
+    bool operator()( const StringIdx& lhs, const StringIdx& rhs ) const
+    {
+        return memcmp( &lhs, &rhs, sizeof( StringIdx ) ) == 0;
+    }
+};
+
 class Int24
 {
 public:
@@ -133,6 +149,11 @@ public:
         SetVal( val );
     }
 
+    tracy_force_inline void Clear()
+    {
+        memset( m_val, 0, 6 );
+    }
+
     tracy_force_inline void SetVal( int64_t val )
     {
         memcpy( m_val, &val, 4 );
@@ -157,6 +178,8 @@ public:
 private:
     uint8_t m_val[6];
 };
+
+struct Int48Sort { bool operator()( const Int48& lhs, const Int48& rhs ) { return lhs.Val() < rhs.Val(); }; };
 
 
 struct SourceLocationBase
@@ -241,14 +264,51 @@ struct SampleData
 
 enum { SampleDataSize = sizeof( SampleData ) };
 
+struct SampleDataSort { bool operator()( const SampleData& lhs, const SampleData& rhs ) { return lhs.time.Val() < rhs.time.Val(); }; };
+
 
 struct SampleDataRange
 {
     Int48 time;
+    uint16_t thread;
     CallstackFrameId ip;
 };
 
 enum { SampleDataRangeSize = sizeof( SampleDataRange ) };
+
+
+struct HwSampleData
+{
+    SortedVector<Int48, Int48Sort> cycles;
+    SortedVector<Int48, Int48Sort> retired;
+    SortedVector<Int48, Int48Sort> cacheRef;
+    SortedVector<Int48, Int48Sort> cacheMiss;
+    SortedVector<Int48, Int48Sort> branchRetired;
+    SortedVector<Int48, Int48Sort> branchMiss;
+
+    bool is_sorted() const
+    {
+        return
+            cycles.is_sorted() &&
+            retired.is_sorted() &&
+            cacheRef.is_sorted() &&
+            cacheMiss.is_sorted() &&
+            branchRetired.is_sorted() &&
+            branchMiss.is_sorted();
+    }
+
+    void sort()
+    {
+        if( !cycles.is_sorted() ) cycles.sort();
+        if( !retired.is_sorted() ) retired.sort();
+        if( !cacheRef.is_sorted() ) cacheRef.sort();
+        if( !cacheMiss.is_sorted() ) cacheMiss.sort();
+        if( !branchRetired.is_sorted() ) branchRetired.sort();
+        if( !branchMiss.is_sorted() ) branchMiss.sort();
+    }
+};
+
+enum { HwSampleDataSize = sizeof( HwSampleData ) };
 
 
 struct LockEvent
@@ -399,15 +459,27 @@ struct CallstackFrameData
 enum { CallstackFrameDataSize = sizeof( CallstackFrameData ) };
 
 
-struct CallstackFrameTree
+struct MemCallstackFrameTree
 {
-    CallstackFrameTree( CallstackFrameId id ) : frame( id ), alloc( 0 ), count( 0 ) {}
+    MemCallstackFrameTree( CallstackFrameId id ) : frame( id ), alloc( 0 ), count( 0 ) {}
 
     CallstackFrameId frame;
     uint64_t alloc;
     uint32_t count;
-    unordered_flat_map<uint64_t, CallstackFrameTree> children;
+    unordered_flat_map<uint64_t, MemCallstackFrameTree> children;
     unordered_flat_set<uint32_t> callstacks;
+};
+
+enum { MemCallstackFrameTreeSize = sizeof( MemCallstackFrameTree ) };
+
+
+struct CallstackFrameTree
+{
+    CallstackFrameTree( CallstackFrameId id ) : frame( id ), count( 0 ) {}
+
+    CallstackFrameId frame;
+    uint32_t count;
+    unordered_flat_map<uint64_t, CallstackFrameTree> children;
 };
 
 enum { CallstackFrameTreeSize = sizeof( CallstackFrameTree ) };
@@ -426,6 +498,7 @@ enum { CrashEventSize = sizeof( CrashEvent ) };
 
 struct ContextSwitchData
 {
+    enum : int8_t { Fiber = 99 };
     enum : int8_t { NoState = 100 };
     enum : int8_t { Wakeup = -2 };
 
@@ -442,6 +515,8 @@ struct ContextSwitchData
     tracy_force_inline void SetState( int8_t state ) { memcpy( &_end_reason_state, &state, 1 ); }
     tracy_force_inline int64_t WakeupVal() const { return _wakeup.Val(); }
     tracy_force_inline void SetWakeup( int64_t wakeup ) { assert( wakeup < (int64_t)( 1ull << 47 ) ); _wakeup.SetVal( wakeup ); }
+    tracy_force_inline uint16_t Thread() const { return _thread; }
+    tracy_force_inline void SetThread( uint16_t thread ) { _thread = thread; }
 
     tracy_force_inline void SetStartCpu( int64_t start, uint8_t cpu ) { assert( start < (int64_t)( 1ull << 47 ) ); _start_cpu = ( uint64_t( start ) << 16 ) | cpu; }
     tracy_force_inline void SetEndReasonState( int64_t end, int8_t reason, int8_t state ) { assert( end < (int64_t)( 1ull << 47 ) ); _end_reason_state = ( uint64_t( end ) << 16 ) | ( uint64_t( reason ) << 8 ) | uint8_t( state ); }
@@ -449,6 +524,7 @@ struct ContextSwitchData
     uint64_t _start_cpu;
     uint64_t _end_reason_state;
     Int48 _wakeup;
+    uint16_t _thread;
 };
 
 enum { ContextSwitchDataSize = sizeof( ContextSwitchData ) };
@@ -543,6 +619,15 @@ struct GhostZone
 
 enum { GhostZoneSize = sizeof( GhostZone ) };
 
+
+struct ChildSample
+{
+    Int48 time;
+    uint64_t addr;
+};
+
+enum { ChildSampleSize = sizeof( ChildSample ) };
+
 #pragma pack()
 
 
@@ -559,8 +644,18 @@ struct ThreadData
     Vector<int64_t> childTimeStack;
     Vector<GhostZone> ghostZones;
     uint64_t ghostIdx;
+    SortedVector<SampleData, SampleDataSort> postponedSamples;
 #endif
     Vector<SampleData> samples;
+    SampleData pendingSample;
+    Vector<SampleData> ctxSwitchSamples;
+    uint64_t kernelSampleCnt;
+    uint8_t isFiber;
+    ThreadData* fiber;
+    uint8_t* stackCount;
+
+    tracy_force_inline void IncStackCount( int16_t srcloc ) { stackCount[uint16_t(srcloc)]++; }
+    tracy_force_inline bool DecStackCount( int16_t srcloc ) { return --stackCount[uint16_t(srcloc)] != 0; }
 };
 
 struct GpuCtxThreadData
@@ -581,6 +676,9 @@ struct GpuCtxData
     int64_t calibratedGpuTime;
     int64_t calibratedCpuTime;
     double calibrationMod;
+    int64_t lastGpuTime;
+    uint64_t overflow;
+    uint32_t overflowMul;
     StringIdx name;
     unordered_flat_map<uint64_t, GpuCtxThreadData> threadData;
     short_ptr<GpuEvent> query[64*1024];
@@ -642,6 +740,7 @@ struct PlotData
     uint64_t name;
     double min;
     double max;
+    double sum;
     SortedVector<PlotItem, PlotItemSort> data;
     PlotType type;
     PlotValueFormatting format;
@@ -729,6 +828,7 @@ struct SymbolStats
 {
     uint32_t incl, excl;
     unordered_flat_map<uint32_t, uint32_t> parents;
+    unordered_flat_map<uint32_t, uint32_t> baseParents;
 };
 
 enum { SymbolStatsSize = sizeof( SymbolStats ) };

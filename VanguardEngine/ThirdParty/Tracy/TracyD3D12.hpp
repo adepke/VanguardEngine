@@ -91,10 +91,8 @@ namespace tracy
 			{
 				D3D12_FEATURE_DATA_D3D12_OPTIONS3 featureData{};
 
-				if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS3, &featureData, sizeof(featureData))))
-				{
-					assert(false && "Platform does not support profiling of copy queues.");
-				}
+				bool Success = SUCCEEDED(device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS3, &featureData, sizeof(featureData)));
+				assert(Success && featureData.CopyQueueTimestampQueriesSupported && "Platform does not support profiling of copy queues.");
 			}
 
 			uint64_t timestampFrequency;
@@ -451,8 +449,6 @@ namespace tracy
 
 	static inline D3D12QueueCtx* CreateD3D12Context(ID3D12Device* device, ID3D12CommandQueue* queue)
 	{
-		InitRPMallocThread();
-
 		auto* ctx = static_cast<D3D12QueueCtx*>(tracy_malloc(sizeof(D3D12QueueCtx)));
 		new (ctx) D3D12QueueCtx{ device, queue };
 

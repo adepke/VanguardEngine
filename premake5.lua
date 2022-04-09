@@ -131,7 +131,13 @@ project "Engine"
 		end
 		
 		-- Extra third party defines
-		defines { "IMGUI_DEFINE_MATH_OPERATORS", "SPDLOG_COMPILED_LIB", "SPDLOG_WCHAR_TO_UTF8_SUPPORT", "SPDLOG_NO_EXCEPTIONS" }
+		defines {
+			"IMGUI_DEFINE_MATH_OPERATORS",
+			"SPDLOG_COMPILED_LIB",
+			"SPDLOG_WCHAR_TO_UTF8_SUPPORT",
+			"SPDLOG_NO_EXCEPTIONS",
+			"TRACY_IMPORTS"  -- Tracy client compiled as a DLL
+		}
 		
 	-- Specific Build
 		

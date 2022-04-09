@@ -1,10 +1,6 @@
 #ifndef __TRACYOPENGL_HPP__
 #define __TRACYOPENGL_HPP__
 
-#if !defined GL_TIMESTAMP && !defined GL_TIMESTAMP_EXT
-#  error "You must include OpenGL 3.2 headers before including TracyOpenGL.hpp"
-#endif
-
 #if !defined TRACY_ENABLE || defined __APPLE__
 
 #define TracyGpuContext
@@ -53,7 +49,7 @@ public:
 #  define glQueryCounter glQueryCounterEXT
 #endif
 
-#define TracyGpuContext tracy::InitRPMallocThread(); tracy::GetGpuCtx().ptr = (tracy::GpuCtx*)tracy::tracy_malloc( sizeof( tracy::GpuCtx ) ); new(tracy::GetGpuCtx().ptr) tracy::GpuCtx;
+#define TracyGpuContext tracy::GetGpuCtx().ptr = (tracy::GpuCtx*)tracy::tracy_malloc( sizeof( tracy::GpuCtx ) ); new(tracy::GetGpuCtx().ptr) tracy::GpuCtx;
 #define TracyGpuContextName( name, size ) tracy::GetGpuCtx().ptr->Name( name, size );
 #if defined TRACY_HAS_CALLSTACK && defined TRACY_CALLSTACK
 #  define TracyGpuNamedZone( varname, name, active ) static constexpr tracy::SourceLocationData TracyConcat(__tracy_gpu_source_location,__LINE__) { name, __FUNCTION__,  __FILE__, (uint32_t)__LINE__, 0 }; tracy::GpuCtxScope varname( &TracyConcat(__tracy_gpu_source_location,__LINE__), TRACY_CALLSTACK, active );
@@ -238,12 +234,15 @@ public:
         const auto queryId = GetGpuCtx().ptr->NextQueryId();
         glQueryCounter( GetGpuCtx().ptr->TranslateOpenGlQueryId( queryId ), GL_TIMESTAMP );
 
+#ifdef TRACY_FIBERS
+        TracyLfqPrepare( QueueType::GpuZoneBegin );
+        memset( &item->gpuZoneBegin.thread, 0, sizeof( item->gpuZoneBegin.thread ) );
+#else
         GetProfiler().SendCallstack( depth );
-
-        const auto thread = GetThreadHandle();
         TracyLfqPrepare( QueueType::GpuZoneBeginCallstack );
+        MemWrite( &item->gpuZoneBegin.thread, GetThreadHandle() );
+#endif
         MemWrite( &item->gpuZoneBegin.cpuTime, Profiler::GetTime() );
-        MemWrite( &item->gpuZoneBegin.thread, thread );
         MemWrite( &item->gpuZoneBegin.queryId, uint16_t( queryId ) );
         MemWrite( &item->gpuZoneBegin.context, GetGpuCtx().ptr->GetId() );
         MemWrite( &item->gpuZoneBegin.srcloc, (uint64_t)srcloc );
@@ -284,13 +283,16 @@ public:
         const auto queryId = GetGpuCtx().ptr->NextQueryId();
         glQueryCounter( GetGpuCtx().ptr->TranslateOpenGlQueryId( queryId ), GL_TIMESTAMP );
 
+#ifdef TRACY_FIBERS
+        TracyLfqPrepare( QueueType::GpuZoneBeginAllocSrcLoc );
+        memset( &item->gpuZoneBegin.thread, 0, sizeof( item->gpuZoneBegin.thread ) );
+#else
         GetProfiler().SendCallstack( depth );
-
-        const auto thread = GetThreadHandle();
         TracyLfqPrepare( QueueType::GpuZoneBeginAllocSrcLocCallstack );
+        MemWrite( &item->gpuZoneBegin.thread, GetThreadHandle() );
+#endif
         const auto srcloc = Profiler::AllocSourceLocation( line, source, sourceSz, function, functionSz, name, nameSz );
         MemWrite( &item->gpuZoneBegin.cpuTime, Profiler::GetTime() );
-        MemWrite( &item->gpuZoneBegin.thread, thread );
         MemWrite( &item->gpuZoneBegin.queryId, uint16_t( queryId ) );
         MemWrite( &item->gpuZoneBegin.context, GetGpuCtx().ptr->GetId() );
         MemWrite( &item->gpuZoneBegin.srcloc, (uint64_t)srcloc );
