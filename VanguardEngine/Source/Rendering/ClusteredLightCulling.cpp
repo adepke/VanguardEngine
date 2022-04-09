@@ -197,7 +197,17 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 		list.UAVBarrier(resources.GetBuffer(clusterVisibilityTag));
 		list.FlushBarriers();
 
-		ClusterDepthCullBindData bindData;
+		struct {
+			uint32_t objectBuffer;
+			uint32_t objectIndex;
+			uint32_t cameraBuffer;
+			uint32_t cameraIndex;
+			VertexAssemblyData vertexAssemblyData;
+			uint32_t visibilityBuffer;
+			int32_t dimensions[3];
+			float logY;
+		} bindData;
+
 		bindData.objectBuffer = resources.Get(instanceBuffer);
 		bindData.cameraBuffer = resources.Get(cameraBuffer);
 		bindData.vertexAssemblyData.positionBuffer = resources.Get(meshResources.positionTag);

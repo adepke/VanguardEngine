@@ -1,58 +1,12 @@
 // Copyright (c) 2019-2022 Andrew Depke
 
 #include <Rendering/RenderSystems.h>
-#include <Rendering/Base.h>
-#include <Rendering/Renderer.h>
-#include <Core/CoreComponents.h>
-#include <Rendering/RenderComponents.h>
 #include <Rendering/ShaderStructs.h>
 
 #include <imgui.h>
 
 #include <cmath>
 #include <algorithm>
-
-void MeshSystem::Render(Renderer& renderer, const entt::registry& registry, CommandList& list, bool renderTransparents)
-{
-	auto& indexBuffer = renderer.device->GetResourceManager().Get(renderer.meshFactory->indexBuffer);
-	D3D12_INDEX_BUFFER_VIEW indexView{
-		.BufferLocation = indexBuffer.Native()->GetGPUVirtualAddress(),
-		.SizeInBytes = static_cast<UINT>(indexBuffer.description.size * indexBuffer.description.stride),
-		.Format = DXGI_FORMAT_R32_UINT
-	};
-	list.Native()->IASetIndexBuffer(&indexView);
-
-	size_t index = 0;
-	registry.view<const TransformComponent, const MeshComponent>().each([&](auto entity, const auto&, const auto& mesh)
-	{
-		list.BindResource("perObject", renderer.instanceBuffer, renderer.instanceOffset + (index * sizeof(EntityInstance)));
-
-		std::vector<uint8_t> metadata;
-		metadata.resize(sizeof(VertexMetadata));
-		std::memcpy(metadata.data(), &mesh.metadata, metadata.size());
-		const auto [metadataBuffer, metadataOffset] = renderer.device->FrameAllocate(sizeof(VertexMetadata));
-		renderer.device->GetResourceManager().Write(metadataBuffer, metadata, metadataOffset);
-		list.BindResource("vertexMetadata", metadataBuffer, metadataOffset);
-
-		for (const auto& subset : mesh.subsets)
-		{
-			if (!renderTransparents && subset.material.transparent)
-				continue;
-
-			if (renderer.device->GetResourceManager().Valid(subset.material.materialBuffer))
-			{
-				list.BindResourceOptional("material", subset.material.materialBuffer);
-			}
-
-			list.BindResource("vertexPositionBuffer", renderer.meshFactory->vertexPositionBuffer, mesh.globalOffset.position + subset.localOffset.position);
-			list.BindResourceOptional("vertexExtraBuffer", renderer.meshFactory->vertexExtraBuffer, mesh.globalOffset.extra + subset.localOffset.extra);
-
-			list.Native()->DrawIndexedInstanced(static_cast<uint32_t>(subset.indices), 1, (mesh.globalOffset.index + subset.localOffset.index) / sizeof(uint32_t), 0, 0);
-		}
-
-		++index;
-	});
-}
 
 XMMATRIX SpectatorCameraView(TransformComponent& transform, const CameraComponent& camera, float deltaTime, float deltaPitch, float deltaYaw,
 	bool moveForward, bool moveBackward, bool moveLeft, bool moveRight, bool moveUp, bool moveDown, bool moveSprint)
@@ -112,7 +66,7 @@ void CameraSystem::Update(entt::registry& registry, float deltaTime)
 	if (io.KeysDown[VK_SPACE]) moveUp = true;  // Spacebar
 	if (io.KeysDown[VK_CONTROL]) moveDown = true;  // Ctrl
 	if (io.KeysDown[VK_SHIFT]) moveSprint = true;  // Shift
-	
+
 	// Iterate all camera entities that have control.
 	registry.view<TransformComponent, const CameraComponent, const ControlComponent>().each([&](auto entity, auto& transform, const auto& camera)
 	{
@@ -120,7 +74,7 @@ void CameraSystem::Update(entt::registry& registry, float deltaTime)
 
 		const auto aspectRatio = static_cast<float>(Renderer::Get().device->renderWidth) / static_cast<float>(Renderer::Get().device->renderHeight);
 		const auto projectionMatrix = XMMatrixPerspectiveFovRH(camera.fieldOfView / 2.f, aspectRatio, camera.farPlane, camera.nearPlane);  // Inverse Z.
-		
+
 		// #TODO: Support multiple cameras.
 		globalViewMatrix = viewMatrix;
 		globalProjectionMatrix = projectionMatrix;

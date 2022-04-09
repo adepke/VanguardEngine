@@ -230,7 +230,14 @@ void Renderer::Render(entt::registry& registry)
 	prePass.Output(depthStencilTag, OutputBind::DSV, LoadType::Clear);
 	prePass.Bind([&](CommandList& list, RenderPassResources& resources)
 	{
-		PrePassBindData bindData;
+		struct {
+			uint32_t objectBuffer;
+			uint32_t objectIndex;
+			uint32_t cameraBuffer;
+			uint32_t cameraIndex;
+			VertexAssemblyData vertexAssemblyData;
+		} bindData;
+
 		bindData.objectBuffer = resources.Get(instanceBufferTag);
 		bindData.cameraBuffer = resources.Get(cameraBufferTag);
 		bindData.vertexAssemblyData.positionBuffer = resources.Get(meshResources.positionTag);
@@ -285,7 +292,20 @@ void Renderer::Render(entt::registry& registry)
 		iblData.brdfTexture = resources.Get(iblResources.brdfTag);
 		iblData.prefilterLevels = ibl.GetPrefilterLevels();
 
-		ForwardBindData bindData;
+		struct {
+			uint32_t objectBuffer;
+			uint32_t objectIndex;
+			uint32_t cameraBuffer;
+			uint32_t cameraIndex;
+			VertexAssemblyData vertexAssemblyData;
+			uint32_t materialBuffer;
+			uint32_t lightBuffer;
+			uint32_t sunTransmittanceBuffer;
+			float padding;
+			ClusterData clusterData;
+			IblData iblData;
+		} bindData;
+
 		bindData.objectBuffer = resources.Get(instanceBufferTag);
 		bindData.cameraBuffer = resources.Get(cameraBufferTag);
 		bindData.vertexAssemblyData.positionBuffer = resources.Get(meshResources.positionTag);
