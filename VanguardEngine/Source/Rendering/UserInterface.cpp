@@ -135,6 +135,7 @@ void UserInterfaceManager::CreateDeviceObjects()
 			.destBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA,
 			.blendOpAlpha = D3D12_BLEND_OP_ADD
 		})
+		.CullMode(D3D12_CULL_MODE_NONE)
 		.DepthEnabled(false);
 
 	CreateFontTexture();
