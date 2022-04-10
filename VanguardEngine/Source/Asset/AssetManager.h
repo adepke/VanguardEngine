@@ -9,6 +9,7 @@
 #include <tiny_gltf.h>
 
 #include <filesystem>
+#include <list>
 #include <queue>
 #include <utility>
 
@@ -16,14 +17,16 @@ class RenderDevice;
 
 class AssetManager : public Singleton<AssetManager>
 {
+	using MaterialQueue = std::queue<std::pair<tinygltf::Material, BufferHandle>>;
+
 private:
 	RenderDevice* device;
-	std::queue<std::pair<tinygltf::Material, BufferHandle>> materialQueue;
+	std::list<MaterialQueue> modelMaterialQueues;
 
 public:
-	// Need to keep the model data alive for delayed material loading.
-	// #TODO: This is very temporary, will need a new system for multiple meshes.
-	tinygltf::Model model;
+	// #TODO: Poor solution, should rework this.
+	std::list<tinygltf::Model> models;
+	bool newModel = false;
 
 public:
 	void Initialize(RenderDevice* inDevice) { device = inDevice; }

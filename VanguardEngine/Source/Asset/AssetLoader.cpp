@@ -70,11 +70,9 @@ namespace AssetLoader
 		std::string error;
 		std::string warning;
 
-		//tinygltf::Model model;
+		tinygltf::Model& model = AssetManager::Get().models.emplace_back();
+		AssetManager::Get().newModel = true;
 		tinygltf::TinyGLTF loader;
-
-		// #TEMP
-		auto& model = AssetManager::Get().model;
 
 		bool result = false;
 

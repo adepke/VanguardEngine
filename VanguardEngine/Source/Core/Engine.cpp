@@ -104,9 +104,39 @@ void EngineBoot()
 
 void EngineLoop()
 {
+	const auto AddHelmet = [](const TransformComponent& transform)
+	{
+		const auto entity = registry.create();
+		registry.emplace<NameComponent>(entity, "Helmet");
+		registry.emplace<TransformComponent>(entity, transform);
+		registry.emplace<MeshComponent>(entity, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/DamagedHelmet/HelmetTangents.glb"));
+
+		return entity;
+	};
+
+	const auto AddSponza = [](const TransformComponent& transform)
+	{
+		const auto entity = registry.create();
+		registry.emplace<NameComponent>(entity, "Sponza");
+		registry.emplace<TransformComponent>(entity, transform);
+		registry.emplace<MeshComponent>(entity, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/Sponza/glTF/Sponza.gltf"));
+
+		return entity;
+	};
+
+	const auto AddBistro = [](const TransformComponent& transform)
+	{
+		const auto entity = registry.create();
+		registry.emplace<NameComponent>(entity, "Bistro");
+		registry.emplace<TransformComponent>(entity, transform);
+		registry.emplace<MeshComponent>(entity, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/Bistro/Bistro2.gltf"));
+
+		return entity;
+	};
+
 	TransformComponent spectatorTransform{};
-	spectatorTransform.translation = { 84.7401f, -12.6401f, -23.2183f };
-	spectatorTransform.rotation = { 0.f, -11.9175f * 3.14159f / 180.f, 31.9711 * 3.14159f / 180.f };
+	spectatorTransform.translation = { 0.f, 0.f, 0.f };
+	spectatorTransform.rotation = { 0.f, 0.f, 0.f };
 
 	const auto spectator = registry.create();
 	registry.emplace<NameComponent>(spectator, "Spectator");
@@ -114,24 +144,17 @@ void EngineLoop()
 	registry.emplace<CameraComponent>(spectator);
 	registry.emplace<ControlComponent>(spectator);  // #TEMP
 
-	TransformComponent sponzaTransform{};
-	sponzaTransform.translation = { 100.f, -25.f, -34.f };
-	//sponzaTransform.rotation = { -90.f * 3.14159f / 180.f, 0.f, 0.f };  // Rotate the sponza into our coordinate space.
-	sponzaTransform.rotation = { -90.f * 3.14159f / 180.f, 0.f, -90.f * 3.14159f / 180.f };
-	sponzaTransform.scale = { 10.f, 10.f, 10.f };
+	AddHelmet({
+		.scale = { 10.f, 10.f, 10.f },
+		.rotation = { -169.5f * 3.14159f / 180.f, 0.f, 121.5f * 3.14159f / 180.f },
+		.translation = { 78.f, 0.f, -5.f }
+	});
 
-	const auto sponza = registry.create();
-	registry.emplace<NameComponent>(sponza, "Sponza");
-	registry.emplace<TransformComponent>(sponza, std::move(sponzaTransform));
-	//registry.emplace<MeshComponent>(sponza, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/Sponza/glTF/Sponza.gltf"));
-	//registry.emplace<MeshComponent>(sponza, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/Bistro/Bistro2.gltf"));
-	//registry.emplace<MeshComponent>(sponza, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/SunTemple.glb"));
-	registry.emplace<MeshComponent>(sponza, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/DamagedHelmet/HelmetTangents.glb"));
-	//registry.emplace<MeshComponent>(sponza, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/PbrSpheres/scene.gltf"));
-	//registry.emplace<MeshComponent>(sponza, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/GoldKPM.glb"));
-	//registry.emplace<MeshComponent>(sponza, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/Bowl2.glb"));
-	//registry.emplace<MeshComponent>(sponza, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/3Spheres.glb"));
-	//registry.emplace<MeshComponent>(sponza, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/radio.glb"));
+	AddSponza({
+		.scale = { 0.1f, 0.1f, 0.1f },
+		.rotation = { -90.f * 3.14159f / 180.f, 0.f, 0.f },
+		.translation = { 120.f, -3.f, -21.f }
+	});
 
 	const auto light = registry.create();
 	registry.emplace<LightComponent>(light, LightComponent{ .type = LightType::Point, .color = { 1.f, 1.f, 1.f } });

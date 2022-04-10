@@ -12,18 +12,41 @@ MeshComponent AssetManager::LoadModel(const std::filesystem::path& path)
 
 void AssetManager::EnqueueMaterialLoad(const tinygltf::Material& material, BufferHandle buffer)
 {
-	materialQueue.emplace(std::make_pair(material, buffer));
+	VGAssert(models.size() > 0, "No models available to queue materials for.");
+	if (newModel)
+	{
+		modelMaterialQueues.emplace_back();
+		newModel = false;
+	}
+	modelMaterialQueues.back().emplace(std::make_pair(material, buffer));
 }
 
 void AssetManager::Update()
 {
-	if (materialQueue.size() == 0)
+	tinygltf::Model* model = nullptr;
+	MaterialQueue* queue = nullptr;
+
+	while (models.size() > 0)
 	{
-		return;
+		queue = &modelMaterialQueues.front();
+		if (queue->size() == 0)
+		{
+			models.pop_front();
+			modelMaterialQueues.pop_front();
+		}
+
+		else
+		{
+			model = &models.front();
+			break;
+		}
 	}
+
+	if (!model)
+		return;
 	
-	auto [material, buffer] = materialQueue.front();
-	materialQueue.pop();
+	auto [material, buffer] = queue->front();
+	queue->pop();
 
 	// Create a single material and upload it to the GPU.
 
@@ -34,7 +57,7 @@ void AssetManager::Update()
 			return 0;
 		}
 
-		const auto& texture = model.images[model.textures[index].source];
+		const auto& texture = model->images[model->textures[index].source];
 
 		TextureDescription description{
 			.bindFlags = BindFlag::ShaderResource,
