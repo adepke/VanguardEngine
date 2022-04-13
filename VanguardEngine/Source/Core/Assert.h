@@ -19,7 +19,7 @@
 			std::snprintf(buffer, std::size(buffer), format, __VA_ARGS__); \
 			std::wstringstream stream; \
 			stream << "Assertion failed in " << __FILE__ << ":" << __LINE__ << "\nCondition: " << #condition << "\nMessage: " << buffer; \
-			RequestCrash(stream.str(), true); \
+			RequestCrashMessage(stream.str()); \
 		} \
 	} \
 	while (0)
@@ -33,7 +33,7 @@
 			std::snprintf(buffer, std::size(buffer), format __VA_OPT__(,) __VA_ARGS__); \
 			std::wstringstream stream; \
 			stream << "Assertion failed in " << __FILE__ << ":" << __LINE__ << "\nCondition: " << #condition << "\nMessage: " << buffer; \
-			RequestCrash(stream.str(), true); \
+			RequestCrashMessage(stream.str()); \
 		} \
 	} \
 	while (0)

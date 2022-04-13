@@ -31,9 +31,9 @@ inline HRESULT GetPlatformError() { return GetLastError(); }
 #define VGLogWarning(logger, ...) SPDLOG_LOGGER_WARN(logger, _Detail_VGFormatExtract(__VA_ARGS__))
 #define VGLogError(logger, ...) SPDLOG_LOGGER_ERROR(logger, _Detail_VGFormatExtract(__VA_ARGS__))
 #if ENABLE_LOGGING
-#define VGLogCritical(logger, ...) SPDLOG_LOGGER_CRITICAL(logger, _Detail_VGFormatExtract(__VA_ARGS__)); RequestCrash(VGText("#TODO: Crash message formatting."));
+#define VGLogCritical(logger, ...) SPDLOG_LOGGER_CRITICAL(logger, _Detail_VGFormatExtract(__VA_ARGS__)); RequestCrash();
 #else
-#define VGLogCritical(logger, ...) RequestCrash(VGText("Enable logging for more information."));
+#define VGLogCritical(logger, ...) RequestCrashMessage(VGText("Enable logging for more information."));
 #endif
 
 extern std::shared_ptr<spdlog::logger> logAsset;

@@ -14,23 +14,25 @@
 
 void OnDeviceRemoved(void* context, uint8_t)
 {
-	auto* device = static_cast<ID3D12Device5*>(context);
-	auto removedReason = device->GetDeviceRemovedReason();
-
-	VGLogError(logRendering, "Device removed, reason: {}", removedReason);
-
-	ResourcePtr<ID3D12DeviceRemovedExtendedData1> dred;
-	auto result = device->QueryInterface(IID_PPV_ARGS(dred.Indirect()));
-	if (FAILED(result))
+	RequestCrash([context]()
 	{
-		VGLogError(logRendering, "Failed to get DRED interface: {}", result);
-	}
+		auto* device = static_cast<ID3D12Device5*>(context);
+		auto removedReason = device->GetDeviceRemovedReason();
 
-	else
-	{
-		VGLog(logRendering, "{}", GetDredInfo(device, dred.Get()).str());
-		VGBreak();
-	}
+		VGLogError(logRendering, "Device removed, reason: {}", removedReason);
+
+		ResourcePtr<ID3D12DeviceRemovedExtendedData1> dred;
+		auto result = device->QueryInterface(IID_PPV_ARGS(dred.Indirect()));
+		if (FAILED(result))
+		{
+			VGLogError(logRendering, "Failed to get DRED interface: {}", result);
+		}
+
+		else
+		{
+			VGLogError(logRendering, "{}", GetDredInfo(device, dred.Get()).str());
+		}
+	});
 }
 
 void RenderDevice::SetNames()
@@ -190,7 +192,7 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 		{
 			VGLogError(logRendering, "Failed to get D3D12 info queue: {}", result);
 		}
-		
+
 		else
 		{
 			infoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, true);

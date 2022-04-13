@@ -7,16 +7,28 @@
 
 #include <csignal>
 #include <thread>
+#include <map>
 #include <sstream>
 #include <fstream>
+
+std::map<int, const char*> signalNames = {
+	{ SIGINT, "Interrupt" },
+	{ SIGILL, "Illegal instruction" },
+	{ SIGFPE, "Floating point exception" },
+	{ SIGSEGV, "Segment violation" },
+	{ SIGTERM, "Software termination" },
+	{ SIGBREAK, "Break sequence" },
+	{ SIGABRT, "Abnormal termination via abort" },
+	{ SIGABRT_COMPAT, "Abnormal termination via abort" }
+};
 
 void RegisterCrashHandlers()
 {
 	auto singalHandler = +[](int signal)
 	{
 		std::wstringstream stream;
-		stream << "Signal: " << signal;
-		RequestCrash(stream.str());
+		stream << "Signal: " << signalNames[signal] << " (" << signal << ")";
+		RequestCrashMessage(stream.str());
 	};
 
 	std::signal(SIGTERM, singalHandler);
@@ -33,40 +45,40 @@ void RegisterCrashHandlers()
 		{
 			switch (exceptionPointers->ExceptionRecord->ExceptionCode)
 			{
-			case EXCEPTION_ACCESS_VIOLATION: RequestCrash(VGText("SEH: Access violation.")); break;
-			case EXCEPTION_ARRAY_BOUNDS_EXCEEDED: RequestCrash(VGText("SEH: Array out of bounds.")); break;
-			case EXCEPTION_BREAKPOINT: RequestCrash(VGText("SEH: Breakpoint hit.")); break;
-			case EXCEPTION_DATATYPE_MISALIGNMENT: RequestCrash(VGText("SEH: Datatype misalignment.")); break;
-			case EXCEPTION_FLT_DENORMAL_OPERAND: RequestCrash(VGText("SEH: Floating-point denormal operand.")); break;
-			case EXCEPTION_FLT_DIVIDE_BY_ZERO: RequestCrash(VGText("SEH: Floating-point divide by zero.")); break;
-			case EXCEPTION_FLT_INEXACT_RESULT: RequestCrash(VGText("SEH: Floating-point inexact result.")); break;
-			case EXCEPTION_FLT_INVALID_OPERATION: RequestCrash(VGText("SEH: Floating-point invalid operation.")); break;
-			case EXCEPTION_FLT_OVERFLOW: RequestCrash(VGText("SEH: Floating-point value overflow.")); break;
-			case EXCEPTION_FLT_STACK_CHECK: RequestCrash(VGText("SEH: Floating-point stack overflow or underflow.")); break;
-			case EXCEPTION_FLT_UNDERFLOW: RequestCrash(VGText("SEH: Floating-point value underflow.")); break;
-			case EXCEPTION_ILLEGAL_INSTRUCTION: RequestCrash(VGText("SEH: Invalid instruction.")); break;
-			case EXCEPTION_IN_PAGE_ERROR: RequestCrash(VGText("SEH: Attempted to access page not present.")); break;
-			case EXCEPTION_INT_DIVIDE_BY_ZERO: RequestCrash(VGText("SEH: Integer divide by zero.")); break;
-			case EXCEPTION_INT_OVERFLOW: RequestCrash(VGText("SEH: Integer value overflow.")); break;
-			case EXCEPTION_INVALID_DISPOSITION: RequestCrash(VGText("SEH: Invalid disposition.")); break;
-			case EXCEPTION_NONCONTINUABLE_EXCEPTION: RequestCrash(VGText("SEH: Thread attempted to continue after fatal error.")); break;
-			case EXCEPTION_PRIV_INSTRUCTION: RequestCrash(VGText("SEH: Attempted to execute instruction not allowed.")); break;
-			case EXCEPTION_SINGLE_STEP: RequestCrash(VGText("SEH: Single step.")); break;
-			case EXCEPTION_STACK_OVERFLOW: RequestCrash(VGText("SEH: Stack overflow.")); break;
-			default: RequestCrash(VGText("SEH: Unrecognized exception code.")); break;
+			case EXCEPTION_ACCESS_VIOLATION: RequestCrashMessage(VGText("SEH: Access violation.")); break;
+			case EXCEPTION_ARRAY_BOUNDS_EXCEEDED: RequestCrashMessage(VGText("SEH: Array out of bounds.")); break;
+			case EXCEPTION_BREAKPOINT: RequestCrashMessage(VGText("SEH: Breakpoint hit.")); break;
+			case EXCEPTION_DATATYPE_MISALIGNMENT: RequestCrashMessage(VGText("SEH: Datatype misalignment.")); break;
+			case EXCEPTION_FLT_DENORMAL_OPERAND: RequestCrashMessage(VGText("SEH: Floating-point denormal operand.")); break;
+			case EXCEPTION_FLT_DIVIDE_BY_ZERO: RequestCrashMessage(VGText("SEH: Floating-point divide by zero.")); break;
+			case EXCEPTION_FLT_INEXACT_RESULT: RequestCrashMessage(VGText("SEH: Floating-point inexact result.")); break;
+			case EXCEPTION_FLT_INVALID_OPERATION: RequestCrashMessage(VGText("SEH: Floating-point invalid operation.")); break;
+			case EXCEPTION_FLT_OVERFLOW: RequestCrashMessage(VGText("SEH: Floating-point value overflow.")); break;
+			case EXCEPTION_FLT_STACK_CHECK: RequestCrashMessage(VGText("SEH: Floating-point stack overflow or underflow.")); break;
+			case EXCEPTION_FLT_UNDERFLOW: RequestCrashMessage(VGText("SEH: Floating-point value underflow.")); break;
+			case EXCEPTION_ILLEGAL_INSTRUCTION: RequestCrashMessage(VGText("SEH: Invalid instruction.")); break;
+			case EXCEPTION_IN_PAGE_ERROR: RequestCrashMessage(VGText("SEH: Attempted to access page not present.")); break;
+			case EXCEPTION_INT_DIVIDE_BY_ZERO: RequestCrashMessage(VGText("SEH: Integer divide by zero.")); break;
+			case EXCEPTION_INT_OVERFLOW: RequestCrashMessage(VGText("SEH: Integer value overflow.")); break;
+			case EXCEPTION_INVALID_DISPOSITION: RequestCrashMessage(VGText("SEH: Invalid disposition.")); break;
+			case EXCEPTION_NONCONTINUABLE_EXCEPTION: RequestCrashMessage(VGText("SEH: Thread attempted to continue after fatal error.")); break;
+			case EXCEPTION_PRIV_INSTRUCTION: RequestCrashMessage(VGText("SEH: Attempted to execute instruction not allowed.")); break;
+			case EXCEPTION_SINGLE_STEP: RequestCrashMessage(VGText("SEH: Single step.")); break;
+			case EXCEPTION_STACK_OVERFLOW: RequestCrashMessage(VGText("SEH: Stack overflow.")); break;
+			default: RequestCrashMessage(VGText("SEH: Unrecognized exception code.")); break;
 			}
 		}
 
 		else
 		{
-			RequestCrash(VGText("Unknown SEH exception."));
+			RequestCrashMessage(VGText("Unknown SEH exception."));
 		}
 
 		return EXCEPTION_EXECUTE_HANDLER;
 	});
 };
 
-void ReportCrashEvent(const std::wstring& reason, bool printToLog)
+void ReportInternalCrashEvent(const std::wstring& reason, bool printToLog)
 {
 	std::wstringstream stream;
 	stream << "Crash reported on thread '" << std::this_thread::get_id() << "': " << reason;
