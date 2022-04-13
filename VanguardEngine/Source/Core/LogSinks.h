@@ -5,6 +5,8 @@
 #include <spdlog/sinks/base_sink.h>
 #include <spdlog/details/null_mutex.h>
 
+#include <limits>
+
 template <typename Mutex>
 class TracySink : public spdlog::sinks::base_sink<Mutex>
 {
@@ -14,6 +16,13 @@ protected:
 		spdlog::memory_buf_t formatted;
 		spdlog::sinks::base_sink<Mutex>::formatter_->format(msg, formatted);
 		const auto msgFormatted = fmt::to_string(formatted);
+
+		if (msgFormatted.size() >= std::numeric_limits<uint16_t>::max())
+		{
+			const std::string messageTooLong = "Log message too large, refer to other log source for actual log.";
+			TracyMessageC(messageTooLong.c_str(), messageTooLong.size(), tracy::Color::Cyan);
+			return;
+		}
 
 		switch (msg.level)
 		{
