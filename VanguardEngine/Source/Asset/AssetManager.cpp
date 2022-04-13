@@ -10,15 +10,20 @@ MeshComponent AssetManager::LoadModel(const std::filesystem::path& path)
 	return AssetLoader::LoadMesh(*device, *Renderer::Get().meshFactory, path);
 }
 
-void AssetManager::EnqueueMaterialLoad(const tinygltf::Material& material, BufferHandle buffer)
+size_t AssetManager::EnqueueMaterialLoad(const tinygltf::Material& material)
 {
 	VGAssert(models.size() > 0, "No models available to queue materials for.");
+
+	const auto index = Renderer::Get().materialFactory->Create();
+
 	if (newModel)
 	{
 		modelMaterialQueues.emplace_back();
 		newModel = false;
 	}
-	modelMaterialQueues.back().emplace(std::make_pair(material, buffer));
+	modelMaterialQueues.back().emplace(std::make_pair(material, index));
+
+	return index;
 }
 
 void AssetManager::Update()
@@ -45,7 +50,7 @@ void AssetManager::Update()
 	if (!model)
 		return;
 	
-	auto [material, buffer] = queue->front();
+	auto [material, bufferIndex] = queue->front();
 	queue->pop();
 
 	// Create a single material and upload it to the GPU.
@@ -99,6 +104,7 @@ void AssetManager::Update()
 	materialBytes.resize(sizeof(materialData));
 	std::memcpy(materialBytes.data(), &materialData, materialBytes.size());
 
-	device->GetResourceManager().Write(buffer, materialBytes);
-	device->GetDirectList().TransitionBarrier(buffer, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
+	const auto materialBuffer = Renderer::Get().materialFactory->materialBuffer;
+
+	device->GetResourceManager().Write(materialBuffer, materialBytes, bufferIndex * sizeof(MaterialData));
 }

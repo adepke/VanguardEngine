@@ -17,7 +17,7 @@ class RenderDevice;
 
 class AssetManager : public Singleton<AssetManager>
 {
-	using MaterialQueue = std::queue<std::pair<tinygltf::Material, BufferHandle>>;
+	using MaterialQueue = std::queue<std::pair<tinygltf::Material, size_t>>;
 
 private:
 	RenderDevice* device;
@@ -35,7 +35,7 @@ public:
 	MeshComponent LoadModel(const std::filesystem::path& path);
 
 	// Instead of loading all model materials in one frame, stagger loading out over multiple frames.
-	void EnqueueMaterialLoad(const tinygltf::Material& material, BufferHandle buffer);
+	size_t EnqueueMaterialLoad(const tinygltf::Material& material);
 
 	void Update();
 };

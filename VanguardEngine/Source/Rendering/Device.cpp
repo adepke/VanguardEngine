@@ -2,7 +2,6 @@
 
 #include <Rendering/Device.h>
 #include <Rendering/ResourceManager.h>
-#include <Rendering/Material.h>
 #include <Core/Config.h>
 #include <Utility/AlignedSize.h>
 #include <Rendering/DREDHelper.h>

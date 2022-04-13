@@ -3,7 +3,6 @@
 #pragma once
 
 #include <Rendering/Base.h>
-#include <Rendering/Material.h>
 #include <Rendering/ResourceHandle.h>
 #include <Rendering/ShaderStructs.h>
 
@@ -24,7 +23,7 @@ struct MeshComponent
 		PrimitiveOffset localOffset;
 		size_t indices;
 
-		Material material;
+		size_t materialIndex;
 	};
 
 	std::vector<Subset> subsets;

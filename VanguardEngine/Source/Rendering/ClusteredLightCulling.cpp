@@ -220,7 +220,7 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 
 		list.BindPipeline(depthCullLayout);
 
-		MeshSystem::Render(Renderer::Get(), registry, list, false, bindData);
+		MeshSystem::Render(Renderer::Get(), registry, list, bindData);
 	});
 
 	auto& clusterCompaction = graph.AddPass("Visible Cluster Compaction", ExecutionQueue::Compute);

@@ -7,8 +7,8 @@
 #include <Window/WindowFrame.h>
 #include <Rendering/Device.h>
 #include <Rendering/MeshFactory.h>
+#include <Rendering/MaterialFactory.h>
 #include <Rendering/ResourceHandle.h>
-#include <Rendering/Material.h>
 #include <Rendering/UserInterface.h>
 #include <Rendering/DescriptorAllocator.h>
 #include <Rendering/RenderGraphResourceManager.h>
@@ -28,6 +28,7 @@ public:
 	std::unique_ptr<WindowFrame> window;
 	std::unique_ptr<RenderDevice> device;  // Destruct the device after all other resources.
 	std::unique_ptr<MeshFactory> meshFactory;
+	std::unique_ptr<MaterialFactory> materialFactory;
 
 private:
 	RenderGraphResourceManager renderGraphResources;

@@ -33,10 +33,10 @@ public:
 	MeshFactory(RenderDevice* inDevice, size_t maxVertices, size_t maxIndices);
 	~MeshFactory();
 
-	inline MeshComponent CreateMeshComponent(const std::vector<PrimitiveAssembly>& assemblies, const std::vector<Material>& materials, const std::vector<uint32_t>& materialIndices);
+	inline MeshComponent CreateMeshComponent(const std::vector<PrimitiveAssembly>& assemblies, const std::vector<size_t>& materials, const std::vector<uint32_t>& materialIndices);
 };
 
-inline MeshComponent MeshFactory::CreateMeshComponent(const std::vector<PrimitiveAssembly>& assemblies, const std::vector<Material>& materials, const std::vector<uint32_t>& materialIndices)
+inline MeshComponent MeshFactory::CreateMeshComponent(const std::vector<PrimitiveAssembly>& assemblies, const std::vector<size_t>& materials, const std::vector<uint32_t>& materialIndices)
 {
 	VGScopedCPUStat("Create Mesh Component");
 

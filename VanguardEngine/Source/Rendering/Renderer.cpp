@@ -164,6 +164,7 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 	window = std::move(inWindow);
 	device = std::move(inDevice);
 	meshFactory = std::make_unique<MeshFactory>(device.get(), maxVertices, maxVertices);
+	materialFactory = std::make_unique<MaterialFactory>(device.get(), 1024 * 8);
 
 	device->CheckFeatureSupport();
 
@@ -212,6 +213,8 @@ void Renderer::Render(entt::registry& registry)
 	meshResources.positionTag = graph.Import(meshFactory->vertexPositionBuffer);
 	meshResources.extraTag = graph.Import(meshFactory->vertexExtraBuffer);
 
+	RenderResource materialBufferTag = graph.Import(materialFactory->materialBuffer);
+
 	auto backBufferTag = graph.Import(device->GetBackBuffer());
 	auto cameraBufferTag = graph.Import(cameraBuffer);
 	auto instanceBufferTag = graph.Import(instanceBuffer);
@@ -245,7 +248,7 @@ void Renderer::Render(entt::registry& registry)
 
 		list.BindPipeline(prepassLayout);
 
-		MeshSystem::Render(Renderer::Get(), registry, list, false, bindData);
+		MeshSystem::Render(Renderer::Get(), registry, list, bindData);
 	});
 
 	// #TODO: Don't have this here.
@@ -268,6 +271,7 @@ void Renderer::Render(entt::registry& registry)
 	forwardPass.Read(lightBufferTag, ResourceBind::SRV);
 	forwardPass.Read(meshResources.positionTag, ResourceBind::SRV);
 	forwardPass.Read(meshResources.extraTag, ResourceBind::SRV);
+	forwardPass.Read(materialBufferTag, ResourceBind::SRV);
 	forwardPass.Read(clusterResources.lightList, ResourceBind::SRV);
 	forwardPass.Read(clusterResources.lightInfo, ResourceBind::SRV);
 	forwardPass.Read(iblResources.irradianceTag, ResourceBind::SRV);
@@ -299,9 +303,9 @@ void Renderer::Render(entt::registry& registry)
 			uint32_t cameraIndex;
 			VertexAssemblyData vertexAssemblyData;
 			uint32_t materialBuffer;
+			uint32_t materialIndex;
 			uint32_t lightBuffer;
 			uint32_t sunTransmittanceBuffer;
-			float padding;
 			ClusterData clusterData;
 			IblData iblData;
 		} bindData;
@@ -310,6 +314,7 @@ void Renderer::Render(entt::registry& registry)
 		bindData.cameraBuffer = resources.Get(cameraBufferTag);
 		bindData.vertexAssemblyData.positionBuffer = resources.Get(meshResources.positionTag);
 		bindData.vertexAssemblyData.extraBuffer = resources.Get(meshResources.extraTag);
+		bindData.materialBuffer = resources.Get(materialBufferTag);
 		bindData.lightBuffer = resources.Get(lightBufferTag);
 		bindData.clusterData = clusterData;
 		bindData.iblData = iblData;
@@ -320,7 +325,7 @@ void Renderer::Render(entt::registry& registry)
 
 			list.BindPipeline(forwardOpaqueLayout);
 
-			MeshSystem::Render(Renderer::Get(), registry, list, false, bindData);
+			MeshSystem::Render(Renderer::Get(), registry, list, bindData);
 		}
 	});
 

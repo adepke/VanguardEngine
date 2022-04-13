@@ -34,10 +34,10 @@ struct BindData
 	uint cameraBuffer;
 	uint cameraIndex;
 	VertexAssemblyData vertexAssemblyData;
-	uint materialBuffer;  // #TODO: Replace with material buffer index.
+	uint materialBuffer;
+	uint materialIndex;
 	uint lightBuffer;
 	uint sunTransmittanceBuffer;
-	float padding;
 	ClusterData clusterData;
 	IblData iblData;
 };
@@ -98,7 +98,7 @@ float4 PSMain(PixelIn input) : SV_Target
 	StructuredBuffer<Camera> cameraBuffer = ResourceDescriptorHeap[bindData.cameraBuffer];
 	Camera camera = cameraBuffer[bindData.cameraIndex];
 	StructuredBuffer<MaterialData> materialBuffer = ResourceDescriptorHeap[bindData.materialBuffer];
-	MaterialData material = materialBuffer[0];  // #TODO: Merge all materials into a single buffer.
+	MaterialData material = materialBuffer[bindData.materialIndex];
 	
 	float4 baseColor = input.color;
 	
@@ -114,7 +114,7 @@ float4 PSMain(PixelIn input) : SV_Target
 	float3 normal = input.normal;
 	float ambientOcclusion = 1.0;
 	float3 emissive = { 1.0, 1.0, 1.0 };
-
+	
 	if (material.metallicRoughness > 0)
 	{
 		Texture2D<float4> metallicRoughnessMap = ResourceDescriptorHeap[material.metallicRoughness];
@@ -147,7 +147,7 @@ float4 PSMain(PixelIn input) : SV_Target
 	baseColor *= material.baseColorFactor;
 	metallicRoughness *= float2(material.metallicFactor, material.roughnessFactor);
 	emissive *= material.emissiveFactor;
-
+	
 	float4 output;
 	output.rgb = float3(0.0, 0.0, 0.0);
 	output.a = baseColor.a;
@@ -191,10 +191,10 @@ float4 PSMain(PixelIn input) : SV_Target
 	
 	float width, height, prefilterMipCount;
 	prefilterMap.GetDimensions(0, width, height, prefilterMipCount);
-	
+
 	float3 ibl = ComputeIBL(normalDirection, viewDirection, materialSample, bindData.iblData.prefilterLevels, irradianceMap, prefilterMap, brdfMap, anisotropicWrap);
 	output.rgb += ibl;
-	
+
 	output.rgb += materialSample.emissive;
 	
 	return output;

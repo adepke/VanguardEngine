@@ -22,25 +22,9 @@
 
 namespace AssetLoader
 {
-	Material CreateMaterial(RenderDevice& device, const tinygltf::Material& material, const tinygltf::Model& model)
+	size_t CreateMaterial(RenderDevice& device, const tinygltf::Material& material, const tinygltf::Model& model)
 	{
-		Material result;
-		result.transparent = material.alphaMode != "OPAQUE";
-
-		// #TODO: Single buffer for all materials.
-		BufferDescription tableDesc{
-			.updateRate = ResourceFrequency::Static,
-			.bindFlags = BindFlag::ShaderResource,
-			.accessFlags = AccessFlag::CPUWrite,
-			.size = 1,
-			.stride = sizeof(MaterialData)
-		};
-
-		result.materialBuffer = device.GetResourceManager().Create(tableDesc, VGText("Material table"));
-		device.GetDirectList().TransitionBarrier(result.materialBuffer, D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER);
-
-		AssetManager::Get().EnqueueMaterialLoad(material, result.materialBuffer);
-
+		size_t result = AssetManager::Get().EnqueueMaterialLoad(material);
 		return result;
 	}
 
@@ -116,7 +100,7 @@ namespace AssetLoader
 		}
 
 		std::vector<PrimitiveAssembly> assemblies;
-		std::vector<Material> materials;
+		std::vector<size_t> materials;
 		std::vector<uint32_t> materialIndices;
 		std::list<std::vector<uint32_t>> indices;  // We convert indices instead of using TinyGLTF's stream. One buffer per assembly. Stable buffers.
 

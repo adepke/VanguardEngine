@@ -7,7 +7,6 @@
 #include <Rendering/PipelineState.h>
 #include <Rendering/DescriptorAllocator.h>
 #include <Rendering/CommandList.h>
-#include <Rendering/Material.h>
 
 // #TODO: Fix Windows.h leaking.
 #include <Rendering/ResourceHandle.h>

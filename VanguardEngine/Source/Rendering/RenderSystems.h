@@ -17,7 +17,7 @@ class CommandList;
 struct MeshSystem
 {
 	template <typename T>
-	static void Render(Renderer& renderer, const entt::registry& registry, CommandList& list, bool renderTransparents, T& bindData);
+	static void Render(Renderer& renderer, const entt::registry& registry, CommandList& list, T& bindData);
 };
 
 struct CameraSystem
@@ -26,12 +26,12 @@ struct CameraSystem
 };
 
 // Hacky macro-based reflection solution since std::reflect isn't out yet.
-VGMakeMemberCheck(materialBuffer);
+VGMakeMemberCheck(materialIndex);
 
 // #TODO: Find a better solution than making this a template.
 
 template <typename T>
-void MeshSystem::Render(Renderer& renderer, const entt::registry& registry, CommandList& list, bool renderTransparents, T& bindData)
+void MeshSystem::Render(Renderer& renderer, const entt::registry& registry, CommandList& list, T& bindData)
 {
 	auto& indexBuffer = renderer.device->GetResourceManager().Get(renderer.meshFactory->indexBuffer);
 	D3D12_INDEX_BUFFER_VIEW indexView{
@@ -46,18 +46,12 @@ void MeshSystem::Render(Renderer& renderer, const entt::registry& registry, Comm
 	{
 		for (const auto& subset : mesh.subsets)
 		{
-			if (!renderTransparents && subset.material.transparent)
-				continue;
-
 			bindData.objectIndex = index;
 			bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
 
-			if constexpr (VGHasMember(T, materialBuffer))
+			if constexpr (VGHasMember(T, materialIndex))
 			{
-				if (renderer.device->GetResourceManager().Valid(subset.material.materialBuffer))
-				{
-					bindData.materialBuffer = renderer.device->GetResourceManager().Get(subset.material.materialBuffer).SRV->bindlessIndex;
-				}
+				bindData.materialIndex = subset.materialIndex;
 			}
 
 			bindData.vertexAssemblyData.metadata = mesh.metadata;
