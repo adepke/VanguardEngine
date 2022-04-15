@@ -83,6 +83,10 @@ public:
 	TextureComponent& Get(TextureHandle handle);
 
 	// Source data can be discarded immediately. Offsets are in bytes.
+	template <typename T>
+	void Write(BufferHandle target, const T& source, size_t targetOffset = 0);
+	template <typename T>
+	void Write(TextureHandle target, const T& source);
 	void Write(BufferHandle target, const std::vector<uint8_t>& source, size_t targetOffset = 0);
 	void Write(TextureHandle target, const std::vector<uint8_t>& source);
 
@@ -132,6 +136,24 @@ inline TextureComponent& ResourceManager::Get(TextureHandle handle)
 	VGAssert(registry.valid(handle.handle), "Fetching invalid texture handle.");
 
 	return registry.get<TextureComponent>(handle.handle);
+}
+
+template <typename T>
+inline void ResourceManager::Write(BufferHandle target, const T& source, size_t targetOffset)
+{
+	std::vector<uint8_t> bytes;
+	bytes.resize(sizeof(T));
+	std::memcpy(bytes.data(), &source, sizeof(T));
+	Write(target, bytes, targetOffset);
+}
+
+template <typename T>
+inline void ResourceManager::Write(TextureHandle target, const T& source)
+{
+	std::vector<uint8_t> bytes;
+	bytes.resize(sizeof(T));
+	std::memcpy(bytes.data(), &source, sizeof(T));
+	Write(target, bytes);
 }
 
 inline void ResourceManager::Destroy(BufferHandle handle)
