@@ -192,7 +192,7 @@ void LogDredInfo(ID3D12Device5* device, ID3D12DeviceRemovedExtendedData1* dred)
 
 	else
 	{
-		VGLog(logRendering, "GPU page fault virtual address: {:x}", pageFault.PageFaultVA);
+		VGLog(logRendering, "GPU page fault virtual address: {:#x}", pageFault.PageFaultVA);
 
 		const auto printAllocation = [](auto* node, auto id)
 		{
