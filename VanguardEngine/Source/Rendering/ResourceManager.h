@@ -12,6 +12,8 @@
 #include <vector>
 #include <memory>
 #include <string_view>
+#include <iterator>
+#include <ranges>
 
 class RenderDevice;
 class CommandList;
@@ -82,11 +84,21 @@ public:
 	BufferComponent& Get(BufferHandle handle);
 	TextureComponent& Get(TextureHandle handle);
 
-	// Source data can be discarded immediately. Offsets are in bytes.
+	// Resource writing utilities. Source data can be discarded immediately. Offsets are in bytes.
+
+	// Writing a single unit of data.
 	template <typename T>
 	void Write(BufferHandle target, const T& source, size_t targetOffset = 0);
 	template <typename T>
 	void Write(TextureHandle target, const T& source);
+	
+	// Writing an iterable type (list, vector, etc.) of data.
+	template <typename T> requires std::random_access_iterator<std::ranges::iterator_t<T>>
+	void Write(BufferHandle target, const T& source, size_t targetOffset = 0);
+	template <typename T> requires std::random_access_iterator<std::ranges::iterator_t<T>>
+	void Write(TextureHandle target, const T& source);
+
+	// Writing a raw buffer of bytes.
 	void Write(BufferHandle target, const std::vector<uint8_t>& source, size_t targetOffset = 0);
 	void Write(TextureHandle target, const std::vector<uint8_t>& source);
 
@@ -153,6 +165,26 @@ inline void ResourceManager::Write(TextureHandle target, const T& source)
 	std::vector<uint8_t> bytes;
 	bytes.resize(sizeof(T));
 	std::memcpy(bytes.data(), &source, sizeof(T));
+	Write(target, bytes);
+}
+
+template <typename T>
+	requires std::random_access_iterator<std::ranges::iterator_t<T>>
+inline void ResourceManager::Write(BufferHandle target, const T& source, size_t targetOffset)
+{
+	std::vector<uint8_t> bytes;
+	bytes.resize(std::size(source) * sizeof(T::value_type));
+	std::memcpy(bytes.data(), source.data(), std::size(source) * sizeof(T::value_type));
+	Write(target, bytes, targetOffset);
+}
+
+template <typename T>
+	requires std::random_access_iterator<std::ranges::iterator_t<T>>
+inline void ResourceManager::Write(TextureHandle target, const T& source)
+{
+	std::vector<uint8_t> bytes;
+	bytes.resize(std::size(source) * sizeof(T::value_type));
+	std::memcpy(bytes.data(), source.data(), std::size(source) * sizeof(T::value_type));
 	Write(target, bytes);
 }
 
