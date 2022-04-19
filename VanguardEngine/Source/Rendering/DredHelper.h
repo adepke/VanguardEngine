@@ -3,6 +3,7 @@
 #pragma once
 
 #include <Rendering/Base.h>
+#include <Core/Logging.h>
 #include <Core/Windows/DirectX12Minimal.h>
 
 #include <sstream>
@@ -94,12 +95,12 @@ auto* DredAllocationName(D3D12_DRED_ALLOCATION_TYPE type)
 	}
 }
 
-std::wstringstream GetDredInfo(ID3D12Device5* device, ID3D12DeviceRemovedExtendedData1* dred)
+void LogDredInfo(ID3D12Device5* device, ID3D12DeviceRemovedExtendedData1* dred)
 {
 	D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT1 breadcrumbs;
 	D3D12_DRED_PAGE_FAULT_OUTPUT1 pageFault;
 
-	std::wstringstream output;
+	std::vector<std::pair<int, const D3D12_AUTO_BREADCRUMB_NODE1*>> badNodes;
 
 	auto result = dred->GetAutoBreadcrumbsOutput1(&breadcrumbs);
 	if (FAILED(result))
@@ -112,12 +113,12 @@ std::wstringstream GetDredInfo(ID3D12Device5* device, ID3D12DeviceRemovedExtende
 		auto* node = breadcrumbs.pHeadAutoBreadcrumbNode;
 		if (node)
 		{
-			output << VGText("DRED breadcrumb node(s):\n");
+			VGLog(logRendering, "DRED breadcrumb node(s):");
 		}
 
 		else
 		{
-			output << VGText("No DRED breadcrumbs available.\n");
+			VGLog(logRendering, "No DRED breadcrumbs available.");
 		}
 
 		int nodeId = 0;
@@ -128,11 +129,12 @@ std::wstringstream GetDredInfo(ID3D12Device5* device, ID3D12DeviceRemovedExtende
 			auto count = node->BreadcrumbCount;
 			auto countCompleted = *node->pLastBreadcrumbValue;
 
-			output << VGText("\tNode ") << nodeId << (" from list \"")
-				<< (commandList ? commandList : VGText("Unknown")) << VGText("\", queue \"")
-				<< (commandQueue ? commandQueue : VGText("Unknown")) << VGText("\" contains ")
-				<< count << VGText(" breadcrumb(s), executed ")
-				<< countCompleted << VGText(":\n");
+			if (countCompleted > 0 && countCompleted < count)
+			{
+				badNodes.emplace_back(nodeId, node);
+			}
+
+			VGLog(logRendering, "\tNode {} from list \"{}\", queue \"{}\" executed {}/{} breadcrumbs", nodeId, commandList ? commandList : VGText("Unknown"), commandQueue ? commandQueue : VGText("Unknown"), countCompleted, count);
 			
 			std::unordered_map<uint32_t, const wchar_t*> contextMap;
 			contextMap.reserve(node->BreadcrumbContextsCount);
@@ -147,31 +149,32 @@ std::wstringstream GetDredInfo(ID3D12Device5* device, ID3D12DeviceRemovedExtende
 			{
 				auto command = node->pCommandHistory[i];
 
-				output << VGText("\t\t[") << i << VGText("]: ");
+				std::wstringstream nodeStream;
+				nodeStream << VGText("\t\t[") << i << VGText("]: ");
 
 				if (i < 10)
-					output << VGText("  ");
+					nodeStream << VGText("  ");
 				else if (i < 100)
-					output << VGText(" ");
+					nodeStream << VGText(" ");
 
 				if (command == D3D12_AUTO_BREADCRUMB_OP_ENDEVENT)
 					--stack;
 
 				for (int j = 0; j < stack; ++j)
 				{
-					output << "  ";
+					nodeStream << "  ";
 				}
 
-				output << DredBreadcrumbOpName(command);
+				nodeStream << DredBreadcrumbOpName(command);
 				if (contextMap.contains(i))
 				{
-					output << VGText(": \"") << contextMap[i] << VGText("\"");
+					nodeStream << VGText(": \"") << contextMap[i] << VGText("\"");
 				}
 
 				if (command == D3D12_AUTO_BREADCRUMB_OP_BEGINEVENT)
 					++stack;
 
-				output << "\n";
+				VGLog(logRendering, "{}", nodeStream.str());
 			}
 
 			++nodeId;
@@ -179,7 +182,7 @@ std::wstringstream GetDredInfo(ID3D12Device5* device, ID3D12DeviceRemovedExtende
 		}
 	}
 
-	output << "\n";
+	VGLog(logRendering, "");
 
 	result = dred->GetPageFaultAllocationOutput1(&pageFault);
 	if (FAILED(result))
@@ -189,26 +192,30 @@ std::wstringstream GetDredInfo(ID3D12Device5* device, ID3D12DeviceRemovedExtende
 
 	else
 	{
-		output << VGText("GPU page fault virtual address: 0x") << std::hex << pageFault.PageFaultVA << "\n";
+		VGLog(logRendering, "GPU page fault virtual address: {:x}", pageFault.PageFaultVA);
 
-		const auto printAllocation = [&output](auto* node, auto id)
+		const auto printAllocation = [](auto* node, auto id)
 		{
-			if (id < 10)
-				output << VGText("  ");
-			else if (id < 100)
-				output << VGText(" ");
+			std::wstringstream nodeStream;
 
-			output << VGText("\t[") << id << VGText("]: \"") <<
+			if (id < 10)
+				nodeStream << VGText("  ");
+			else if (id < 100)
+				nodeStream << VGText(" ");
+
+			nodeStream << VGText("\t[") << id << VGText("]: \"") <<
 				(node->ObjectNameW ? node->ObjectNameW : VGText("Unnamed")) <<
 				VGText("\": (") << DredAllocationName(node->AllocationType) <<
 				VGText(") ptr: 0x") << std::hex << node->pObject << VGText("\n");
+
+			VGLog(logRendering, "{}", nodeStream.str());
 		};
 
-		output << VGText("Relevant existing runtime objects:\n");
+		VGLog(logRendering, "Relevant existing runtime objects:");
 		auto* node = pageFault.pHeadExistingAllocationNode;
 		if (!node)
 		{
-			output << VGText("No DRED page fault existing objects available.\n");
+			VGLog(logRendering, "No DRED page fault existing objects available.");
 		}
 
 		int nodeId = 0;
@@ -219,11 +226,12 @@ std::wstringstream GetDredInfo(ID3D12Device5* device, ID3D12DeviceRemovedExtende
 			node = node->pNext;
 		}
 
-		output << VGText("\nRelevant recently freed runtime objects:\n");
+		VGLog(logRendering, "");
+		VGLog(logRendering, "Relevant recently freed runtime objects:");
 		node = pageFault.pHeadRecentFreedAllocationNode;
 		if (!node)
 		{
-			output << VGText("No DRED page fault recently freed objects available.\n");
+			VGLog(logRendering, "No DRED page fault recently freed objects available.");
 		}
 
 		nodeId = 0;
@@ -235,5 +243,45 @@ std::wstringstream GetDredInfo(ID3D12Device5* device, ID3D12DeviceRemovedExtende
 		}
 	}
 
-	return std::move(output);
+	VGLog(logRendering, "");
+	VGLog(logRendering, "======== DRED SUMMARY ========");
+	if (badNodes.size() > 0)
+	{
+		int i = 0;
+		VGLog(logRendering, "Potential culprits:");
+		for (const auto [nodeId, node] : badNodes)
+		{
+			auto* commandList = node->pCommandListDebugNameW;
+			auto* commandQueue = node->pCommandQueueDebugNameW;
+			auto count = node->BreadcrumbCount;
+			auto countCompleted = *node->pLastBreadcrumbValue;
+
+			VGLog(logRendering, "\t[{}] Node {} from list \"{}\", queue \"{}\" did not finish the following execution (completed {}/{}):", i, nodeId, commandList ? commandList : VGText("Unknown"), commandQueue ? commandQueue : VGText("Unknown"), countCompleted, count);
+			
+			std::unordered_map<uint32_t, const wchar_t*> contextMap;
+			contextMap.reserve(node->BreadcrumbContextsCount);
+
+			for (int i = 0; i < node->BreadcrumbContextsCount; ++i)
+			{
+				contextMap[node->pBreadcrumbContexts[i].BreadcrumbIndex] = node->pBreadcrumbContexts[i].pContextString;
+			}
+
+			const auto badCommand = countCompleted;  // 0-indexed, so no +1.
+
+			std::wstringstream nodeStream;
+			nodeStream << DredBreadcrumbOpName(node->pCommandHistory[badCommand]);
+			if (contextMap.contains(badCommand))
+			{
+				nodeStream << VGText(": \"") << contextMap[badCommand] << VGText("\"");
+			}
+
+			VGLog(logRendering, "\t\t  {}", nodeStream.str());
+			++i;
+		}
+	}
+	
+	else
+	{
+		VGLog(logRendering, "Found no potential culprits. All nodes either ran to completion or did not run at all.");
+	}
 }

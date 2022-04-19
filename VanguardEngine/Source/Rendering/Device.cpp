@@ -30,7 +30,7 @@ void OnDeviceRemoved(void* context, uint8_t)
 
 		else
 		{
-			VGLogError(logRendering, "{}", GetDredInfo(device, dred.Get()).str());
+			LogDredInfo(device, dred.Get());
 		}
 	});
 }
