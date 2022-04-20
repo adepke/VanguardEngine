@@ -19,6 +19,7 @@ function IncludeThirdParty()
 	includedirs "VanguardEngine/ThirdParty/PIX/Include"
 	includedirs "VanguardEngine/ThirdParty/TinyGLTF"
 	includedirs "VanguardEngine/ThirdParty/spdlog/include"
+	includedirs "VanguardEngine/ThirdParty/meshoptimizer/src"
 end
 
 function LinkThirdParty()
@@ -35,6 +36,7 @@ function LinkThirdParty()
 	links "spdlog"
 	links "dxcompiler"
 	links "WinPixEventRuntime"
+	links "meshoptimizer"
 end
 
 function RunThirdParty()
@@ -43,6 +45,7 @@ function RunThirdParty()
 	include "VanguardEngine/ThirdParty/Tracy"
 	include "VanguardEngine/ThirdParty/D3D12MemoryAllocator"
 	include "VanguardEngine/ThirdParty/spdlog"
+	include "VanguardEngine/ThirdParty/meshoptimizer"
 end
 
 workspace "Vanguard"
