@@ -100,11 +100,7 @@ void AssetManager::Update()
 	materialData.metallicFactor = static_cast<float>(material.pbrMetallicRoughness.metallicFactor);
 	materialData.roughnessFactor = static_cast<float>(material.pbrMetallicRoughness.roughnessFactor);
 
-	std::vector<uint8_t> materialBytes{};
-	materialBytes.resize(sizeof(materialData));
-	std::memcpy(materialBytes.data(), &materialData, materialBytes.size());
-
 	const auto materialBuffer = Renderer::Get().materialFactory->materialBuffer;
 
-	device->GetResourceManager().Write(materialBuffer, materialBytes, bufferIndex * sizeof(MaterialData));
+	device->GetResourceManager().Write(materialBuffer, materialData, bufferIndex * sizeof(MaterialData));
 }
