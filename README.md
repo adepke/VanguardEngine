@@ -4,9 +4,10 @@ A Direct3D 12 real-time rendering sandbox for exploring evolving render tech.
 ## Key features:
 - Physically-based shading
 - Render graph handling all resources, barriers, and scheduling
+- Indirect GPU-driven rendering, mesh culling performed in compute shaders
 - Fully bindless resources (shader model 6.6+)
 - Precomputed atmospheric scattering model
-- Clustered forward rendering
+- Clustered forward light rendering
 - Image-based lighting
 - Bloom
 - Simple editor
