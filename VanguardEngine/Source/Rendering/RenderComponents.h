@@ -33,8 +33,8 @@ struct MeshComponent
 	{
 		PrimitiveOffset localOffset;
 		size_t indices;
-
 		size_t materialIndex;
+		float boundingSphereRadius;
 	};
 
 	std::vector<Subset> subsets;

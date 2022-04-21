@@ -150,6 +150,16 @@ void RenderGraph::InjectBarriers(RenderDevice* device, size_t passId)
 			if (buffer)
 			{
 				list->TransitionBarrier(*buffer, state);
+
+				if (state == D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT)
+				{
+					// If we have a counter buffer, we need to make sure it's in the proper state.
+					auto& bufferComponent = device->GetResourceManager().Get(*buffer);
+					if (bufferComponent.description.uavCounter)
+					{
+						list->TransitionBarrier(bufferComponent.counterBuffer, state);
+					}
+				}
 			}
 
 			else if (texture)

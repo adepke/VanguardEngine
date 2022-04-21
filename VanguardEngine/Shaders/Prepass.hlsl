@@ -7,18 +7,19 @@
 
 struct BindData
 {
+	uint batchId;
 	uint objectBuffer;
-	uint objectIndex;
 	uint cameraBuffer;
 	uint cameraIndex;
-	VertexAssemblyData vertexAssemblyData;
+	uint vertexPositionBuffer;
 };
 
 ConstantBuffer<BindData> bindData : register(b0);
 
 struct Input
 {
-	uint vertexID : SV_VertexID;
+	uint vertexId : SV_VertexID;
+	uint instanceId : SV_InstanceID;
 };
 
 struct Output
@@ -29,14 +30,19 @@ struct Output
 [RootSignature(RS)]
 Output VSMain(Input input)
 {
-	StructuredBuffer<PerObject> objectBuffer = ResourceDescriptorHeap[bindData.objectBuffer];
-	PerObject perObject = objectBuffer[bindData.objectIndex];
+	StructuredBuffer<ObjectData> objectBuffer = ResourceDescriptorHeap[bindData.objectBuffer];
+	ObjectData object = objectBuffer[bindData.batchId + input.instanceId];
 	StructuredBuffer<Camera> cameraBuffer = ResourceDescriptorHeap[bindData.cameraBuffer];
 	Camera camera = cameraBuffer[bindData.cameraIndex];
 
+	VertexAssemblyData assemblyData;
+	assemblyData.positionBuffer = bindData.vertexPositionBuffer;
+	assemblyData.extraBuffer = 0;  // Unused.
+	assemblyData.metadata = object.vertexMetadata;
+
 	Output output;
-	output.positionCS = LoadVertexPosition(bindData.vertexAssemblyData, input.vertexID);
-	output.positionCS = mul(output.positionCS, perObject.worldMatrix);
+	output.positionCS = LoadVertexPosition(assemblyData, input.vertexId);
+	output.positionCS = mul(output.positionCS, object.worldMatrix);
 	output.positionCS = mul(output.positionCS, camera.view);
 	output.positionCS = mul(output.positionCS, camera.projection);
 

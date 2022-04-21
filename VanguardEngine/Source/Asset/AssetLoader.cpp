@@ -102,6 +102,7 @@ namespace AssetLoader
 		std::vector<PrimitiveAssembly> assemblies;
 		std::vector<size_t> materials;
 		std::vector<uint32_t> materialIndices;
+		std::vector<float> boundingSpheres;
 		std::list<std::vector<uint32_t>> indices;  // We convert indices instead of using TinyGLTF's stream. One buffer per assembly. Stable buffers.
 
 		if (model.scenes.size() > 1)
@@ -186,8 +187,26 @@ namespace AssetLoader
 					}
 				}
 
-				assemblies.emplace_back(std::move(assembly));
+				const auto* positionStream = reinterpret_cast<XMFLOAT3*>(assembly.GetAttributeData("POSITION"));
+				const auto positionCount = assembly.GetAttributeCount("POSITION");
+				float radius = 0.f;
 
+				for (int i = 0; i < positionCount; ++i)
+				{
+					radius = std::max(
+						std::max(
+							std::max(radius, positionStream[i].x),
+							positionStream[i].y
+						),
+						positionStream[i].z
+					);
+				}
+
+				// Can't use since it's too large for a single meshlet...
+				//auto bounds = meshopt_computeClusterBounds(assembly.GetIndexStream().data(), assembly.GetIndexStream().size(), positionStream, assembly.GetAttributeCount("POSITION"), sizeof(XMFLOAT3));
+
+				boundingSpheres.emplace_back(radius);
+				assemblies.emplace_back(std::move(assembly));
 				materialIndices.emplace_back(primitive.material);
 			}
 		}
@@ -201,6 +220,6 @@ namespace AssetLoader
 			}
 		}
 
-		return factory.CreateMeshComponent(assemblies, materials, materialIndices);
+		return factory.CreateMeshComponent(assemblies, materials, materialIndices, boundingSpheres);
 	}
 }

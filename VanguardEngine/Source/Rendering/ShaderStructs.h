@@ -6,12 +6,6 @@
 
 // #TODO: Shader interop or code gen.
 
-// Per-entity data.
-struct EntityInstance
-{
-	XMMATRIX worldMatrix;
-};
-
 struct Camera
 {
 	XMFLOAT4 position;  // World space.
@@ -98,4 +92,20 @@ struct IblData
 	uint32_t prefilterTexture;
 	uint32_t brdfTexture;
 	uint32_t prefilterLevels;
+};
+
+struct ObjectData
+{
+	XMMATRIX worldMatrix;
+	VertexMetadata vertexMetadata;
+	uint32_t materialIndex;
+	float boundingSphereRadius;
+	XMFLOAT2 padding;
+};
+
+struct MeshIndirectArgument
+{
+	uint32_t batchId;
+	D3D12_DRAW_INDEXED_ARGUMENTS draw;
+	XMFLOAT2 padding;
 };

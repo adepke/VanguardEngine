@@ -149,7 +149,7 @@ void ClusteredLightCulling::Initialize(RenderDevice* inDevice)
 	}
 }
 
-ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::registry& registry, RenderResource cameraBuffer, RenderResource depthStencil, RenderResource lightsBuffer, RenderResource instanceBuffer, MeshResources meshResources)
+ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::registry& registry, RenderResource cameraBuffer, RenderResource depthStencil, RenderResource lightsBuffer, RenderResource instanceBuffer, MeshResources meshResources, RenderResource meshIndirectRenderArgs)
 {
 	VGScopedCPUStat("Clustered Light Culling");
 
@@ -183,14 +183,14 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 	clusterDepthCullingPass.Read(depthStencil, ResourceBind::DSV);
 	clusterDepthCullingPass.Read(instanceBuffer, ResourceBind::SRV);
 	clusterDepthCullingPass.Read(meshResources.positionTag, ResourceBind::SRV);
-	clusterDepthCullingPass.Read(meshResources.extraTag, ResourceBind::SRV);
+	clusterDepthCullingPass.Read(meshIndirectRenderArgs, ResourceBind::Indirect);
 	const auto clusterVisibilityTag = clusterDepthCullingPass.Create(TransientBufferDescription{
 		.updateRate = ResourceFrequency::Static,  // Must be static for UAVs.
 		.size = gridInfo.x * gridInfo.y * gridInfo.z,
 		.format = DXGI_FORMAT_R8_UINT
 	}, VGText("Cluster visibility"));
 	clusterDepthCullingPass.Write(clusterVisibilityTag, clusterVisibilityView);
-	clusterDepthCullingPass.Bind([&, cameraBuffer, instanceBuffer, meshResources, clusterVisibilityTag](CommandList& list, RenderPassResources& resources)
+	clusterDepthCullingPass.Bind([&, cameraBuffer, instanceBuffer, meshResources, meshIndirectRenderArgs, clusterVisibilityTag](CommandList& list, RenderPassResources& resources)
 	{
 		RenderUtils::Get().ClearUAV(list, resources.GetBuffer(clusterVisibilityTag), resources.Get(clusterVisibilityTag, "uav_visible"), resources.GetDescriptor(clusterVisibilityTag, "uav_nonvisible"));
 
@@ -198,20 +198,20 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 		list.FlushBarriers();
 
 		struct {
+			uint32_t batchId;
 			uint32_t objectBuffer;
-			uint32_t objectIndex;
 			uint32_t cameraBuffer;
 			uint32_t cameraIndex;
-			VertexAssemblyData vertexAssemblyData;
+			uint32_t vertexPositionBuffer;
 			uint32_t visibilityBuffer;
-			int32_t dimensions[3];
 			float logY;
+			float padding;
+			int32_t dimensions[3];
 		} bindData;
 
 		bindData.objectBuffer = resources.Get(instanceBuffer);
 		bindData.cameraBuffer = resources.Get(cameraBuffer);
-		bindData.vertexAssemblyData.positionBuffer = resources.Get(meshResources.positionTag);
-		bindData.vertexAssemblyData.extraBuffer = resources.Get(meshResources.extraTag);
+		bindData.vertexPositionBuffer = resources.Get(meshResources.positionTag);
 		bindData.visibilityBuffer = resources.Get(clusterVisibilityTag, "uav_visible");
 		bindData.dimensions[0] = gridInfo.x;
 		bindData.dimensions[1] = gridInfo.y;
@@ -220,7 +220,7 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 
 		list.BindPipeline(depthCullLayout);
 
-		MeshSystem::Render(Renderer::Get(), registry, list, bindData);
+		MeshSystem::Render(Renderer::Get(), registry, list, bindData, resources.GetBuffer(meshIndirectRenderArgs));
 	});
 
 	auto& clusterCompaction = graph.AddPass("Visible Cluster Compaction", ExecutionQueue::Compute);

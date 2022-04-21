@@ -469,3 +469,8 @@ void RenderGraphResourceManager::DiscardDescriptors(RenderDevice* device)
 
 	passViews.clear();
 }
+
+void RenderGraphResourceManager::DiscardPipelines()
+{
+	passPipelines.clear();
+}

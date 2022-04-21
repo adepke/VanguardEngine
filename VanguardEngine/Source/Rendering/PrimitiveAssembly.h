@@ -48,6 +48,11 @@ public:
 	template <typename T>
 	void AddVertexStream(const std::string_view name, std::span<T> stream) { vertexStream[std::string{ name }] = stream; }
 
+	const std::span<uint32_t> GetIndexStream() const
+	{
+		return indexStream;
+	}
+
 	size_t GetAttributeSize(const std::string_view name) const
 	{
 		return std::visit([](auto&& arg)

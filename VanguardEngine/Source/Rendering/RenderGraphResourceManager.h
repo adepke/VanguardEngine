@@ -79,6 +79,7 @@ public:
 	void BuildDescriptors(RenderDevice* device, RenderGraph* graph);
 	void DiscardTransients(RenderDevice* device);
 	void DiscardDescriptors(RenderDevice* device);
+	void DiscardPipelines();
 
 public:
 	const uint32_t GetDescriptor(size_t passIndex, const RenderResource resource, const std::string& name);

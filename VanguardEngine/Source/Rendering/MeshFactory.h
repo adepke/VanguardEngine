@@ -33,10 +33,10 @@ public:
 	MeshFactory(RenderDevice* inDevice, size_t maxVertices, size_t maxIndices);
 	~MeshFactory();
 
-	inline MeshComponent CreateMeshComponent(const std::vector<PrimitiveAssembly>& assemblies, const std::vector<size_t>& materials, const std::vector<uint32_t>& materialIndices);
+	inline MeshComponent CreateMeshComponent(const std::vector<PrimitiveAssembly>& assemblies, const std::vector<size_t>& materials, const std::vector<uint32_t>& materialIndices, const std::vector<float>& boundingSpheres);
 };
 
-inline MeshComponent MeshFactory::CreateMeshComponent(const std::vector<PrimitiveAssembly>& assemblies, const std::vector<size_t>& materials, const std::vector<uint32_t>& materialIndices)
+inline MeshComponent MeshFactory::CreateMeshComponent(const std::vector<PrimitiveAssembly>& assemblies, const std::vector<size_t>& materials, const std::vector<uint32_t>& materialIndices, const std::vector<float>& boundingSpheres)
 {
 	VGScopedCPUStat("Create Mesh Component");
 
@@ -137,7 +137,7 @@ inline MeshComponent MeshFactory::CreateMeshComponent(const std::vector<Primitiv
 		indexData.resize(indexData.size() + assembly.indexStream.size_bytes());
 		std::memcpy(indexData.data() + localOffset.index, assembly.indexStream.data(), indexData.size() - localOffset.index);
 
-		component.subsets.emplace_back(localOffset, assembly.indexStream.size(), materials[materialIndices[index]]);
+		component.subsets.emplace_back(localOffset, assembly.indexStream.size(), materials[materialIndices[index]], boundingSpheres[index]);
 
 		++index;
 	}

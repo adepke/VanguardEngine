@@ -20,6 +20,17 @@
 
 #include <entt/entt.hpp>
 
+struct MeshRenderable
+{
+	uint32_t positionOffset;
+	uint32_t extraOffset;
+	uint32_t indexOffset;
+	uint32_t indexCount;
+	uint32_t materialIndex;
+	uint32_t batchId;
+	float boundingSphereRadius;
+};
+
 class CommandList;
 
 class Renderer : public Singleton<Renderer>
@@ -30,28 +41,34 @@ public:
 	std::unique_ptr<MeshFactory> meshFactory;
 	std::unique_ptr<MaterialFactory> materialFactory;
 
-private:
-	RenderGraphResourceManager renderGraphResources;
-
-	BufferHandle instanceBuffer;
-	BufferHandle cameraBuffer;
-
-	RenderPipelineLayout prepassLayout;
-	RenderPipelineLayout forwardOpaqueLayout;
-	RenderPipelineLayout postProcessLayout;
-
-public:
 	float lastFrameTime = -1.f;
-
-public:
 	std::unique_ptr<UserInterfaceManager> userInterface;
 	Atmosphere atmosphere;
 	ClusteredLightCulling clusteredCulling;
 	ImageBasedLighting ibl;
 	Bloom bloom;
 
+	size_t renderableCount;
+
+	ResourcePtr<ID3D12RootSignature> rootSignature;
+	ResourcePtr<ID3D12CommandSignature> meshIndirectCommandSignature;
+
 private:
-	void UpdateInstanceBuffer(const entt::registry& registry);
+	RenderGraphResourceManager renderGraphResources;
+
+	BufferHandle instanceBuffer;
+	BufferHandle cameraBuffer;
+
+	RenderPipelineLayout meshCullLayout;
+	RenderPipelineLayout prepassLayout;
+	RenderPipelineLayout forwardOpaqueLayout;
+	RenderPipelineLayout postProcessLayout;
+
+	BufferHandle meshIndirectRenderArgs;
+
+private:
+	void CreateRootSignature();
+	std::vector<MeshRenderable> UpdateObjects(const entt::registry& registry);
 	void UpdateCameraBuffer(const entt::registry& registry);
 	void CreatePipelines();
 	BufferHandle CreateLightBuffer(const entt::registry& registry);
@@ -68,6 +85,8 @@ public:
 
 	std::pair<uint32_t, uint32_t> GetResolution() const;
 	void SetResolution(uint32_t width, uint32_t height, bool fullscreen);
+
+	void ReloadShaderPipelines();
 };
 
 inline void Renderer::SubmitFrameTime(uint32_t timeUs)

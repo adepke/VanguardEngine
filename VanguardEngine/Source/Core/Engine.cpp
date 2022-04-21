@@ -64,7 +64,7 @@ void EngineBoot()
 
 	spdlog::set_default_logger(logCore);
 	spdlog::set_pattern("[%H:%M:%S.%e][tid:%t][%n.%l] %v");
-	spdlog::flush_on(spdlog::level::critical);
+	spdlog::flush_on(spdlog::level::err);
 	spdlog::flush_every(1s);
 
 	// Not useful to set an error handler, this isn't invoked unless exceptions are enabled.
@@ -144,17 +144,50 @@ void EngineLoop()
 	registry.emplace<CameraComponent>(spectator);
 	registry.emplace<ControlComponent>(spectator);  // #TEMP
 
-	AddHelmet({
-		.scale = { 10.f, 10.f, 10.f },
-		.rotation = { -169.5f * 3.14159f / 180.f, 0.f, 121.5f * 3.14159f / 180.f },
-		.translation = { 78.f, 0.f, -5.f }
+	//AddHelmet({
+	//	.scale = { 10.f, 10.f, 10.f },
+	//	.rotation = { -169.5f * 3.14159f / 180.f, 0.f, 121.5f * 3.14159f / 180.f },
+	//	.translation = { 78.f, 0.f, -5.f }
+	//});
+	//
+	//AddHelmet({
+	//	.scale = { 10.f, 10.f, 10.f },
+	//	.rotation = { 169.5f * 3.14159f / 180.f, 0.f, -20.5f * 3.14159f / 180.f },
+	//	.translation = { 50.f, -20.f, 8.f }
+	//});
+	
+	AddSponza({
+		.scale = { 1.f, 1.f, 1.f },
+		.rotation = { -90.f * 3.14159f / 180.f, 0.f, 0.f },
+		//.translation = { 120.f, -3.f, -21.f }
+		.translation = { 120.f, -3.f, -3500.f }
 	});
 
-	AddSponza({
-		.scale = { 0.1f, 0.1f, 0.1f },
-		.rotation = { -90.f * 3.14159f / 180.f, 0.f, 0.f },
-		.translation = { 120.f, -3.f, -21.f }
-	});
+	const auto helmetMesh = AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/DamagedHelmet/HelmetTangents.glb");
+	int perAxis = 25;
+	float spacing = 50.f;
+	for (int i = 0; i < perAxis; i++)
+	{
+		for (int j = 0; j < perAxis; j++)
+		{
+			for (int k = 0; k < perAxis; k++)
+			{
+				TransformComponent transform = {
+					.scale = { 10.f, 10.f, 10.f },
+					.rotation = { (float)Rand(-2.0, 2.0) * 3.142f, (float)Rand(-2.0, 2.0) * 3.142f, (float)Rand(-2.0, 2.0) * 3.142f },
+					.translation = {
+						(i * spacing) - (perAxis * spacing / 2.f),
+						(j * spacing) - (perAxis * spacing / 2.f),
+						(k * spacing) - (perAxis * spacing / 2.f)
+					}
+				};
+
+				const auto entity = registry.create();
+				registry.emplace<TransformComponent>(entity, transform);
+				registry.emplace<MeshComponent>(entity, helmetMesh);
+			}
+		}
+	}
 
 	const auto light = registry.create();
 	registry.emplace<LightComponent>(light, LightComponent{ .type = LightType::Point, .color = { 1.f, 1.f, 1.f } });

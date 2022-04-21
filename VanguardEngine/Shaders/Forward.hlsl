@@ -29,15 +29,16 @@ struct IblData
 
 struct BindData
 {
+	uint batchId;
 	uint objectBuffer;
-	uint objectIndex;
 	uint cameraBuffer;
 	uint cameraIndex;
-	VertexAssemblyData vertexAssemblyData;
 	uint materialBuffer;
-	uint materialIndex;
 	uint lightBuffer;
 	uint sunTransmittanceBuffer;
+	uint vertexPositionBuffer;
+	uint vertexExtraBuffer;
+	float3 padding;
 	ClusterData clusterData;
 	IblData iblData;
 };
@@ -46,7 +47,8 @@ ConstantBuffer<BindData> bindData : register(b0);
 
 struct VertexIn
 {
-	uint vertexID : SV_VertexID;
+	uint vertexId : SV_VertexID;
+	uint instanceId : SV_InstanceID;
 };
 
 struct PixelIn
@@ -59,35 +61,42 @@ struct PixelIn
 	float3 bitangent : BITANGENT;  // World space.
 	float depthVS : DEPTH;  // View space.
 	float4 color : COLOR;
+	uint instanceId : SV_InstanceID;
 };
 
 [RootSignature(RS)]
 PixelIn VSMain(VertexIn input)
 {
-	StructuredBuffer<PerObject> objectBuffer = ResourceDescriptorHeap[bindData.objectBuffer];
-	PerObject perObject = objectBuffer[bindData.objectIndex];
+	StructuredBuffer<ObjectData> objectBuffer = ResourceDescriptorHeap[bindData.objectBuffer];
+	ObjectData object = objectBuffer[bindData.batchId + input.instanceId];
 	StructuredBuffer<Camera> cameraBuffer = ResourceDescriptorHeap[bindData.cameraBuffer];
 	Camera camera = cameraBuffer[bindData.cameraIndex];
+
+	VertexAssemblyData assemblyData;
+	assemblyData.positionBuffer = bindData.vertexPositionBuffer;
+	assemblyData.extraBuffer = bindData.vertexExtraBuffer;
+	assemblyData.metadata = object.vertexMetadata;
 	
-	float4 position = LoadVertexPosition(bindData.vertexAssemblyData, input.vertexID);
-	float4 normal = float4(LoadVertexNormal(bindData.vertexAssemblyData, input.vertexID), 0.f);
-	float2 uv = LoadVertexTexcoord(bindData.vertexAssemblyData, input.vertexID);
-	float4 tangent = LoadVertexTangent(bindData.vertexAssemblyData, input.vertexID);
-	float4 bitangent = LoadVertexBitangent(bindData.vertexAssemblyData, input.vertexID);
-	float4 color = LoadVertexColor(bindData.vertexAssemblyData, input.vertexID);
+	float4 position = LoadVertexPosition(assemblyData, input.vertexId);
+	float4 normal = float4(LoadVertexNormal(assemblyData, input.vertexId), 0.f);
+	float2 uv = LoadVertexTexcoord(assemblyData, input.vertexId);
+	float4 tangent = LoadVertexTangent(assemblyData, input.vertexId);
+	float4 bitangent = LoadVertexBitangent(assemblyData, input.vertexId);
+	float4 color = LoadVertexColor(assemblyData, input.vertexId);
 	
 	PixelIn output;
 	output.positionCS = position;
-	output.positionCS = mul(output.positionCS, perObject.worldMatrix);
+	output.positionCS = mul(output.positionCS, object.worldMatrix);
 	output.positionCS = mul(output.positionCS, camera.view);
 	output.depthVS = output.positionCS.z;
 	output.positionCS = mul(output.positionCS, camera.projection);
-	output.position = mul(position, perObject.worldMatrix).xyz;
-	output.normal = normalize(mul(normal, perObject.worldMatrix)).xyz;
+	output.position = mul(position, object.worldMatrix).xyz;
+	output.normal = normalize(mul(normal, object.worldMatrix)).xyz;
 	output.uv = uv;
-	output.tangent = normalize(mul(tangent, perObject.worldMatrix)).xyz;
-	output.bitangent = normalize(mul(bitangent, perObject.worldMatrix)).xyz;
+	output.tangent = normalize(mul(tangent, object.worldMatrix)).xyz;
+	output.bitangent = normalize(mul(bitangent, object.worldMatrix)).xyz;
 	output.color = color;
+	output.instanceId = input.instanceId;
 	
 	return output;
 }
@@ -95,10 +104,12 @@ PixelIn VSMain(VertexIn input)
 [RootSignature(RS)]
 float4 PSMain(PixelIn input) : SV_Target
 {
+	StructuredBuffer<ObjectData> objectBuffer = ResourceDescriptorHeap[bindData.objectBuffer];
+	ObjectData object = objectBuffer[bindData.batchId + input.instanceId];
 	StructuredBuffer<Camera> cameraBuffer = ResourceDescriptorHeap[bindData.cameraBuffer];
 	Camera camera = cameraBuffer[bindData.cameraIndex];
 	StructuredBuffer<MaterialData> materialBuffer = ResourceDescriptorHeap[bindData.materialBuffer];
-	MaterialData material = materialBuffer[bindData.materialIndex];
+	MaterialData material = materialBuffer[object.materialIndex];
 	
 	float4 baseColor = input.color;
 	
