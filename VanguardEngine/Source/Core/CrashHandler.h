@@ -10,6 +10,8 @@
 #include <condition_variable>
 
 void RegisterCrashHandlers();
+void SuspendProcessThreads();
+void ResumeProcessThreads();
 void ReportInternalCrashEvent(const std::wstring& reason, bool printToLog);
 bool HasDebuggerAttached();
 
@@ -31,6 +33,10 @@ VGForceInline void RequestCrash(const std::function<void()>& handler = []() {})
 		crashedFlag = true;
 		lock.unlock();
 
+		// Pause all other threads from running so we have a more accurate snapshot of the failure,
+		// and to prevent them from writing (non-fatally) to the log during our crashing handling.
+		SuspendProcessThreads();
+
 		// We were the first thread to report a crash, execute our handler.
 		handler();
 
@@ -40,6 +46,8 @@ VGForceInline void RequestCrash(const std::function<void()>& handler = []() {})
 		{
 			VGBreak();
 		}
+
+		ResumeProcessThreads();
 
 		condVar.notify_all();
 

@@ -1,6 +1,8 @@
 // Copyright (c) 2019-2022 Andrew Depke
 
 #include <Core/CrashHandler.h>
+#include <Core/Logging.h>
+#include <Core/Globals.h>
 #include <Core/Windows/WindowsMinimal.h>
 
 #include <errhandlingapi.h>
@@ -77,6 +79,42 @@ void RegisterCrashHandlers()
 		return EXCEPTION_EXECUTE_HANDLER;
 	});
 };
+
+std::vector<HANDLE> threadHandles;
+
+void SuspendProcessThreads()
+{
+	const auto caller = std::this_thread::get_id();
+
+	for (auto thread : GProcessThreads)
+	{
+		if (thread != caller)
+		{
+			const auto id = *(DWORD*)&thread;
+			auto threadHandle = OpenThread(THREAD_SUSPEND_RESUME, false , id);
+			if (threadHandle != 0)
+			{
+				SuspendThread(threadHandle);
+			}
+			
+			else
+			{
+				VGLog(logCore, "Failed to suspend process thread {}: {}", id, GetLastError());
+			}
+		}
+	}
+}
+
+void ResumeProcessThreads()
+{
+	for (auto handle : threadHandles)
+	{
+		ResumeThread(handle);
+		CloseHandle(handle);
+	}
+
+	threadHandles.clear();
+}
 
 void ReportInternalCrashEvent(const std::wstring& reason, bool printToLog)
 {

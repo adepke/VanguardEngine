@@ -9,6 +9,8 @@
 
 #include <Core/Logging.h>  // spdlog leaks Windows.h, likely with lean and mean defined, so we have to include it after.
 
+#include <thread>
+
 void ParseCommandLine()
 {
 	VGScopedCPUStat("Parse Command Line");
@@ -30,6 +32,8 @@ int WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPS
 VGWarningPop
 {
 	ParseCommandLine();
+
+	GProcessThreads.emplace_back(std::this_thread::get_id());
 
 	return static_cast<int>(EngineMain());
 }

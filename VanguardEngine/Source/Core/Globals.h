@@ -4,5 +4,7 @@
 
 #include <vector>
 #include <string>
+#include <thread>
 
-static std::vector<std::wstring> GCommandLineArgs;
+inline std::vector<std::wstring> GCommandLineArgs;
+inline std::vector<std::thread::id> GProcessThreads;
