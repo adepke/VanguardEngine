@@ -295,6 +295,14 @@ void Renderer::Render(entt::registry& registry)
 {
 	VGScopedCPUStat("Render");
 
+	// Check if shaders need to be reloaded here since we might be requested at anytime during the frame.
+	if (shouldReloadShaders)
+	{
+		device->Synchronize();
+		renderGraphResources.DiscardPipelines();
+		shouldReloadShaders = false;
+	}
+
 	// Only run once for now since this becomes the bottleneck running every frame with 100k+ objects.
 	static bool objectsUpdated = false;
 	if (!objectsUpdated)
@@ -567,6 +575,5 @@ void Renderer::SetResolution(uint32_t width, uint32_t height, bool fullscreen)
 
 void Renderer::ReloadShaderPipelines()
 {
-	device->Synchronize();
-	renderGraphResources.DiscardPipelines();
+	shouldReloadShaders = true;
 }

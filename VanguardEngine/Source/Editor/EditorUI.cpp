@@ -23,6 +23,7 @@ void EditorUI::DrawMenu()
 	{
 		if (ImGui::BeginMenu("View"))
 		{
+			ImGui::MenuItem("Controls", nullptr, &controlsOpen);
 			ImGui::MenuItem("Entity Hierarchy", nullptr, &entityHierarchyOpen);
 			ImGui::MenuItem("Entity Properties", nullptr, &entityPropertyViewerOpen);
 			ImGui::MenuItem("Metrics", nullptr, &metricsOpen);
@@ -204,6 +205,22 @@ void EditorUI::DrawScene(RenderDevice* device, entt::registry& registry, Texture
 	ImGui::End();
 
 	ImGui::PopStyleVar();
+}
+
+void EditorUI::DrawControls(RenderDevice* device)
+{
+	if (controlsOpen)
+	{
+		if (ImGui::Begin("Controls", &controlsOpen))
+		{
+			if (ImGui::Button("Reload Shaders"))
+			{
+				Renderer::Get().ReloadShaderPipelines();
+			}
+		}
+
+		ImGui::End();
+	}
 }
 
 void EditorUI::DrawEntityHierarchy(entt::registry& registry)

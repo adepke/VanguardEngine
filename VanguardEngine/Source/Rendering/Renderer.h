@@ -66,6 +66,8 @@ private:
 
 	BufferHandle meshIndirectRenderArgs;
 
+	bool shouldReloadShaders = false;
+
 private:
 	void CreateRootSignature();
 	std::vector<MeshRenderable> UpdateObjects(const entt::registry& registry);

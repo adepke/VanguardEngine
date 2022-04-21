@@ -77,6 +77,7 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 			ui->DrawLayout();
 			ui->DrawDemoWindow();
 			ui->DrawScene(&device, registry, resources.GetTexture(outputLDR));
+			ui->DrawControls(&device);
 			ui->DrawEntityHierarchy(registry);
 			ui->DrawEntityPropertyViewer(registry);
 			ui->DrawMetrics(&device, renderer.lastFrameTime);

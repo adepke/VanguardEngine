@@ -32,6 +32,7 @@ private:
 	bool fullscreen = false;
 
 	// Window states.
+	bool controlsOpen = true;
 	bool entityHierarchyOpen = true;
 	bool entityPropertyViewerOpen = true;
 	bool metricsOpen = true;
@@ -67,6 +68,7 @@ public:
 	void DrawLayout();
 	void DrawDemoWindow();
 	void DrawScene(RenderDevice* device, entt::registry& registry, TextureHandle sceneTexture);
+	void DrawControls(RenderDevice* device);
 	void DrawEntityHierarchy(entt::registry& registry);
 	void DrawEntityPropertyViewer(entt::registry& registry);
 	void DrawMetrics(RenderDevice* device, float frameTimeMs);
