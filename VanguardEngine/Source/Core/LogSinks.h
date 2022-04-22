@@ -13,6 +13,7 @@ class TracySink : public spdlog::sinks::base_sink<Mutex>
 protected:
 	virtual void sink_it_(const spdlog::details::log_msg& msg) override
 	{
+#if ENABLE_PROFILING
 		spdlog::memory_buf_t formatted;
 		spdlog::sinks::base_sink<Mutex>::formatter_->format(msg, formatted);
 		const auto msgFormatted = fmt::to_string(formatted);
@@ -31,6 +32,7 @@ protected:
 		case spdlog::level::critical: TracyMessageC(msgFormatted.c_str(), msgFormatted.size(), tracy::Color::Red); break;
 		default: TracyMessage(msgFormatted.c_str(), msgFormatted.size()); break;
 		}
+#endif
 	}
 
 	virtual void flush_() override {}

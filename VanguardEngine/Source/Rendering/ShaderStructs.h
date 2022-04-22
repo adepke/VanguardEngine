@@ -4,6 +4,8 @@
 
 #include <Rendering/Base.h>
 
+#include <Core/Windows/DirectX12Minimal.h>
+
 // #TODO: Shader interop or code gen.
 
 struct Camera

@@ -6,6 +6,8 @@
 #include <Rendering/Shader.h>
 #include <Rendering/ShaderMacro.h>
 
+#include <Core/Windows/DirectX12Minimal.h>
+
 #include <filesystem>
 #include <map>
 #include <utility>

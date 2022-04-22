@@ -7,18 +7,20 @@
 #include <Utility/Singleton.h>
 #include <Core/CrashHandler.h>
 
-#include <spdlog/logger.h>
-
-#if ENABLE_PROFILING
-#include <Tracy.hpp>
-
 // TracyD3D12.hpp includes wrl/client.h, which is a big leak.
 // #TODO: Fix Windows.h leaking.
 #define NOMINMAX
-
 #include <TracyD3D12.hpp>
+
+// Need to include this before windows minimal to prevent compiler errors.
+#if ENABLE_PROFILING
 #include <WinPixEventRuntime/pix3.h>
 #endif
+
+#include <Core/Windows/WindowsMinimal.h>
+
+#include <spdlog/logger.h>
+#include <Tracy.hpp>
 
 #include <memory>
 
@@ -52,7 +54,9 @@ extern std::shared_ptr<spdlog::logger> logWindow;
 #define VGStatFrameGPU(context) TracyD3D12Collect(context); TracyD3D12NewFrame(context)
 #else
 #define VGScopedCPUStat(name) do {} while (0)
+#define VGScopedCPUTransientStat(name) do {} while (0)
 #define VGScopedGPUStat(name) do {} while (0)
+#define VGScopedGPUTransientStat(name, context, list) do {} while (0)
 #define VGStatFrameCPU() do {} while (0)
 #define VGStatFrameGPU(context) do {} while (0)
 #endif
