@@ -50,7 +50,7 @@ void EditorUI::DrawFrameTimeHistory()
 {
 	// Compute statistics.
 	const auto [min, max] = std::minmax_element(frameTimes.begin(), frameTimes.end());
-	const auto mean = std::accumulate(frameTimes.begin(), frameTimes.end(), 0) / static_cast<float>(frameTimes.size());
+	const auto mean = std::accumulate(frameTimes.begin(), frameTimes.end(), 0) / static_cast<float>(frameTimes.size());	
 
 	auto* window = ImGui::GetCurrentWindow();
 	auto& style = ImGui::GetStyle();
@@ -76,14 +76,17 @@ void EditorUI::DrawFrameTimeHistory()
 
 	if (frameTimes.size() > 1)
 	{
-		const ImVec2 lineSize = { frameRenderSpace.GetWidth() / (frameTimes.size() - 1), frameRenderSpace.GetHeight() / (*max - *min) };
+		// Pad out the min/max range.
+		const auto range = std::max((*max - *min) + 5.f, 20.f);
+
+		const ImVec2 lineSize = { frameRenderSpace.GetWidth() / (frameTimes.size() - 1), frameRenderSpace.GetHeight() / (range * 2.f) };
 		const auto lineColor = ImGui::ColorConvertFloat4ToU32(style.Colors[ImGuiCol_PlotLines]);
 
 		for (int i = 0; i < frameTimes.size() - 1; ++i)  // Don't draw the final point.
 		{
 			window->DrawList->AddLine(
-				{ frameRenderSpace.Min.x + (lineSize.x * i), frameRenderSpace.Min.y + frameRenderSpace.GetHeight() - (lineSize.y * (frameTimes[i] - *min)) },
-				{ frameRenderSpace.Min.x + (lineSize.x * (i + 1)), frameRenderSpace.Min.y + frameRenderSpace.GetHeight() - (lineSize.y * (frameTimes[i + 1] - *min)) },
+				{ frameRenderSpace.Min.x + (lineSize.x * i), frameRenderSpace.Min.y + (frameRenderSpace.GetHeight() / 2.f) + (mean - frameTimes[i]) * lineSize.y },
+				{ frameRenderSpace.Min.x + (lineSize.x * (i + 1)), frameRenderSpace.Min.y + (frameRenderSpace.GetHeight() / 2.f) + (mean - frameTimes[i + 1]) * lineSize.y },
 				lineColor);
 		}
 	}
