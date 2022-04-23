@@ -4,6 +4,7 @@
 
 std::shared_ptr<spdlog::logger> logAsset;
 std::shared_ptr<spdlog::logger> logCore;
+std::shared_ptr<spdlog::logger> logEditor;
 std::shared_ptr<spdlog::logger> logRendering;
 std::shared_ptr<spdlog::logger> logThreading;
 std::shared_ptr<spdlog::logger> logUtility;

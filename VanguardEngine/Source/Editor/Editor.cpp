@@ -37,7 +37,7 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 	// Allow toggling the editor rendering entirely with F1.
 	auto& io = ImGui::GetIO();
 	static bool newPress = true;
-	if (io.KeysDown[0x70])
+	if (io.KeysDown[VK_F1])
 	{
 		if (newPress)
 		{
@@ -103,4 +103,9 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 		});
 	}
 #endif
+}
+
+void Editor::LogMessage(const std::string& message)
+{
+	ui->AddConsoleMessage(message);
 }

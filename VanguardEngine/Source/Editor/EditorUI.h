@@ -40,12 +40,16 @@ private:
 	bool atmosphereControlsOpen = true;
 	bool bloomControlsOpen = true;
 	bool renderVisualizerOpen = true;
+	bool consoleOpen = false;
 
 	// Focus states.
 	bool entityPropertyViewerFocus = false;
 
 	std::deque<float> frameTimes;
 	size_t frameTimeHistoryCount = 0;
+	std::deque<std::string> consoleMessages;
+	bool needsScrollUpdate = true;
+	bool consoleFullyScrolled = false;
 
 	// Scene drawing information.
 	float sceneWidthUV;
@@ -62,6 +66,8 @@ public:
 private:
 	void DrawMenu();
 	void DrawFrameTimeHistory();
+	bool ExecuteCommand(const std::string& command);
+	void DrawConsole(const ImVec2& min, const ImVec2& max);
 
 public:
 	void Update();
@@ -76,4 +82,6 @@ public:
 	void DrawAtmosphereControls(Atmosphere& atmosphere);
 	void DrawBloomControls(Bloom& bloom);
 	void DrawRenderVisualizer(RenderDevice* device, ClusteredLightCulling& clusteredCulling, TextureHandle overlay);
+
+	void AddConsoleMessage(const std::string& message);
 };

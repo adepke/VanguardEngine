@@ -54,9 +54,11 @@ void EngineBoot()
 	auto fileSink = std::make_shared<spdlog::sinks::basic_file_sink_mt>("Log.txt", true);
 	auto msvcSink = std::make_shared<spdlog::sinks::msvc_sink_mt>();
 	auto tracySink = std::make_shared<TracySink_mt>();
+	auto editorSink = std::make_shared<EditorSink_mt>();
 	
-	logCore = std::make_shared<spdlog::logger>("core", spdlog::sinks_init_list{ fileSink, msvcSink, tracySink });
+	logCore = std::make_shared<spdlog::logger>("core", spdlog::sinks_init_list{ fileSink, msvcSink, tracySink, editorSink });
 	logAsset = logCore->clone("asset");
+	logEditor = logCore->clone("editor");
 	logRendering = logCore->clone("rendering");
 	logThreading = logCore->clone("threading");
 	logUtility = logCore->clone("utility");
@@ -145,7 +147,7 @@ void EngineLoop()
 	registry.emplace<ControlComponent>(spectator);  // #TEMP
 
 	//AddHelmet({
-	//	.scale = { 10.f, 10.f, 10.f },
+	//	.scale = { 1.f, 1.f, 1.f },
 	//	.rotation = { -169.5f * 3.14159f / 180.f, 0.f, 121.5f * 3.14159f / 180.f },
 	//	.translation = { 78.f, 0.f, -5.f }
 	//});

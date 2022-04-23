@@ -16,6 +16,9 @@
 
 #include <algorithm>
 #include <numeric>
+#include <string>
+#include <sstream>
+#include <optional>
 
 void EditorUI::DrawMenu()
 {
@@ -24,6 +27,7 @@ void EditorUI::DrawMenu()
 		if (ImGui::BeginMenu("View"))
 		{
 			ImGui::MenuItem("Controls", nullptr, &controlsOpen);
+			ImGui::MenuItem("Console", "F2", &consoleOpen);
 			ImGui::MenuItem("Entity Hierarchy", nullptr, &entityHierarchyOpen);
 			ImGui::MenuItem("Entity Properties", nullptr, &entityPropertyViewerOpen);
 			ImGui::MenuItem("Metrics", nullptr, &metricsOpen);
@@ -101,6 +105,222 @@ void EditorUI::DrawFrameTimeHistory()
 		ImGui::Text("Min:  %.3f", *min / 1000.f);
 
 		ImGui::EndGroup();
+	}
+}
+
+bool EditorUI::ExecuteCommand(const std::string& command)
+{
+	const auto assignment = command.find('=');
+	if (assignment == std::string::npos)
+	{
+		return false;
+	}
+
+	const auto strip = [](const auto& str)
+	{
+		std::string result = str;
+		const auto start = str.find_first_not_of(' ');
+		const auto end = str.find_last_not_of(' ');
+		if (end != std::string::npos)
+		{
+			result.erase(end + 1);
+		}
+		if (start != std::string::npos)
+		{
+			result.erase(0, start);
+		}
+
+		return result;
+	};
+
+	std::string data = strip(command.substr(assignment + 1));
+	std::string cvar = strip(command.substr(0, assignment));
+	if (data.size() == 0 || cvar.size() == 0)
+	{
+		return false;
+	}
+
+	std::transform(cvar.begin(), cvar.end(), cvar.begin(), [](auto c)
+	{
+		return std::tolower(c);
+	});
+
+	std::optional<const Cvar*> cvarData;
+
+	// Search for the proper capitalization.
+	for (const auto& [key, cvarIt] : CvarManager::Get().cvars)
+	{
+		auto cvarName = cvarIt.name;
+		std::transform(cvarName.begin(), cvarName.end(), cvarName.begin(), [](auto c)
+		{
+			return std::tolower(c);
+		});
+
+		if (cvarName == cvar)
+		{
+			cvarData = &cvarIt;
+			break;
+		}
+	}
+
+	if (!cvarData)
+	{
+		return false;
+	}
+
+	std::stringstream dataStream;
+	dataStream << data;
+
+	switch ((*cvarData)->type)
+	{
+	case Cvar::CvarType::Int:
+	{
+		int data;
+		dataStream >> data;
+		CvarManager::Get().SetVariable(entt::hashed_string::value((*cvarData)->name.c_str(), (*cvarData)->name.size()), data);
+		break;
+	}
+	case Cvar::CvarType::Float:
+	{
+		float data;
+		dataStream >> data;
+		CvarManager::Get().SetVariable(entt::hashed_string::value((*cvarData)->name.c_str(), (*cvarData)->name.size()), data);
+		break;
+	}
+	default:
+		VGLogError(logEditor, "Attempted to execute cvar command with unknown type {}", (*cvarData)->type);
+		return false;
+	}
+
+	return true;
+}
+
+void EditorUI::DrawConsole(const ImVec2& min, const ImVec2& max)
+{
+	auto& io = ImGui::GetIO();
+	static bool newPress = true;
+	if (io.KeysDown[VK_F2])
+	{
+		if (newPress)
+		{
+			consoleOpen = !consoleOpen;
+			newPress = false;
+		}
+	}
+	else
+	{
+		newPress = true;
+	}
+
+	if (consoleOpen)
+	{
+		auto windowMin = min;
+		auto windowMax = max;
+
+		// Limit the height.
+		constexpr auto heightMax = 220.f;
+		const auto height = std::min(max.y - min.y, heightMax);
+		windowMax.y = windowMin.y + height;
+
+		if (ImGui::BeginChild("Console", { 0, 0 }, true,
+			ImGuiWindowFlags_NoTitleBar |
+			ImGuiWindowFlags_NoResize |
+			ImGuiWindowFlags_NoMove |
+			ImGuiWindowFlags_NoScrollbar |
+			ImGuiWindowFlags_NoCollapse |
+			ImGuiWindowFlags_NoBackground |
+			ImGuiWindowFlags_NoSavedSettings))
+		{
+			auto* window = ImGui::GetCurrentWindow();
+			auto& style = ImGui::GetStyle();
+
+			constexpr auto frameColor = IM_COL32(20, 20, 20, 238);
+
+			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 0, 0 });
+			ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, frameColor);
+
+			ImGui::BeginChild("Console History", windowMax - windowMin, false,
+				ImGuiWindowFlags_NoTitleBar |
+				ImGuiWindowFlags_NoResize |
+				ImGuiWindowFlags_NoMove |
+				ImGuiWindowFlags_NoCollapse |
+				ImGuiWindowFlags_NoBackground |
+				ImGuiWindowFlags_NoSavedSettings);
+			
+			ImGui::RenderFrame(windowMin, windowMax, frameColor, true);
+
+			ImGui::SetCursorPos(windowMin);
+
+			// Draw the log history.
+
+			for (const auto& message : consoleMessages)
+			{
+				ImGui::Text("%s", message.c_str());
+			}
+
+			if (needsScrollUpdate)
+			{
+				ImGui::SetScrollHereY(1.f);
+				needsScrollUpdate = false;
+			}
+
+			consoleFullyScrolled = ImGui::GetCursorPosY() - ImGui::GetScrollY() < 240.f;  // Magic value comes from weird empty area at top, oh well.
+
+			ImGui::EndChild();
+			ImGui::PopStyleColor();
+
+			// Draw the text bar.
+
+			const auto textBarStart = ImGui::GetCursorPos();
+
+			ImGui::PushStyleColor(ImGuiCol_FrameBg, IM_COL32(20, 20, 20, 245));
+
+			static char buffer[256] = { 0 };
+			
+			std::vector<const Cvar*> cvarMatches;
+			if (buffer[0] != '\0')
+			{
+				std::string bufferStr = buffer;
+				std::transform(bufferStr.begin(), bufferStr.end(), bufferStr.begin(), [](auto c)
+				{
+					return std::tolower(c);
+				});
+
+				for (const auto& [key, cvar] : CvarManager::Get().cvars)
+				{
+					auto cvarName = cvar.name;
+					std::transform(cvarName.begin(), cvarName.end(), cvarName.begin(), [](auto c)
+					{
+						return std::tolower(c);
+					});
+
+					if (cvarName.find(bufferStr) != std::string::npos)
+					{
+						cvarMatches.emplace_back(&cvar);
+					}
+				}
+			}
+
+			ImGui::SetCursorPos(textBarStart);
+			if (ImGui::InputTextEx("", "", buffer, std::size(buffer), { windowMax.x - windowMin.x, 0 }, ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue))
+			{
+				if (ExecuteCommand(buffer))
+				{
+					buffer[0] = '\0';  // Clear the field.
+					needsScrollUpdate = true;
+				}
+			}
+
+			for (const auto cvar : cvarMatches)
+			{
+				ImGui::Text(cvar->name.c_str());
+			}
+
+			ImGui::PopStyleColor();
+			ImGui::PopStyleVar();
+		}
+
+		ImGui::EndChild();
 	}
 }
 
@@ -203,6 +423,9 @@ void EditorUI::DrawScene(RenderDevice* device, entt::registry& registry, Texture
 
 			ImGui::EndDragDropTarget();
 		}
+
+		ImGui::SetCursorPos(viewportMin);
+		DrawConsole(sceneViewportMin, sceneViewportMax);
 	}
 
 	ImGui::End();
@@ -589,5 +812,15 @@ void EditorUI::DrawRenderVisualizer(RenderDevice* device, ClusteredLightCulling&
 		}
 
 		ImGui::End();
+	}
+}
+
+void EditorUI::AddConsoleMessage(const std::string& message)
+{
+	consoleMessages.push_back(message);
+
+	if (consoleFullyScrolled)
+	{
+		needsScrollUpdate = true;
 	}
 }

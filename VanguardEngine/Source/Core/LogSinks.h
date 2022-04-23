@@ -2,6 +2,8 @@
 
 #pragma once
 
+#include <Editor/Editor.h>  // Careful with this include.
+
 #include <spdlog/sinks/base_sink.h>
 #include <spdlog/details/null_mutex.h>
 
@@ -40,3 +42,21 @@ protected:
 
 // Tracy will handle multi-threaded messages internally.
 using TracySink_mt = TracySink<spdlog::details::null_mutex>;
+
+template <typename Mutex>
+class EditorSink : public spdlog::sinks::base_sink<Mutex>
+{
+protected:
+	virtual void sink_it_(const spdlog::details::log_msg& msg) override
+	{
+		spdlog::memory_buf_t formatted;
+		spdlog::sinks::base_sink<Mutex>::formatter_->format(msg, formatted);
+		const auto msgFormatted = fmt::to_string(formatted);
+
+		Editor::Get().LogMessage(msgFormatted);
+	}
+
+	virtual void flush_() override {}
+};
+
+using EditorSink_mt = EditorSink<std::mutex>;
