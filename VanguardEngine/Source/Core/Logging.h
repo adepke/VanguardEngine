@@ -55,7 +55,7 @@ extern std::shared_ptr<spdlog::logger> logWindow;
 #else
 #define VGScopedCPUStat(name) do {} while (0)
 #define VGScopedCPUTransientStat(name) do {} while (0)
-#define VGScopedGPUStat(name) do {} while (0)
+#define VGScopedGPUStat(name, context, list) do {} while (0)
 #define VGScopedGPUTransientStat(name, context, list) do {} while (0)
 #define VGStatFrameCPU() do {} while (0)
 #define VGStatFrameGPU(context) do {} while (0)

@@ -6,6 +6,7 @@
 #include <Core/Assert.h>
 #include <Core/Logging.h>
 #include <Core/Globals.h>
+#include <Core/ConsoleVariable.h>
 #include <Core/Misc.h>
 
 #include <cstdint>

@@ -351,7 +351,7 @@ void Renderer::Render(entt::registry& registry)
 
 	graph.Tag(backBufferTag, ResourceTag::BackBuffer);
 
-	bool meshCullingEnabled = true;
+	CvarCreate("meshCulling", "Controls compute-based mesh culling", 1);
 
 	auto& meshCullPass = graph.AddPass("Mesh Culling Pass", ExecutionQueue::Compute);
 	auto meshIndirectCulledRenderArgsTag = meshCullPass.Create(TransientBufferDescription{
@@ -366,7 +366,7 @@ void Renderer::Render(entt::registry& registry)
 	meshCullPass.Read(cameraBufferTag, ResourceBind::SRV);
 	meshCullPass.Bind([&](CommandList& list, RenderPassResources& resources)
 	{
-		if (meshCullingEnabled)
+		if (*CvarGet("meshCulling", int) > 0)
 		{
 			list.BindPipeline(meshCullLayout);
 
