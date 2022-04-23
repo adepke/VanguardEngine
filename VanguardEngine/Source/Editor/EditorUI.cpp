@@ -258,6 +258,32 @@ void EditorUI::DrawConsole(const ImVec2& min, const ImVec2& max)
 
 		const auto inputBoxSize = 25.f;
 
+		static char buffer[256] = { 0 };  // Input box text buffer.
+
+		std::vector<const Cvar*> cvarMatches;
+		if (buffer[0] != '\0')
+		{
+			std::string bufferStr = buffer;
+			std::transform(bufferStr.begin(), bufferStr.end(), bufferStr.begin(), [](auto c)
+			{
+				return std::tolower(c);
+			});
+
+			for (const auto& [key, cvar] : CvarManager::Get().cvars)
+			{
+				auto cvarName = cvar.name;
+				std::transform(cvarName.begin(), cvarName.end(), cvarName.begin(), [](auto c)
+				{
+					return std::tolower(c);
+				});
+
+				if (cvarName.find(bufferStr) != std::string::npos)
+				{
+					cvarMatches.emplace_back(&cvar);
+				}
+			}
+		}
+
 		ImGui::PushStyleColor(ImGuiCol_FrameBg, frameColorDark);
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, { 2, 2 });
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 2, 0 });
@@ -274,32 +300,6 @@ void EditorUI::DrawConsole(const ImVec2& min, const ImVec2& max)
 			const auto p3 = ImVec2{ textBarStart.x - spacing + inputBoxSize, textBarStart.y + spacing + (inputBoxSize - 2.f * spacing) * 0.5f - offset };
 			ImGui::GetWindowDrawList()->AddTriangleFilled(p1, p2, p3, IM_COL32(255, 255, 255, 245));
 
-			static char buffer[256] = { 0 };
-
-			std::vector<const Cvar*> cvarMatches;
-			if (buffer[0] != '\0')
-			{
-				std::string bufferStr = buffer;
-				std::transform(bufferStr.begin(), bufferStr.end(), bufferStr.begin(), [](auto c)
-				{
-					return std::tolower(c);
-				});
-
-				for (const auto& [key, cvar] : CvarManager::Get().cvars)
-				{
-					auto cvarName = cvar.name;
-					std::transform(cvarName.begin(), cvarName.end(), cvarName.begin(), [](auto c)
-					{
-						return std::tolower(c);
-					});
-
-					if (cvarName.find(bufferStr) != std::string::npos)
-					{
-						cvarMatches.emplace_back(&cvar);
-					}
-				}
-			}
-
 			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + inputBoxSize + style.ItemSpacing.x);
 			if (ImGui::InputTextEx("", "", buffer, std::size(buffer), { windowMax.x - windowMin.x, 0 }, ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue))
 			{
@@ -309,16 +309,42 @@ void EditorUI::DrawConsole(const ImVec2& min, const ImVec2& max)
 					needsScrollUpdate = true;
 				}
 			}
-
-			for (const auto cvar : cvarMatches)
-			{
-				ImGui::Text(cvar->name.c_str());
-			}
 		}
 
 		ImGui::EndChildFrame();
 		ImGui::PopStyleVar();
 		ImGui::PopStyleVar();
+
+		const auto entries = cvarMatches.size();
+		if (entries > 0)
+		{
+			const auto entrySize = ImGui::CalcTextSize("Dummy").y + style.ItemSpacing.y;
+			const auto autocompBoxMaxHeight = entrySize * 4;
+			const auto autocompBoxSize = std::min(entries * entrySize + 2.f * style.FramePadding.y, autocompBoxMaxHeight);
+
+			if (ImGui::BeginChildFrame(ImGui::GetID("Console Autocomplete"), { 0, autocompBoxSize }))
+			{
+				const char* typeMap[] = {
+					"Int",
+					"Float"
+				};
+
+				for (const auto cvar : cvarMatches)
+				{
+					const auto lineStart = ImGui::GetCursorPosX();
+					ImGui::Text(cvar->name.c_str());
+					ImGui::SameLine();
+					ImGui::SetCursorPosX(lineStart + 350.f);
+					ImGui::TextDisabled(typeMap[(uint32_t)cvar->type]);
+					ImGui::SameLine();
+					ImGui::SetCursorPosX(lineStart + 430.f);
+					ImGui::TextDisabled(cvar->description.c_str());
+				}
+			}
+
+			ImGui::EndChildFrame();
+		}
+
 		ImGui::PopStyleColor();
 		ImGui::PopStyleVar();
 	}
