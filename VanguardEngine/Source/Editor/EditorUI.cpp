@@ -214,6 +214,7 @@ void EditorUI::DrawConsole(const ImVec2& min, const ImVec2& max)
 
 	if (consoleOpen)
 	{
+		auto& style = ImGui::GetStyle();
 		auto windowMin = min;
 		auto windowMax = max;
 
@@ -222,37 +223,20 @@ void EditorUI::DrawConsole(const ImVec2& min, const ImVec2& max)
 		const auto height = std::min(max.y - min.y, heightMax);
 		windowMax.y = windowMin.y + height;
 
-		if (ImGui::BeginChild("Console", { 0, 0 }, true,
-			ImGuiWindowFlags_NoTitleBar |
-			ImGuiWindowFlags_NoResize |
-			ImGuiWindowFlags_NoMove |
-			ImGuiWindowFlags_NoScrollbar |
-			ImGuiWindowFlags_NoCollapse |
-			ImGuiWindowFlags_NoBackground |
-			ImGuiWindowFlags_NoSavedSettings))
+		constexpr auto frameColor = IM_COL32(20, 20, 20, 238);
+		constexpr auto frameColorDark = IM_COL32(20, 20, 20, 245);
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0);
+		ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, frameColor);
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 0, 0 });
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1);
+
+		if (ImGui::BeginChildFrame(ImGui::GetID("Console History"), { 0, height }))
 		{
 			auto* window = ImGui::GetCurrentWindow();
 			auto& style = ImGui::GetStyle();
 
-			constexpr auto frameColor = IM_COL32(20, 20, 20, 238);
-
-			ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 0, 0 });
-			ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, frameColor);
-
-			ImGui::BeginChild("Console History", windowMax - windowMin, false,
-				ImGuiWindowFlags_NoTitleBar |
-				ImGuiWindowFlags_NoResize |
-				ImGuiWindowFlags_NoMove |
-				ImGuiWindowFlags_NoCollapse |
-				ImGuiWindowFlags_NoBackground |
-				ImGuiWindowFlags_NoSavedSettings);
-			
 			ImGui::RenderFrame(windowMin, windowMax, frameColor, true);
-
-			ImGui::SetCursorPos(windowMin);
-
-			// Draw the log history.
-
+			
 			for (const auto& message : consoleMessages)
 			{
 				ImGui::Text("%s", message.c_str());
@@ -264,19 +248,34 @@ void EditorUI::DrawConsole(const ImVec2& min, const ImVec2& max)
 				needsScrollUpdate = false;
 			}
 
-			consoleFullyScrolled = ImGui::GetCursorPosY() - ImGui::GetScrollY() < 240.f;  // Magic value comes from weird empty area at top, oh well.
+			consoleFullyScrolled = ImGui::GetCursorPosY() - ImGui::GetScrollY() < 240.f;  // Near the bottom, autoscroll.
+		}
 
-			ImGui::EndChild();
-			ImGui::PopStyleColor();
+		ImGui::EndChildFrame();
+		ImGui::PopStyleVar();
+		ImGui::PopStyleVar();
+		ImGui::PopStyleColor();
 
-			// Draw the text bar.
+		const auto inputBoxSize = 25.f;
 
-			const auto textBarStart = ImGui::GetCursorPos();
+		ImGui::PushStyleColor(ImGuiCol_FrameBg, frameColorDark);
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, { 2, 2 });
+		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 2, 0 });
 
-			ImGui::PushStyleColor(ImGuiCol_FrameBg, IM_COL32(20, 20, 20, 245));
+		if (ImGui::BeginChildFrame(ImGui::GetID("Console Input"), { 0, inputBoxSize }, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+		{
+			const auto textBarStart = ImGui::GetCursorPos() + ImGui::GetWindowPos();
+
+			// Draw hint triangle.
+			const auto spacing = 6.f;
+			const auto offset = 2.f;
+			const auto p1 = ImVec2{ textBarStart.x + spacing, textBarStart.y + spacing - offset };
+			const auto p2 = ImVec2{ textBarStart.x + spacing, textBarStart.y - spacing + inputBoxSize - offset };
+			const auto p3 = ImVec2{ textBarStart.x - spacing + inputBoxSize, textBarStart.y + spacing + (inputBoxSize - 2.f * spacing) * 0.5f - offset };
+			ImGui::GetWindowDrawList()->AddTriangleFilled(p1, p2, p3, IM_COL32(255, 255, 255, 245));
 
 			static char buffer[256] = { 0 };
-			
+
 			std::vector<const Cvar*> cvarMatches;
 			if (buffer[0] != '\0')
 			{
@@ -301,7 +300,7 @@ void EditorUI::DrawConsole(const ImVec2& min, const ImVec2& max)
 				}
 			}
 
-			ImGui::SetCursorPos(textBarStart);
+			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + inputBoxSize + style.ItemSpacing.x);
 			if (ImGui::InputTextEx("", "", buffer, std::size(buffer), { windowMax.x - windowMin.x, 0 }, ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue))
 			{
 				if (ExecuteCommand(buffer))
@@ -315,12 +314,13 @@ void EditorUI::DrawConsole(const ImVec2& min, const ImVec2& max)
 			{
 				ImGui::Text(cvar->name.c_str());
 			}
-
-			ImGui::PopStyleColor();
-			ImGui::PopStyleVar();
 		}
 
-		ImGui::EndChild();
+		ImGui::EndChildFrame();
+		ImGui::PopStyleVar();
+		ImGui::PopStyleVar();
+		ImGui::PopStyleColor();
+		ImGui::PopStyleVar();
 	}
 }
 
