@@ -3,6 +3,8 @@
 #pragma once
 
 #include <Utility/Singleton.h>
+#include <Core/Logging.h>
+#include <Utility/StringTools.h>
 
 #include <entt/entt.hpp>
 
@@ -42,9 +44,15 @@ struct CvarStorage
 
 class CvarManager : public Singleton<CvarManager>
 {
+	friend class EditorUI;
+
 private:
 	std::unordered_map<uint32_t, Cvar> cvars;
 	std::array<CvarStorage, 3> storage;
+
+	// Overload only used by the editor.
+	template <typename T>
+	bool SetVariable(uint32_t nameHash, const T& value);
 
 public:
 	template <typename T>
@@ -85,6 +93,15 @@ Cvar& CvarManager::CreateVariable(const std::string& name, const std::string& de
 	const auto index = storage[(uint32_t)type].count++;
 
 	const auto hash = entt::hashed_string::value(name.data(), name.size());
+
+	auto existing = cvars.find(hash);
+	if (existing != cvars.end())
+	{
+		return existing->second;
+	}
+
+	VGLog(logCore, "Cvar '{}' created with default value: {}", Str2WideStr(name), defaultValue);
+
 	const auto it = cvars.emplace(hash, Cvar{
 		.index = index,
 		.type = type,
@@ -128,9 +145,17 @@ const T* CvarManager::GetVariable(entt::hashed_string name)
 template <typename T>
 bool CvarManager::SetVariable(entt::hashed_string name, const T& value)
 {
-	const auto it = cvars.find(name);
+	return SetVariable(name.value(), value);
+}
+
+template <typename T>
+bool CvarManager::SetVariable(uint32_t nameHash, const T& value)
+{
+	const auto it = cvars.find(nameHash);
 	if (it != cvars.end())
 	{
+		VGLog(logCore, "Cvar '{}' set to value: {}", Str2WideStr(it->second.name), value);
+
 		const auto index = it->second.index;
 		const auto type = it->second.type;
 		void* data = nullptr;
