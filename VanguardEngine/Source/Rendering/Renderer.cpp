@@ -216,6 +216,11 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 {
 	VGScopedCPUStat("Renderer Initialize");
 
+	CvarCreate("reloadShaders", "Deletes all shader pipelines, reloads on-demand from disk", +[]()
+	{
+		Renderer::Get().ReloadShaderPipelines();
+	});
+
 	constexpr size_t maxVertices = 32 * 1024 * 1024;
 
 	window = std::move(inWindow);

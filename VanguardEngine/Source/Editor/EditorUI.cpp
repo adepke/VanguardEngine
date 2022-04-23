@@ -111,7 +111,8 @@ void EditorUI::DrawFrameTimeHistory()
 bool EditorUI::ExecuteCommand(const std::string& command)
 {
 	const auto assignment = command.find('=');
-	if (assignment == std::string::npos)
+	const auto call = command.find("()");
+	if (assignment == std::string::npos && call == std::string::npos)
 	{
 		return false;
 	}
@@ -133,9 +134,17 @@ bool EditorUI::ExecuteCommand(const std::string& command)
 		return result;
 	};
 
-	std::string data = strip(command.substr(assignment + 1));
-	std::string cvar = strip(command.substr(0, assignment));
-	if (data.size() == 0 || cvar.size() == 0)
+	std::string cvar;
+	std::string data;
+	if (assignment != std::string::npos)
+	{
+		cvar = strip(command.substr(0, assignment));
+		data = strip(command.substr(assignment + 1));
+	}
+	else
+		cvar = strip(command.substr(0, call));
+
+	if (cvar.size() == 0 || (assignment != std::string::npos && data.size() == 0))
 	{
 		return false;
 	}
@@ -185,6 +194,11 @@ bool EditorUI::ExecuteCommand(const std::string& command)
 		float data;
 		dataStream >> data;
 		CvarManager::Get().SetVariable(entt::hashed_string::value((*cvarData)->name.c_str(), (*cvarData)->name.size()), data);
+		break;
+	}
+	case Cvar::CvarType::Function:
+	{
+		CvarManager::Get().ExecuteVariable(entt::hashed_string::value((*cvarData)->name.c_str(), (*cvarData)->name.size()));
 		break;
 	}
 	default:
@@ -326,7 +340,8 @@ void EditorUI::DrawConsole(const ImVec2& min, const ImVec2& max)
 			{
 				const char* typeMap[] = {
 					"Int",
-					"Float"
+					"Float",
+					"Function"
 				};
 
 				for (const auto cvar : cvarMatches)

@@ -24,7 +24,8 @@ struct Cvar
 	enum class CvarType
 	{
 		Int = 0,
-		Float = 1
+		Float = 1,
+		Function = 2
 	};
 
 	size_t index;
@@ -33,12 +34,15 @@ struct Cvar
 	std::string description;
 };
 
+using CvarCallableType = void (*)();
+
 struct CvarStorage
 {
 	using IntStorage = std::array<int, 1000>;
 	using FloatStorage = std::array<float, 1000>;
+	using FunctionStorage = std::array<CvarCallableType, 100>;
 
-	std::variant<IntStorage, FloatStorage> buffer;
+	std::variant<IntStorage, FloatStorage, FunctionStorage> buffer;
 	size_t count = 0;
 };
 
@@ -50,9 +54,10 @@ private:
 	std::unordered_map<uint32_t, Cvar> cvars;
 	std::array<CvarStorage, 3> storage;
 
-	// Overload only used by the editor.
+	// Overloads only used by the editor.
 	template <typename T>
 	bool SetVariable(uint32_t nameHash, const T& value);
+	bool ExecuteVariable(uint32_t nameHash);
 
 public:
 	template <typename T>
@@ -63,6 +68,8 @@ public:
 
 	template <typename T>
 	bool SetVariable(entt::hashed_string name, const T& value);
+
+	bool ExecuteVariable(entt::hashed_string name);
 };
 
 template <typename T>
@@ -75,6 +82,10 @@ inline constexpr Cvar::CvarType FindCvarType()
 	else if constexpr (std::is_same_v<T, float>)
 	{
 		return Cvar::CvarType::Float;
+	}
+	else if constexpr (std::is_same_v<T, CvarCallableType>)
+	{
+		return Cvar::CvarType::Function;
 	}
 	else
 	{
@@ -100,7 +111,15 @@ Cvar& CvarManager::CreateVariable(const std::string& name, const std::string& de
 		return existing->second;
 	}
 
-	VGLog(logCore, "Cvar '{}' created with default value: {}", Str2WideStr(name), defaultValue);
+	if constexpr (!std::is_same_v<T, CvarCallableType>)
+	{
+		VGLog(logCore, "Cvar '{}' created with default value: {}", Str2WideStr(name), defaultValue);
+	}
+	
+	else
+	{
+		VGLog(logCore, "Cvar '{}' created with default value: <function>", Str2WideStr(name));
+	}
 
 	const auto it = cvars.emplace(hash, Cvar{
 		.index = index,
@@ -154,7 +173,15 @@ bool CvarManager::SetVariable(uint32_t nameHash, const T& value)
 	const auto it = cvars.find(nameHash);
 	if (it != cvars.end())
 	{
-		VGLog(logCore, "Cvar '{}' set to value: {}", Str2WideStr(it->second.name), value);
+		if constexpr (!std::is_same_v<T, CvarCallableType>)
+		{
+			VGLog(logCore, "Cvar '{}' set to value: {}", Str2WideStr(it->second.name), value);
+		}
+
+		else
+		{
+			VGLog(logCore, "Cvar '{}' set to value: <function>", Str2WideStr(it->second.name));
+		}
 
 		const auto index = it->second.index;
 		const auto type = it->second.type;
@@ -166,6 +193,34 @@ bool CvarManager::SetVariable(uint32_t nameHash, const T& value)
 		}, storage[(uint32_t)type].buffer);
 
 		*(T*)data = value;
+		return true;
+	}
+
+	return false;
+}
+
+inline bool CvarManager::ExecuteVariable(entt::hashed_string name)
+{
+	return ExecuteVariable(name.value());
+}
+
+inline bool CvarManager::ExecuteVariable(uint32_t nameHash)
+{
+	const auto it = cvars.find(nameHash);
+	if (it != cvars.end())
+	{
+		VGLog(logCore, "Cvar '{}' executed.", Str2WideStr(it->second.name));
+
+		const auto index = it->second.index;
+		const auto type = it->second.type;
+		void* data = nullptr;
+
+		std::visit([index, &data](auto&& buffer)
+		{
+			data = buffer.data() + index;
+		}, storage[(uint32_t)type].buffer);
+
+		(*(CvarCallableType*)data)();
 		return true;
 	}
 
