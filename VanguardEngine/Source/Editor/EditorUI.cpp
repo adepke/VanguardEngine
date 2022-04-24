@@ -209,7 +209,7 @@ bool EditorUI::ExecuteCommand(const std::string& command)
 	return true;
 }
 
-void EditorUI::DrawConsole(const ImVec2& min, const ImVec2& max)
+void EditorUI::DrawConsole(entt::registry& registry, const ImVec2& min, const ImVec2& max)
 {
 	auto& io = ImGui::GetIO();
 	static bool newPress = true;
@@ -322,6 +322,12 @@ void EditorUI::DrawConsole(const ImVec2& min, const ImVec2& max)
 					buffer[0] = '\0';  // Clear the field.
 					needsScrollUpdate = true;
 				}
+			}
+			ImGui::SetItemDefaultFocus();
+			if (ImGui::IsWindowAppearing())
+			{
+				registry.clear<ControlComponent>();
+				ImGui::SetKeyboardFocusHere();
 			}
 		}
 
@@ -466,7 +472,7 @@ void EditorUI::DrawScene(RenderDevice* device, entt::registry& registry, Texture
 		}
 
 		ImGui::SetCursorPos(viewportMin);
-		DrawConsole(sceneViewportMin, sceneViewportMax);
+		DrawConsole(registry, sceneViewportMin, sceneViewportMax);
 	}
 
 	ImGui::End();

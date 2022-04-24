@@ -67,7 +67,7 @@ private:
 	void DrawMenu();
 	void DrawFrameTimeHistory();
 	bool ExecuteCommand(const std::string& command);
-	void DrawConsole(const ImVec2& min, const ImVec2& max);
+	void DrawConsole(entt::registry& registry, const ImVec2& min, const ImVec2& max);
 
 public:
 	void Update();
