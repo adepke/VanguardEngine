@@ -66,6 +66,10 @@ private:
 
 	BufferHandle meshIndirectRenderArgs;
 
+	bool cameraFrozen = false;
+	XMMATRIX frozenView;
+	XMMATRIX frozenProjection;
+
 	bool shouldReloadShaders = false;
 
 private:
@@ -88,6 +92,7 @@ public:
 	std::pair<uint32_t, uint32_t> GetResolution() const;
 	void SetResolution(uint32_t width, uint32_t height, bool fullscreen);
 
+	void FreezeCamera();
 	void ReloadShaderPipelines();
 };
 

@@ -125,18 +125,38 @@ void Renderer::UpdateCameraBuffer(const entt::registry& registry)
 
 	auto& backBuffer = device->GetResourceManager().Get(device->GetBackBuffer());
 
-	Camera bufferData;
-	bufferData.position = XMFLOAT4{ translation.x, translation.y, translation.z, 0.f };
-	bufferData.view = globalViewMatrix;
-	bufferData.projection = globalProjectionMatrix;
-	bufferData.inverseView = XMMatrixInverse(nullptr, bufferData.view);
-	bufferData.inverseProjection = XMMatrixInverse(nullptr, bufferData.projection);
-	bufferData.nearPlane = nearPlane;
-	bufferData.farPlane = farPlane;
-	bufferData.fieldOfView = fieldOfView;
-	bufferData.aspectRatio = static_cast<float>(backBuffer.description.width) / static_cast<float>(backBuffer.description.height);
+	std::vector<Camera> cameras;
+	cameras.emplace_back(Camera{
+		.position = XMFLOAT4{ translation.x, translation.y, translation.z, 0.f },
+		.view = globalViewMatrix,
+		.projection = globalProjectionMatrix,
+		.inverseView = XMMatrixInverse(nullptr, globalViewMatrix),
+		.inverseProjection = XMMatrixInverse(nullptr, globalProjectionMatrix),
+		.nearPlane = nearPlane,
+		.farPlane = farPlane,
+		.fieldOfView = fieldOfView,
+		.aspectRatio = static_cast<float>(backBuffer.description.width) / static_cast<float>(backBuffer.description.height)
+	});
 
-	device->GetResourceManager().Write(cameraBuffer, bufferData);
+	if (cameraFrozen)
+	{
+		const auto translationVector = XMMatrixInverse(nullptr, frozenView).r[3];
+		XMStoreFloat3(&translation, translationVector);
+
+		cameras.emplace_back(Camera{
+			.position = XMFLOAT4{ translation.x, translation.y, translation.z, 0.f },
+			.view = frozenView,
+			.projection = frozenProjection,
+			.inverseView = XMMatrixInverse(nullptr, frozenView),
+			.inverseProjection = XMMatrixInverse(nullptr, frozenProjection),
+			.nearPlane = nearPlane,
+			.farPlane = farPlane,
+			.fieldOfView = fieldOfView,
+			.aspectRatio = static_cast<float>(backBuffer.description.width) / static_cast<float>(backBuffer.description.height)
+		});
+	}
+
+	device->GetResourceManager().Write(cameraBuffer, cameras);
 }
 
 void Renderer::CreatePipelines()
@@ -216,6 +236,11 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 {
 	VGScopedCPUStat("Renderer Initialize");
 
+	CvarCreate("meshCulling", "Controls compute-based mesh culling, 0=disabled, 1=enabled", 1);
+	CvarCreate("cameraFreeze", "Freezes the current camera in place, while still allowing for free fly movement. Used for debugging culling", +[]()
+	{
+		Renderer::Get().FreezeCamera();
+	});
 	CvarCreate("reloadShaders", "Deletes all shader pipelines, reloads on-demand from disk", +[]()
 	{
 		Renderer::Get().ReloadShaderPipelines();
@@ -241,9 +266,9 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 
 	BufferDescription cameraBufferDesc{};
 	cameraBufferDesc.updateRate = ResourceFrequency::Static;
-	cameraBufferDesc.bindFlags = BindFlag::ConstantBuffer | BindFlag::ShaderResource;
+	cameraBufferDesc.bindFlags = BindFlag::ShaderResource;
 	cameraBufferDesc.accessFlags = AccessFlag::CPUWrite;
-	cameraBufferDesc.size = 1;  // #TODO: Support multiple cameras.
+	cameraBufferDesc.size = 2;  // #TODO: Better camera management.
 	cameraBufferDesc.stride = sizeof(Camera);
 
 	cameraBuffer = device->GetResourceManager().Create(cameraBufferDesc, VGText("Camera buffer"));
@@ -356,8 +381,6 @@ void Renderer::Render(entt::registry& registry)
 
 	graph.Tag(backBufferTag, ResourceTag::BackBuffer);
 
-	CvarCreate("meshCulling", "Controls compute-based mesh culling", 1);
-
 	auto& meshCullPass = graph.AddPass("Mesh Culling Pass", ExecutionQueue::Compute);
 	auto meshIndirectCulledRenderArgsTag = meshCullPass.Create(TransientBufferDescription{
 		.updateRate = ResourceFrequency::Static,  // Need unordered-access.
@@ -388,7 +411,7 @@ void Renderer::Render(entt::registry& registry)
 			bindData.outputBuffer = resources.Get(meshIndirectCulledRenderArgsTag);
 			bindData.objectBuffer = resources.Get(instanceBufferTag);
 			bindData.cameraBuffer = resources.Get(cameraBufferTag);
-			bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
+			bindData.cameraIndex = cameraFrozen ? 1 : 0;  // #TODO: Support multiple cameras.
 			bindData.drawCount = renderableCount;
 
 			list.BindConstants("bindData", bindData);
@@ -576,6 +599,16 @@ void Renderer::SetResolution(uint32_t width, uint32_t height, bool fullscreen)
 
 	renderGraphResources.DiscardTransients(device.get());
 	clusteredCulling.MarkDirty();
+}
+
+void Renderer::FreezeCamera()
+{
+	cameraFrozen = !cameraFrozen;
+	if (cameraFrozen)
+	{
+		frozenView = globalViewMatrix;
+		frozenProjection = globalProjectionMatrix;
+	}
 }
 
 void Renderer::ReloadShaderPipelines()

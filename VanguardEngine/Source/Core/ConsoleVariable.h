@@ -38,9 +38,10 @@ using CvarCallableType = void (*)();
 
 struct CvarStorage
 {
-	using IntStorage = std::array<int, 1000>;
-	using FloatStorage = std::array<float, 1000>;
-	using FunctionStorage = std::array<CvarCallableType, 100>;
+	static constexpr size_t StorageSize = 1000;
+	using IntStorage = std::array<int, StorageSize>;
+	using FloatStorage = std::array<float, StorageSize>;
+	using FunctionStorage = std::array<CvarCallableType, StorageSize>;
 
 	std::variant<IntStorage, FloatStorage, FunctionStorage> buffer;
 	size_t count = 0;
@@ -100,9 +101,6 @@ inline constexpr Cvar::CvarType FindCvarType()
 template <typename T>
 Cvar& CvarManager::CreateVariable(const std::string& name, const std::string& description, const T& defaultValue)
 {
-	const auto type = FindCvarType<std::decay_t<T>>();
-	const auto index = storage[(uint32_t)type].count++;
-
 	const auto hash = entt::hashed_string::value(name.data(), name.size());
 
 	auto existing = cvars.find(hash);
@@ -119,6 +117,15 @@ Cvar& CvarManager::CreateVariable(const std::string& name, const std::string& de
 	else
 	{
 		VGLog(logCore, "Cvar '{}' created with default value: <function>", Str2WideStr(name));
+	}
+
+	const auto type = FindCvarType<std::decay_t<T>>();
+	const auto index = storage[(uint32_t)type].count++;
+
+	// First entry in the storage needs to set the variant type.
+	if (storage[(uint32_t)type].count == 1)
+	{
+		storage[(uint32_t)type].buffer = std::array<T, CvarStorage::StorageSize>{};
 	}
 
 	const auto it = cvars.emplace(hash, Cvar{
