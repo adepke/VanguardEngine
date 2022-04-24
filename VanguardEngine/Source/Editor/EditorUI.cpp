@@ -621,7 +621,7 @@ void EditorUI::DrawMetrics(RenderDevice* device, float frameTimeMs)
 			const auto memoryInfo = device->GetResourceManager().QueryMemoryInfo();
 
 			ImGui::Separator();
-			ImGui::Text("Memory");
+			ImGui::Text("GPU Memory");
 
 			ImGui::Text("Buffers (%u objects): %.2f MB", memoryInfo.bufferCount, memoryInfo.bufferBytes / (1024.f * 1024.f));
 			ImGui::Text("Textures (%u objects): %.2f MB", memoryInfo.textureCount, memoryInfo.textureBytes / (1024.f * 1024.f));
