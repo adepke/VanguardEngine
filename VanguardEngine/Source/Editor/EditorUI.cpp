@@ -327,7 +327,7 @@ void EditorUI::DrawConsole(entt::registry& registry, const ImVec2& min, const Im
 				}
 			}	
 			ImGui::SetItemDefaultFocus();
-			if (ImGui::IsWindowAppearing())
+			if (ImGui::IsWindowAppearing() || ImGui::IsItemDeactivatedAfterEdit())
 			{
 				registry.clear<ControlComponent>();
 				ImGui::SetKeyboardFocusHere();
@@ -336,7 +336,7 @@ void EditorUI::DrawConsole(entt::registry& registry, const ImVec2& min, const Im
 
 			// If the user unfocuses the input box, then IsItemDeactivated() will be 0 for a frame.
 			// We need to lock out the recapture feature until the console is closed and reopened in this case.
-			consoleInputFocus &= !ImGui::IsItemDeactivated();
+			consoleInputFocus &= !ImGui::IsItemDeactivated() || ImGui::IsItemDeactivatedAfterEdit();
 		}
 
 		ImGui::EndChildFrame();
