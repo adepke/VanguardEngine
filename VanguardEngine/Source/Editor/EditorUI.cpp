@@ -211,12 +211,15 @@ bool EditorUI::ExecuteCommand(const std::string& command)
 
 void EditorUI::DrawConsole(entt::registry& registry, const ImVec2& min, const ImVec2& max)
 {
+	consoleClosedThisFrame = false;
+
 	auto& io = ImGui::GetIO();
 	static bool newPress = true;
 	if (io.KeysDown[VK_F2])
 	{
 		if (newPress)
 		{
+			consoleClosedThisFrame = consoleOpen;
 			consoleOpen = !consoleOpen;
 			newPress = false;
 		}
@@ -322,13 +325,18 @@ void EditorUI::DrawConsole(entt::registry& registry, const ImVec2& min, const Im
 					buffer[0] = '\0';  // Clear the field.
 					needsScrollUpdate = true;
 				}
-			}
+			}	
 			ImGui::SetItemDefaultFocus();
 			if (ImGui::IsWindowAppearing())
 			{
 				registry.clear<ControlComponent>();
 				ImGui::SetKeyboardFocusHere();
+				consoleInputFocus = true;
 			}
+
+			// If the user unfocuses the input box, then IsItemDeactivated() will be 0 for a frame.
+			// We need to lock out the recapture feature until the console is closed and reopened in this case.
+			consoleInputFocus &= !ImGui::IsItemDeactivated();
 		}
 
 		ImGui::EndChildFrame();
@@ -444,7 +452,8 @@ void EditorUI::DrawScene(RenderDevice* device, entt::registry& registry, Texture
 		ImGui::Image(device, sceneTexture, { 1.f, 1.f }, { widthUV, heightUV }, { 1.f + widthUV, 1.f + heightUV });
 
 		// Double clicking the viewport grants control.
-		if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && ImGui::IsItemHovered(ImGuiHoveredFlags_None))
+		const bool shouldReacquireControl = consoleClosedThisFrame && consoleInputFocus;
+		if ((ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && ImGui::IsWindowHovered(ImGuiHoveredFlags_None)) || shouldReacquireControl)
 		{
 			// #TODO: Grant control to only the camera that the viewport is linked to, not every camera-owning entity.
 			registry.view<const CameraComponent>().each([&](auto entity, const auto&)

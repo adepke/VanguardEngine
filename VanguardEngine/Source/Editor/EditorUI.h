@@ -44,6 +44,8 @@ private:
 
 	// Focus states.
 	bool entityPropertyViewerFocus = false;
+	bool consoleClosedThisFrame = false;  // If the console was just closed.
+	bool consoleInputFocus = false;
 
 	std::deque<float> frameTimes;
 	size_t frameTimeHistoryCount = 0;
