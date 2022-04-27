@@ -57,7 +57,7 @@ public:
 	const RenderResource Import(const TextureHandle resource);
 	void Tag(const RenderResource resource, ResourceTag tag);
 	PipelineState& RequestPipelineState(RenderDevice* device, const RenderPipelineLayout& layout, size_t passIndex);
-	RenderPass& AddPass(std::string_view stableName, ExecutionQueue execution);
+	RenderPass& AddPass(std::string_view stableName, ExecutionQueue execution, bool enabled = true);
 	void Build();
 	void Execute(RenderDevice* device);
 };

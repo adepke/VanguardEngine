@@ -316,9 +316,9 @@ PipelineState& RenderGraph::RequestPipelineState(RenderDevice* device, const Ren
 	}
 }
 
-RenderPass& RenderGraph::AddPass(std::string_view stableName, ExecutionQueue execution)
+RenderPass& RenderGraph::AddPass(std::string_view stableName, ExecutionQueue execution, bool enabled)
 {
-	return *passes.emplace_back(std::make_unique<RenderPass>(resourceManager, stableName, execution));
+	return *passes.emplace_back(std::make_unique<RenderPass>(resourceManager, stableName, execution, enabled));
 }
 
 void RenderGraph::Build()
@@ -353,6 +353,11 @@ void RenderGraph::Execute(RenderDevice* device)
 	{
 		auto& pass = passes[i];
 		auto& list = passLists[i];
+
+		if (!pass->enabled)
+		{
+			continue;  // Skip disabled passes.
+		}
 
 		VGScopedCPUTransientStat(pass->stableName.data());
 		VGScopedGPUTransientStat(pass->stableName.data(), device->GetDirectContext(), list->Native());

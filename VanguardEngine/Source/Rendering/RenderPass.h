@@ -32,6 +32,7 @@ class RenderPass
 public:
 	std::string_view stableName;
 	ExecutionQueue queue;
+	bool enabled;
 
 	std::set<RenderResource> reads;
 	std::set<RenderResource> writes;
@@ -51,7 +52,7 @@ private:
 #endif
 
 public:
-	RenderPass(RenderGraphResourceManager* inResourceManager, std::string_view name, ExecutionQueue execution);
+	RenderPass(RenderGraphResourceManager* inResourceManager, std::string_view name, ExecutionQueue execution, bool isEnabled);
 
 	const RenderResource Create(TransientBufferDescription description, const std::wstring& name);
 	const RenderResource Create(TransientTextureDescription description, const std::wstring& name);
@@ -86,8 +87,8 @@ public:
 	const DescriptorHandle& GetDescriptor(const RenderResource resource, const std::string& name = "") const;
 };
 
-inline RenderPass::RenderPass(RenderGraphResourceManager* inResourceManager, std::string_view name, ExecutionQueue execution)
-	: resourceManager(inResourceManager), stableName(name), queue(execution) {}
+inline RenderPass::RenderPass(RenderGraphResourceManager* inResourceManager, std::string_view name, ExecutionQueue execution, bool isEnabled)
+	: resourceManager(inResourceManager), stableName(name), queue(execution), enabled(isEnabled) {}
 
 inline const RenderResource RenderPass::Create(TransientBufferDescription description, const std::wstring& name)
 {
