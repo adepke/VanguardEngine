@@ -363,6 +363,42 @@ void EditorUI::DrawConsole(entt::registry& registry, const ImVec2& min, const Im
 					const auto lineStart = ImGui::GetCursorPosX();
 					ImGui::Text(cvar->name.c_str());
 					ImGui::SameLine();
+
+					switch (cvar->type)
+					{
+					case Cvar::CvarType::Int:
+					{
+						if (auto cvarValue = CvarManager::Get().GetVariable<int>(entt::hashed_string::value(cvar->name.c_str(), cvar->name.size())); cvarValue)
+						{
+							std::stringstream valueStream;
+							valueStream << *cvarValue;
+							ImGui::TextDisabled("= %s", valueStream.str().c_str());
+							ImGui::SameLine();
+						}
+						break;
+					}
+					case Cvar::CvarType::Float:
+					{
+						if (auto cvarValue = CvarManager::Get().GetVariable<float>(entt::hashed_string::value(cvar->name.c_str(), cvar->name.size())); cvarValue)
+						{
+							std::stringstream valueStream;
+							valueStream << *cvarValue;
+							ImGui::TextDisabled("= %s", valueStream.str().c_str());
+							ImGui::SameLine();
+						}
+						break;
+					}
+					case Cvar::CvarType::Function:
+					{
+						if (auto cvarValue = CvarManager::Get().GetVariable<CvarCallableType>(entt::hashed_string::value(cvar->name.c_str(), cvar->name.size())); cvarValue)
+						{
+							ImGui::TextDisabled("= <function>");
+							ImGui::SameLine();
+						}
+						break;
+					}
+					}
+					
 					ImGui::SetCursorPosX(lineStart + 350.f);
 					ImGui::TextDisabled(typeMap[(uint32_t)cvar->type]);
 					ImGui::SameLine();

@@ -58,6 +58,8 @@ private:
 	// Overloads only used by the editor.
 	template <typename T>
 	bool SetVariable(uint32_t nameHash, const T& value);
+	template <typename T>
+	const T* GetVariable(uint32_t nameHash);
 	bool ExecuteVariable(uint32_t nameHash);
 
 public:
@@ -150,7 +152,13 @@ Cvar& CvarManager::CreateVariable(const std::string& name, const std::string& de
 template <typename T>
 const T* CvarManager::GetVariable(entt::hashed_string name)
 {
-	const auto it = cvars.find(name);
+	return GetVariable<T>(name.value());
+}
+
+template <typename T>
+const T* CvarManager::GetVariable(uint32_t nameHash)
+{
+	const auto it = cvars.find(nameHash);
 	if (it != cvars.end())
 	{
 		const auto index = it->second.index;
