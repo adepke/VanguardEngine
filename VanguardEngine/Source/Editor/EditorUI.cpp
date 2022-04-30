@@ -730,6 +730,17 @@ void EditorUI::DrawEntityPropertyViewer(entt::registry& registry)
 					ImGui::Text("No components.");
 				}
 			}
+
+			else
+			{
+				const auto windowWidth = ImGui::GetWindowSize().x;
+				const auto text = "No entity selected.";
+				const auto textWidth = ImGui::CalcTextSize(text).x;
+
+				ImGui::SetCursorPosX((windowWidth - textWidth) * 0.5f);
+				ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 10.f);
+				ImGui::TextDisabled(text);
+			}
 		}
 
 		ImGui::End();
