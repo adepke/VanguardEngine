@@ -114,7 +114,7 @@ void Bloom::Render(RenderGraph& graph, const RenderResource hdrSource)
 	upsampleExtractViewNames.resize(bloomPasses);
 	for (int i = 0; i < bloomPasses; ++i)
 	{
-		upsampleExtractViewNames[i] = std::string{ "srv_" } + std::to_string(i);
+		upsampleExtractViewNames[i] = std::string{ "uav_" } + std::to_string(i);
 		upsampleExtractView.UAV(upsampleExtractViewNames[i], bloomPasses - i - 1);  // Write to the prior mip.
 	}
 

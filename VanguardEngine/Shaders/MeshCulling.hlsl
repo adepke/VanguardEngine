@@ -12,6 +12,9 @@ struct BindData
 	uint cameraBuffer;
 	uint cameraIndex;
 	uint drawCount;
+	uint cullingLevel;
+	uint hiZTexture;
+	uint hiZMipLevels;
 };
 
 ConstantBuffer<BindData> bindData : register(b0);
@@ -27,6 +30,30 @@ struct MeshIndirectArgument
 	float2 padding;
 };
 
+// Credit: 2D Polyhedral Bounds of a Clipped, Perspective-Projected 3D Sphere
+bool ProjectSphere(float3 center, float radius, Camera camera, out float4 aabb)
+{
+	if (center.z < camera.nearPlane + radius)
+		return false;
+
+	float2 cx = -center.xz;
+	float2 vx = float2(sqrt(dot(cx, cx) - radius * radius), radius);
+	float2 minx = mul(float2x2(vx.x, vx.y, -vx.y, vx.x), cx);
+	float2 maxx = mul(float2x2(vx.x, -vx.y, vx.y, vx.x), cx);
+
+	float2 cy = -center.yz;
+	float2 vy = float2(sqrt(dot(cy, cy) - radius * radius), radius);
+	float2 miny = mul(float2x2(vy.x, vy.y, -vy.y, vy.x), cy);
+	float2 maxy = mul(float2x2(vy.x, -vy.y, vy.y, vy.x), cy);
+
+	float p00 = camera.lastFrameProjection._m00;
+	float p11 = camera.lastFrameProjection._m11;
+	aabb = float4(minx.x / minx.y * p00, miny.x / miny.y * p11, maxx.x / maxx.y * p00, maxy.x / maxy.y * p11);
+	aabb = aabb.xwzy * float4(0.5, -0.5, 0.5, -0.5) + 0.5.xxxx;
+
+	return true;
+}
+
 bool IsVisible(ObjectData object, Camera camera)
 {
 	float3 center = float3(object.worldMatrix._m30, object.worldMatrix._m31, object.worldMatrix._m32);
@@ -36,7 +63,7 @@ bool IsVisible(ObjectData object, Camera camera)
 	float4 viewSpace = mul(float4(center, 1.f), camera.view);
 	center = (viewSpace / viewSpace.w).xyz;  // Perspective division.
 
-	matrix projectionTranspose = transpose(camera.projection);
+	matrix projectionTranspose = transpose(camera.lastFrameProjection);
 	float4 r0 = float4(projectionTranspose._m00, projectionTranspose._m01, projectionTranspose._m02, projectionTranspose._m03);
 	float4 r1 = float4(projectionTranspose._m10, projectionTranspose._m11, projectionTranspose._m12, projectionTranspose._m13);
 	float4 r2 = float4(projectionTranspose._m20, projectionTranspose._m21, projectionTranspose._m22, projectionTranspose._m23);
@@ -56,6 +83,32 @@ bool IsVisible(ObjectData object, Camera camera)
 	visible = visible && -radius <= mul(center, r3 - r1);  // Top plane
 	visible = visible && -radius <= mul(center, r3);  // Near plane
 	visible = visible && -radius <= mul(center, r3 - r2);  // Far plane
+
+	if (visible && bindData.cullingLevel > 1)
+	{
+		center.z *= -1;
+
+		float4 aabb;
+		if (ProjectSphere(center, radius, camera, aabb))
+		{
+			Texture2D<float> hiZTexture = ResourceDescriptorHeap[bindData.hiZTexture];
+			uint width, height, mipCount;
+			hiZTexture.GetDimensions(0, width, height, mipCount);
+			mipCount = min(mipCount, bindData.hiZMipLevels) - 1;
+
+			float projectedWidth = (aabb.z - aabb.x) * width;
+			float projectedHeight = (aabb.w - aabb.y) * height;
+			projectedWidth *= -1;
+			projectedHeight *= -1;
+
+			float level = min(floor(log2(max(projectedWidth, projectedHeight))), mipCount);
+			float2 uv = (aabb.xy + aabb.zw) * 0.5;
+			float depth = hiZTexture.SampleLevel(linearMipPointClampMinimum, uv, level);
+			float depthSphere = camera.nearPlane / (center.z - radius);
+
+			visible = visible && depthSphere >= depth;  // Inverse Z.
+		}
+	}
 
 	return visible;
 }

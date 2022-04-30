@@ -17,6 +17,7 @@
 #include <Rendering/ClusteredLightCulling.h>
 #include <Rendering/ImageBasedLighting.h>
 #include <Rendering/Bloom.h>
+#include <Rendering/OcclusionCulling.h>
 
 #include <entt/entt.hpp>
 
@@ -47,6 +48,7 @@ public:
 	ClusteredLightCulling clusteredCulling;
 	ImageBasedLighting ibl;
 	Bloom bloom;
+	OcclusionCulling occlusionCulling;
 
 	size_t renderableCount;
 

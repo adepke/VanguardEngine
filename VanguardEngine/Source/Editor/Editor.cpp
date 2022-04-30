@@ -57,8 +57,22 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 		RenderResource activeOverlayTag{};
 		switch (ui->activeOverlay)
 		{
-		case RenderOverlay::Clusters: activeOverlayTag = renderer.clusteredCulling.RenderDebugOverlay(graph, clusterResources.lightInfo, clusterResources.lightVisibility); break;
-		default: break;
+		case RenderOverlay::None: break;
+		case RenderOverlay::Clusters:
+		{
+			activeOverlayTag = renderer.clusteredCulling.RenderDebugOverlay(graph, clusterResources.lightInfo, clusterResources.lightVisibility);
+			break;
+		}
+		case RenderOverlay::HiZ:
+		{
+			activeOverlayTag = renderer.occlusionCulling.RenderDebugOverlay(graph, cameraBuffer);;
+			break;
+		}
+		default:
+		{
+			VGAssert(false, "Render overlay missing tag and view.");
+			break;
+		}
 		}
 
 		auto& editorPass = graph.AddPass("Editor Pass", ExecutionQueue::Graphics);
@@ -74,6 +88,12 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 		{
 			renderer.userInterface->NewFrame();
 
+			TextureHandle overlayHandle{};
+			if (ui->activeOverlay != RenderOverlay::None)
+			{
+				overlayHandle = resources.GetTexture(activeOverlayTag);
+			}
+
 			ui->DrawLayout();
 			ui->DrawDemoWindow();
 			ui->DrawScene(&device, registry, resources.GetTexture(outputLDR));
@@ -84,7 +104,7 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 			ui->DrawRenderGraph(&device, resourceManager, resources.GetTexture(depthStencil), resources.GetTexture(outputLDR));
 			ui->DrawAtmosphereControls(renderer.atmosphere);
 			ui->DrawBloomControls(renderer.bloom);
-			ui->DrawRenderVisualizer(&device, renderer.clusteredCulling, ui->activeOverlay != RenderOverlay::None ? resources.GetTexture(activeOverlayTag) : TextureHandle{});
+			ui->DrawRenderVisualizer(&device, renderer.clusteredCulling, overlayHandle);
 
 			renderer.userInterface->Render(list, resources.GetBuffer(cameraBuffer));
 		});

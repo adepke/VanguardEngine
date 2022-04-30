@@ -12,7 +12,8 @@
 enum class RenderOverlay
 {
 	None,
-	Clusters
+	Clusters,
+	HiZ
 };
 
 class RenderDevice;

@@ -13,6 +13,8 @@ struct Camera
 	matrix projection;
 	matrix inverseView;
 	matrix inverseProjection;
+	matrix lastFrameView;
+	matrix lastFrameProjection;
 	// Boundary
 	float nearPlane;
 	float farPlane;

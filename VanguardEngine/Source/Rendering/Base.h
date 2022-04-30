@@ -15,3 +15,5 @@ using Microsoft::WRL::ComPtr;
 // #TODO: Temporary globals.
 inline XMMATRIX globalViewMatrix;
 inline XMMATRIX globalProjectionMatrix;
+inline XMMATRIX globalLastFrameViewMatrix;
+inline XMMATRIX globalLastFrameProjectionMatrix;

@@ -10,6 +10,9 @@
 
 namespace ImGui
 {
+	// Note: we need to use static descriptors instead of dynamic descriptors, since ImGui uses the texture ID as component of the item id, so it cannot change between frames.
+	// We can have an Image() overload for a custom descriptor, but not an ImageButton() overload without some changes to the ID system.
+
 	inline void Image(RenderDevice* device, TextureHandle handle, const ImVec2& scale = { 1.f, 1.f }, const ImVec2& uv0 = { 0.f, 0.f }, const ImVec2& uv1 = { 1.f, 1.f }, const ImVec4& tint = { 1.f, 1.f, 1.f, 1.f })
 	{
 		if (!device->GetResourceManager().Valid(handle)) return;
@@ -18,28 +21,12 @@ namespace ImGui
 		ImGui::Image((ImTextureID)textureComponent.SRV->bindlessIndex, { (float)textureComponent.description.width * scale.x, (float)textureComponent.description.height * scale.y }, uv0, uv1, tint);
 	}
 
-	inline void Image(RenderDevice* device, TextureHandle handle, uint32_t descriptorIndex, const ImVec2& scale = { 1.f, 1.f }, const ImVec2& uv0 = { 0.f, 0.f }, const ImVec2& uv1 = { 1.f, 1.f }, const ImVec4& tint = { 1.f, 1.f, 1.f, 1.f })
-	{
-		if (!device->GetResourceManager().Valid(handle) || descriptorIndex == 0) return;
-
-		const auto& textureComponent = device->GetResourceManager().Get(handle);
-		ImGui::Image((ImTextureID)descriptorIndex, { (float)textureComponent.description.width * scale.x, (float)textureComponent.description.height * scale.y }, uv0, uv1, tint);
-	}
-
 	inline void ImageButton(RenderDevice* device, TextureHandle handle, const ImVec2& scale = { 1.f, 1.f }, const ImVec2& uv0 = { 0.f, 0.f }, const ImVec2& uv1 = { 1.f, 1.f }, const ImVec4& tint = { 1.f, 1.f, 1.f, 1.f })
 	{
 		if (!device->GetResourceManager().Valid(handle)) return;
 
 		const auto& textureComponent = device->GetResourceManager().Get(handle);
 		ImGui::ImageButton((ImTextureID)textureComponent.SRV->bindlessIndex, { (float)textureComponent.description.width * scale.x, (float)textureComponent.description.height * scale.y }, uv0, uv1, -1, { 0.f, 0.f, 0.f, 0.f }, tint);
-	}
-
-	inline void ImageButton(RenderDevice* device, TextureHandle handle, uint32_t descriptorIndex, const ImVec2& scale = { 1.f, 1.f }, const ImVec2& uv0 = { 0.f, 0.f }, const ImVec2& uv1 = { 1.f, 1.f }, const ImVec4& tint = { 1.f, 1.f, 1.f, 1.f })
-	{
-		if (!device->GetResourceManager().Valid(handle) || descriptorIndex == 0) return;
-
-		const auto& textureComponent = device->GetResourceManager().Get(handle);
-		ImGui::ImageButton((ImTextureID)descriptorIndex, { (float)textureComponent.description.width * scale.x, (float)textureComponent.description.height * scale.y }, uv0, uv1, -1, { 0.f, 0.f, 0.f, 0.f }, tint);
 	}
 
 	inline void StyleColorsVanguard(ImGuiStyle* dst = nullptr)

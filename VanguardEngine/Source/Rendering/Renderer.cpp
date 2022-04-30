@@ -12,6 +12,7 @@
 #include <Core/Config.h>
 #include <Rendering/RenderUtils.h>
 #include <Editor/Editor.h>
+#include <Utility/Math.h>
 
 #include <vector>
 #include <utility>
@@ -132,6 +133,8 @@ void Renderer::UpdateCameraBuffer(const entt::registry& registry)
 		.projection = globalProjectionMatrix,
 		.inverseView = XMMatrixInverse(nullptr, globalViewMatrix),
 		.inverseProjection = XMMatrixInverse(nullptr, globalProjectionMatrix),
+		.lastFrameView = globalLastFrameViewMatrix,
+		.lastFrameProjection = globalLastFrameProjectionMatrix,
 		.nearPlane = nearPlane,
 		.farPlane = farPlane,
 		.fieldOfView = fieldOfView,
@@ -149,6 +152,8 @@ void Renderer::UpdateCameraBuffer(const entt::registry& registry)
 			.projection = frozenProjection,
 			.inverseView = XMMatrixInverse(nullptr, frozenView),
 			.inverseProjection = XMMatrixInverse(nullptr, frozenProjection),
+			.lastFrameView = frozenView,
+			.lastFrameProjection = frozenProjection,
 			.nearPlane = nearPlane,
 			.farPlane = farPlane,
 			.fieldOfView = fieldOfView,
@@ -236,8 +241,8 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 {
 	VGScopedCPUStat("Renderer Initialize");
 
-	CvarCreate("meshCulling", "Controls compute-based mesh culling, 0=disabled, 1=enabled", 1);
-	CvarCreate("cameraFreeze", "Freezes the current camera in place, while still allowing for free fly movement. Used for debugging culling", +[]()
+	CvarCreate("meshCulling", "Controls compute-based mesh culling, 0=disabled, 1=frustum, 2=frustum+occlusion", 2);
+	CvarCreate("freeze", "Toggles freezing the camera in place, while still allowing for free fly movement. Used for debugging culling", +[]()
 	{
 		Renderer::Get().FreezeCamera();
 	});
@@ -284,6 +289,7 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 	clusteredCulling.Initialize(device.get());
 	ibl.Initialize(device.get());
 	bloom.Initialize(device.get());
+	occlusionCulling.Initialize(device.get());
 
 	std::vector<D3D12_INDIRECT_ARGUMENT_DESC> meshIndirectArgDescs;
 	meshIndirectArgDescs.emplace_back(D3D12_INDIRECT_ARGUMENT_DESC{
@@ -381,6 +387,8 @@ void Renderer::Render(entt::registry& registry)
 
 	graph.Tag(backBufferTag, ResourceTag::BackBuffer);
 
+	auto lastFrameHiZ = occlusionCulling.GetLastFrameHiZ();
+
 	auto& meshCullPass = graph.AddPass("Mesh Culling Pass", ExecutionQueue::Compute);
 	auto meshIndirectCulledRenderArgsTag = meshCullPass.Create(TransientBufferDescription{
 		.updateRate = ResourceFrequency::Static,  // Need unordered-access.
@@ -392,9 +400,13 @@ void Renderer::Render(entt::registry& registry)
 	meshCullPass.Write(meshIndirectCulledRenderArgsTag, ResourceBind::UAV);
 	meshCullPass.Read(instanceBufferTag, ResourceBind::SRV);
 	meshCullPass.Read(cameraBufferTag, ResourceBind::SRV);
+	if (*CvarGet("meshCulling", int) > 1 && lastFrameHiZ.id != 0)  // 0 first frame.
+		meshCullPass.Read(lastFrameHiZ, ResourceBind::SRV);
 	meshCullPass.Bind([&](CommandList& list, RenderPassResources& resources)
 	{
-		if (*CvarGet("meshCulling", int) > 0)
+		const auto meshCulling = *CvarGet("meshCulling", int);
+
+		if (meshCulling > 0)
 		{
 			list.BindPipeline(meshCullLayout);
 
@@ -405,6 +417,9 @@ void Renderer::Render(entt::registry& registry)
 				uint32_t cameraBuffer;
 				uint32_t cameraIndex;
 				uint32_t drawCount;
+				uint32_t cullingLevel;
+				uint32_t hiZTexture;
+				uint32_t hiZMipLevels;
 			} bindData;
 
 			bindData.inputBuffer = resources.Get(meshIndirectRenderArgsTag);
@@ -413,6 +428,12 @@ void Renderer::Render(entt::registry& registry)
 			bindData.cameraBuffer = resources.Get(cameraBufferTag);
 			bindData.cameraIndex = cameraFrozen ? 1 : 0;  // #TODO: Support multiple cameras.
 			bindData.drawCount = renderableCount;
+			bindData.cullingLevel = meshCulling;
+			bindData.hiZTexture = (meshCulling > 1 && lastFrameHiZ.id != 0) ? resources.Get(lastFrameHiZ) : 0;
+			bindData.hiZMipLevels = *CvarGet("hiZPyramidLevels", int);
+
+			if (lastFrameHiZ.id == 0)
+				bindData.cullingLevel = 1;  // Can't use hi-z first frame.
 
 			list.BindConstants("bindData", bindData);
 
@@ -476,6 +497,9 @@ void Renderer::Render(entt::registry& registry)
 
 	// #TODO: Don't have this here.
 	const auto iblResources = ibl.UpdateLuts(graph, luminanceTexture, cameraBufferTag);
+
+	// #TODO: Don't have this here.
+	occlusionCulling.Render(graph, cameraFrozen, depthStencilTag);
 
 	auto& forwardPass = graph.AddPass("Forward Pass", ExecutionQueue::Graphics);
 	const auto outputHDRTag = forwardPass.Create(TransientTextureDescription{

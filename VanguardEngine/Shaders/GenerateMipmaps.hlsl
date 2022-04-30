@@ -56,7 +56,7 @@ struct Input
 
 [RootSignature(RS)]
 [numthreads(8, 8, 1)]
-void main(Input input)
+void Main(Input input)
 { 
 	float2 offset = bindData.texelSize * 0.5;
 	

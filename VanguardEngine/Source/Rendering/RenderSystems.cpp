@@ -83,6 +83,8 @@ void CameraSystem::Update(entt::registry& registry, float deltaTime)
 		const auto projectionMatrix = XMMatrixPerspectiveFovRH(camera.fieldOfView / 2.f, aspectRatio, camera.farPlane, camera.nearPlane);  // Inverse Z.
 
 		// #TODO: Support multiple cameras.
+		globalLastFrameViewMatrix = globalViewMatrix;
+		globalLastFrameProjectionMatrix = globalProjectionMatrix;
 		globalViewMatrix = viewMatrix;
 		globalProjectionMatrix = projectionMatrix;
 	});

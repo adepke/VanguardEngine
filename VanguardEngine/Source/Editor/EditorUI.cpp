@@ -277,7 +277,7 @@ void EditorUI::DrawConsole(entt::registry& registry, const ImVec2& min, const Im
 
 		static char buffer[256] = { 0 };  // Input box text buffer.
 
-		std::vector<const Cvar*> cvarMatches;
+		std::vector<std::pair<const Cvar*, size_t>> cvarMatches;
 		if (buffer[0] != '\0')
 		{
 			std::string bufferStr = buffer;
@@ -294,9 +294,9 @@ void EditorUI::DrawConsole(entt::registry& registry, const ImVec2& min, const Im
 					return std::tolower(c);
 				});
 
-				if (cvarName.find(bufferStr) != std::string::npos)
+				if (const auto pos = cvarName.find(bufferStr); pos != std::string::npos)
 				{
-					cvarMatches.emplace_back(&cvar);
+					cvarMatches.emplace_back(&cvar, pos);
 				}
 			}
 		}
@@ -317,8 +317,93 @@ void EditorUI::DrawConsole(entt::registry& registry, const ImVec2& min, const Im
 			const auto p3 = ImVec2{ textBarStart.x - spacing + inputBoxSize, textBarStart.y + spacing + (inputBoxSize - 2.f * spacing) * 0.5f - offset };
 			ImGui::GetWindowDrawList()->AddTriangleFilled(p1, p2, p3, IM_COL32(255, 255, 255, 245));
 
+			const auto textCallback = [](ImGuiInputTextCallbackData* data) -> int
+			{
+				switch (data->EventFlag)
+				{
+				case ImGuiInputTextFlags_CallbackCompletion:
+				{
+					const char* wordEnd = data->Buf + data->CursorPos;
+					const char* wordStart = wordEnd;
+					while (wordStart > data->Buf)
+					{
+						const char c = wordStart[-1];
+						if (c == ' ' || c == '\t' || c == ',' || c == ';')
+							break;
+						--wordStart;
+					}
+
+					// Raw matches are all possible, but autocomplete should only factor in matches that are currently equivalent.
+					// Exception to this is one raw match with no exact match.
+					const auto* rawMatches = (std::vector<std::pair<const Cvar*, size_t>>*)data->UserData;
+					std::vector<std::string> matches;
+					matches.reserve(rawMatches->size());
+					for (const auto& match : *rawMatches)
+					{
+						if (match.second == 0)
+							matches.emplace_back(match.first->name);
+					}
+
+					// Autocomplete to partial match.
+					if (matches.size() == 0 && rawMatches->size() == 1)
+					{
+						matches.emplace_back(rawMatches->at(0).first->name);
+					}
+
+					if (matches.size() == 1)
+					{
+						data->DeleteChars((int)(wordStart - data->Buf), (int)(wordEnd - wordStart));
+						data->InsertChars(data->CursorPos, matches[0].c_str());
+						data->InsertChars(data->CursorPos, " ");
+					}
+
+					else if (matches.size() > 1)
+					{
+						int matchLength = wordEnd - wordStart;
+						while (true)
+						{
+							int c = 0;
+							bool allCandidatesMatches = true;
+							for (int i = 0; i < matches.size() && allCandidatesMatches; ++i)
+							{
+								if (i == 0)
+									c = toupper(matches[i][matchLength]);
+								else if (c == 0 || c != toupper(matches[i][matchLength]))
+									allCandidatesMatches = false;
+							}
+							if (!allCandidatesMatches)
+								break;
+							++matchLength;
+						}
+
+						if (matchLength > 0)
+						{
+							data->DeleteChars((int)(wordStart - data->Buf), (int)(wordEnd - wordStart));
+							const auto matchString = matches[0].c_str();
+							data->InsertChars(data->CursorPos, matchString, matchString + matchLength);
+						}
+					}
+
+					break;
+				}
+
+				case ImGuiInputTextFlags_CallbackHistory:
+				{
+					// #TODO: History if empty, otherwise autocomplete.
+
+					break;
+				}
+				}
+
+				return 0;
+			};
+
 			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + inputBoxSize + style.ItemSpacing.x);
-			if (ImGui::InputTextEx("", "", buffer, std::size(buffer), { windowMax.x - windowMin.x, 0 }, ImGuiInputTextFlags_AutoSelectAll | ImGuiInputTextFlags_EnterReturnsTrue))
+			const auto inputFlags = ImGuiInputTextFlags_AutoSelectAll |
+				ImGuiInputTextFlags_EnterReturnsTrue |
+				ImGuiInputTextFlags_CallbackCompletion |
+				ImGuiInputTextFlags_CallbackHistory;
+			if (ImGui::InputTextEx("", "", buffer, std::size(buffer), { windowMax.x - windowMin.x, 0 }, inputFlags, textCallback, (void*)&cvarMatches))
 			{
 				if (ExecuteCommand(buffer))
 				{
@@ -361,14 +446,17 @@ void EditorUI::DrawConsole(entt::registry& registry, const ImVec2& min, const Im
 				for (const auto cvar : cvarMatches)
 				{
 					const auto lineStart = ImGui::GetCursorPosX();
-					ImGui::Text(cvar->name.c_str());
+					ImGui::Text(cvar.first->name.c_str());
 					ImGui::SameLine();
 
-					switch (cvar->type)
+					const auto cvarName = cvar.first->name.c_str();
+					const auto cvarSize = cvar.first->name.size();
+
+					switch (cvar.first->type)
 					{
 					case Cvar::CvarType::Int:
 					{
-						if (auto cvarValue = CvarManager::Get().GetVariable<int>(entt::hashed_string::value(cvar->name.c_str(), cvar->name.size())); cvarValue)
+						if (auto cvarValue = CvarManager::Get().GetVariable<int>(entt::hashed_string::value(cvarName, cvarSize)); cvarValue)
 						{
 							std::stringstream valueStream;
 							valueStream << *cvarValue;
@@ -379,7 +467,7 @@ void EditorUI::DrawConsole(entt::registry& registry, const ImVec2& min, const Im
 					}
 					case Cvar::CvarType::Float:
 					{
-						if (auto cvarValue = CvarManager::Get().GetVariable<float>(entt::hashed_string::value(cvar->name.c_str(), cvar->name.size())); cvarValue)
+						if (auto cvarValue = CvarManager::Get().GetVariable<float>(entt::hashed_string::value(cvarName, cvarSize)); cvarValue)
 						{
 							std::stringstream valueStream;
 							valueStream << *cvarValue;
@@ -390,7 +478,7 @@ void EditorUI::DrawConsole(entt::registry& registry, const ImVec2& min, const Im
 					}
 					case Cvar::CvarType::Function:
 					{
-						if (auto cvarValue = CvarManager::Get().GetVariable<CvarCallableType>(entt::hashed_string::value(cvar->name.c_str(), cvar->name.size())); cvarValue)
+						if (auto cvarValue = CvarManager::Get().GetVariable<CvarCallableType>(entt::hashed_string::value(cvarName, cvarSize)); cvarValue)
 						{
 							ImGui::TextDisabled("= <function>");
 							ImGui::SameLine();
@@ -400,10 +488,10 @@ void EditorUI::DrawConsole(entt::registry& registry, const ImVec2& min, const Im
 					}
 					
 					ImGui::SetCursorPosX(lineStart + 350.f);
-					ImGui::TextDisabled(typeMap[(uint32_t)cvar->type]);
+					ImGui::TextDisabled(typeMap[(uint32_t)cvar.first->type]);
 					ImGui::SameLine();
 					ImGui::SetCursorPosX(lineStart + 430.f);
-					ImGui::TextDisabled(cvar->description.c_str());
+					ImGui::TextDisabled(cvar.first->description.c_str());
 				}
 			}
 
@@ -772,11 +860,12 @@ void EditorUI::DrawRenderVisualizer(RenderDevice* device, ClusteredLightCulling&
 				{
 				case RenderOverlay::None: *output = "None"; break;
 				case RenderOverlay::Clusters: *output = "Clusters"; break;
+				case RenderOverlay::HiZ: *output = "Hierarchical Depth Pyramid"; break;
 				default: return false;
 				}
 
 				return true;
-			}, nullptr, 2);  // Note: Make sure to update the hardcoded count when new overlays are added.
+			}, nullptr, 3);  // Note: Make sure to update the hardcoded count when new overlays are added.
 
 			ImGui::Separator();
 
@@ -871,7 +960,18 @@ void EditorUI::DrawRenderVisualizer(RenderDevice* device, ClusteredLightCulling&
 
 				break;
 			}
+			case RenderOverlay::HiZ:
+			{
+				const auto sceneViewportSize = sceneViewportMax - sceneViewportMin;
+				char viewText[64];
+				ImFormatString(viewText, std::size(viewText), "Viewing Depth Pyramid Level: %d", *CvarGet("hiZPyramidLevels", int));
+				const auto viewTextSize = ImGui::CalcTextSize(viewText);
 
+				ImGui::SetCursorPos({ sceneViewportMin.x + sceneViewportSize.x * 0.5f - viewTextSize.x * 0.5f, sceneViewportMin.y + sceneViewportSize.y - 80.f });
+				ImGui::Text(viewText);
+
+				break;
+			}
 			default: break;
 			}
 		}
