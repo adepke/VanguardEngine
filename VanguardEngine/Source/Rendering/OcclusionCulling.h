@@ -23,6 +23,9 @@ private:
 	RenderPipelineLayout debugOverlayLayout;
 #endif
 
+	// How many total levels we want, not mips to generate.
+	uint32_t GetMipLevels(RenderGraph& graph);
+
 public:
 	void Initialize(RenderDevice* inDevice);
 	RenderResource GetLastFrameHiZ();

@@ -36,7 +36,7 @@ float4 PSMain(PixelIn input) : SV_Target
 	StructuredBuffer<Camera> cameraBuffer = ResourceDescriptorHeap[bindData.cameraBuffer];
 	Camera camera = cameraBuffer[bindData.cameraIndex];
 
-	float depth = hiZTexture.Sample(linearMipPointClampMinimum, input.uv);
+	float depth = hiZTexture.Sample(pointClamp, input.uv);
 	float4 output = float4(depth, 0.f, 0.f, 1.f);
 	output.x = 1.f - LinearizeDepth(camera, output.x);
 

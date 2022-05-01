@@ -2,10 +2,22 @@
 
 #pragma once
 
+#include <DirectXMath.h>
+
 #include <cstdint>
+#include <limits>
+
+using namespace DirectX;
+
+// Taken from: https://graphics.stanford.edu/~seander/bithacks.html#DetermineIfPowerOf2
+inline constexpr bool IsPowerOf2(uint32_t value)
+{
+	return (value & (value - 1)) == 0;  // Note: doesn't account for 0.
+}
 
 // Taken from: https://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2
-constexpr uint32_t NextPowerOf2(uint32_t value)
+// Doesn't step up if value is already a power of 2.
+inline constexpr uint32_t NextPowerOf2(uint32_t value)
 {
 	--value;
 	value |= value >> 1;
@@ -16,4 +28,13 @@ constexpr uint32_t NextPowerOf2(uint32_t value)
 	++value;
 
 	return value;
+}
+
+// Steps down a power if value is already a power of 2.
+inline constexpr uint32_t PreviousPowerOf2(uint32_t value)
+{
+	uint32_t result = 1;
+	while (result * 2 < value)
+		result *= 2;
+	return result;
 }
