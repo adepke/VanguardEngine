@@ -354,7 +354,24 @@ void EditorUI::DrawConsole(entt::registry& registry, const ImVec2& min, const Im
 					{
 						data->DeleteChars((int)(wordStart - data->Buf), (int)(wordEnd - wordStart));
 						data->InsertChars(data->CursorPos, matches[0].c_str());
-						data->InsertChars(data->CursorPos, " ");
+
+						// If the cvar is a function, add (), otherwise add a space.
+
+						auto matchIt = std::find_if(rawMatches->begin(), rawMatches->end(), [&matches](auto it)
+						{
+							return it.first->name == matches[0];
+						});
+						VGAssert(matchIt != rawMatches->end(), "Failed to find Cvar match in autocomplete.");
+						const auto match = matchIt->first;
+
+						if (match->type == Cvar::CvarType::Function)
+						{
+							data->InsertChars(data->CursorPos, "()");
+						}
+						else
+						{
+							data->InsertChars(data->CursorPos, " ");
+						}
 					}
 
 					else if (matches.size() > 1)
