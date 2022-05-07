@@ -263,7 +263,7 @@ void EditorUI::DrawRenderOverlayProxy(RenderDevice* device, const ImVec2& min, c
 
 		auto* window = ImGui::GetCurrentWindow();
 
-		ImGui::Image(device, overlayTexture, { 1.f, 1.f }, { sceneWidthUV, sceneHeightUV }, { 1.f + sceneWidthUV, 1.f + sceneHeightUV }, { 1.f, 1.f, 1.f, 0.25f });
+		ImGui::Image(device, overlayTexture, { 1.f, 1.f }, { sceneWidthUV, sceneHeightUV }, { 1.f + sceneWidthUV, 1.f + sceneHeightUV }, { 1.f, 1.f, 1.f, overlayAlpha });
 
 		DrawRenderOverlayTools(device, min, max);
 
@@ -1069,6 +1069,8 @@ void EditorUI::DrawRenderVisualizer(RenderDevice* device, ClusteredLightCulling&
 			{
 				if (!renderOverlayOnScene)
 				{
+					ImGui::Text("Drag the overlay onto the scene to view.");
+
 					ImGui::ImageButton(device, overlay, { 0.25f, 0.25f });
 
 					if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
@@ -1091,6 +1093,8 @@ void EditorUI::DrawRenderVisualizer(RenderDevice* device, ClusteredLightCulling&
 			{
 				ImGui::Text("No active overlay.");
 			}
+
+			ImGui::SliderFloat("Overlay alpha", &overlayAlpha, 0.05f, 1.f, "%.2f");
 		}
 
 		ImGui::End();

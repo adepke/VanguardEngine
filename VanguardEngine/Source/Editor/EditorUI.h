@@ -61,6 +61,7 @@ private:
 	ImVec2 sceneViewportMax;
 
 	bool renderOverlayOnScene = false;
+	float overlayAlpha = 0.5f;
 
 public:
 	// Debug/visualization overlay state.
