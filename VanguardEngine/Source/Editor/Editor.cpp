@@ -65,7 +65,7 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 		}
 		case RenderOverlay::HiZ:
 		{
-			activeOverlayTag = renderer.occlusionCulling.RenderDebugOverlay(graph, cameraBuffer);;
+			activeOverlayTag = renderer.occlusionCulling.RenderDebugOverlay(graph, ui->hiZOverlayMip, cameraBuffer);
 			break;
 		}
 		default:

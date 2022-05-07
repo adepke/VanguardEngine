@@ -85,7 +85,7 @@ struct ClusterData
 	uint32_t lightListBuffer;
 	uint32_t lightInfoBuffer;
 	float logY;
-	uint32_t padding1;
+	int32_t froxelSize;
 	uint32_t dimensions[3];
 	uint32_t padding2;
 };

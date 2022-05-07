@@ -108,6 +108,169 @@ void EditorUI::DrawFrameTimeHistory()
 	}
 }
 
+void EditorUI::DrawRenderOverlayTools(RenderDevice* device, const ImVec2& min, const ImVec2& max)
+{
+	const auto toolsWindowFlags =
+		ImGuiWindowFlags_NoDecoration |
+		ImGuiWindowFlags_NoScrollWithMouse |
+		//ImGuiWindowFlags_NoBackground |
+		ImGuiWindowFlags_NoSavedSettings |
+		ImGuiWindowFlags_NoFocusOnAppearing |
+		ImGuiWindowFlags_NoNav |
+		//ImGuiWindowFlags_NoInputs |
+		ImGuiWindowFlags_NoDocking;
+
+	enum class ToolPosition
+	{
+		Bottom,
+		Right
+	};
+
+	ImVec2 toolWindowSize = { 100, 100 };
+	ToolPosition position = ToolPosition::Bottom;
+
+	switch (activeOverlay)
+	{
+	case RenderOverlay::Clusters:
+		toolWindowSize = { 480, 50 };
+		position = ToolPosition::Bottom;
+		break;
+	case RenderOverlay::HiZ:
+		toolWindowSize = { 70, 300 };
+		position = ToolPosition::Right;
+		break;
+	}
+
+	const auto padding = 15.f;
+	const auto windowBase = ImGui::GetWindowPos();  // Not sure why we need this, oh well.
+
+	switch (position)
+	{
+	case ToolPosition::Bottom:
+		ImGui::SetNextWindowPos({ windowBase.x + (max.x - min.x - toolWindowSize.x) * 0.5f, max.y - toolWindowSize.y - padding });
+		break;
+	case ToolPosition::Right:
+		ImGui::SetNextWindowPos({ max.x - toolWindowSize.x - padding, windowBase.y + (max.y - min.y - toolWindowSize.y) * 0.5f });
+		break;
+	}
+	
+	if (ImGui::BeginChildFrame(ImGui::GetID("Render Overlay Tools"), toolWindowSize, toolsWindowFlags))
+	{
+		auto style = ImGui::GetStyle();
+
+		switch (activeOverlay)
+		{
+		case RenderOverlay::Clusters:
+		{
+			// Color scale.
+
+			const char* titleText = "Cluster froxel bins light count";
+			const char* leftText = "0";
+			char rightText[8];
+			ImFormatString(rightText, std::size(rightText), "%i", *CvarGet("maxLightsPerFroxel", int));
+
+			const auto titleSize = ImGui::CalcTextSize(titleText);
+			const auto leftSize = ImGui::CalcTextSize(leftText);
+			const auto rightSize = ImGui::CalcTextSize(rightText);
+
+			ImGui::SetCursorPosX((toolWindowSize.x - titleSize.x) * 0.5f);
+			ImGui::Text(titleText);
+
+			const auto sceneViewportSize = max - min;
+			const auto colorScaleSize = ImVec2{ toolWindowSize.x - std::max(leftSize.x, rightSize.x) * 2.f - style.FramePadding.x * 2.f - 4.f, 20.f };
+			auto colorScalePosMin = ImGui::GetWindowPos();
+			colorScalePosMin += { (toolWindowSize.x - colorScaleSize.x) * 0.5f, ImGui::GetCursorPosY() };
+			auto* drawList = ImGui::GetWindowDrawList();
+			drawList->AddRectFilledMultiColor(colorScalePosMin, colorScalePosMin + colorScaleSize, IM_COL32(0, 255, 0, 255), IM_COL32(255, 0, 0, 255), IM_COL32(255, 0, 0, 255), IM_COL32(0, 255, 0, 255));
+
+			ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 2.f);
+			ImGui::Text(leftText);
+
+			ImGui::SameLine();
+			ImGui::SetCursorPosX(toolWindowSize.x - rightSize.x - style.FramePadding.x);
+			ImGui::Text(rightText);
+
+			break;
+		}
+
+		case RenderOverlay::HiZ:
+		{
+			// Mip selector.
+
+			const auto sceneViewportSize = sceneViewportMax - sceneViewportMin;
+			char viewText[32];
+			ImFormatString(viewText, std::size(viewText), "Depth\nPyramid\nLevel");
+			const auto viewTextSize = ImGui::CalcTextSize(viewText);
+
+			ImGui::Text(viewText);
+
+			const auto& overlayComponent = device->GetResourceManager().Get(overlayTexture);
+			const auto maxMip = std::min((int)std::floor(std::log2(std::max(overlayComponent.description.width, overlayComponent.description.height))) + 1, *CvarGet("hiZPyramidLevels", int));
+			const auto sliderPad = 10.f;
+			const auto sliderSize = ImVec2{ toolWindowSize.x - (style.FramePadding.x + sliderPad) * 2.f, toolWindowSize.y - viewTextSize.y - style.FramePadding.y * 2.f - style.ItemSpacing.y - 4.f };
+
+			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + sliderPad);
+			ImGui::VSliderInt("", sliderSize, &hiZOverlayMip, 0, maxMip - 1);
+
+			break;
+		}
+
+		default: break;
+		}
+	}
+
+	ImGui::EndChild();
+
+	// Render the remove overlay button.
+
+	const char* buttonText = "Remove render overlay";
+	const auto removePadding = ImGui::GetStyle().WindowPadding + ImGui::GetStyle().FramePadding;
+	const auto overlayRemoveSize = ImGui::CalcTextSize(buttonText) + removePadding * 2.f + ImVec2{ 8.f, 8.f };
+
+	ImGui::SetNextWindowPos(max - overlayRemoveSize - ImVec2{ 18, 18 });
+	if (ImGui::BeginChildFrame(ImGui::GetID("Render Overlay Remove"), overlayRemoveSize, toolsWindowFlags))
+	{
+		auto style = ImGui::GetStyle();
+
+		if (ImGui::Button(buttonText))
+		{
+			renderOverlayOnScene = false;
+		}
+	}
+
+	ImGui::EndChildFrame();
+}
+
+void EditorUI::DrawRenderOverlayProxy(RenderDevice* device, const ImVec2& min, const ImVec2& max)
+{
+	if (renderOverlayOnScene && activeOverlay != RenderOverlay::None)
+	{
+		auto& style = ImGui::GetStyle();
+
+		const auto proxyWindowFlags =
+			ImGuiWindowFlags_NoDecoration |
+			ImGuiWindowFlags_NoScrollWithMouse |
+			ImGuiWindowFlags_NoBackground |
+			ImGuiWindowFlags_NoSavedSettings |
+			ImGuiWindowFlags_NoFocusOnAppearing |
+			ImGuiWindowFlags_NoNav |
+			ImGuiWindowFlags_NoInputs |
+			ImGuiWindowFlags_NoDocking;
+
+		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, { 0, 0 });
+		ImGui::BeginChildFrame(ImGui::GetID("Render Overlay Proxy"), { 0, 0 }, proxyWindowFlags);
+		ImGui::PopStyleVar();  // Don't affect the tools window.
+
+		auto* window = ImGui::GetCurrentWindow();
+
+		ImGui::Image(device, overlayTexture, { 1.f, 1.f }, { sceneWidthUV, sceneHeightUV }, { 1.f + sceneWidthUV, 1.f + sceneHeightUV }, { 1.f, 1.f, 1.f, 0.25f });
+
+		DrawRenderOverlayTools(device, min, max);
+
+		ImGui::EndChildFrame();
+	}
+}
+
 bool EditorUI::ExecuteCommand(const std::string& command)
 {
 	const auto assignment = command.find('=');
@@ -241,23 +404,23 @@ void EditorUI::DrawConsole(entt::registry& registry, const ImVec2& min, const Im
 		windowMax.y = windowMin.y + height;
 
 		constexpr auto frameColor = IM_COL32(20, 20, 20, 238);
-		constexpr auto frameColorDark = IM_COL32(20, 20, 20, 245);
+		constexpr auto frameColorDark = IM_COL32(20, 20, 20, 242);
 		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0);
 		ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, frameColor);
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 0, 0 });
-		ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 1);
-
-		if (ImGui::BeginChildFrame(ImGui::GetID("Console History"), { 0, height }))
+		
+		ImGui::SetNextWindowBgAlpha(0.f);
+		if (ImGui::BeginChild(ImGui::GetID("Console History"), { 0, height }, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground))
 		{
 			auto* window = ImGui::GetCurrentWindow();
-			auto& style = ImGui::GetStyle();
-
-			ImGui::RenderFrame(windowMin, windowMax, frameColor, true);
+			ImGui::RenderFrame(windowMin, windowMax, frameColor, false);
 			
+			ImGui::SetWindowFontScale(0.8f);
 			for (const auto& message : consoleMessages)
 			{
 				ImGui::Text("%s", message.c_str());
 			}
+			ImGui::SetWindowFontScale(1.f);
 
 			if (needsScrollUpdate)
 			{
@@ -268,8 +431,7 @@ void EditorUI::DrawConsole(entt::registry& registry, const ImVec2& min, const Im
 			consoleFullyScrolled = ImGui::GetCursorPosY() - ImGui::GetScrollY() < 240.f;  // Near the bottom, autoscroll.
 		}
 
-		ImGui::EndChildFrame();
-		ImGui::PopStyleVar();
+		ImGui::EndChild();
 		ImGui::PopStyleVar();
 		ImGui::PopStyleColor();
 
@@ -622,6 +784,8 @@ void EditorUI::DrawScene(RenderDevice* device, entt::registry& registry, Texture
 		}
 
 		ImGui::SetCursorPos(viewportMin);
+		DrawRenderOverlayProxy(device, sceneViewportMin, sceneViewportMax);
+		ImGui::SetCursorPos(viewportMin);
 		DrawConsole(registry, sceneViewportMin, sceneViewportMax);
 	}
 
@@ -876,6 +1040,10 @@ void EditorUI::DrawBloomControls(Bloom& bloom)
 
 void EditorUI::DrawRenderVisualizer(RenderDevice* device, ClusteredLightCulling& clusteredCulling, TextureHandle overlay)
 {
+	// We don't draw the overlay until the next frame, so just save it here.
+	// #TODO: Bit of a scuffed solution, and causing a crash sometimes when changing overlays!
+	overlayTexture = overlay;
+
 	if (renderVisualizerOpen)
 	{
 		if (ImGui::Begin("Render Visualizer", &renderVisualizerOpen))
@@ -922,112 +1090,6 @@ void EditorUI::DrawRenderVisualizer(RenderDevice* device, ClusteredLightCulling&
 			else
 			{
 				ImGui::Text("No active overlay.");
-			}
-		}
-
-		ImGui::End();
-	}
-
-	// Don't bound scene overlay rendering by the visibility of the render visualization window.
-	if (activeOverlay != RenderOverlay::None && renderOverlayOnScene)
-	{
-		const auto proxyWindowFlags =
-			ImGuiWindowFlags_NoDecoration |
-			ImGuiWindowFlags_NoScrollWithMouse |
-			ImGuiWindowFlags_NoBackground |
-			ImGuiWindowFlags_NoSavedSettings |
-			ImGuiWindowFlags_NoFocusOnAppearing |
-			ImGuiWindowFlags_NoNav |
-			ImGuiWindowFlags_NoInputs |
-			ImGuiWindowFlags_NoDocking;
-
-		ImGui::SetNextWindowPos(sceneViewportMin);
-		ImGui::SetNextWindowSize(sceneViewportMax - sceneViewportMin);
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, { 0.f, 0.f });
-		if (ImGui::Begin("Render Overlay Proxy", nullptr, proxyWindowFlags))
-		{
-			ImGui::Image(device, overlay, { 1.f, 1.f }, { sceneWidthUV, sceneHeightUV }, { 1.f + sceneWidthUV, 1.f + sceneHeightUV }, { 1.f, 1.f, 1.f, 0.25f });
-
-			// Any additional overlay-specific tooling.
-			switch (activeOverlay)
-			{
-			case RenderOverlay::Clusters:
-			{
-				// Render a color scale.
-
-				const auto sceneViewportSize = sceneViewportMax - sceneViewportMin;
-				const auto colorScaleSize = ImVec2{ sceneViewportSize.x * 0.35f, 20.f };
-				const auto colorScalePosMin = ImVec2{ sceneViewportMin.x + sceneViewportSize.x * 0.5f - colorScaleSize.x * 0.5f, sceneViewportMax.y - colorScaleSize.y - 40.f };
-				auto* drawList = ImGui::GetForegroundDrawList();
-				drawList->AddRectFilledMultiColor(colorScalePosMin, colorScalePosMin + colorScaleSize, IM_COL32(0, 255, 0, 255), IM_COL32(255, 0, 0, 255), IM_COL32(255, 0, 0, 255), IM_COL32(0, 255, 0, 255));
-				
-				const auto frameThickness = 4.f;
-				const auto padding = ImVec2{ frameThickness - 1.f, frameThickness - 1.f };
-				ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, frameThickness);
-				ImGui::RenderFrameBorder(colorScalePosMin - padding, colorScalePosMin + colorScaleSize + padding);
-				ImGui::PopStyleVar();
-
-				const char* titleText = "Cluster froxel bins light count";
-				const char* leftText = "0";
-				char rightText[8];
-				ImFormatString(rightText, std::size(rightText), "%i", clusteredCulling.maxLightsPerFroxel);
-
-				const auto titleSize = ImGui::CalcTextSize(titleText);
-				const auto leftSize = ImGui::CalcTextSize(leftText);
-				const auto rightSize = ImGui::CalcTextSize(rightText);
-
-				const float textPadding = 8.f;
-				ImGui::SetCursorScreenPos({ sceneViewportMin.x + sceneViewportSize.x * 0.5f - titleSize.x * 0.5f, colorScalePosMin.y - titleSize.y * 0.5f - textPadding - 6.f });
-				ImGui::Text(titleText);
-
-				ImGui::SetCursorScreenPos({ sceneViewportMin.x + sceneViewportSize.x * 0.5f - colorScaleSize.x * 0.5f - leftSize.x - textPadding, colorScalePosMin.y + colorScaleSize.y * 0.5f - leftSize.y * 0.5f });
-				ImGui::Text(leftText);
-
-				ImGui::SetCursorScreenPos({ sceneViewportMin.x + sceneViewportSize.x * 0.5f + colorScaleSize.x * 0.5f + textPadding, colorScalePosMin.y + colorScaleSize.y * 0.5f - rightSize.y * 0.5f });
-				ImGui::Text(rightText);
-
-				break;
-			}
-			case RenderOverlay::HiZ:
-			{
-				const auto sceneViewportSize = sceneViewportMax - sceneViewportMin;
-				char viewText[64];
-				ImFormatString(viewText, std::size(viewText), "Viewing Depth Pyramid Level: %d", *CvarGet("hiZPyramidLevels", int));
-				const auto viewTextSize = ImGui::CalcTextSize(viewText);
-
-				ImGui::SetCursorPos({ sceneViewportMin.x + sceneViewportSize.x * 0.5f - viewTextSize.x * 0.5f, sceneViewportMin.y + sceneViewportSize.y - 80.f });
-				ImGui::Text(viewText);
-
-				break;
-			}
-			default: break;
-			}
-		}
-
-		ImGui::End();
-
-		ImGui::PopStyleVar();
-
-		// The overlay proxy has no input, so we need a secondary window to remove the overlay from the scene.
-		const auto overlayToolsFlags =
-			ImGuiWindowFlags_NoDecoration |
-			ImGuiWindowFlags_NoScrollWithMouse |
-			ImGuiWindowFlags_NoSavedSettings |
-			ImGuiWindowFlags_NoFocusOnAppearing |
-			ImGuiWindowFlags_NoDocking;
-
-		const char* buttonText = "Remove render overlay";
-		const auto padding = ImGui::GetStyle().WindowPadding + ImGui::GetStyle().FramePadding;
-		const auto overlayToolsWindowSize = ImGui::CalcTextSize(buttonText) + padding * 2.f;
-
-		ImGui::SetNextWindowPos(sceneViewportMax - overlayToolsWindowSize - ImVec2{ 20, 20 });
-		ImGui::SetNextWindowSize(overlayToolsWindowSize);
-		ImGui::SetNextWindowBgAlpha(0.8f);
-		if (ImGui::Begin("Render Overlay Tools", nullptr, overlayToolsFlags))
-		{
-			if (ImGui::Button(buttonText))
-			{
-				renderOverlayOnScene = false;
 			}
 		}
 

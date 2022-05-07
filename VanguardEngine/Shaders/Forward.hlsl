@@ -14,7 +14,7 @@ struct ClusterData
 	uint lightListBuffer;
 	uint lightInfoBuffer;
 	float logY;
-	float padding1;
+	int froxelSize;
 	uint3 dimensions;
 	float padding2;
 };
@@ -179,7 +179,7 @@ float4 PSMain(PixelIn input) : SV_Target
 	StructuredBuffer<uint2> clusteredLightInfo = ResourceDescriptorHeap[bindData.clusterData.lightInfoBuffer];
 	StructuredBuffer<float3> sunTransmittance = ResourceDescriptorHeap[bindData.sunTransmittanceBuffer];
 	
-	uint3 clusterId = DrawToClusterId(FROXEL_SIZE, bindData.clusterData.logY, camera, input.positionCS.xy, input.depthVS);
+	uint3 clusterId = DrawToClusterId(bindData.clusterData.froxelSize, bindData.clusterData.logY, camera, input.positionCS.xy, input.depthVS);
 	uint2 lightInfo = clusteredLightInfo[ClusterId2Index(bindData.clusterData.dimensions, clusterId)];
 	for (uint i = 0; i < lightInfo.y; ++i)
 	{

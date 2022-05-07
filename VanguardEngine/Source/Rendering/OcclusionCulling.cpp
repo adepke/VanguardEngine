@@ -105,11 +105,11 @@ void OcclusionCulling::Render(RenderGraph& graph, bool cameraFrozen, const Rende
 	lastFrameHiZ = hiZTag;
 }
 
-RenderResource OcclusionCulling::RenderDebugOverlay(RenderGraph& graph, const RenderResource cameraBufferTag)
+RenderResource OcclusionCulling::RenderDebugOverlay(RenderGraph& graph, int mipLevel, const RenderResource cameraBufferTag)
 {
 #if ENABLE_EDITOR
 	TextureView hiZView{};
-	hiZView.SRV("", GetMipLevels(graph) - 1, 1);
+	hiZView.SRV("", mipLevel, 1);
 
 	auto& overlayPass = graph.AddPass("Occlusion Culling Debug Overlay", ExecutionQueue::Graphics);
 	const auto debugOverlayTag = overlayPass.Create(TransientTextureDescription{

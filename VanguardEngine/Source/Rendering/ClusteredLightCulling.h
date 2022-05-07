@@ -37,22 +37,12 @@ struct ClusterResources
 
 class ClusteredLightCulling
 {
-public:
-	static constexpr int froxelSize = 64;
-	static constexpr int maxLightsPerFroxel = 256;  // Can realistically reduce this to save memory.
-
 private:
 	RenderDevice* device = nullptr;
 
 	bool dirty = true;
 	ClusterGridInfo gridInfo;
 	BufferHandle clusterBounds;
-
-	RenderPipelineLayout boundsLayout;
-	RenderPipelineLayout depthCullLayout;
-	RenderPipelineLayout compactionLayout;
-	RenderPipelineLayout binningLayout;
-	RenderPipelineLayout indirectGenerationLayout;
 
 #if ENABLE_EDITOR
 	// Debugging visualizations.
@@ -63,7 +53,7 @@ private:
 
 	ClusterGridInfo ComputeGridInfo(const entt::registry& registry) const;
 	// Needs to be called every time the camera resolution or FOV changes.
-	void ComputeClusterGrid(CommandList& list, uint32_t cameraBuffer, uint32_t clusterBoundsBuffer) const;
+	void ComputeClusterGrid(CommandList& list, const RenderPipelineLayout& boundsLayout, uint32_t cameraBuffer, uint32_t clusterBoundsBuffer) const;
 
 public:
 	~ClusteredLightCulling();

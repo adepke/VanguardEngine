@@ -34,6 +34,7 @@ ClusterGridInfo ClusteredLightCulling::ComputeGridInfo(const entt::registry& reg
 		cameraFOV = camera.fieldOfView;
 	});
 
+	const auto froxelSize = *CvarGet("clusteredFroxelSize", int);
 	const auto x = static_cast<uint32_t>(std::ceil(backBufferComponent.description.width / (float)froxelSize));
 	const auto y = static_cast<uint32_t>(std::ceil(backBufferComponent.description.height / (float)froxelSize));
 	const float depthFactor = 1.f + (2.f * std::tan(cameraFOV / 4.f) / (float)y);
@@ -42,7 +43,7 @@ ClusterGridInfo ClusteredLightCulling::ComputeGridInfo(const entt::registry& reg
 	return { x, y, z, depthFactor };
 }
 
-void ClusteredLightCulling::ComputeClusterGrid(CommandList& list, uint32_t cameraBuffer, uint32_t clusterBoundsBuffer) const
+void ClusteredLightCulling::ComputeClusterGrid(CommandList& list, const RenderPipelineLayout& boundsLayout, uint32_t cameraBuffer, uint32_t clusterBoundsBuffer) const
 {
 	constexpr auto groupSize = 8;
 
@@ -85,6 +86,9 @@ void ClusteredLightCulling::Initialize(RenderDevice* inDevice)
 {
 	VGScopedCPUStat("Clustered Light Culling Initialize");
 
+	CvarCreate("maxLightsPerFroxel", "Max number of lights per froxel bin in light culling", 256);  // Can reduce this to save memory.
+	CvarCreate("clusteredFroxelSize", "Width and height of a froxel bin in light culling, in pixels", 64);
+
 	device = inDevice;
 
 	// #TODO: Dynamically reallocate.
@@ -100,36 +104,6 @@ void ClusteredLightCulling::Initialize(RenderDevice* inDevice)
 	clusterBoundsDesc.stride = 32;
 
 	clusterBounds = device->GetResourceManager().Create(clusterBoundsDesc, VGText("Cluster bounds"));
-
-	boundsLayout = RenderPipelineLayout{}
-		.ComputeShader({ "Clusters/ClusterBounds.hlsl", "Main" })
-		.Macro({ "FROXEL_SIZE", froxelSize });
-
-	depthCullLayout = RenderPipelineLayout{}
-		.VertexShader({ "Clusters/ClusterDepthCulling.hlsl", "VSMain" })
-		.PixelShader({ "Clusters/ClusterDepthCulling.hlsl", "PSMain" })
-		.CullMode(D3D12_CULL_MODE_NONE)  // Transparents can't have back culling.
-		.DepthEnabled(true, false, DepthTestFunction::GreaterEqual)  // Opaque and transparents receive lighting, so they cannot be culled.
-		.Macro({ "FROXEL_SIZE", froxelSize });
-
-	compactionLayout = RenderPipelineLayout{}
-		.ComputeShader({ "Clusters/ClusterCompaction.hlsl", "Main" });
-
-	binningLayout = RenderPipelineLayout{}
-		.ComputeShader({ "Clusters/ClusterLightBinning.hlsl", "Main" })
-		.Macro({ "MAX_LIGHTS_PER_FROXEL", maxLightsPerFroxel });
-
-	indirectGenerationLayout = RenderPipelineLayout{}
-		.ComputeShader({ "Clusters/ClusterIndirectBufferGeneration.hlsl", "Main" });
-
-#if ENABLE_EDITOR
-	debugOverlayLayout = RenderPipelineLayout{}
-		.VertexShader({ "Clusters/ClusterDebugOverlay.hlsl", "VSMain" })
-		.PixelShader({ "Clusters/ClusterDebugOverlay.hlsl", "PSMain" })
-		.DepthEnabled(false)
-		.Macro({ "FROXEL_SIZE", froxelSize })
-		.Macro({ "MAX_LIGHTS_PER_FROXEL", maxLightsPerFroxel });
-#endif
 
 	std::vector<D3D12_INDIRECT_ARGUMENT_DESC> binningIndirectArgDescs;
 	binningIndirectArgDescs.emplace_back(D3D12_INDIRECT_ARGUMENT_DESC{
@@ -168,7 +142,11 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 		computeClusterGridPass.Write(clusterBoundsTag, ResourceBind::UAV);
 		computeClusterGridPass.Bind([&, cameraBuffer, clusterBoundsTag](CommandList& list, RenderPassResources& resources)
 		{
-			ComputeClusterGrid(list, resources.Get(cameraBuffer), resources.Get(clusterBoundsTag));
+			const auto boundsLayout = RenderPipelineLayout{}
+				.ComputeShader({ "Clusters/ClusterBounds.hlsl", "Main" })
+				.Macro({ "FROXEL_SIZE", *CvarGet("clusteredFroxelSize", int) });
+
+			ComputeClusterGrid(list, boundsLayout, resources.Get(cameraBuffer), resources.Get(clusterBoundsTag));
 		});
 
 		dirty = false;
@@ -192,6 +170,13 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 	clusterDepthCullingPass.Write(clusterVisibilityTag, clusterVisibilityView);
 	clusterDepthCullingPass.Bind([&, cameraBuffer, instanceBuffer, meshResources, meshIndirectRenderArgs, clusterVisibilityTag](CommandList& list, RenderPassResources& resources)
 	{
+		const auto depthCullLayout = RenderPipelineLayout{}
+			.VertexShader({ "Clusters/ClusterDepthCulling.hlsl", "VSMain" })
+			.PixelShader({ "Clusters/ClusterDepthCulling.hlsl", "PSMain" })
+			.CullMode(D3D12_CULL_MODE_NONE)  // Transparents can't have back culling.
+			.DepthEnabled(true, false, DepthTestFunction::GreaterEqual)  // Opaque and transparents receive lighting, so they cannot be culled.
+			.Macro({ "FROXEL_SIZE", *CvarGet("clusteredFroxelSize", int) });
+
 		RenderUtils::Get().ClearUAV(list, resources.GetBuffer(clusterVisibilityTag), resources.Get(clusterVisibilityTag, "uav_visible"), resources.GetDescriptor(clusterVisibilityTag, "uav_nonvisible"));
 
 		list.UAVBarrier(resources.GetBuffer(clusterVisibilityTag));
@@ -240,6 +225,12 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 	clusterCompaction.Write(indirectBufferTag, ResourceBind::UAV);
 	clusterCompaction.Bind([&, clusterVisibilityTag, denseClustersTag, indirectBufferTag](CommandList& list, RenderPassResources& resources)
 	{
+		const auto compactionLayout = RenderPipelineLayout{}
+			.ComputeShader({ "Clusters/ClusterCompaction.hlsl", "Main" });
+
+		const auto 	indirectGenerationLayout = RenderPipelineLayout{}
+			.ComputeShader({ "Clusters/ClusterIndirectBufferGeneration.hlsl", "Main" });
+
 		auto& denseClustersComponent = device->GetResourceManager().Get(resources.GetBuffer(denseClustersTag));
 
 		list.BindPipeline(compactionLayout);
@@ -302,7 +293,7 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 	binningPass.Write(lightCounterTag, lightCounterView);
 	const auto lightListTag = binningPass.Create(TransientBufferDescription{
 		.updateRate = ResourceFrequency::Static,
-		.size = gridInfo.x * gridInfo.y * gridInfo.z * maxLightsPerFroxel,
+		.size = gridInfo.x * gridInfo.y * gridInfo.z * *CvarGet("maxLightsPerFroxel", int),
 		.stride = sizeof(uint32_t)
 	}, VGText("Cluster binning light list"));
 	binningPass.Write(lightListTag, ResourceBind::UAV);
@@ -317,6 +308,10 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 	binningPass.Bind([&, denseClustersTag, clusterBoundsTag, lightsBuffer, lightCounterTag,
 		lightListTag, lightInfoTag, indirectBufferTag, cameraBuffer](CommandList& list, RenderPassResources& resources)
 	{
+		const auto binningLayout = RenderPipelineLayout{}
+			.ComputeShader({ "Clusters/ClusterLightBinning.hlsl", "Main" })
+			.Macro({ "MAX_LIGHTS_PER_FROXEL", *CvarGet("maxLightsPerFroxel", int) });
+
 		RenderUtils::Get().ClearUAV(list, resources.GetBuffer(lightCounterTag), resources.Get(lightCounterTag, "uav_visible"), resources.GetDescriptor(lightCounterTag, "uav_nonvisible"));
 		RenderUtils::Get().ClearUAV(list, resources.GetBuffer(lightInfoTag), resources.Get(lightInfoTag, "uav_visible"), resources.GetDescriptor(lightInfoTag, "uav_nonvisible"));
 
@@ -372,6 +367,13 @@ RenderResource ClusteredLightCulling::RenderDebugOverlay(RenderGraph& graph, Ren
 	overlayPass.Output(clusterDebugOverlayTag, OutputBind::RTV, LoadType::Preserve);
 	overlayPass.Bind([&, lightInfoBuffer, clusterVisibilityBuffer](CommandList& list, RenderPassResources& resources)
 	{
+		const auto debugOverlayLayout = RenderPipelineLayout{}
+			.VertexShader({ "Clusters/ClusterDebugOverlay.hlsl", "VSMain" })
+			.PixelShader({ "Clusters/ClusterDebugOverlay.hlsl", "PSMain" })
+			.DepthEnabled(false)
+			.Macro({ "FROXEL_SIZE", *CvarGet("clusteredFroxelSize", int) })
+			.Macro({ "MAX_LIGHTS_PER_FROXEL", *CvarGet("maxLightsPerFroxel", int) });
+
 		list.BindPipeline(debugOverlayLayout);
 
 		struct BindData

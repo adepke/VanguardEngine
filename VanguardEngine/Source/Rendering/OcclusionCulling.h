@@ -30,7 +30,7 @@ public:
 	void Initialize(RenderDevice* inDevice);
 	RenderResource GetLastFrameHiZ();
 	void Render(RenderGraph& graph, bool cameraFrozen, const RenderResource depthStencilTag);
-	RenderResource RenderDebugOverlay(RenderGraph& graph, const RenderResource cameraBufferTag);
+	RenderResource RenderDebugOverlay(RenderGraph& graph, int mipLevel, const RenderResource cameraBufferTag);
 };
 
 inline RenderResource OcclusionCulling::GetLastFrameHiZ()

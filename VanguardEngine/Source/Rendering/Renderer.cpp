@@ -176,8 +176,7 @@ void Renderer::CreatePipelines()
 	forwardOpaqueLayout = RenderPipelineLayout{}
 		.VertexShader({ "Forward", "VSMain" })
 		.PixelShader({ "Forward", "PSMain" })
-		.DepthEnabled(true, false, DepthTestFunction::Equal)  // Prepass provides depth.
-		.Macro({ "FROXEL_SIZE", clusteredCulling.froxelSize });
+		.DepthEnabled(true, false, DepthTestFunction::Equal);  // Prepass provides depth.
 
 	postProcessLayout = RenderPipelineLayout{}
 		.VertexShader({ "PostProcess", "VSMain" })
@@ -526,6 +525,7 @@ void Renderer::Render(entt::registry& registry)
 		auto& gridInfo = clusteredCulling.GetGridInfo();
 		clusterData.lightListBuffer = resources.Get(clusterResources.lightList);
 		clusterData.lightInfoBuffer = resources.Get(clusterResources.lightInfo);
+		clusterData.froxelSize = *CvarGet("clusteredFroxelSize", int);
 		clusterData.dimensions[0] = gridInfo.x;
 		clusterData.dimensions[1] = gridInfo.y;
 		clusterData.dimensions[2] = gridInfo.z;

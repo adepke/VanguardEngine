@@ -65,10 +65,14 @@ private:
 public:
 	// Debug/visualization overlay state.
 	RenderOverlay activeOverlay = RenderOverlay::None;
+	TextureHandle overlayTexture;
+	int hiZOverlayMip = 0;
 
 private:
 	void DrawMenu();
 	void DrawFrameTimeHistory();
+	void DrawRenderOverlayTools(RenderDevice* device, const ImVec2& min, const ImVec2& max);
+	void DrawRenderOverlayProxy(RenderDevice* device, const ImVec2& min, const ImVec2& max);
 	bool ExecuteCommand(const std::string& command);
 	void DrawConsole(entt::registry& registry, const ImVec2& min, const ImVec2& max);
 
