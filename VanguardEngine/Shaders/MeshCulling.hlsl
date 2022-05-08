@@ -33,18 +33,19 @@ struct MeshIndirectArgument
 // Credit: 2D Polyhedral Bounds of a Clipped, Perspective-Projected 3D Sphere
 bool ProjectSphere(float3 center, float radius, Camera camera, out float4 aabb)
 {
+	// Near plane culling.
 	if (center.z < camera.nearPlane + radius)
 		return false;
 
 	float2 cx = -center.xz;
 	float2 vx = float2(sqrt(dot(cx, cx) - radius * radius), radius);
-	float2 minx = mul(float2x2(vx.x, vx.y, -vx.y, vx.x), cx);
-	float2 maxx = mul(float2x2(vx.x, -vx.y, vx.y, vx.x), cx);
+	float2 minx = mul(cx, float2x2(vx.x, vx.y, -vx.y, vx.x));
+	float2 maxx = mul(cx, float2x2(vx.x, -vx.y, vx.y, vx.x));
 
 	float2 cy = -center.yz;
 	float2 vy = float2(sqrt(dot(cy, cy) - radius * radius), radius);
-	float2 miny = mul(float2x2(vy.x, vy.y, -vy.y, vy.x), cy);
-	float2 maxy = mul(float2x2(vy.x, -vy.y, vy.y, vy.x), cy);
+	float2 miny = mul(cy, float2x2(vy.x, vy.y, -vy.y, vy.x));
+	float2 maxy = mul(cy, float2x2(vy.x, -vy.y, vy.y, vy.x));
 
 	float p00 = camera.lastFrameProjection._m00;
 	float p11 = camera.lastFrameProjection._m11;
@@ -86,7 +87,9 @@ bool IsVisible(ObjectData object, Camera camera)
 
 	if (visible && bindData.cullingLevel > 1)
 	{
+		// Convention here is +Z going outwards from camera.
 		center.z *= -1;
+		radius *= 0.25;  // Revert the weird 4x scaling above.
 
 		float4 aabb;
 		if (ProjectSphere(center, radius, camera, aabb))
@@ -98,8 +101,6 @@ bool IsVisible(ObjectData object, Camera camera)
 
 			float projectedWidth = (aabb.z - aabb.x) * width;
 			float projectedHeight = (aabb.w - aabb.y) * height;
-			projectedWidth *= -1;
-			projectedHeight *= -1;
 
 			float level = min(floor(log2(max(projectedWidth, projectedHeight))), mipCount);
 			float2 uv = (aabb.xy + aabb.zw) * 0.5;
