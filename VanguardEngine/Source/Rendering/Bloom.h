@@ -21,8 +21,11 @@ private:
 
 public:
 	// Values from: https://www.froyok.fr/blog/2021-12-ue4-custom-bloom/
-	float internalBlend = 0.85f;
-	float intensity = 0.3f;
+	//float internalBlend = 0.85f;
+	//float intensity = 0.3f;
+	// Values that increase sun quality.
+	float internalBlend = 0.66f;
+	float intensity = 0.26f;
 
 public:
 	void Initialize(RenderDevice* inDevice);
