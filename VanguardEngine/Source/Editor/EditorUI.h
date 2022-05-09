@@ -69,6 +69,8 @@ public:
 	TextureHandle overlayTexture;
 	int hiZOverlayMip = 0;
 
+	bool showFps = false;
+
 private:
 	void DrawMenu();
 	void DrawFrameTimeHistory();

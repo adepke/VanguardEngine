@@ -27,6 +27,12 @@ Editor::~Editor()
 
 void Editor::Update()
 {
+	// Creating editor cvars here is simple and doesn't matter if we recreate them every frame.
+	CvarCreate("showFps", "Toggles display of FPS on the scene window", +[]()
+	{
+		Editor::Get().ui->showFps = !Editor::Get().ui->showFps;
+	});
+
 	ui->Update();
 }
 
