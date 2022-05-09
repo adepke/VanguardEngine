@@ -790,16 +790,17 @@ void EditorUI::DrawScene(RenderDevice* device, entt::registry& registry, Texture
 		{
 			auto& style = ImGui::GetStyle();
 
-			ImGui::SetWindowFontScale(2.f);
+			ImGui::SetWindowFontScale(1.5f);
 
 			const auto fpsTextSize = ImGui::CalcTextSize("FPS: 000.0");
 			const auto fpsTextPosition = ImVec2{ viewportMax.x - fpsTextSize.x - 40.f, viewportMin.y + 40.f };
 			ImGui::SetCursorPos(fpsTextPosition);
 
-			const auto border = 5.f;
+			const auto border = 2.f;
+			const auto offset = 2.f;
 			const auto screenOffset = ImGui::GetWindowPos();
-			const auto frameMin = ImVec2{ fpsTextPosition.x - border, fpsTextPosition.y - border };
-			const auto frameMax = ImVec2{ fpsTextPosition.x + fpsTextSize.x + border, fpsTextPosition.y + fpsTextSize.y + border };
+			const auto frameMin = ImVec2{ fpsTextPosition.x - border - 4.f, fpsTextPosition.y - border - offset };
+			const auto frameMax = ImVec2{ fpsTextPosition.x + fpsTextSize.x + border + 4.f, fpsTextPosition.y + fpsTextSize.y + border - offset };
 			auto frameColor = ImGui::GetColorU32(ImGuiCol_FrameBg, 0.85f);
 			ImGui::RenderFrame(screenOffset + frameMin, screenOffset + frameMax, frameColor, true);
 
