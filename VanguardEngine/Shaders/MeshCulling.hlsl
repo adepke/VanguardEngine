@@ -90,6 +90,7 @@ bool IsVisible(ObjectData object, Camera camera)
 		// Convention here is +Z going outwards from camera.
 		center.z *= -1;
 		radius *= 0.25;  // Revert the weird 4x scaling above.
+		radius += 2;  // Add buffering zone to reduce artifacts from 1-frame delay.
 
 		float4 aabb;
 		if (ProjectSphere(center, radius, camera, aabb))
