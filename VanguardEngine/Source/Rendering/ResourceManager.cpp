@@ -663,7 +663,8 @@ void ResourceManager::Write(TextureHandle target, const std::vector<uint8_t>& so
 	auto& component = Get(target);
 
 	VGAssert(component.description.accessFlags & AccessFlag::CPUWrite, "Failed to write to texture, no CPU write access.");
-	VGAssert(component.description.width * component.description.height * component.description.depth * GetResourceFormatSize(component.description.format) / 8 <= source.size(), "Failed to write to texture, source is larger than target.");
+	VGAssert(component.description.width * component.description.height * component.description.depth * (GetResourceFormatSize(component.description.format) / 8) >= source.size(),
+		"Failed to write to texture, source is larger than target.");
 
 	const auto frameIndex = device->GetFrameIndex();
 
