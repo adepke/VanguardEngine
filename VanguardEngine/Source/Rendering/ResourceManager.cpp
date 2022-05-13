@@ -672,10 +672,6 @@ void ResourceManager::Write(TextureHandle target, const std::vector<uint8_t>& so
 	// need this alignment, so only align here.
 	uploadOffsets[frameIndex] = AlignedSize(uploadOffsets[frameIndex], D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
 
-	VGAssert(uploadOffsets[frameIndex] + source.size() <= uploadResources[frameIndex]->GetResource()->GetDesc().Width, "Failed to write to texture, exhausted frame upload heap.");
-
-	std::memcpy(static_cast<uint8_t*>(uploadPtrs[frameIndex]) + uploadOffsets[frameIndex], source.data(), source.size());
-
 	D3D12_TEXTURE_COPY_LOCATION sourceCopyDesc{};
 	sourceCopyDesc.pResource = uploadResources[frameIndex]->GetResource();
 	sourceCopyDesc.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
@@ -684,6 +680,49 @@ void ResourceManager::Write(TextureHandle target, const std::vector<uint8_t>& so
 
 	uint64_t requiredCopySize;
 	device->Native()->GetCopyableFootprints(&targetDescriptionCopy, 0, 1, uploadOffsets[frameIndex], &sourceCopyDesc.PlacedFootprint, nullptr, nullptr, &requiredCopySize);
+
+	std::vector<uint8_t> alignedSource;
+	auto* sourcePtr = &source;  // We might need to change the source data if we hit a misalignment.
+
+	// Check conditions could be improved, but we essentially need to check if the source data's rows aren't aligned to D3D12_TEXTURE_DATA_PITCH_ALIGNMENT.
+	// If they aren't, we need to pad the source data.
+	// https://docs.microsoft.com/en-us/windows/win32/direct3d12/upload-and-readback-of-texture-data
+	if ((component.description.width * GetResourceFormatSize(component.description.format) / 8) % D3D12_TEXTURE_DATA_PITCH_ALIGNMENT != 0)
+	{
+		VGScopedCPUStat("Source Padding");
+
+		// Log a message since this isn't a cheap and should probably be avoided.
+		VGLog(logRendering, "Texture write misalignment, padding out source data.");
+
+		alignedSource.resize(
+			sourceCopyDesc.PlacedFootprint.Footprint.RowPitch *
+			component.description.height *
+			component.description.depth *
+			(GetResourceFormatSize(component.description.format) / 8));
+
+		VGAssert(source.size() < alignedSource.size(), "Expected different aligned size, something probably broke with texture writes.");
+
+		// #TODO: Assuming a full resource write here.
+		for (int i = 0; i < component.description.depth; ++i)
+		{
+			for (int j = 0; j < component.description.height; ++j)
+			{
+				const auto rowSize = sourceCopyDesc.PlacedFootprint.Footprint.RowPitch;
+				const auto sliceSize = rowSize * component.description.height;
+
+				const auto destOffset = j * rowSize + i * sliceSize;
+				const auto sourceOffset = j * component.description.width + i * component.description.width * component.description.height;
+
+				std::memcpy(alignedSource.data() + destOffset, source.data() + sourceOffset, component.description.width);
+			}
+		}
+
+		sourcePtr = &alignedSource;
+	}
+
+	VGAssert(uploadOffsets[frameIndex] + sourcePtr->size() <= uploadResources[frameIndex]->GetResource()->GetDesc().Width, "Failed to write to texture, exhausted frame upload heap.");
+
+	std::memcpy(static_cast<uint8_t*>(uploadPtrs[frameIndex]) + uploadOffsets[frameIndex], sourcePtr->data(), sourcePtr->size());
 
 	D3D12_TEXTURE_COPY_LOCATION targetCopyDesc{};
 	targetCopyDesc.pResource = component.Native();
