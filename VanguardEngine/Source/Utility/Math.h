@@ -6,6 +6,7 @@
 
 #include <cstdint>
 #include <limits>
+#include <algorithm>
 
 using namespace DirectX;
 
@@ -37,4 +38,15 @@ inline constexpr uint32_t PreviousPowerOf2(uint32_t value)
 	while (result * 2 < value)
 		result *= 2;
 	return result;
+}
+
+// Unclamped range remapping.
+inline constexpr float RemapRange(float value, float inMin, float inMax, float outMin, float outMax)
+{
+	return outMin + (((value - inMin) / (inMax - inMin)) * (outMax - outMin));
+}
+
+inline constexpr float RemapRangeClamped(float value, float inMin, float inMax, float outMin, float outMax)
+{
+	return std::clamp(RemapRange(value, inMin, inMax, outMin, outMax), outMin, outMax);
 }
