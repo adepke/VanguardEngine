@@ -5,6 +5,7 @@
 
 #include "Constants.hlsli"
 #include "Camera.hlsli"
+#include "Volumetrics/PhaseFunctions.hlsli"
 
 // Atmospheric scattering, inspired by "Precomputed Atmospheric Rendering" [https://hal.inria.fr/inria-00288758/en]
 // and with additions from Frostbite [https://media.contentapi.ea.com/content/dam/eacom/frostbite/files/s2016-pbs-frostbite-sky-clouds-new.pdf]
@@ -50,6 +51,7 @@ struct AtmosphereData
 
 static const float sunAngularRadius = 0.004675f;
 static const float minMuS = -0.5f;
+static const float mieAnisotropy = 0.8f;
 
 float DistanceToAtmosphereTop(AtmosphereData atmosphere, float radius, float mu)
 {
@@ -245,22 +247,6 @@ void ComputeSingleScattering(AtmosphereData atmosphere, Texture2D transmittanceL
 	mie = mieSum * dx * atmosphere.solarIrradiance * atmosphere.mieScattering;
 }
 
-float RayleighPhase(float nu)
-{
-	static const float k = 3.f / (16.f * pi);
-	return k * (1.f + nu * nu);
-}
-
-float MiePhase(float nu)
-{
-	// Mean cosine, determines the medium anisotropy. 0 = isotropic.
-	static const float g = 0.8f;
-	
-	float gSquared = g * g;
-	float k = 3.f / (8.f * pi) * (1.f - gSquared) / (2.f + gSquared);
-	return k * (1.f + nu * nu) / pow(1.f + gSquared - 2.f * g * nu, 1.5f);
-}
-
 float4 GetScatteringLutDimensions4D(float3 textureSize)
 {
 	static const float nuSize = 8.f;
@@ -403,7 +389,7 @@ float3 GetScattering(AtmosphereData atmosphere, Texture3D singleRayleighScatteri
 		float3 rayleigh = GetScattering(atmosphere, singleRayleighScatteringLut, lutSampler, radius, mu, muS, nu, rayIntersectsGround);
 		float3 mie = GetScattering(atmosphere, singleMieScatteringLut, lutSampler, radius, mu, muS, nu, rayIntersectsGround);
 		
-		return rayleigh * RayleighPhase(nu) + mie * MiePhase(nu);
+		return rayleigh * RayleighPhase(nu) + mie * MiePhase(nu, mieAnisotropy);
 	}
 	
 	else
@@ -541,7 +527,7 @@ float3 ComputeScatteringDensity(AtmosphereData atmosphere, Texture2D transmittan
 			float rayleighDensity = GetAtmosphereLayerDensity(atmosphere.rayleighDensity, radius - atmosphere.radiusBottom);
 			float mieDensity = GetAtmosphereLayerDensity(atmosphere.mieDensity, radius - atmosphere.radiusBottom);
 			
-			rayleighMie += incidentRadiance * (atmosphere.rayleighScattering * rayleighDensity * RayleighPhase(nu2) + atmosphere.mieScattering * mieDensity * MiePhase(nu2)) * dOmegaI;
+			rayleighMie += incidentRadiance * (atmosphere.rayleighScattering * rayleighDensity * RayleighPhase(nu2) + atmosphere.mieScattering * mieDensity * MiePhase(nu2, mieAnisotropy)) * dOmegaI;
 		}
 	}
 	
@@ -677,7 +663,7 @@ float3 GetSkyRadiance(AtmosphereData atmosphere, Texture2D transmittanceLut, Tex
 		singleMieScattering *= shadowTransmittance;
 	}
 	
-	return scattering * RayleighPhase(nu) + singleMieScattering * MiePhase(nu);
+	return scattering * RayleighPhase(nu) + singleMieScattering * MiePhase(nu, mieAnisotropy);
 }
 
 float3 GetSkyRadianceToPoint(AtmosphereData atmosphere, Texture2D transmittanceLut, Texture3D scatteringLut, SamplerState lutSampler,
@@ -734,7 +720,7 @@ float3 GetSkyRadianceToPoint(AtmosphereData atmosphere, Texture2D transmittanceL
 	// Avoid rendering artifacts when the sun is below the horizon.
 	singleMieScattering *= smoothstep(0.f, 0.01f, muS);
 	
-	return scattering * RayleighPhase(nu) + singleMieScattering * MiePhase(nu);
+	return scattering * RayleighPhase(nu) + singleMieScattering * MiePhase(nu, mieAnisotropy);
 }
 
 void GetSunAndSkyIrradiance(AtmosphereData atmosphere, Texture2D transmittanceLut, Texture2D irradianceLut, SamplerState lutSampler,
