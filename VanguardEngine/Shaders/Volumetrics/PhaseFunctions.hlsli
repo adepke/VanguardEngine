@@ -38,4 +38,15 @@ float HenyeyGreensteinPhase(float nu, float eccentricity)
 	return numerator / denominator;
 }
 
+// Cheap approximation of Henyey-Greenstein. Note that k can be precomputed for a given g.
+// nu = cos(theta)
+float SchlickPhase(float nu, float g)
+{
+	const float k = 1.55 * g - 0.55 * g*g*g;
+	const float numerator = 1.0 - k*k;
+	const float bottomTerm = 1.0 + k * nu;
+	const float denominator = bottomTerm*bottomTerm * 4.0 * pi;
+	return numerator / denominator;
+}
+
 #endif  // __PHASEFUNCTIONS_HLSLI__
