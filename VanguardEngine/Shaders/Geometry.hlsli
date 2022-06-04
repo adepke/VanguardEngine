@@ -58,4 +58,21 @@ bool SphereAABBIntersection(float3 center, float radius, AABB aabb)
 	return true;
 }
 
+// Credit: https://iquilezles.org/articles/intersectors/
+bool RaySphereIntersection(float3 origin, float3 direction, float3 center, float radius, out float2 solutions)
+{
+	float3 oc = origin - center;
+	float b = dot(oc, direction);
+	float c = dot(oc, oc) - radius*radius;
+	float h = b*b - c;
+	if (h < 0.0)
+		return false;
+	// Additional check to prevent intersections behind the ray.
+	if (length(oc) > radius && dot(-oc, direction) < 0.f)
+		return false;
+	h = sqrt(h);
+	solutions = float2(-b - h, -b + h);
+	return true;
+}
+
 #endif  // __GEOMETRY_HLSLI__
