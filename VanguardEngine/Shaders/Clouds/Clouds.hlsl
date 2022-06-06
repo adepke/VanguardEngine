@@ -4,6 +4,7 @@
 #include "Camera.hlsli"
 #include "Geometry.hlsli"
 #include "Constants.hlsli"
+#include "Reprojection.hlsli"
 #include "Volumetrics/LightIntegration.hlsli"
 #include "Volumetrics/PhaseFunctions.hlsli"
 
@@ -14,6 +15,9 @@ struct BindData
 	uint cameraBuffer;
 	uint cameraIndex;
 	float solarZenithAngle;
+	uint timeSlice;
+	float2 outputResolution;
+	uint lastFrameTexture;
 };
 
 ConstantBuffer<BindData> bindData : register(b0);
@@ -179,12 +183,9 @@ float SampleCloudDensityCone(Texture3D<float> baseNoise, Texture3D<float> detail
 	return density;
 }
 
-float ComputeBeersPowder(float value, float absorption, float viewDotLight)
+float ComputeBeersLaw(float value, float absorption)
 {
-	const float beers = exp(-value * absorption);  // Absorption increases for rain clouds.
-	float powder = 1.0 - exp(-value * 2.0);
-	powder = lerp(1, powder, saturate((viewDotLight * 0.5) + 0.5));  // Fix the output range.
-	return beers * powder;
+	return exp(-value * absorption);  // Absorption increases for rain clouds.
 }
 
 float ComputePhaseFunction(float nu)
@@ -195,14 +196,25 @@ float ComputePhaseFunction(float nu)
 	return (a + b) / 2.0;
 }
 
+float ComputeInScatterProbability(float density, float heightFraction)
+{
+	const float depthProbability = 0.05 + pow(density, RemapRange(heightFraction, 0.3, 0.85, 0.5, 2.0));
+	const float verticalProbability = pow(saturate(RemapRange(heightFraction, 0.07, 0.14, 0.1, 1.0)), 0.8);
+
+	return depthProbability * verticalProbability;
+}
+
 float ComputeLightEnergy(float3 position, float density, float viewDotLight)
 {
-	// Lighting model described in GPU Pro 7 page 119. Various changes made to proposed model.
+	// Lighting model inspired by GPU Pro 7 page 119, Frostbite, and Nubis 2017 real-time volumetric cloudscapes.
 
 	const float absorption = 1.5;  // #TODO: Comes from weather.
 
-	float energy = ComputeBeersPowder(density, absorption, viewDotLight) * ComputePhaseFunction(viewDotLight);
-	return energy * 2;  // #TEMP
+	const float beers = ComputeBeersLaw(density, absorption);
+	const float phase = ComputePhaseFunction(viewDotLight);
+	const float inScatter = ComputeInScatterProbability(density, GetHeightFractionForPoint(position, float2(cloudLayerBottom, cloudLayerTop)));
+
+	return beers * phase * inScatter;
 }
 
 void RayMarch(float3 origin, float3 direction, float3 sunDirection, out float3 scatteredLuminance, out float transmittance)
@@ -345,19 +357,46 @@ float4 PSMain(PixelIn input) : SV_Target
 	StructuredBuffer<Camera> cameraBuffer = ResourceDescriptorHeap[bindData.cameraBuffer];
 	Camera camera = cameraBuffer[bindData.cameraIndex];
 
-	float3 sunDirection = float3(sin(bindData.solarZenithAngle), 0.f, cos(bindData.solarZenithAngle));
-	float3 rayDirection = ComputeRayDirection(camera, input.uv);
+	static const uint crossFilter[] = {
+		0, 8, 2, 10,
+		12, 4, 14, 6,
+		3, 11, 1, 9,
+		15, 7, 13, 5
+	};
 
-	ComputeNoiseKernel(sunDirection);
+	int2 pixel = input.uv * bindData.outputResolution;
+	int index = (pixel.x + 4 * pixel.y) % 16;
+	if (index == crossFilter[bindData.timeSlice])
+	{
+		float3 sunDirection = float3(sin(bindData.solarZenithAngle), 0.f, cos(bindData.solarZenithAngle));
+		float3 rayDirection = ComputeRayDirection(camera, input.uv);
 
-	float3 scatteredLuminance;
-	float transmittance;
-	RayMarch(camera.position.xyz, rayDirection, sunDirection, scatteredLuminance, transmittance);
+		ComputeNoiseKernel(sunDirection);
 
-	float3 skyColor = 0.xxx;  // Applying as overlay, so no sky color.
-	float4 output;
-	output.rgb = scatteredLuminance + transmittance * skyColor;
-	output.a = 1 - transmittance;
+		float3 scatteredLuminance;
+		float transmittance;
+		RayMarch(camera.position.xyz, rayDirection, sunDirection, scatteredLuminance, transmittance);
 
-	return output;
+		float3 skyColor = 0.xxx;  // Applying as overlay, so no sky color.
+		float4 output;
+		output.rgb = scatteredLuminance + transmittance * skyColor;
+		output.a = 1 - transmittance;
+
+		return output;
+	}
+
+	else
+	{
+		// Not rendering this pixel this frame, so reproject instead.
+		Texture2D<float4> lastFrameTexture = ResourceDescriptorHeap[bindData.lastFrameTexture];
+		float2 reprojectedUv = ReprojectUv(camera, input.uv);
+
+		float4 lastFrame = 0.xxxx;
+		if (bindData.lastFrameTexture != 0)
+		{
+			lastFrame = lastFrameTexture.Sample(linearMipPointTransparentBorder, reprojectedUv);
+		}
+
+		return lastFrame;
+	}
 }
