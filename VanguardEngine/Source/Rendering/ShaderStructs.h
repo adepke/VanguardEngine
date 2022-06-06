@@ -17,6 +17,8 @@ struct Camera
 	XMMATRIX inverseProjection;
 	XMMATRIX lastFrameView;
 	XMMATRIX lastFrameProjection;
+	XMMATRIX lastFrameInverseView;
+	XMMATRIX lastFrameInverseProjection;
 	float nearPlane;
 	float farPlane;
 	float fieldOfView;  // Horizontal, radians.
