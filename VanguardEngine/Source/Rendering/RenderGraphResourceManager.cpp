@@ -5,7 +5,7 @@
 #include <Rendering/RenderGraph.h>
 #include <Rendering/RenderPass.h>
 
-DescriptorHandle RenderGraphResourceManager::CreateDescriptorFromView(RenderDevice* device, const RenderResource resource, ShaderResourceViewDescription viewDesc)
+DescriptorHandle RenderGraphResourceManager::CreateDescriptorFromView(const RenderResource resource, ShaderResourceViewDescription viewDesc)
 {
 	VGScopedCPUStat("Create Descriptor From View");
 
@@ -141,7 +141,7 @@ DescriptorHandle RenderGraphResourceManager::CreateDescriptorFromView(RenderDevi
 	return std::move(handle);
 }
 
-uint32_t RenderGraphResourceManager::GetDefaultDescriptor(RenderDevice* device, const RenderResource resource, ResourceBind bind)
+uint32_t RenderGraphResourceManager::GetDefaultDescriptor(const RenderResource resource, ResourceBind bind)
 {
 	switch (bind)
 	{
@@ -174,10 +174,73 @@ uint32_t RenderGraphResourceManager::GetDefaultDescriptor(RenderDevice* device, 
 	return -1;
 }
 
-void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGraph* graph)
+void RenderGraphResourceManager::SearchCrossFrameTransients(RenderGraph* graph)
+{
+	// We can't check if there's an intersection between pass->reads or pass->writes and the transient resource,
+	// since we can have multiple different resource handles pointing to the same underlying resource.
+
+	for (auto& transientBuffer : transientBuffers)
+	{
+		for (const auto& pass : graph->passes)
+		{
+			std::vector<entt::entity> accessedHandles;
+			accessedHandles.reserve(pass->reads.size() + pass->writes.size());
+
+			for (const auto read : pass->reads)
+			{
+				if (bufferResources.contains(read))
+					accessedHandles.emplace_back(bufferResources[read].handle);
+			}
+			for (const auto write : pass->writes)
+			{
+				if (bufferResources.contains(write))
+					accessedHandles.emplace_back(bufferResources[write].handle);
+			}
+
+			const auto handle = bufferResources[transientBuffer.resource].handle;
+			if (std::find(accessedHandles.begin(), accessedHandles.end(), handle) != accessedHandles.end())
+			{
+				transientBuffer.counter = 0;
+				break;
+			}
+		}
+	}
+
+	for (auto& transientTexture : transientTextures)
+	{
+		for (const auto& pass : graph->passes)
+		{
+			std::vector<entt::entity> accessedHandles;
+			accessedHandles.reserve(pass->reads.size() + pass->writes.size());
+
+			for (const auto read : pass->reads)
+			{
+				if (textureResources.contains(read))
+					accessedHandles.emplace_back(textureResources[read].handle);
+			}
+			for (const auto write : pass->writes)
+			{
+				if (textureResources.contains(write))
+					accessedHandles.emplace_back(textureResources[write].handle);
+			}
+
+			const auto handle = textureResources[transientTexture.resource].handle;
+			if (std::find(accessedHandles.begin(), accessedHandles.end(), handle) != accessedHandles.end())
+			{
+				transientTexture.counter = 0;
+				break;
+			}
+		}
+	}
+}
+
+void RenderGraphResourceManager::BuildTransients(RenderGraph* graph)
 {
 	VGScopedCPUStat("Render Graph Build Transients");
 	VGScopedGPUStat("Render Graph Build Transients", device->GetDirectContext(), device->GetDirectList().Native());
+
+	// Transients used across frames need special handling.
+	SearchCrossFrameTransients(graph);
 
 	// #TODO: Don't brute force search all passes to determine bind flags. Use a better approach.
 
@@ -222,7 +285,7 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 					}
 
 					foundReusable = true;
-					--transientBuffer.counter;
+					transientBuffer.counter = 0;
 					bufferResources[resource] = bufferResources[transientBuffer.resource];  // Duplicate the resource handle.
 
 					// If we have a UAV counter, we need to reset it.
@@ -272,7 +335,7 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 	while (i != transientBuffers.end())
 	{
 		// If the transient wasn't reused recently, discard it.
-		if (i->counter > 1)
+		if (i->counter > transientExpiration)
 		{
 			device->GetResourceManager().AddFrameResource(device->GetFrameIndex(), bufferResources[i->resource]);
 			i = transientBuffers.erase(i);
@@ -339,7 +402,7 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 					}
 
 					foundReusable = true;
-					--transientTexture.counter;
+					transientTexture.counter = 0;
 					textureResources[resource] = textureResources[transientTexture.resource];  // Duplicate the resource handle.
 
 					device->GetResourceManager().NameResource(textureResources[resource], info.second);
@@ -389,7 +452,7 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 	while (j != transientTextures.end())
 	{
 		// If the transient wasn't reused recently, discard it.
-		if (j->counter > 1)
+		if (j->counter > transientExpiration)
 		{
 			device->GetResourceManager().AddFrameResource(device->GetFrameIndex(), textureResources[j->resource]);
 			j = transientTextures.erase(j);
@@ -403,7 +466,7 @@ void RenderGraphResourceManager::BuildTransients(RenderDevice* device, RenderGra
 	}
 }
 
-void RenderGraphResourceManager::BuildDescriptors(RenderDevice* device, RenderGraph* graph)
+void RenderGraphResourceManager::BuildDescriptors(RenderGraph* graph)
 {
 	VGScopedCPUStat("Render Graph Build Descriptors");
 
@@ -416,7 +479,7 @@ void RenderGraphResourceManager::BuildDescriptors(RenderDevice* device, RenderGr
 			// Check if we want a default descriptor or a custom set.
 			if (requests.descriptorRequests.size() == 0)
 			{
-				passViews[i].views[resource].descriptorIndices[""] = GetDefaultDescriptor(device, resource, pass->bindInfo[resource]);
+				passViews[i].views[resource].descriptorIndices[""] = GetDefaultDescriptor(resource, pass->bindInfo[resource]);
 			}
 
 			else
@@ -424,7 +487,7 @@ void RenderGraphResourceManager::BuildDescriptors(RenderDevice* device, RenderGr
 				for (const auto& [name, request] : requests.descriptorRequests)
 				{
 					// #TODO: Don't recreate descriptors every frame.
-					auto descriptor = CreateDescriptorFromView(device, resource, request);
+					auto descriptor = CreateDescriptorFromView(resource, request);
 					passViews[i].views[resource].descriptorIndices[name] = descriptor.bindlessIndex;
 					passViews[i].views[resource].fullDescriptors[name] = std::move(descriptor);
 				}
@@ -432,7 +495,7 @@ void RenderGraphResourceManager::BuildDescriptors(RenderDevice* device, RenderGr
 		}
 	}
 }
-void RenderGraphResourceManager::DiscardTransients(RenderDevice* device)
+void RenderGraphResourceManager::DiscardTransients()
 {
 	VGScopedCPUStat("Render Graph Discard Transients");
 
@@ -451,7 +514,7 @@ void RenderGraphResourceManager::DiscardTransients(RenderDevice* device)
 	transientTextures.clear();
 }
 
-void RenderGraphResourceManager::DiscardDescriptors(RenderDevice* device)
+void RenderGraphResourceManager::DiscardDescriptors()
 {
 	VGScopedCPUStat("Render Graph Discard Descriptors");
 

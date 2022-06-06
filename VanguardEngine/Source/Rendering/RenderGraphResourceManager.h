@@ -3,6 +3,7 @@
 #pragma once
 
 #include <Rendering/Base.h>
+#include <Rendering/Device.h>
 #include <Rendering/ResourceHandle.h>
 #include <Rendering/ResourceBind.h>
 #include <Rendering/RenderGraphResource.h>
@@ -16,7 +17,6 @@
 #include <optional>
 #include <algorithm>
 
-class RenderDevice;
 class RenderGraph;
 
 struct TransientBuffer
@@ -48,7 +48,9 @@ public:
 	bool transientReuse = true;
 
 private:
+	RenderDevice* device = nullptr;
 	size_t counter = 0;
+	static constexpr size_t transientExpiration = 4;  // How many frames it takes for unused transients to expire.
 
 	std::unordered_map<RenderResource, BufferHandle> bufferResources;
 	std::unordered_map<RenderResource, TextureHandle> textureResources;
@@ -66,19 +68,22 @@ private:
 	std::unordered_map<size_t, PipelineState> passPipelines;
 
 private:
-	DescriptorHandle CreateDescriptorFromView(RenderDevice* device, const RenderResource resource, ShaderResourceViewDescription viewDesc);
-	uint32_t GetDefaultDescriptor(RenderDevice* device, const RenderResource resource, ResourceBind bind);
+	DescriptorHandle CreateDescriptorFromView(const RenderResource resource, ShaderResourceViewDescription viewDesc);
+	uint32_t GetDefaultDescriptor(const RenderResource resource, ResourceBind bind);
 
 public:
+	void SetDevice(RenderDevice* inDevice);
+
 	const RenderResource AddResource(const BufferHandle resource);
 	const RenderResource AddResource(const TextureHandle resource);
 	const RenderResource AddResource(const TransientBufferDescription& description, const std::wstring& name);
 	const RenderResource AddResource(const TransientTextureDescription& description, const std::wstring& name);
 
-	void BuildTransients(RenderDevice* device, RenderGraph* graph);
-	void BuildDescriptors(RenderDevice* device, RenderGraph* graph);
-	void DiscardTransients(RenderDevice* device);
-	void DiscardDescriptors(RenderDevice* device);
+	void SearchCrossFrameTransients(RenderGraph* graph);
+	void BuildTransients(RenderGraph* graph);
+	void BuildDescriptors(RenderGraph* graph);
+	void DiscardTransients();
+	void DiscardDescriptors();
 	void DiscardPipelines();
 
 public:
@@ -92,10 +97,17 @@ public:
 	std::optional<TextureHandle> GetOptionalTexture(const RenderResource resource);
 };
 
+inline void RenderGraphResourceManager::SetDevice(RenderDevice* inDevice)
+{
+	device = inDevice;
+}
+
 inline const RenderResource RenderGraphResourceManager::AddResource(const BufferHandle resource)
 {
 	// #TODO: Resources can be re-imported, and this will just create a new entry to the same underlying resource, but with a different handle.
 	// This is probably an issue, will need to figure something out eventually.
+
+	VGAssert(device->GetResourceManager().Valid(resource), "Cannot added invalid resource.");
 
 	RenderResource result{ counter++ };
 	bufferResources[result] = resource;
@@ -106,6 +118,8 @@ inline const RenderResource RenderGraphResourceManager::AddResource(const Buffer
 inline const RenderResource RenderGraphResourceManager::AddResource(const TextureHandle resource)
 {
 	// #TODO: See above todo.
+
+	VGAssert(device->GetResourceManager().Valid(resource), "Cannot added invalid resource.");
 
 	RenderResource result{ counter++ };
 	textureResources[result] = resource;

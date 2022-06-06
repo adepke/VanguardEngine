@@ -339,8 +339,8 @@ void RenderGraph::Execute(RenderDevice* device)
 {
 	VGScopedCPUStat("Render Graph Execute");
 
-	resourceManager->BuildTransients(device, this);
-	resourceManager->BuildDescriptors(device, this);
+	resourceManager->BuildTransients(this);
+	resourceManager->BuildDescriptors(this);
 
 	passLists.reserve(passes.size());
 
@@ -468,7 +468,7 @@ void RenderGraph::Execute(RenderDevice* device)
 	}
 
 	// After recording, we can get rid of the descriptors.
-	resourceManager->DiscardDescriptors(device);
+	resourceManager->DiscardDescriptors();
 
 	// Close and submit the command lists.
 

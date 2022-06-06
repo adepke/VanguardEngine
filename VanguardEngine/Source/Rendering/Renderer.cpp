@@ -135,6 +135,8 @@ void Renderer::UpdateCameraBuffer(const entt::registry& registry)
 		.inverseProjection = XMMatrixInverse(nullptr, globalProjectionMatrix),
 		.lastFrameView = globalLastFrameViewMatrix,
 		.lastFrameProjection = globalLastFrameProjectionMatrix,
+		.lastFrameInverseView = XMMatrixInverse(nullptr, globalLastFrameViewMatrix),
+		.lastFrameInverseProjection = XMMatrixInverse(nullptr, globalLastFrameProjectionMatrix),
 		.nearPlane = nearPlane,
 		.farPlane = farPlane,
 		.fieldOfView = fieldOfView,
@@ -154,6 +156,8 @@ void Renderer::UpdateCameraBuffer(const entt::registry& registry)
 			.inverseProjection = XMMatrixInverse(nullptr, frozenProjection),
 			.lastFrameView = frozenView,
 			.lastFrameProjection = frozenProjection,
+			.lastFrameInverseView = XMMatrixInverse(nullptr, frozenView),
+			.lastFrameInverseProjection = XMMatrixInverse(nullptr, frozenProjection),
 			.nearPlane = nearPlane,
 			.farPlane = farPlane,
 			.fieldOfView = fieldOfView,
@@ -256,6 +260,7 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 	device = std::move(inDevice);
 	meshFactory = std::make_unique<MeshFactory>(device.get(), maxVertices, maxVertices);
 	materialFactory = std::make_unique<MaterialFactory>(device.get(), 1024 * 8);
+	renderGraphResources.SetDevice(device.get());
 
 	device->CheckFeatureSupport();
 
@@ -289,6 +294,7 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 	ibl.Initialize(device.get());
 	bloom.Initialize(device.get());
 	occlusionCulling.Initialize(device.get());
+	clouds.Initialize(device.get());
 
 	std::vector<D3D12_INDIRECT_ARGUMENT_DESC> meshIndirectArgDescs;
 	meshIndirectArgDescs.emplace_back(D3D12_INDIRECT_ARGUMENT_DESC{
@@ -575,6 +581,9 @@ void Renderer::Render(entt::registry& registry)
 	atmosphere.Render(graph, atmosphereResources, cameraBufferTag, depthStencilTag, outputHDRTag, registry);
 
 	// #TODO: Don't have this here.
+	clouds.Render(graph, atmosphere, outputHDRTag, cameraBufferTag);
+
+	// #TODO: Don't have this here.
 	bloom.Render(graph, outputHDRTag);
 
 	auto& postProcessPass = graph.AddPass("Post Process Pass", ExecutionQueue::Graphics);
@@ -621,7 +630,7 @@ void Renderer::SetResolution(uint32_t width, uint32_t height, bool fullscreen)
 {
 	device->SetResolution(width, height, fullscreen);
 
-	renderGraphResources.DiscardTransients(device.get());
+	renderGraphResources.DiscardTransients();
 	clusteredCulling.MarkDirty();
 }
 
