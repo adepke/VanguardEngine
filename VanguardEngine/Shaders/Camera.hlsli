@@ -15,6 +15,8 @@ struct Camera
 	matrix inverseProjection;
 	matrix lastFrameView;
 	matrix lastFrameProjection;
+	matrix lastFrameInverseView;
+	matrix lastFrameInverseProjection;
 	// Boundary
 	float nearPlane;
 	float farPlane;
@@ -28,6 +30,12 @@ float4 UvToClipSpace(float2 uv)
 	uv = uv * 2.f - 1.f;  // Remap to [-1, 1].
 	
 	return float4(uv, 0.f, 1.f);  // Clip space Z of 0 due to the inverse depth buffer.
+}
+
+float2 ClipSpaceToUv(float4 clipSpace)
+{
+	float2 uv = float2(clipSpace.xy + 1.0) / 2.0;
+	return float2(uv.x, 1.0 - uv.y);
 }
 
 float4 ClipToViewSpace(Camera camera, float4 clipSpace)

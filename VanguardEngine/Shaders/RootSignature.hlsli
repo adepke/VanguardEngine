@@ -98,7 +98,18 @@
 		"mipLODBias = 0.f," \
 		"minLOD = 0.f," \
 		"maxLOD = 100.f," \
-		"visibility = SHADER_VISIBILITY_ALL)"
+		"visibility = SHADER_VISIBILITY_ALL)," \
+	"StaticSampler(" \
+		"s9," \
+		"filter = FILTER_MIN_MAG_LINEAR_MIP_POINT," \
+		"addressU = TEXTURE_ADDRESS_BORDER," \
+		"addressV = TEXTURE_ADDRESS_BORDER," \
+		"addressW = TEXTURE_ADDRESS_BORDER," \
+		"mipLODBias = 0.f," \
+		"minLOD = 0.f," \
+		"maxLOD = 100.f," \
+		"borderColor = STATIC_BORDER_COLOR_TRANSPARENT_BLACK," \
+		"visibility = SHADER_VISIBILITY_ALL)" \
 
 SamplerState pointClamp: register(s0);
 SamplerState bilinearClamp : register(s1);
@@ -110,5 +121,6 @@ SamplerState linearMipPointWrap : register(s6);
 SamplerState downsampleBorder : register(s7);  // Black border color, see: https://www.froyok.fr/blog/2021-12-ue4-custom-bloom/
 
 SamplerState linearMipPointClampMinimum : register(s8);
+SamplerState linearMipPointTransparentBorder : register(s9);  // Border with alpha=0.
 
 #endif  // __ROOTSIGNATURE_HLSLI__
