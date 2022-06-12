@@ -18,7 +18,6 @@
 #include <Rendering/ImageBasedLighting.h>
 #include <Rendering/Bloom.h>
 #include <Rendering/OcclusionCulling.h>
-#include <Rendering/Clouds.h>
 
 #include <entt/entt.hpp>
 
@@ -50,7 +49,6 @@ public:
 	ImageBasedLighting ibl;
 	Bloom bloom;
 	OcclusionCulling occlusionCulling;
-	Clouds clouds;
 
 	size_t renderableCount;
 
