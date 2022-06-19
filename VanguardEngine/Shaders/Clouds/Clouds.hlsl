@@ -18,6 +18,7 @@ struct BindData
 	uint timeSlice;
 	float2 outputResolution;
 	uint lastFrameTexture;
+	uint depthTexture;
 };
 
 ConstantBuffer<BindData> bindData : register(b0);
@@ -52,10 +53,10 @@ float RemapRange(float value, float inMin, float inMax, float outMin, float outM
 	return outMin + (((value - inMin) / (inMax - inMin)) * (outMax - outMin));
 }
 
-float SampleBaseShape(Texture3D<float> noiseTexture, float3 position)
+float SampleBaseShape(Texture3D<float> noiseTexture, float3 position, uint mip)
 {
 	const float frequency = 0.1f;
-	return noiseTexture.Sample(bilinearWrap, position * frequency);
+	return noiseTexture.SampleLevel(bilinearWrap, position * frequency, mip);
 }
 
 float SampleDetailShape(Texture3D<float> noiseTexture, float3 position)
@@ -76,32 +77,16 @@ float GetDensityHeightGradientForPoint(float3 position, float2 weather)
 
 	// Cloud type: 0.0=stratus, 0.5=cumulus, 1.0=cumulonimbus
 	
-	float stratusGradient = sin(fraction * 30 - 1);  // Base shape
-	stratusGradient *= 1 - smoothstep(0.15, 0.2, fraction + 0.09);  // Top mask
-	stratusGradient *= smoothstep(0.65, 0.7, fraction + 0.63);  // Bottom mask
-
-	float cumulusGradient = sin(fraction * 4.5);  // Base shape
-	cumulusGradient *= 1 - smoothstep(0.4, 0.55, fraction - 0.06);  // Top mask
-
-	float cumulonimbusGradient = smoothstep(0., 0.05, fraction);  // Bottom mask
-	cumulonimbusGradient *= 1 - smoothstep(0.7, 1.0, fraction - 0.02);  // Top mask
-
-	// Compose the final gradient based off cloud type.
-	float gradient = 0.f;
-	if (weather.y < 0.5)
-	{
-		gradient = lerp(stratusGradient, cumulusGradient, weather.y * 2.0);
-	}
-	else
-	{
-		gradient = lerp(cumulusGradient, cumulonimbusGradient, weather.y * 2.0 - 1.0);
-	}
+	float a = 0.1;
+	float b = 0.3;
+	float c = 0.5;
+	float gradient = saturate(RemapRange(fraction, 0, a, 0, 1)) * saturate(RemapRange(fraction, b, c, 1, 0));
 
 	// Weather sample is composed of cloud density and cloud type.
 	return weather.x * gradient;
 }
 
-float SampleCloudDensity(Texture3D<float> baseNoise, Texture3D<float> detailNoise, float3 position, bool detailSample)
+float SampleCloudDensity(Texture3D<float> baseNoise, Texture3D<float> detailNoise, float3 position, bool detailSample, uint mip)
 {
 	// #TODO: Sample weather texture.
 	float2 weather = float2(0.6, 0.5);  // Semi-dense cumulus.
@@ -111,7 +96,7 @@ float SampleCloudDensity(Texture3D<float> baseNoise, Texture3D<float> detailNois
 	// Custom remapping here to shift the density curve.
 	float coverage = 1.0 - (0.15 * weather.x);
 
-	float baseShape = SampleBaseShape(baseNoise, position);
+	float baseShape = SampleBaseShape(baseNoise, position, mip);
 	baseShape = RemapRange(baseShape, 0.9, 1.0, 0.0, 1.0);
 	float densityHeightGradient = GetDensityHeightGradientForPoint(position, weather);
 
@@ -133,7 +118,7 @@ float SampleCloudDensity(Texture3D<float> baseNoise, Texture3D<float> detailNois
 		finalShape = RemapRange(finalShape, detailShape * 0.2, 1.0, 0.0, 1.0);
 	}
 
-	return saturate(finalShape);  // #TEMP: Noise is sometimes negative... patchy fix.
+	return max(finalShape, 0);  // #TEMP: shouldnt need the max here.
 }
 
 static const int noiseKernelSize = 6;
@@ -166,7 +151,7 @@ void ComputeNoiseKernel(float3 lightDirection)
 
 float SampleCloudDensityCone(Texture3D<float> baseNoise, Texture3D<float> detailNoise, float3 position)
 {
-	const float stepSize = 60.0 / 1000.0;  // 60m, seems like it should be pretty good.
+	const float stepSize = 70.0 / 1000.0;  // 70m.
 	const int coneSamples = noiseKernelSize;
 	float density = 0.0;
 
@@ -175,12 +160,18 @@ float SampleCloudDensityCone(Texture3D<float> baseNoise, Texture3D<float> detail
 	for (int i = 0; i < coneSamples; ++i)
 	{
 		float3 samplePosition = position + (stepSize * (float)i * noiseKernel[i]);
+
+		// Cone sample left the cloud layer, bail out. Need to check here since math breaks in SampleCloudDensity if sampling out of bounds.
+		float heightFraction = GetHeightFractionForPoint(position, float2(cloudLayerBottom, cloudLayerTop));
+		if (heightFraction > 1.f)
+			break;
+
 		// Once the density has reached 0.3, switch to low-detail noise. Refer to slide 86.
 		const bool detailSamples = density < 0.3;
-		density += SampleCloudDensity(baseNoise, detailNoise, samplePosition, detailSamples);
+		density += SampleCloudDensity(baseNoise, detailNoise, samplePosition, detailSamples, 0);
 	}
 
-	return density;
+	return max(density, 0);
 }
 
 float ComputeBeersLaw(float value, float absorption)
@@ -196,28 +187,32 @@ float ComputePhaseFunction(float nu)
 	return (a + b) / 2.0;
 }
 
-float ComputeInScatterProbability(float density, float heightFraction)
+float ComputeInScatterProbability(float localDensity, float heightFraction)
 {
-	const float depthProbability = 0.05 + pow(density, RemapRange(heightFraction, 0.3, 0.85, 0.5, 2.0));
-	const float verticalProbability = pow(saturate(RemapRange(heightFraction, 0.07, 0.14, 0.1, 1.0)), 0.8);
+	const float depthProbability = 0.05 + pow(localDensity, max(RemapRange(heightFraction, 0.3, 0.85, 0.5, 2.0), 0.001));
+	const float verticalProbability = pow(saturate(0.07 + RemapRange(heightFraction, 0.07, 0.14, 0.6, 1.0)), 0.8);
 
 	return depthProbability * verticalProbability;
 }
 
-float ComputeLightEnergy(float3 position, float density, float viewDotLight)
+float ComputeLightEnergy(Texture3D<float> baseNoise, Texture3D<float> detailNoise, float3 position, float densityToLight, float viewDotLight)
 {
 	// Lighting model inspired by GPU Pro 7 page 119, Frostbite, and Nubis 2017 real-time volumetric cloudscapes.
 
 	const float absorption = 1.5;  // #TODO: Comes from weather.
 
-	const float beers = ComputeBeersLaw(density, absorption);
-	const float phase = ComputePhaseFunction(viewDotLight);
-	const float inScatter = ComputeInScatterProbability(density, GetHeightFractionForPoint(position, float2(cloudLayerBottom, cloudLayerTop)));
+	// Sample the mean density at the sample position using a higher mip level.
+	// #TODO: experiment with accounting for coverage, height gradient, etc, since these affect the density.
+	float localDensity = saturate(RemapRange(SampleBaseShape(baseNoise, position, 1), 0.89, 1, 0, 1));
 
-	return beers * phase * inScatter;
+	const float outScatter = ComputeBeersLaw(densityToLight, absorption);
+	const float phase = ComputePhaseFunction(viewDotLight);
+	const float inScatter = ComputeInScatterProbability(localDensity, GetHeightFractionForPoint(position, float2(cloudLayerBottom, cloudLayerTop)));
+
+	return outScatter * phase * inScatter;
 }
 
-void RayMarch(float3 origin, float3 direction, float3 sunDirection, out float3 scatteredLuminance, out float transmittance)
+void RayMarch(float3 origin, float3 direction, float3 sunDirection, out float3 scatteredLuminance, out float transmittance, out float depth)
 {
 	Texture3D<float> baseShapeNoiseTexture = ResourceDescriptorHeap[bindData.baseShapeNoiseTexture];
 	Texture3D<float> detailShapeNoiseTexture = ResourceDescriptorHeap[bindData.detailShapeNoiseTexture];
@@ -297,7 +292,7 @@ void RayMarch(float3 origin, float3 direction, float3 sunDirection, out float3 s
 		float3 position = origin + direction * dist;
 
 		const bool detailSamples = detailSteps > 0;
-		float cloudDensity = SampleCloudDensity(baseShapeNoiseTexture, detailShapeNoiseTexture, position, detailSamples);
+		float cloudDensity = SampleCloudDensity(baseShapeNoiseTexture, detailShapeNoiseTexture, position, detailSamples, 0);
 
 		// If we're in open space, take large steps. If we're in a cloud or just recently left one, take small steps.
 		if (cloudDensity > 0.0)
@@ -324,7 +319,8 @@ void RayMarch(float3 origin, float3 direction, float3 sunDirection, out float3 s
 
 			float coneDensity = SampleCloudDensityCone(baseShapeNoiseTexture, detailShapeNoiseTexture, position);
 			coneDensity = (coneDensity + cloudDensity) / float(noiseKernelSize + 1);
-			float energy = ComputeLightEnergy(position, coneDensity, viewDotLight);
+			float energy = ComputeLightEnergy(baseShapeNoiseTexture, detailShapeNoiseTexture, position, coneDensity, viewDotLight);
+			energy *= 4.0;  // Model loses a bit too much energy, so artificially bring it back here.
 			float3 sunLuminance = float3(1.474f, 1.8504f, 1.91198f) * energy;  // #TODO: Get from atmosphere.
 			float stepSize = smallStepSize * 1000.0;  // Kilometers to meters.
 
@@ -333,6 +329,10 @@ void RayMarch(float3 origin, float3 direction, float3 sunDirection, out float3 s
 			float3 trans = transmittance.xxx;
 			ComputeScatteringIntegration(cloudDensity, sunLuminance, stepSize, scattCoeff, absorCoeff, scatteredLuminance, trans);
 			transmittance = trans.x;  // Scattering and absorbtion are uniform, so just use one channel.
+
+			// Update the depth every time we hit a detail sample. Decent approximation.
+			// May get better results using the first detail sample distance.
+			depth = marchStart + dist;
 		}
 
 		else
@@ -375,7 +375,11 @@ float4 PSMain(PixelIn input) : SV_Target
 
 		float3 scatteredLuminance;
 		float transmittance;
-		RayMarch(camera.position.xyz, rayDirection, sunDirection, scatteredLuminance, transmittance);
+		float depth;
+		RayMarch(camera.position.xyz, rayDirection, sunDirection, scatteredLuminance, transmittance, depth);
+
+		RWTexture2D<float> depthTexture = ResourceDescriptorHeap[bindData.depthTexture];
+		depthTexture[input.uv] = depth;
 
 		float3 skyColor = 0.xxx;  // Applying as overlay, so no sky color.
 		float4 output;
@@ -389,7 +393,11 @@ float4 PSMain(PixelIn input) : SV_Target
 	{
 		// Not rendering this pixel this frame, so reproject instead.
 		Texture2D<float4> lastFrameTexture = ResourceDescriptorHeap[bindData.lastFrameTexture];
-		float2 reprojectedUv = ReprojectUv(camera, input.uv);
+		RWTexture2D<float> depthTexture = ResourceDescriptorHeap[bindData.depthTexture];
+
+		float depth = depthTexture[input.uv];
+		depth = 1;  // #TEMP
+		float2 reprojectedUv = ReprojectUv(camera, input.uv, depth);
 
 		float4 lastFrame = 0.xxxx;
 		if (bindData.lastFrameTexture != 0)

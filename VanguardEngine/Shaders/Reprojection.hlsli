@@ -17,7 +17,7 @@ float2 ReprojectUv(Camera camera, float2 inputUv, float depth)
 
 	// Scale by the depth.
 	float3 ray = normalize(worldSpace.xyz - camera.position.xyz);
-	worldSpace = float4(camera.position + ray * depth, 1.f);
+	worldSpace = float4(camera.position.xyz + ray * depth, 1.f);
 	
 	// Convert back to clip space of the current frame.
 	float4 reprojected = mul(worldSpace, viewProjection);
