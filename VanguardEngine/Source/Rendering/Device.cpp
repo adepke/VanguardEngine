@@ -216,7 +216,7 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 
 	resourceManager.Initialize(this, frameCount);
 
-	descriptorManager.Initialize(this, 2048, 64, 16);
+	descriptorManager.Initialize(this, 4096, 64, 16);
 
 	// #TODO: Condense building queues and command lists into a function.
 

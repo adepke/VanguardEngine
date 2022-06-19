@@ -5,7 +5,7 @@
 #include <Rendering/Base.h>
 #include <Rendering/Resource.h>
 #include <Rendering/ResourceHandle.h>
-#include <Rendering/PipelineState.h>
+#include <Rendering/Mipmapping.h>
 
 #include <D3D12MemAlloc.h>
 
@@ -49,9 +49,7 @@ private:
 	void CreateResourceViews(TextureComponent& target);
 	void SetResourceName(ResourcePtr<D3D12MA::Allocation>& target, const std::wstring_view name);
 
-	PipelineState mipmapPipeline;
-
-	void CreateMipmapTools();
+	Mipmapper mipmapper;
 
 	GpuMemoryInfo memoryInfo;
 	void ReportBufferAllocation(const BufferHandle handle);

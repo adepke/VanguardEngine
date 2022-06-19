@@ -231,14 +231,6 @@ void ResourceManager::SetResourceName(ResourcePtr<D3D12MA::Allocation>& target, 
 #endif
 }
 
-void ResourceManager::CreateMipmapTools()
-{
-	ComputePipelineStateDescription mipmapDescription;
-	mipmapDescription.shader = { "GenerateMipmaps", "Main" };
-
-	mipmapPipeline.Build(*device, mipmapDescription);
-}
-
 void ResourceManager::ReportBufferAllocation(const BufferHandle handle)
 {
 	const auto description = Get(handle).Native()->GetDesc();
@@ -338,7 +330,7 @@ void ResourceManager::Initialize(RenderDevice* inDevice, size_t bufferedFrames)
 		SetResourceName(uploadResources[i], VGText("Upload heap"));
 	}
 
-	CreateMipmapTools();
+	mipmapper.Initialize(*device);
 }
 
 const BufferHandle ResourceManager::Create(const BufferDescription& description, const std::wstring_view name)
@@ -724,20 +716,6 @@ void ResourceManager::Write(TextureHandle target, const std::vector<uint8_t>& so
 
 	std::memcpy(static_cast<uint8_t*>(uploadPtrs[frameIndex]) + uploadOffsets[frameIndex], sourcePtr->data(), sourcePtr->size());
 
-	D3D12_TEXTURE_COPY_LOCATION targetCopyDesc{};
-	targetCopyDesc.pResource = component.Native();
-	targetCopyDesc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-	targetCopyDesc.SubresourceIndex = 0;
-
-	// #TODO: Support custom copy sizes.
-	D3D12_BOX sourceBox{};
-	sourceBox.left = 0;
-	sourceBox.top = 0;
-	sourceBox.front = 0;
-	sourceBox.right = component.description.width;
-	sourceBox.bottom = component.description.height;
-	sourceBox.back = component.description.depth;
-
 	// Ensure we're in the proper state.
 	if (component.state != D3D12_RESOURCE_STATE_COPY_DEST)
 	{
@@ -745,10 +723,57 @@ void ResourceManager::Write(TextureHandle target, const std::vector<uint8_t>& so
 		device->GetDirectList().FlushBarriers();
 	}
 
-	auto* targetCommandList = device->GetDirectList().Native();  // Small writes are more efficiently performed on the direct/compute queue.
-	targetCommandList->CopyTextureRegion(&targetCopyDesc, 0, 0, 0, &sourceCopyDesc, &sourceBox);
+	// Texture arrays need special handling.
+	// #TODO: Only texture 2D arrays are support for now.
+	if (component.description.depth > 1 && component.description.array)
+	{
+		int slices = component.description.depth;
+		for (int i = 0; i < slices; ++i)
+		{
+			D3D12_TEXTURE_COPY_LOCATION targetCopyDesc{};
+			targetCopyDesc.pResource = component.Native();
+			targetCopyDesc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+			targetCopyDesc.SubresourceIndex = i * component.Native()->GetDesc().MipLevels;
 
-	uploadOffsets[frameIndex] += requiredCopySize;
+			// #TODO: Support custom copy sizes.
+			D3D12_BOX sourceBox{};
+			sourceBox.left = 0;
+			sourceBox.top = 0;
+			sourceBox.front = 0;
+			sourceBox.right = component.description.width;
+			sourceBox.bottom = component.description.height;
+			sourceBox.back = 1;
+
+			auto* targetCommandList = device->GetDirectList().Native();  // Small writes are more efficiently performed on the direct/compute queue.
+			targetCommandList->CopyTextureRegion(&targetCopyDesc, 0, 0, 0, &sourceCopyDesc, &sourceBox);
+
+			uploadOffsets[frameIndex] += requiredCopySize;
+			uploadOffsets[frameIndex] = AlignedSize(uploadOffsets[frameIndex], D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
+			device->Native()->GetCopyableFootprints(&targetDescriptionCopy, 0, 1, uploadOffsets[frameIndex], &sourceCopyDesc.PlacedFootprint, nullptr, nullptr, &requiredCopySize);
+		}
+	}
+
+	else
+	{
+		D3D12_TEXTURE_COPY_LOCATION targetCopyDesc{};
+		targetCopyDesc.pResource = component.Native();
+		targetCopyDesc.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+		targetCopyDesc.SubresourceIndex = 0;
+
+		// #TODO: Support custom copy sizes.
+		D3D12_BOX sourceBox{};
+		sourceBox.left = 0;
+		sourceBox.top = 0;
+		sourceBox.front = 0;
+		sourceBox.right = component.description.width;
+		sourceBox.bottom = component.description.height;
+		sourceBox.back = component.description.depth;
+
+		auto* targetCommandList = device->GetDirectList().Native();  // Small writes are more efficiently performed on the direct/compute queue.
+		targetCommandList->CopyTextureRegion(&targetCopyDesc, 0, 0, 0, &sourceCopyDesc, &sourceBox);
+
+		uploadOffsets[frameIndex] += requiredCopySize;
+	}
 }
 
 void ResourceManager::GenerateMipmaps(CommandList& list, TextureHandle texture)
@@ -756,94 +781,21 @@ void ResourceManager::GenerateMipmaps(CommandList& list, TextureHandle texture)
 	VGScopedCPUStat("Generate mipmaps");
 	VGScopedGPUStat("Generate mipmaps", device->GetDirectContext(), list.Native());
 
+	auto& textureComponent = Get(texture);
+	VGAssert(textureComponent.description.mipMapping, "Textures must have mipmapping enabled in order to generate mipmaps.");
+
 	// Transition to UAV state.
 	list.TransitionBarrier(texture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	list.FlushBarriers();
 
-	auto& textureComponent = Get(texture);
-	VGAssert(textureComponent.description.mipMapping, "Textures must have mipmapping enabled in order to generate mipmaps.");
-	VGAssert(textureComponent.description.depth > 1 ? textureComponent.description.array : true, "Mipmapping a 3D texture requires it to be a texture array.");
-
-	const auto layers = textureComponent.description.depth;
-	const auto mipLevels = textureComponent.allocation->GetResource()->GetDesc().MipLevels;
-	const auto mipDispatches = static_cast<uint32_t>(std::ceil(mipLevels / 4.f));
-
-	std::vector<DescriptorHandle> uavDescriptors;
-	uavDescriptors.reserve(layers * (mipLevels - 1));
-
-	for (int i = 0; i < layers; ++i)
+	if (textureComponent.description.depth > 1 && !textureComponent.description.array)
 	{
-		for (int j = 0; j < mipDispatches; ++j)
-		{
-			const auto baseMipWidth = NextPowerOf2(textureComponent.description.width) >> j * 4;
-			const auto baseMipHeight = NextPowerOf2(textureComponent.description.height) >> j * 4;
-
-			struct BindData
-			{
-				uint32_t mipBase;
-				uint32_t mipCount;
-				XMFLOAT2 texelSize;
-				// Boundary
-				uint32_t outputTextureIndices[4];
-				// Boundary
-				uint32_t inputTextureIndex;
-				uint32_t sRGB;
-				uint32_t array;
-				uint32_t layer;
-			} bindData;
-
-			bindData.mipBase = j * 4;  // Starting mip.
-			bindData.mipCount = std::min(mipLevels - bindData.mipBase - 1, 4u);  // How many mips to generate (0, 4].
-			bindData.sRGB = IsResourceFormatSRGB(textureComponent.description.format);
-			bindData.texelSize = { 2.f / baseMipWidth, 2.f / baseMipHeight };
-			bindData.inputTextureIndex = textureComponent.SRV->bindlessIndex;
-			bindData.array = layers > 1;
-			bindData.layer = i;
-
-			// Allocate UAVs.
-			for (int k = 0; k < bindData.mipCount; ++k)
-			{
-				auto descriptor = device->AllocateDescriptor(DescriptorType::Default);
-
-				D3D12_UNORDERED_ACCESS_VIEW_DESC viewDesc{};
-				viewDesc.Format = ConvertResourceFormatToLinear(textureComponent.description.format);
-				if (layers == 1)
-				{
-					viewDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-					viewDesc.Texture2D.MipSlice = j * 4 + k + 1;
-					viewDesc.Texture2D.PlaneSlice = 0;
-				}
-
-				else
-				{
-					viewDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
-					viewDesc.Texture2DArray.MipSlice = j * 4 + k + 1;
-					viewDesc.Texture2DArray.FirstArraySlice = 0;
-					viewDesc.Texture2DArray.ArraySize = textureComponent.description.depth;
-					viewDesc.Texture2DArray.PlaneSlice = 0;
-				}
-
-				device->Native()->CreateUnorderedAccessView(textureComponent.allocation->GetResource(), nullptr, &viewDesc, descriptor);
-
-				bindData.outputTextureIndices[k] = descriptor.bindlessIndex;
-
-				uavDescriptors.emplace_back(std::move(descriptor));
-			}
-
-			list.BindPipelineState(mipmapPipeline);
-			list.BindDescriptorAllocator(device->GetDescriptorAllocator());
-			list.BindConstants("bindData", bindData);
-
-			list.Dispatch(std::max((uint32_t)std::ceil(baseMipWidth / (2.f * 8.f)), 1u), std::max((uint32_t)std::ceil(baseMipHeight / (2.f * 8.f)), 1u), 1);
-
-			list.UAVBarrier(texture);
-			list.FlushBarriers();
-		}
+		mipmapper.Generate3D(*device, list, texture, textureComponent);
 	}
 
-	for (auto&& descriptor : uavDescriptors)
+	else
 	{
-		AddFrameDescriptor(device->GetFrameIndex(), std::move(descriptor));
+		mipmapper.Generate2D(*device, list, texture, textureComponent);
 	}
 }
 
