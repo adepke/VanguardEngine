@@ -158,12 +158,12 @@ void EngineLoop()
 	//	.translation = { 50.f, -20.f, 8.f }
 	//});
 	
-	AddSponza({
-		.scale = { 1.f, 1.f, 1.f },
-		.rotation = { -90.f * 3.14159f / 180.f, 0.f, 0.f },
-		//.translation = { 120.f, -3.f, -21.f }
-		.translation = { 120.f, -3.f, -3500.f }
-	});
+	//AddSponza({
+	//	.scale = { 1.f, 1.f, 1.f },
+	//	.rotation = { -90.f * 3.14159f / 180.f, 0.f, 0.f },
+	//	//.translation = { 120.f, -3.f, -21.f }
+	//	.translation = { 120.f, -3.f, -3500.f }
+	//});
 
 	const auto helmetMesh = AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/DamagedHelmet/HelmetTangents.glb");
 	int perAxis = 25;

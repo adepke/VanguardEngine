@@ -294,7 +294,6 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 	ibl.Initialize(device.get());
 	bloom.Initialize(device.get());
 	occlusionCulling.Initialize(device.get());
-	clouds.Initialize(device.get());
 
 	std::vector<D3D12_INDIRECT_ARGUMENT_DESC> meshIndirectArgDescs;
 	meshIndirectArgDescs.emplace_back(D3D12_INDIRECT_ARGUMENT_DESC{
@@ -579,9 +578,6 @@ void Renderer::Render(entt::registry& registry)
 
 	// #TODO: Don't have this here.
 	atmosphere.Render(graph, atmosphereResources, cameraBufferTag, depthStencilTag, outputHDRTag, registry);
-
-	// #TODO: Don't have this here.
-	clouds.Render(graph, atmosphere, outputHDRTag, cameraBufferTag);
 
 	// #TODO: Don't have this here.
 	bloom.Render(graph, outputHDRTag);
