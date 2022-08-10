@@ -59,7 +59,6 @@ float RemapRange(float value, float inMin, float inMax, float outMin, float outM
 
 float3 SampleWeather(Texture2D<float3> weatherTexture, float3 position)
 {
-	//const float frequency = 0.05;
 	const float frequency = 0.02;
 	return weatherTexture.Sample(bilinearWrap, position.xy * frequency);
 }
@@ -72,7 +71,7 @@ float SampleBaseShape(Texture3D<float> noiseTexture, float3 position, uint mip)
 
 float SampleDetailShape(Texture3D<float> noiseTexture, float3 position)
 {
-	const float frequency = 5.2;
+	const float frequency = 3;
 	return noiseTexture.Sample(bilinearWrap, position * frequency);
 }
 
@@ -121,8 +120,15 @@ float GetDensityHeightGradientForPoint(float3 position, float cloudType)
 float SampleCloudDensity(Texture2D<float3> weatherTexture, Texture3D<float> baseNoise, Texture3D<float> detailNoise, float3 position, bool detailSample, uint mip)
 {
 	float3 weather = SampleWeather(weatherTexture, position);
-	const float coverage = weather.x;
+	float coverage = weather.x;
 	const float type = weather.y;
+
+	const float heightFraction = GetHeightFractionForPoint(position, float2(cloudLayerBottom, cloudLayerTop));
+	// Shorter clouds taper off towards the top, while staying more flat on the bottom.
+	const float shortCoverage = pow(coverage, (heightFraction * 3.8 + 0.1));
+	// Taller clouds form an anvil-like shape.
+	const float tallCoverage = pow(coverage, 1.0 - 0.8 * abs(heightFraction - 0.5));
+	coverage = lerp(shortCoverage, tallCoverage, type);
 
 	float baseShape = SampleBaseShape(baseNoise, position, mip);
 	float heightGradient = GetDensityHeightGradientForPoint(position, type);
@@ -138,14 +144,15 @@ float SampleCloudDensity(Texture2D<float3> weatherTexture, Texture3D<float> base
 		float detailShape = SampleDetailShape(detailNoise, position);
 
 		// Gradient from wispy to billowy shapes by height.
-		float heightFraction = GetHeightFractionForPoint(position, float2(cloudLayerBottom, cloudLayerTop));
 		detailShape = lerp(detailShape, 1.0 - detailShape, saturate(heightFraction * 10.0));
 
 		// Erode the final shape.
 		finalShape = RemapRange(finalShape, detailShape * 0.2, 1.0, 0.0, 1.0);
 	}
 
-	return saturate(finalShape);  // #TODO: Should be able to remove the saturate.
+	const float densityMultiplier = 3;
+
+	return max(finalShape, 0) * densityMultiplier;  // #TODO: Should be able to remove the saturate.
 }
 
 static const int noiseKernelSize = 6;
@@ -220,10 +227,10 @@ float ComputePhaseFunction(float nu)
 
 float ComputeInScatterProbability(float localDensity, float heightFraction)
 {
-	const float depthProbability = 0.05 + pow(localDensity, max(RemapRange(heightFraction, 0.3, 0.85, 0.5, 2.0), 0.001));
+	const float depthProbability = 0.05 + pow(localDensity * 3.0, max(RemapRange(heightFraction, 0.3, 0.85, 0.5, 2.0), 0.001));
 	const float verticalProbability = pow(saturate(0.07 + RemapRange(heightFraction, 0.07, 0.14, 0.6, 1.0)), 0.8);
 
-	return depthProbability * verticalProbability;
+	return depthProbability * verticalProbability * 2.0;
 }
 
 float ComputeLightEnergy(Texture2D<float3> weatherTexture, Texture3D<float> baseNoise, Texture3D<float> detailNoise, float3 position, float densityToLight, float viewDotLight)
@@ -237,7 +244,7 @@ float ComputeLightEnergy(Texture2D<float3> weatherTexture, Texture3D<float> base
 	// #TODO: We might be able to get away with not using the full density sample, try just applying coverage and height gradient?
 	float localDensity = SampleCloudDensity(weatherTexture, baseNoise, detailNoise, position, false, 1);
 
-	const float outScatter = ComputeBeersLaw(densityToLight * 4.0, absorption);
+	const float outScatter = ComputeBeersLaw(densityToLight * 3.0, absorption);
 	const float phase = ComputePhaseFunction(viewDotLight);
 	const float inScatter = ComputeInScatterProbability(localDensity, GetHeightFractionForPoint(position, float2(cloudLayerBottom, cloudLayerTop)));
 
@@ -389,7 +396,6 @@ void RayMarch(Camera camera, float2 uv, float3 direction, float3 sunDirection, o
 			float stepSize = smallStepSize * 1000.0;  // Kilometers to meters.
 
 			float3 scattCoeff = 0.05.xxx;  // http://www.patarnott.com/satsens/pdf/opticalPropertiesCloudsReview.pdf
-			//float3 scattCoeff = 0.8.xxx;  // #TEMP: Experimenting with highly-scattering clouds.
 			float3 absorCoeff = 0.xxx;  // Cloud albedo ~= 1.
 			float3 trans = transmittance.xxx;
 			ComputeScatteringIntegration(cloudDensity, energy, stepSize, scattCoeff, absorCoeff, scatteredLuminance, trans);
