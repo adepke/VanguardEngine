@@ -23,6 +23,8 @@ struct BindData
 	uint geometryDepthTexture;
 	uint blueNoiseTexture;
 	uint sunTransmittanceBuffer;
+	float2 wind;
+	float time;
 };
 
 ConstantBuffer<BindData> bindData : register(b0);
@@ -50,7 +52,7 @@ PixelIn VSMain(VertexIn input)
 
 // Kilometers.
 static const float cloudLayerBottom = 1400.0 / 1000.0;
-static const float cloudLayerTop = 6000.0 / 1000.0;
+static const float cloudLayerTop = 5000.0 / 1000.0;
 
 float RemapRange(float value, float inMin, float inMax, float outMin, float outMax)
 {
@@ -96,17 +98,17 @@ float GetDensityHeightGradientForPoint(float3 position, float cloudType)
 	// Stratocumulus
 	a = 0.2;
 	b = 0.28;
-	c = 0.34;
-	float stratocumulus = saturate(RemapRange(fraction, 0, a, 0, 1)) * saturate(RemapRange(fraction, b, c, 1, 0));
+	c = 0.39;
+	float stratocumulus = saturate(RemapRange(fraction, 0.1, a, 0, 1)) * saturate(RemapRange(fraction, b, c, 1, 0));
 
 	// Cumulus
 	a = 0.19;
 	b = 0.38;
-	c = 0.55;
-	float cumulus = saturate(RemapRange(fraction, 0, a, 0, 1)) * saturate(RemapRange(fraction, b, c, 1, 0));
+	c = 0.78;
+	float cumulus = saturate(RemapRange(fraction, 0.08, a, 0, 1)) * saturate(RemapRange(fraction, b, c, 1, 0));
 
 	// Cumulonimbus
-	a = 0.1;
+	a = 0.12;
 	b = 0.8;
 	c = 0.95;
 	float cumulonimbus = saturate(RemapRange(fraction, 0, a, 0, 1)) * saturate(RemapRange(fraction, b, c, 1, 0));
@@ -130,9 +132,14 @@ float SampleCloudDensity(Texture2D<float3> weatherTexture, Texture3D<float> base
 	const float tallCoverage = pow(coverage, 1.0 - 0.8 * abs(heightFraction - 0.5));
 	coverage = lerp(shortCoverage, tallCoverage, type);
 
-	float baseShape = SampleBaseShape(baseNoise, position, mip);
-	float heightGradient = GetDensityHeightGradientForPoint(position, type);
+	const float heightGradient = GetDensityHeightGradientForPoint(position, type);
 
+	// Apply wind distortion for sampling density noise.
+	const float timeDilation = 0.3;
+	position.xy += bindData.wind * bindData.time * timeDilation;
+	position.xy += heightFraction * bindData.wind * 9.0 * timeDilation;
+
+	float baseShape = SampleBaseShape(baseNoise, position, mip);
 	float finalShape = baseShape * heightGradient;  // Apply the gradient early to potentially early-out of the detail sample.
 	finalShape = RemapRange(finalShape, 1.0 - coverage, 1.0, 0.0, 1.0);
 	finalShape = finalShape * coverage;  // Improve appearance of smaller clouds.
@@ -150,9 +157,9 @@ float SampleCloudDensity(Texture2D<float3> weatherTexture, Texture3D<float> base
 		finalShape = RemapRange(finalShape, detailShape * 0.2, 1.0, 0.0, 1.0);
 	}
 
-	const float densityMultiplier = 3;
+	const float densityMultiplier = 2.8;
 
-	return max(finalShape, 0) * densityMultiplier;  // #TODO: Should be able to remove the saturate.
+	return max(finalShape, 0) * densityMultiplier;  // #TODO: Should be able to remove the max.
 }
 
 static const int noiseKernelSize = 6;
@@ -244,7 +251,7 @@ float ComputeLightEnergy(Texture2D<float3> weatherTexture, Texture3D<float> base
 	// #TODO: We might be able to get away with not using the full density sample, try just applying coverage and height gradient?
 	float localDensity = SampleCloudDensity(weatherTexture, baseNoise, detailNoise, position, false, 1);
 
-	const float outScatter = ComputeBeersLaw(densityToLight * 3.0, absorption);
+	const float outScatter = ComputeBeersLaw(densityToLight * 2.4, absorption);
 	const float phase = ComputePhaseFunction(viewDotLight);
 	const float inScatter = ComputeInScatterProbability(localDensity, GetHeightFractionForPoint(position, float2(cloudLayerBottom, cloudLayerTop)));
 
@@ -400,6 +407,14 @@ void RayMarch(Camera camera, float2 uv, float3 direction, float3 sunDirection, o
 			float3 trans = transmittance.xxx;
 			ComputeScatteringIntegration(cloudDensity, energy, stepSize, scattCoeff, absorCoeff, scatteredLuminance, trans);
 			transmittance = trans.x;  // Scattering and absorbtion are uniform, so just use one channel.
+
+			// Multiple scattering approximation from Wrenninge.
+			// See: https://gitea.yiem.net/QianMo/Real-Time-Rendering-4th-Bibliography-Collection/raw/branch/main/Chapter%201-24/[1909]%20[SIGGRAPH%202013]%20Oz-%20The%20Great%20and%20Volumetric.pdf
+			float msScattMultipler = 0.5;
+			float3 msScatt = scatteredLuminance;
+			float3 msTrans = transmittance.xxx;
+			ComputeScatteringIntegration(cloudDensity, energy, stepSize, scattCoeff * msScattMultipler, absorCoeff, msScatt, msTrans);
+			scatteredLuminance = msScatt;  // Single octave summation.
 
 			// Update the depth until about 50% light transmittance, this is a decent approximation given that clouds have no surface.
 			// #TODO: Use Frostbite's improved depth approximation, also look at bitsquid's method.

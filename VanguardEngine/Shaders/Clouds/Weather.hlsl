@@ -8,6 +8,8 @@ struct BindData
 	uint weatherTexture;
 	float globalCoverage;
 	float precipitation;
+	float time;
+	float2 wind;
 };
 
 ConstantBuffer<BindData> bindData : register(b0);
@@ -29,6 +31,9 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	float weatherSize = float(width);
 
 	float2 coord = float2(dispatchId.xy) * (1.0 / weatherSize);
+
+	const float timeDilation = 0.003;
+	coord += bindData.wind * bindData.time * timeDilation;
 
 	float coverage = PerlinNoise2D(coord, 10, 2);
 	coverage = saturate(RemapRange(coverage, 1.0 - bindData.globalCoverage, 1, 0, 1));
