@@ -35,10 +35,10 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	const float timeDilation = 0.003;
 	coord += bindData.wind * bindData.time * timeDilation;
 
-	float coverage = PerlinNoise2D(coord, 10, 2);
+	float coverage = PerlinNoise2D(coord, 8, 3);
 	coverage = saturate(RemapRange(coverage, 1.0 - bindData.globalCoverage, 1, 0, 1));
 
-	float type = PerlinNoise2D(coord, 4, 3);
+	float type = PerlinNoise2D(coord, 4, 2);
 	// Coverage should influence the cloud types. Lower coverage should increase probability of
 	// smaller clouds, while high coverage should promote larger masses.
 	type += bindData.globalCoverage * 0.6 - 0.3;

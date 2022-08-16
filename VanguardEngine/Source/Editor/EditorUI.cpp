@@ -9,6 +9,7 @@
 #include <Editor/EntityReflection.h>
 #include <Editor/ImGuiExtensions.h>
 #include <Rendering/Atmosphere.h>
+#include <Rendering/Clouds.h>
 #include <Rendering/Bloom.h>
 #include <Rendering/ClusteredLightCulling.h>
 
@@ -1024,17 +1025,26 @@ void EditorUI::DrawRenderGraph(RenderDevice* device, RenderGraphResourceManager&
 	}
 }
 
-void EditorUI::DrawAtmosphereControls(Atmosphere& atmosphere)
+void EditorUI::DrawAtmosphereControls(Atmosphere& atmosphere, Clouds& clouds)
 {
 	if (atmosphereControlsOpen)
 	{
-		if (ImGui::Begin("Atmosphere", &atmosphereControlsOpen))
+		if (ImGui::Begin("Sky Atmosphere", &atmosphereControlsOpen))
 		{
 			constexpr float maxZenithAngle = 3.14159f;
-			ImGui::DragFloat("Solar zenith angle", &atmosphere.solarZenithAngle, 0.01f, -maxZenithAngle, maxZenithAngle, "%.3f");
+			ImGui::DragFloat("Solar zenith angle", &atmosphere.solarZenithAngle, 0.005f, -maxZenithAngle, maxZenithAngle, "%.3f");
 
 			ImGui::Separator();
 
+			ImGui::Text("Weather");
+			ImGui::DragFloat("Cloud coverage", &clouds.coverage, 0.005f, 0.f, 1.f);
+			ImGui::DragFloat("Precipitation", &clouds.precipitation, 0.005f, 0.f, 1.f);
+			ImGui::DragFloat("Wind strength", &clouds.windStrength, 0.01f, 0.f, 1.f);
+			ImGui::DragFloat2("Wind direction", (float*)&clouds.windDirection, 0.01f, -1.f, 1.f);
+
+			ImGui::Separator();
+
+			ImGui::Text("Atmosphere");
 			bool dirty = false;
 			dirty |= ImGui::DragFloat("Bottom radius", &atmosphere.model.radiusBottom, 0.2f, 1.f, atmosphere.model.radiusTop, "%.3f");
 			dirty |= ImGui::DragFloat("Top radius", &atmosphere.model.radiusTop, 0.2f, atmosphere.model.radiusBottom, 10000.f, "%.3f");

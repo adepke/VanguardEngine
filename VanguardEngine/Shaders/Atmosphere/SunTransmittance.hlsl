@@ -9,10 +9,12 @@ struct BindData
     AtmosphereData atmosphere;
 	// Boundary
     uint transmissionTexture;
+    uint scatteringTexture;
+    uint irradianceTexture;
     float solarZenithAngle;
+    // Boundary
     uint sunTransmittanceBuffer;
     uint cameraBuffer;
-    // Boundary
     uint cameraIndex;
 };
 
@@ -31,12 +33,13 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	float3 direction = sunDirection;
 	
     Texture2D<float4> transmittanceLut = ResourceDescriptorHeap[bindData.transmissionTexture];
-    Texture3D<float4> scatteringLut;  // Unused.
-	Texture2D<float4> irradianceLut;  // Unused.
+    Texture3D<float4> scatteringLut = ResourceDescriptorHeap[bindData.scatteringTexture];
+	Texture2D<float4> irradianceLut = ResourceDescriptorHeap[bindData.irradianceTexture];
 	
 	float3 transmittance;
 	float3 radiance = GetSkyRadiance(bindData.atmosphere, transmittanceLut, scatteringLut, bilinearClamp, cameraPosition - planetCenter, direction, 0.f, sunDirection, transmittance);
 	
 	RWStructuredBuffer<float3> sunTransmittance = ResourceDescriptorHeap[bindData.sunTransmittanceBuffer];
 	sunTransmittance[0] = transmittance;
+	sunTransmittance[1] = radiance;
 }

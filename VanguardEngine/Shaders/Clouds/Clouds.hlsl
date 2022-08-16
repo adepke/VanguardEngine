@@ -121,6 +121,10 @@ float GetDensityHeightGradientForPoint(float3 position, float cloudType)
 
 float SampleCloudDensity(Texture2D<float3> weatherTexture, Texture3D<float> baseNoise, Texture3D<float> detailNoise, float3 position, bool detailSample, uint mip)
 {
+#ifdef CLOUDS_LOW_DETAIL
+	detailSample = false;
+#endif
+
 	float3 weather = SampleWeather(weatherTexture, position);
 	float coverage = weather.x;
 	const float type = weather.y;
@@ -279,6 +283,17 @@ void RayMarch(Camera camera, float2 uv, float3 direction, float3 sunDirection, o
 	depth = 1000000;  // Assume very far away.
 
 	float3 origin = camera.position.xyz;
+
+#ifdef CLOUDS_RENDER_ORTHOGRAPHIC
+	// Find two perpendicular vectors in the plane defined by the ray direction.
+	const float term = 1.0 / sqrt(2.0);  // Used to define a vector where the sun should never align with (while still producing shadow).
+	const float3 planeA = cross(direction, float3(term, 0, term));
+	const float3 planeB = -cross(direction, planeA);
+	const float2 uvScaled = uv * 2.0 - 1.0;
+	origin += uvScaled.x * planeA * CLOUDS_ORTHOGRAPHIC_SCALE;
+	origin += uvScaled.y * planeB * CLOUDS_ORTHOGRAPHIC_SCALE;
+#endif
+
 	origin *= 1.0 / 1000.0;  // Meters to kilometers.
 	const float planetRadius = 6360.0;  // #TODO: Get from atmosphere data.
 	float3 planetCenter = float3(0, 0, -(planetRadius + 1));  // Offset since the world origin is 1km off the planet surface.
@@ -397,8 +412,11 @@ void RayMarch(Camera camera, float2 uv, float3 direction, float3 sunDirection, o
 			float coneDensity = SampleCloudDensityCone(weatherTexture, baseShapeNoiseTexture, detailShapeNoiseTexture, position);
 			coneDensity = (coneDensity + cloudDensity) / float(noiseKernelSize + 1);
 			float lightEnergy = ComputeLightEnergy(weatherTexture, baseShapeNoiseTexture, detailShapeNoiseTexture, position, coneDensity, viewDotLight);
-			lightEnergy *= 4.0;  // Model loses a bit too much energy, so artificially bring it back here.
-			float3 energy = sunTransmittance[0] * lightEnergy;  // Apply the transmittance of the sun.
+			lightEnergy *= 2.0;  // Model loses a bit too much energy, so artificially bring it back here.
+
+			const float3 solarTransmittance = sunTransmittance[0];
+			const float3 skyRadiance = sunTransmittance[1];
+			float3 energy = solarTransmittance * lightEnergy + skyRadiance;
 
 			float stepSize = smallStepSize * 1000.0;  // Kilometers to meters.
 
@@ -439,7 +457,11 @@ void RayMarch(Camera camera, float2 uv, float3 direction, float3 sunDirection, o
 }
 
 [RootSignature(RS)]
+#ifdef CLOUDS_ONLY_DEPTH
+float PSMain(PixelIn input) : SV_Target
+#else
 float4 PSMain(PixelIn input) : SV_Target
+#endif
 {
 	StructuredBuffer<Camera> cameraBuffer = ResourceDescriptorHeap[bindData.cameraBuffer];
 	Camera camera = cameraBuffer[bindData.cameraIndex];
@@ -453,10 +475,18 @@ float4 PSMain(PixelIn input) : SV_Target
 
 	int2 pixel = input.uv * bindData.outputResolution;
 	int index = (pixel.x + 4 * pixel.y) % 16;
+#ifdef CLOUDS_FULL_RESOLUTION
+	if (true)
+#else
 	if (index == crossFilter[bindData.timeSlice])
+#endif
 	{
 		float3 sunDirection = float3(sin(bindData.solarZenithAngle), 0.f, cos(bindData.solarZenithAngle));
+#ifdef CLOUDS_RENDER_ORTHOGRAPHIC
+		float3 rayDirection = ComputeRayDirection(camera, 0.5.xx);
+#else
 		float3 rayDirection = ComputeRayDirection(camera, input.uv);
+#endif
 
 		ComputeNoiseKernel(sunDirection);
 
@@ -465,16 +495,20 @@ float4 PSMain(PixelIn input) : SV_Target
 		float depth;  // Kilometers.
 		RayMarch(camera, input.uv, rayDirection, sunDirection, scatteredLuminance, transmittance, depth);
 
+#ifdef CLOUDS_ONLY_DEPTH
+		return depth;
+#else
 		RWTexture2D<float> depthTexture = ResourceDescriptorHeap[bindData.depthTexture];
 		depthTexture[input.uv * bindData.outputResolution] = depth;
 
 		float4 output;
 		output.rgb = scatteredLuminance;
 		output.a = transmittance;
-
 		return output;
+#endif
 	}
 
+#ifndef CLOUDS_FULL_RESOLUTION
 	else
 	{
 		// Not rendering this pixel this frame, so reproject instead.
@@ -493,4 +527,5 @@ float4 PSMain(PixelIn input) : SV_Target
 
 		return lastFrame;
 	}
+#endif
 }

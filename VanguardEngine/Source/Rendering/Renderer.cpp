@@ -127,6 +127,8 @@ void Renderer::UpdateCameraBuffer(const entt::registry& registry)
 	auto& backBuffer = device->GetResourceManager().Get(device->GetBackBuffer());
 
 	std::vector<Camera> cameras;
+
+	// Standard spectator camera.
 	cameras.emplace_back(Camera{
 		.position = XMFLOAT4{ translation.x, translation.y, translation.z, 0.f },
 		.view = globalViewMatrix,
@@ -143,27 +145,54 @@ void Renderer::UpdateCameraBuffer(const entt::registry& registry)
 		.aspectRatio = static_cast<float>(backBuffer.description.width) / static_cast<float>(backBuffer.description.height)
 	});
 
-	if (cameraFrozen)
-	{
-		const auto translationVector = XMMatrixInverse(nullptr, frozenView).r[3];
-		XMStoreFloat3(&translation, translationVector);
+	// Frozen perspective camera.
+	const auto translationVector = XMMatrixInverse(nullptr, frozenView).r[3];
+	XMStoreFloat3(&translation, translationVector);
+	cameras.emplace_back(Camera{
+		.position = XMFLOAT4{ translation.x, translation.y, translation.z, 0.f },
+		.view = frozenView,
+		.projection = frozenProjection,
+		.inverseView = XMMatrixInverse(nullptr, frozenView),
+		.inverseProjection = XMMatrixInverse(nullptr, frozenProjection),
+		.lastFrameView = frozenView,
+		.lastFrameProjection = frozenProjection,
+		.lastFrameInverseView = XMMatrixInverse(nullptr, frozenView),
+		.lastFrameInverseProjection = XMMatrixInverse(nullptr, frozenProjection),
+		.nearPlane = nearPlane,
+		.farPlane = farPlane,
+		.fieldOfView = fieldOfView,
+		.aspectRatio = static_cast<float>(backBuffer.description.width) / static_cast<float>(backBuffer.description.height)
+	});
 
-		cameras.emplace_back(Camera{
-			.position = XMFLOAT4{ translation.x, translation.y, translation.z, 0.f },
-			.view = frozenView,
-			.projection = frozenProjection,
-			.inverseView = XMMatrixInverse(nullptr, frozenView),
-			.inverseProjection = XMMatrixInverse(nullptr, frozenProjection),
-			.lastFrameView = frozenView,
-			.lastFrameProjection = frozenProjection,
-			.lastFrameInverseView = XMMatrixInverse(nullptr, frozenView),
-			.lastFrameInverseProjection = XMMatrixInverse(nullptr, frozenProjection),
-			.nearPlane = nearPlane,
-			.farPlane = farPlane,
-			.fieldOfView = fieldOfView,
-			.aspectRatio = static_cast<float>(backBuffer.description.width) / static_cast<float>(backBuffer.description.height)
-		});
-	}
+	// Sun-view orthographic camera.
+	const float sunNearPlane = 1;
+	const float sunFarPlane = 50000;
+	const float sunHeight = 10000;
+	const auto sunRotationMatrix = XMMatrixRotationY(atmosphere.solarZenithAngle);
+	const auto sunForward = XMVector4Transform(XMVectorSet(0.f, 0.f, -1.f, 0.f), sunRotationMatrix);
+	const auto sunUpward = XMVector4Transform(XMVectorSet(1.f, 0.f, 0.f, 0.f), sunRotationMatrix);
+	auto sunPosition = XMVectorSet(0, 0, sunHeight, 0);
+	sunPosition = XMVector4Transform(sunPosition, sunRotationMatrix);
+	XMFLOAT4 sunPositionFloat;
+	XMStoreFloat4(&sunPositionFloat, sunPosition);
+	auto sunView = XMMatrixLookAtRH(sunPosition, sunPosition + sunForward, sunUpward);
+	const auto viewSize = *CvarGet("sunShadowSize", float);
+	auto sunProjection = XMMatrixOrthographicRH(viewSize, viewSize, sunNearPlane, sunFarPlane);
+	cameras.emplace_back(Camera{
+		.position = sunPositionFloat,
+		.view = sunView,
+		.projection = sunProjection,
+		.inverseView = XMMatrixInverse(nullptr, sunView),
+		.inverseProjection = XMMatrixInverse(nullptr, sunProjection),
+		.lastFrameView = XMMatrixIdentity(),  // We should never need last frame matrices for this camera.
+		.lastFrameProjection = XMMatrixIdentity(),
+		.lastFrameInverseView = XMMatrixIdentity(),
+		.lastFrameInverseProjection = XMMatrixIdentity(),
+		.nearPlane = sunNearPlane,
+		.farPlane = sunFarPlane,
+		.fieldOfView = 0,
+		.aspectRatio = static_cast<float>(backBuffer.description.width) / static_cast<float>(backBuffer.description.height)
+	});
 
 	device->GetResourceManager().Write(cameraBuffer, cameras);
 }
@@ -236,6 +265,8 @@ BufferHandle Renderer::CreateLightBuffer(const entt::registry& registry)
 
 Renderer::~Renderer()
 {
+	RenderUtils::Get().Destroy();
+
 	// Sync the device so that resource members in Renderer.h don't get destroyed while in-flight.
 	device->Synchronize();
 }
@@ -253,6 +284,7 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 	{
 		Renderer::Get().ReloadShaderPipelines();
 	});
+	CvarCreate("sunShadowSize", "Width and height of the orthographic camera used for sun shadow mapping, does not affect the shadow map resolution", 50.f);
 
 	constexpr size_t maxVertices = 32 * 1024 * 1024;
 
@@ -277,7 +309,7 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 	cameraBufferDesc.updateRate = ResourceFrequency::Static;
 	cameraBufferDesc.bindFlags = BindFlag::ShaderResource;
 	cameraBufferDesc.accessFlags = AccessFlag::CPUWrite;
-	cameraBufferDesc.size = 2;  // #TODO: Better camera management.
+	cameraBufferDesc.size = 3;  // #TODO: Better camera management.
 	cameraBufferDesc.stride = sizeof(Camera);
 
 	cameraBuffer = device->GetResourceManager().Create(cameraBufferDesc, VGText("Camera buffer"));
@@ -294,6 +326,7 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 	ibl.Initialize(device.get());
 	bloom.Initialize(device.get());
 	occlusionCulling.Initialize(device.get());
+	clouds.Initialize(device.get());
 
 	std::vector<D3D12_INDIRECT_ARGUMENT_DESC> meshIndirectArgDescs;
 	meshIndirectArgDescs.emplace_back(D3D12_INDIRECT_ARGUMENT_DESC{
@@ -577,7 +610,10 @@ void Renderer::Render(entt::registry& registry)
 	});
 
 	// #TODO: Don't have this here.
-	atmosphere.Render(graph, atmosphereResources, cameraBufferTag, depthStencilTag, outputHDRTag, registry);
+	const auto cloudResources = clouds.Render(graph, atmosphere, outputHDRTag, cameraBufferTag, depthStencilTag, sunTransmittance);
+
+	// #TODO: Don't have this here.
+	atmosphere.Render(graph, atmosphereResources, cloudResources, cameraBufferTag, depthStencilTag, outputHDRTag, registry);
 
 	// #TODO: Don't have this here.
 	bloom.Render(graph, outputHDRTag);
@@ -615,6 +651,11 @@ void Renderer::Render(entt::registry& registry)
 	device->AdvanceGPU();
 
 	Editor::Get().Update();
+}
+
+double Renderer::GetAppTime() const
+{
+	return appTime;
 }
 
 std::pair<uint32_t, uint32_t> Renderer::GetResolution() const

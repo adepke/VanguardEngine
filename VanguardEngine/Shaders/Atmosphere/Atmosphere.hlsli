@@ -803,4 +803,34 @@ float3 SampleAtmosphere(AtmosphereData atmosphere, Camera camera, float3 directi
 	return radiance * 10.f;  // 10 is the default exposure used in Bruneton's demo.
 }
 
+void ComputeAtmosphereContributionByDepth(AtmosphereData atmosphere, Camera camera, float3 direction, float3 sunDirection, float depth, Texture2D transmittanceLut, Texture3D scatteringLut, Texture2D irradianceLut, SamplerState lutSampler, out float3 scattering, out float3 transmittance)
+{
+	float3 cameraPosition = ComputeAtmosphereCameraPosition(camera);
+	float3 planetCenter = ComputeAtmospherePlanetCenter(atmosphere);
+	float shadowLength = 0.f;  // Light shafts are not yet supported.
+
+	//if (depth < camera.farPlane)
+	if (true)
+	{
+		depth *= 0.001;  // Meters to kilometers.
+		float3 position = cameraPosition + direction * depth;
+
+		float3 intersectPoint = position - planetCenter;
+		float3 cameraPoint = cameraPosition - planetCenter;
+		scattering = GetSkyRadianceToPoint(atmosphere, transmittanceLut, scatteringLut, lutSampler, cameraPoint, intersectPoint, shadowLength, sunDirection, transmittance);
+	
+		// Shouldn't need this, but we have way too little in-scattered light without it.
+		// This is a close approximation using reference photographs.
+		scattering *= 12;
+	}
+
+	else
+	{
+		scattering = 0.xxx;
+		transmittance = 1.xxx;
+		//transmittance = 0.xxx;
+		//scattering = GetSkyRadiance(atmosphere, transmittanceLut, scatteringLut, lutSampler, cameraPosition - planetCenter, direction, shadowLength, sunDirection, transmittance);
+	}
+}
+
 #endif  // __ATMOSPHERE_HLSLI__

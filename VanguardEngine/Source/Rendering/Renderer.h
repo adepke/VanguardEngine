@@ -18,6 +18,7 @@
 #include <Rendering/ImageBasedLighting.h>
 #include <Rendering/Bloom.h>
 #include <Rendering/OcclusionCulling.h>
+#include <Rendering/Clouds.h>
 
 #include <entt/entt.hpp>
 
@@ -43,12 +44,14 @@ public:
 	std::unique_ptr<MaterialFactory> materialFactory;
 
 	float lastFrameTime = -1.f;
+	double appTime = 0;
 	std::unique_ptr<UserInterfaceManager> userInterface;
 	Atmosphere atmosphere;
 	ClusteredLightCulling clusteredCulling;
 	ImageBasedLighting ibl;
 	Bloom bloom;
 	OcclusionCulling occlusionCulling;
+	Clouds clouds;
 
 	size_t renderableCount;
 
@@ -90,6 +93,8 @@ public:
 	void Render(entt::registry& registry);
 
 	void SubmitFrameTime(uint32_t timeUs);
+	// Returns app time in seconds.
+	double GetAppTime() const;
 
 	std::pair<uint32_t, uint32_t> GetResolution() const;
 	void SetResolution(uint32_t width, uint32_t height, bool fullscreen);
@@ -101,4 +106,5 @@ public:
 inline void Renderer::SubmitFrameTime(uint32_t timeUs)
 {
 	lastFrameTime = static_cast<float>(timeUs);
+	appTime += lastFrameTime * 0.001 * 0.001;
 }

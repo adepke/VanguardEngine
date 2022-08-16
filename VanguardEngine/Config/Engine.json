@@ -1,5 +1,6 @@
 {
   "ShadersPath": "Shaders",
   "FontsPath": "Assets/Fonts",
-  "MaterialsPath": "Assets/Materials"
+  "MaterialsPath": "Assets/Materials",
+  "UtilitiesPath": "Assets/Utilities"
 }

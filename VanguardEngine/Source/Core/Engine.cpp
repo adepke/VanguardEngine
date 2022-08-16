@@ -147,10 +147,25 @@ void EngineLoop()
 	registry.emplace<ControlComponent>(spectator);  // #TEMP
 
 	//AddHelmet({
-	//	.scale = { 1.f, 1.f, 1.f },
+	//	.scale = { 100.f, 100.f, 100.f },
 	//	.rotation = { -169.5f * 3.14159f / 180.f, 0.f, 121.5f * 3.14159f / 180.f },
 	//	.translation = { 78.f, 0.f, -5.f }
 	//});
+	const auto h = AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/DamagedHelmet/HelmetTangents.glb");
+	for (int i = 0; i < 6; i++)
+	{
+		float s = i*i * 19.f + 5;
+		TransformComponent transform = {
+			.scale = { s,s,s },
+			.rotation = { -169.5f * 3.14159f / 180.f, 0.f, 121.5f * 3.14159f / 180.f },
+			//.rotation = {0.f,0.f,0.f},
+			.translation = { i*i*i * 73.f + 40.f * i, i*i * -160.f, 100.f}
+		};
+
+		const auto entity = registry.create();
+		registry.emplace<TransformComponent>(entity, transform);
+		registry.emplace<MeshComponent>(entity, h);
+	}
 	//
 	//AddHelmet({
 	//	.scale = { 10.f, 10.f, 10.f },
@@ -166,7 +181,7 @@ void EngineLoop()
 	//});
 
 	const auto helmetMesh = AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/DamagedHelmet/HelmetTangents.glb");
-	int perAxis = 25;
+	int perAxis = 0;
 	float spacing = 50.f;
 	for (int i = 0; i < perAxis; i++)
 	{

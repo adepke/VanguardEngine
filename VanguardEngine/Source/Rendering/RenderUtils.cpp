@@ -4,6 +4,8 @@
 #include <Rendering/Base.h>
 #include <Rendering/Device.h>
 #include <Rendering/CommandList.h>
+#include <Asset/TextureLoader.h>
+#include <Core/Config.h>
 
 #include <vector>
 #include <cstring>
@@ -16,6 +18,15 @@ void RenderUtils::Initialize(RenderDevice* inDevice)
 	ComputePipelineStateDescription clearUAVStateDesc{};
 	clearUAVStateDesc.shader = { "ClearUAV.hlsl", "Main" };
 	clearUAVState.Build(*device, clearUAVStateDesc);
+
+	// #TODO: Generate blue noise instead of loading from a file.
+	// #TODO: Fix format, we only need single channel, probably 16 bit precision.
+	blueNoise = AssetLoader::LoadTexture(*device, Config::utilitiesPath / "BlueNoise128.png", false);
+}
+
+void RenderUtils::Destroy()
+{
+	device->GetResourceManager().Destroy(blueNoise);
 }
 
 void RenderUtils::ClearUAV(CommandList& list, BufferHandle buffer, uint32_t bufferHandle, const DescriptorHandle& nonVisibleDescriptor)

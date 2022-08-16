@@ -13,12 +13,16 @@ class CommandList;
 
 class RenderUtils : public Singleton<RenderUtils>
 {
+public:
+	TextureHandle blueNoise;
+
 private:
 	RenderDevice* device = nullptr;
 	PipelineState clearUAVState;
 
 public:
 	void Initialize(RenderDevice* inDevice);
+	void Destroy();
 
 	void ClearUAV(CommandList& list, BufferHandle buffer, uint32_t bufferHandle, const DescriptorHandle& nonVisibleDescriptor);
 };

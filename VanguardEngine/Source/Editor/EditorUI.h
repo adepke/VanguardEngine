@@ -19,6 +19,7 @@ enum class RenderOverlay
 class RenderDevice;
 class RenderGraphResourceManager;
 class Atmosphere;
+class Clouds;
 class Bloom;
 class ClusteredLightCulling;
 
@@ -89,7 +90,7 @@ public:
 	void DrawEntityPropertyViewer(entt::registry& registry);
 	void DrawMetrics(RenderDevice* device, float frameTimeMs);
 	void DrawRenderGraph(RenderDevice* device, RenderGraphResourceManager& resourceManager, TextureHandle depthStencil, TextureHandle scene);
-	void DrawAtmosphereControls(Atmosphere& atmosphere);
+	void DrawAtmosphereControls(Atmosphere& atmosphere, Clouds& clouds);
 	void DrawBloomControls(Bloom& bloom);
 	void DrawRenderVisualizer(RenderDevice* device, ClusteredLightCulling& clusteredCulling, TextureHandle overlay);
 

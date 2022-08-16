@@ -108,7 +108,7 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 			ui->DrawEntityPropertyViewer(registry);
 			ui->DrawMetrics(&device, renderer.lastFrameTime);
 			ui->DrawRenderGraph(&device, resourceManager, resources.GetTexture(depthStencil), resources.GetTexture(outputLDR));
-			ui->DrawAtmosphereControls(renderer.atmosphere);
+			ui->DrawAtmosphereControls(renderer.atmosphere, renderer.clouds);
 			ui->DrawBloomControls(renderer.bloom);
 			ui->DrawRenderVisualizer(&device, renderer.clusteredCulling, overlayHandle);
 

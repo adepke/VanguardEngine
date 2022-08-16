@@ -7,7 +7,8 @@
 
 float Hash(float n)
 {
-	return frac(sin(n + 1.951) * 43758.5453);
+	return frac(sin(n * 12.9898) * 43758.5453);
+	//return frac(sin(n + 1.951) * 43758.5453);
 }
 
 float Noise(float3 x)
@@ -218,7 +219,7 @@ float WorleyNoise3D(float3 p, float cellCount)
 			{
 				float3 tp = floor(pCell) + float3(xo, yo, zo);
 
-				tp = pCell - tp - Noise(fmod(tp, cellCount / 1));
+				tp = pCell - tp - Noise(fmod(tp, cellCount.xxx)).xxx;
 
 				d = min(d, dot(tp, tp));
 			}

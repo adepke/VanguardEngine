@@ -6,6 +6,7 @@
 #include <Rendering/ResourceHandle.h>
 #include <Rendering/RenderGraphResource.h>
 #include <Rendering/RenderPipeline.h>
+#include <Rendering/Clouds.h>
 
 #include <entt/entt.hpp>
 
@@ -89,8 +90,8 @@ private:
 
 	void Precompute(CommandList& list, TextureHandle transmittanceHandle, TextureHandle scatteringHandle, TextureHandle irradianceHandle);
 
-	RenderPipelineLayout renderLayout;
 	RenderPipelineLayout sunTransmittanceLayout;
+	RenderPipelineLayout composeLayout;
 
 	static constexpr uint32_t luminanceTextureSize = 1024;
 	static_assert(luminanceTextureSize % 8 == 0, "luminanceTextureSize must be evenly divisible by 8.");
@@ -105,7 +106,7 @@ public:
 	void Initialize(RenderDevice* inDevice, entt::registry& registry);
 
 	AtmosphereResources ImportResources(RenderGraph& graph);
-	void Render(RenderGraph& graph, AtmosphereResources resourceHandles, RenderResource cameraBuffer,
+	void Render(RenderGraph& graph, AtmosphereResources resourceHandles, CloudResources cloudResources, RenderResource cameraBuffer,
 		RenderResource depthStencil, RenderResource outputHDRs, entt::registry& registry);
 	std::pair<RenderResource, RenderResource> RenderEnvironmentMap(RenderGraph& graph, AtmosphereResources resourceHandles, RenderResource cameraBuffer);
 	void MarkModelDirty() { dirty = true; }

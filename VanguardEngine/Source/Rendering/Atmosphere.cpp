@@ -305,16 +305,14 @@ void Atmosphere::Initialize(RenderDevice* inDevice, entt::registry& registry)
 	multipleScatteringPrecomputeLayout = RenderPipelineLayout{}
 		.ComputeShader({ "Atmosphere/AtmospherePrecompute", "MultipleScatteringLutMain" });
 
-	renderLayout = RenderPipelineLayout{}
-		.VertexShader({ "Atmosphere/AtmosphereRender", "VSMain" })
-		.PixelShader({ "Atmosphere/AtmosphereRender", "PSMain" })
-		.DepthEnabled(true, false, DepthTestFunction::GreaterEqual);  // Draw where the depth buffer is at the clear value.
-
 	sunTransmittanceLayout = RenderPipelineLayout{}
 		.ComputeShader({ "Atmosphere/SunTransmittance", "Main" });
 
 	luminancePrecomputeLayout = RenderPipelineLayout{}
 		.ComputeShader({ "Atmosphere/Luminance", "Main" });
+
+	composeLayout = RenderPipelineLayout{}
+		.ComputeShader({ "Atmosphere/Compose", "Main" });
 
 	TextureDescription transmittanceDesc{
 		.bindFlags = BindFlag::ShaderResource | BindFlag::UnorderedAccess,
@@ -415,7 +413,7 @@ AtmosphereResources Atmosphere::ImportResources(RenderGraph& graph)
 	return { transmittanceTag, scatteringTag, irradianceTag };
 }
 
-void Atmosphere::Render(RenderGraph& graph, AtmosphereResources resourceHandles, RenderResource cameraBuffer,
+void Atmosphere::Render(RenderGraph& graph, AtmosphereResources resourceHandles, CloudResources cloudResources, RenderResource cameraBuffer,
 	RenderResource depthStencil, RenderResource outputHDR, entt::registry& registry)
 {
 	if (dirty)
@@ -432,43 +430,63 @@ void Atmosphere::Render(RenderGraph& graph, AtmosphereResources resourceHandles,
 		dirty = false;
 	}
 
-	auto& atmospherePass = graph.AddPass("Atmosphere Pass", ExecutionQueue::Graphics);
-	atmospherePass.Read(cameraBuffer, ResourceBind::SRV);
-	atmospherePass.Read(depthStencil, ResourceBind::DSV);
-	atmospherePass.Read(resourceHandles.transmittanceHandle, ResourceBind::SRV);
-	atmospherePass.Read(resourceHandles.scatteringHandle, ResourceBind::SRV);
-	atmospherePass.Read(resourceHandles.irradianceHandle, ResourceBind::SRV);
-	atmospherePass.Output(outputHDR, OutputBind::RTV, LoadType::Preserve);
-	atmospherePass.Bind([&, cameraBuffer, depthStencil, resourceHandles, outputHDR](CommandList& list, RenderPassResources& resources)
+	// Update the sun light entity.
+	auto& lightTransform = registry.get<TransformComponent>(sunLight);
+	lightTransform.rotation = { 0.f, solarZenithAngle + 3.14159f / 2.f, 0.f };
+
+	auto& composePass = graph.AddPass("Sky Atmosphere Compose Pass", ExecutionQueue::Compute);
+	composePass.Read(cameraBuffer, ResourceBind::SRV);
+	//composePass.Read(outputHDR, ResourceBind::SRV);
+	composePass.Read(cloudResources.cloudsScatteringTransmittance, ResourceBind::SRV);
+	composePass.Read(cloudResources.cloudsDepth, ResourceBind::SRV);
+	composePass.Read(cloudResources.cloudsShadowMap, ResourceBind::SRV);
+	composePass.Read(depthStencil, ResourceBind::SRV);
+	composePass.Write(outputHDR, TextureView{}.UAV("", 0));
+
+	composePass.Read(resourceHandles.transmittanceHandle, ResourceBind::SRV);
+	composePass.Read(resourceHandles.scatteringHandle, ResourceBind::SRV);
+	composePass.Read(resourceHandles.irradianceHandle, ResourceBind::SRV);
+
+	composePass.Bind([&, cloudResources, cameraBuffer, depthStencil, outputHDR, resourceHandles](CommandList& list, RenderPassResources& resources)
 	{
-		struct BindData
-		{
+		list.BindPipeline(composeLayout);
+
+		struct {
 			AtmosphereData atmosphere;
+			uint32_t cameraBuffer;
+			uint32_t cameraIndex;
+			uint32_t cloudsScatteringTransmittanceTexture;
+			uint32_t cloudsDepthTexture;
+			uint32_t cloudsShadowMap;
+			uint32_t geometryDepthTexture;
+			uint32_t outputTexture;
 			uint32_t transmissionTexture;
 			uint32_t scatteringTexture;
 			uint32_t irradianceTexture;
 			float solarZenithAngle;
-			uint32_t cameraBuffer;
-			uint32_t cameraIndex;
 		} bindData;
-		
+
 		bindData.atmosphere = model;
+		bindData.cameraBuffer = resources.Get(cameraBuffer);
+		bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
+		bindData.cloudsScatteringTransmittanceTexture = resources.Get(cloudResources.cloudsScatteringTransmittance);
+		bindData.cloudsDepthTexture = resources.Get(cloudResources.cloudsDepth);
+		bindData.cloudsShadowMap = resources.Get(cloudResources.cloudsShadowMap);
+		bindData.geometryDepthTexture = resources.Get(depthStencil);
+		bindData.outputTexture = resources.Get(outputHDR, "");
 		bindData.transmissionTexture = resources.Get(resourceHandles.transmittanceHandle);
 		bindData.scatteringTexture = resources.Get(resourceHandles.scatteringHandle);
 		bindData.irradianceTexture = resources.Get(resourceHandles.irradianceHandle);
 		bindData.solarZenithAngle = solarZenithAngle;
-		bindData.cameraBuffer = resources.Get(cameraBuffer);
-		bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
 
-		list.BindPipeline(renderLayout);
 		list.BindConstants("bindData", bindData);
 
-		list.DrawFullscreenQuad();
-	});
+		const auto& outputComponent = device->GetResourceManager().Get(resources.GetTexture(outputHDR));
+		const auto dispatchX = std::ceil(outputComponent.description.width / 8.f);
+		const auto dispatchY = std::ceil(outputComponent.description.height / 8.f);
 
-	// Update the sun light entity.
-	auto& lightTransform = registry.get<TransformComponent>(sunLight);
-	lightTransform.rotation = { 0.f, solarZenithAngle + 3.14159f / 2.f, 0.f };
+		list.Dispatch(dispatchX, dispatchY, 1);
+	});
 }
 
 std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(RenderGraph& graph, AtmosphereResources resourceHandles, RenderResource cameraBuffer)
@@ -521,9 +539,11 @@ std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(Rende
 	auto& sunTransmittancePass = graph.AddPass("Sun Transmittance Pass", ExecutionQueue::Compute);
 	sunTransmittancePass.Read(cameraBuffer, ResourceBind::SRV);
 	sunTransmittancePass.Read(resourceHandles.transmittanceHandle, ResourceBind::SRV);
+	sunTransmittancePass.Read(resourceHandles.scatteringHandle, ResourceBind::SRV);
+	sunTransmittancePass.Read(resourceHandles.irradianceHandle, ResourceBind::SRV);
 	const auto sunTransmittance = sunTransmittancePass.Create(TransientBufferDescription{
 		.updateRate = ResourceFrequency::Static,  // Unordered access.
-		.size = 1,
+		.size = 2,  // Transmittance, radiance.
 		.stride = sizeof(XMFLOAT3)
 	}, VGText("Sun transmittance"));
 	sunTransmittancePass.Write(sunTransmittance, ResourceBind::UAV);
@@ -533,6 +553,8 @@ std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(Rende
 		{
 			AtmosphereData atmosphere;
 			uint32_t transmissionTexture;
+			uint32_t scatteringTexture;
+			uint32_t irradianceTexture;
 			float solarZenithAngle;
 			uint32_t sunTransmittanceBuffer;
 			uint32_t cameraBuffer;
@@ -541,6 +563,8 @@ std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(Rende
 
 		bindData.atmosphere = model;
 		bindData.transmissionTexture = resources.Get(resourceHandles.transmittanceHandle);
+		bindData.scatteringTexture = resources.Get(resourceHandles.scatteringHandle);
+		bindData.irradianceTexture = resources.Get(resourceHandles.irradianceHandle);
 		bindData.solarZenithAngle = solarZenithAngle;
 		bindData.sunTransmittanceBuffer = resources.Get(sunTransmittance);
 		bindData.cameraBuffer = resources.Get(cameraBuffer);
