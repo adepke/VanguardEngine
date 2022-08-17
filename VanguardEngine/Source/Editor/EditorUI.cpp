@@ -1046,6 +1046,36 @@ void EditorUI::DrawAtmosphereControls(Atmosphere& atmosphere, Clouds& clouds)
 
 			ImGui::Text("Atmosphere");
 			bool dirty = false;
+			static float haze = 5;
+			static float lastHaze = haze;
+
+			ImGui::TextDisabled("Presets");
+			if (ImGui::Button("Clear sky"))
+				haze = 0;
+			ImGui::SameLine();
+			if (ImGui::Button("Light haze"))
+				haze = 18;
+			ImGui::SameLine();
+			if (ImGui::Button("Heavy haze"))
+				haze = 80;
+
+			ImGui::DragFloat("Haze", &haze, 0.5f, 0.f, 100.f);
+
+			if (haze != lastHaze)
+				dirty = true;
+			lastHaze = haze;
+
+			// Only compute model coefficients if we modified the haze factor.
+			if (dirty)
+			{
+				const auto epsilon = 0.00000001f;
+				const auto defaultMie = 0.003996f * 1.2f;
+				const auto newMie = haze * defaultMie + epsilon;
+				atmosphere.model.mieScattering = { newMie, newMie, newMie };
+				atmosphere.model.mieExtinction = { 1.11f * newMie, 1.11f * newMie, 1.11f * newMie };
+			}
+
+			ImGui::TextDisabled("Model");
 			dirty |= ImGui::DragFloat("Bottom radius", &atmosphere.model.radiusBottom, 0.2f, 1.f, atmosphere.model.radiusTop, "%.3f");
 			dirty |= ImGui::DragFloat("Top radius", &atmosphere.model.radiusTop, 0.2f, atmosphere.model.radiusBottom, 10000.f, "%.3f");
 			dirty |= ImGui::DragFloat3("Rayleigh scattering", (float*)&atmosphere.model.rayleighScattering, 0.001f, 0.f, 1.f, "%.6f");
