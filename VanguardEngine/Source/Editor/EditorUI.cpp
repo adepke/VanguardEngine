@@ -55,7 +55,7 @@ void EditorUI::DrawFrameTimeHistory()
 {
 	// Compute statistics.
 	const auto [min, max] = std::minmax_element(frameTimes.begin(), frameTimes.end());
-	const auto mean = std::accumulate(frameTimes.begin(), frameTimes.end(), 0) / static_cast<float>(frameTimes.size());	
+	const auto mean = std::accumulate(frameTimes.begin(), frameTimes.end(), 0) / static_cast<float>(frameTimes.size());
 
 	auto* window = ImGui::GetCurrentWindow();
 	auto& style = ImGui::GetStyle();
@@ -154,7 +154,7 @@ void EditorUI::DrawRenderOverlayTools(RenderDevice* device, const ImVec2& min, c
 		ImGui::SetNextWindowPos({ max.x - toolWindowSize.x - padding, windowBase.y + (max.y - min.y - toolWindowSize.y) * 0.5f });
 		break;
 	}
-	
+
 	if (ImGui::BeginChildFrame(ImGui::GetID("Render Overlay Tools"), toolWindowSize, toolsWindowFlags))
 	{
 		auto style = ImGui::GetStyle();
@@ -409,13 +409,13 @@ void EditorUI::DrawConsole(entt::registry& registry, const ImVec2& min, const Im
 		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0);
 		ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, frameColor);
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 0, 0 });
-		
+
 		ImGui::SetNextWindowBgAlpha(0.f);
 		if (ImGui::BeginChild(ImGui::GetID("Console History"), { 0, height }, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground))
 		{
 			auto* window = ImGui::GetCurrentWindow();
 			ImGui::RenderFrame(windowMin, windowMax, frameColor, false);
-			
+
 			ImGui::SetWindowFontScale(0.8f);
 			for (const auto& message : consoleMessages)
 			{
@@ -590,7 +590,7 @@ void EditorUI::DrawConsole(entt::registry& registry, const ImVec2& min, const Im
 					buffer[0] = '\0';  // Clear the field.
 					needsScrollUpdate = true;
 				}
-			}	
+			}
 			ImGui::SetItemDefaultFocus();
 			if (ImGui::IsWindowAppearing() || ImGui::IsItemDeactivatedAfterEdit())
 			{
@@ -666,7 +666,7 @@ void EditorUI::DrawConsole(entt::registry& registry, const ImVec2& min, const Im
 						break;
 					}
 					}
-					
+
 					ImGui::SetCursorPosX(lineStart + 350.f);
 					ImGui::TextDisabled(typeMap[(uint32_t)cvar.first->type]);
 					ImGui::SameLine();
@@ -717,6 +717,38 @@ void EditorUI::DrawLayout()
 	ImGui::PopStyleVar(3);
 
 	const auto dockSpaceId = ImGui::GetID("DockSpace");
+
+	// Build the default dock layout if the user hasn't overriden it themselves.
+	if (!ImGui::DockBuilderGetNode(dockSpaceId))
+	{
+		ImGui::DockBuilderRemoveNode(dockSpaceId);
+		ImGui::DockBuilderAddNode(dockSpaceId, ImGuiDockNodeFlags_None);
+
+		ImGuiID sceneDockId = 0;
+		ImGuiID controlsDockId = 0;
+		ImGuiID entitiesDockId = 0;
+		ImGuiID propertiesDockId = 0;
+		ImGuiID metricsDockId = 0;
+		
+		sceneDockId = ImGui::DockBuilderSplitNode(dockSpaceId, ImGuiDir_Left, 0.75f, nullptr, &controlsDockId);
+		entitiesDockId = ImGui::DockBuilderSplitNode(controlsDockId, ImGuiDir_Up, 0.4f, nullptr, &propertiesDockId);
+		controlsDockId = ImGui::DockBuilderSplitNode(entitiesDockId, ImGuiDir_Up, 0.19f, nullptr, &entitiesDockId);
+		propertiesDockId = ImGui::DockBuilderSplitNode(propertiesDockId, ImGuiDir_Up, 0.8f, nullptr, &metricsDockId);
+
+		ImGui::DockBuilderDockWindow("Scene", sceneDockId);
+		ImGui::DockBuilderDockWindow("Controls", controlsDockId);
+		ImGui::DockBuilderDockWindow("Entity Hierarchy", entitiesDockId);
+		ImGui::DockBuilderDockWindow("Property Viewer", propertiesDockId);
+		ImGui::DockBuilderDockWindow("Metrics", metricsDockId);
+		ImGui::DockBuilderDockWindow("Render Graph", propertiesDockId);
+		ImGui::DockBuilderDockWindow("Sky Atmosphere", entitiesDockId);
+		ImGui::DockBuilderDockWindow("Bloom", entitiesDockId);
+		ImGui::DockBuilderDockWindow("Render Visualizer", propertiesDockId);
+		ImGui::DockBuilderDockWindow("Dear ImGui Demo", sceneDockId);
+		
+		ImGui::DockBuilderFinish(dockSpaceId);
+	}
+
 	ImGui::DockSpace(dockSpaceId, { 0.f, 0.f });
 
 	// Draw the menu in the dock space window.
@@ -1084,7 +1116,7 @@ void EditorUI::DrawAtmosphereControls(Atmosphere& atmosphere, Clouds& clouds)
 			dirty |= ImGui::DragFloat3("Absorption extinction", (float*)&atmosphere.model.absorptionExtinction, 0.001f, 0.f, 1.f, "%.6f");
 			dirty |= ImGui::DragFloat3("Surface color", (float*)&atmosphere.model.surfaceColor, 0.01f, 0.f, 1.f, "%.3f");
 			dirty |= ImGui::DragFloat3("Solar irradiance", (float*)&atmosphere.model.solarIrradiance, 0.01f, 0.f, 100.f, "%.4f");
-			
+
 			if (dirty)
 			{
 				atmosphere.MarkModelDirty();

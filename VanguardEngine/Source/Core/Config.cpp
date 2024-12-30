@@ -20,9 +20,17 @@ namespace Config
 			return std::filesystem::exists(path / engineConfigPath);
 		};
 
+		// #TODO: Recursive search for the config file instead of doing this.
+
 		if (IsEngineRoot(currentPath))
 		{
 			engineRootPath = currentPath;
+		}
+
+		// Running from the repo root.
+		if (IsEngineRoot(currentPath / "VanguardEngine"))
+		{
+			engineRootPath = currentPath / "VanguardEngine";
 		}
 
 		// Running from visual studio sandbox.
