@@ -8,6 +8,7 @@
 #include <imgui.h>
 
 #include <deque>
+#include <string>
 
 enum class RenderOverlay
 {
