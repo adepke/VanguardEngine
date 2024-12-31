@@ -5,6 +5,27 @@
 
 // Noise ported from: https://github.com/sebh/TileableVolumeNoise
 
+// HLSL and GLM/GLSL have different behavior in how they treat negative divisors with mod()/fmod(). Replicate the GLM behavior.
+float Mod(float x, float y)
+{
+    return x - y * floor(x / y);
+}
+
+float2 Mod(float2 x, float2 y)
+{
+    return x - y * floor(x / y);
+}
+
+float3 Mod(float3 x, float3 y)
+{
+    return x - y * floor(x / y);
+}
+
+float4 Mod(float4 x, float4 y)
+{
+    return x - y * floor(x / y);
+}
+
 float Hash(float n)
 {
 	return frac(sin(n * 12.9898) * 43758.5453);
@@ -52,8 +73,8 @@ float4 Fade(float4 x)
 
 float Perlin(float4 p, float4 frequency)
 {
-	float4 Pi0 = fmod(floor(p), frequency);
-	float4 Pi1 = fmod(Pi0 + 1.0, frequency);
+    float4 Pi0 = Mod(floor(p), frequency);
+    float4 Pi1 = Mod(Pi0 + 1.0, frequency);
 	float4 Pf0 = frac(p);
 	float4 Pf1 = Pf0 - 1.0;
 	float4 ix = float4(Pi0.x, Pi1.x, Pi0.x, Pi1.x);
@@ -219,7 +240,7 @@ float WorleyNoise3D(float3 p, float cellCount)
 			{
 				float3 tp = floor(pCell) + float3(xo, yo, zo);
 
-				tp = pCell - tp - Noise(fmod(tp, cellCount.xxx)).xxx;
+                tp = pCell - tp - Noise(Mod(tp, cellCount.xxx)).xxx;
 
 				d = min(d, dot(tp, tp));
 			}

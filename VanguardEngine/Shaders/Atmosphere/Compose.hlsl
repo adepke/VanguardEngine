@@ -60,11 +60,18 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	float3 perspectiveTransmittance = 1.xxx;
 	float3 skyScattering = 0.xxx;
 	float3 skyTransmittance = 1.xxx;
-
+	
 	bool hitSurface = geometryDepth < camera.farPlane || cloudsDepth < 1000000;
 	if (hitSurface)
 	{
-		float depth = min(geometryDepth, cloudsDepth);
+        float depth = min(geometryDepth, cloudsDepth);
+		
+		// If the geometry wasn't hit, then throw away the min result, as clouds can reach much further.
+		if (geometryDepth >= camera.farPlane)
+        {
+            depth = cloudsDepth;
+        }
+		
 		depth *= 0.001;  // Meters to kilometers.
 		float3 position = cameraPosition + rayDirection * depth;
 
@@ -72,7 +79,7 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 		float3 cameraPoint = cameraPosition - planetCenter;
 
 		perspectiveScattering = GetSkyRadianceToPoint(bindData.atmosphere, transmittanceLut, scatteringLut, bilinearWrap, cameraPoint, intersectPoint, shadowLength, sunDirection, perspectiveTransmittance);
-	}
+    }
 
 	// Transparent media can show sky behind them, so only check if we didn't hit opaque geometry.
 	if (geometryDepth >= camera.farPlane)
@@ -85,7 +92,7 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 
   		float4 planetRadiance = GetPlanetSurfaceRadiance(bindData.atmosphere, planetCenter, cameraPosition, rayDirection, sunDirection, transmittanceLut, scatteringLut, irradianceLut, bilinearWrap);
 		skyScattering = lerp(skyScattering, planetRadiance.xyz, planetRadiance.w);
-	}
+    }
 
 	// 10 is the default exposure used in Bruneton's demo.
 	float exposure = 10;
@@ -101,7 +108,7 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	float3 finalColor = inputColor * skyTransmittance + skyScattering;
 	finalColor = finalColor * cloudsTransmittance + cloudsScattering;
 	finalColor = finalColor * perspectiveTransmittance + perspectiveScattering;
-
+	
 	// Overlay cloud shadows.
 	float radius = length(cameraPosition - planetCenter);
 	float rMu = dot(cameraPosition - planetCenter, rayDirection);
@@ -135,7 +142,7 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 			}
 		}
 		shadow /= 9.0;
-		finalColor *= 1.0 / (1.0 + shadow * 3.0);
+		finalColor *= 1.0 / (1.0 + shadow * 0.4);
 	}
 
 	outputTexture[dispatchId.xy] = float4(finalColor, 1);

@@ -36,11 +36,6 @@ void BaseShapeMain(uint3 dispatchId : SV_DispatchThreadID)
 			static const uint octaveCount = 3;
 
 			float perlin = PerlinNoise3D(coord, frequency, octaveCount);
-			// #TEMP
-			//outputTexture[uint3(dispatchId.x, i, j)] = perlin;  // PERLIN IS TILEABLE!!
-			//float worl = WorleyNoise3D(coord, 4);
-			//outputTexture[uint3(dispatchId.x, i, j)] = worl;
-			//continue;
 			float perlinWorley = 0.f;
 			{
 				const float cellCount = 4;
