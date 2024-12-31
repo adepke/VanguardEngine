@@ -298,5 +298,5 @@ CloudResources Clouds::Render(RenderGraph& graph, const Atmosphere& atmosphere, 
 
 	lastFrameClouds = cloudOutput;
 
-	return { cloudOutput, cloudDepth, shadowMapTag };
+	return { cloudOutput, cloudDepth, shadowMapTag, weatherTag };
 }

@@ -91,7 +91,7 @@ public:
 	void DrawEntityPropertyViewer(entt::registry& registry);
 	void DrawMetrics(RenderDevice* device, float frameTimeMs);
 	void DrawRenderGraph(RenderDevice* device, RenderGraphResourceManager& resourceManager, TextureHandle depthStencil, TextureHandle scene);
-	void DrawAtmosphereControls(Atmosphere& atmosphere, Clouds& clouds);
+	void DrawAtmosphereControls(RenderDevice* device, Atmosphere& atmosphere, Clouds& clouds, TextureHandle weather);
 	void DrawBloomControls(Bloom& bloom);
 	void DrawRenderVisualizer(RenderDevice* device, ClusteredLightCulling& clusteredCulling, TextureHandle overlay);
 

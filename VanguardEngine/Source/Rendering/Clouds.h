@@ -16,6 +16,7 @@ struct CloudResources
 	RenderResource cloudsScatteringTransmittance;
 	RenderResource cloudsDepth;
 	RenderResource cloudsShadowMap;
+	RenderResource weather;
 };
 
 class Clouds

@@ -1057,7 +1057,7 @@ void EditorUI::DrawRenderGraph(RenderDevice* device, RenderGraphResourceManager&
 	}
 }
 
-void EditorUI::DrawAtmosphereControls(Atmosphere& atmosphere, Clouds& clouds)
+void EditorUI::DrawAtmosphereControls(RenderDevice* device, Atmosphere& atmosphere, Clouds& clouds, TextureHandle weather)
 {
 	if (atmosphereControlsOpen)
 	{
@@ -1074,11 +1074,13 @@ void EditorUI::DrawAtmosphereControls(Atmosphere& atmosphere, Clouds& clouds)
 			ImGui::DragFloat("Wind strength", &clouds.windStrength, 0.01f, 0.f, 1.f);
 			ImGui::DragFloat2("Wind direction", (float*)&clouds.windDirection, 0.01f, -1.f, 1.f);
 
+			ImGui::Image(device, weather, { 0.1f, 0.1f });
+
 			ImGui::Separator();
 
 			ImGui::Text("Atmosphere");
 			bool dirty = false;
-			static float haze = 5;
+			static float haze = 8;
 			static float lastHaze = haze;
 
 			ImGui::TextDisabled("Presets");

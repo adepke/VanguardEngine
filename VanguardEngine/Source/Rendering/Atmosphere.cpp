@@ -401,7 +401,7 @@ void Atmosphere::Initialize(RenderDevice* inDevice, entt::registry& registry)
 	sunLight = registry.create();
 	registry.emplace<TransformComponent>(sunLight);
 	// Hack while figuring out proper radiometry.
-	registry.emplace<LightComponent>(sunLight, LightComponent{ .type = LightType::Directional, .color = { 6.f, 6.f, 6.f } });
+	registry.emplace<LightComponent>(sunLight, LightComponent{ .type = LightType::Directional, .color = { 30.f, 30.f, 30.f } });
 }
 
 AtmosphereResources Atmosphere::ImportResources(RenderGraph& graph)

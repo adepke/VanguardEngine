@@ -37,7 +37,8 @@ void Editor::Update()
 }
 
 void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer, RenderGraphResourceManager& resourceManager, entt::registry& registry,
-	RenderResource cameraBuffer, RenderResource depthStencil, RenderResource outputLDR, RenderResource backBuffer, const ClusterResources& clusterResources)
+	RenderResource cameraBuffer, RenderResource depthStencil, RenderResource outputLDR, RenderResource backBuffer, const ClusterResources& clusterResources,
+	RenderResource weather)
 {
 #if ENABLE_EDITOR
 	// Allow toggling the editor rendering entirely with F1.
@@ -85,12 +86,13 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 		editorPass.Read(cameraBuffer, ResourceBind::SRV);
 		editorPass.Read(depthStencil, ResourceBind::SRV);
 		editorPass.Read(outputLDR, ResourceBind::SRV);
+		editorPass.Read(weather, ResourceBind::SRV);
 		if (ui->activeOverlay != RenderOverlay::None)
 		{
 			editorPass.Read(activeOverlayTag, ResourceBind::SRV);
 		}
 		editorPass.Output(backBuffer, OutputBind::RTV, LoadType::Preserve);
-		editorPass.Bind([&, cameraBuffer, depthStencil, outputLDR, activeOverlayTag](CommandList& list, RenderPassResources& resources)
+		editorPass.Bind([&, cameraBuffer, depthStencil, outputLDR, weather, activeOverlayTag](CommandList& list, RenderPassResources& resources)
 		{
 			renderer.userInterface->NewFrame();
 
@@ -108,7 +110,7 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 			ui->DrawEntityPropertyViewer(registry);
 			ui->DrawMetrics(&device, renderer.lastFrameTime);
 			ui->DrawRenderGraph(&device, resourceManager, resources.GetTexture(depthStencil), resources.GetTexture(outputLDR));
-			ui->DrawAtmosphereControls(renderer.atmosphere, renderer.clouds);
+			ui->DrawAtmosphereControls(&device, renderer.atmosphere, renderer.clouds, resources.GetTexture(weather));
 			ui->DrawBloomControls(renderer.bloom);
 			ui->DrawRenderVisualizer(&device, renderer.clusteredCulling, overlayHandle);
 
