@@ -61,19 +61,19 @@ float RemapRange(float value, float inMin, float inMax, float outMin, float outM
 
 float3 SampleWeather(Texture2D<float3> weatherTexture, float3 position)
 {
-	const float frequency = 0.02;
+	const float frequency = 0.015;
 	return weatherTexture.Sample(bilinearWrap, position.xy * frequency);
 }
 
 float SampleBaseShape(Texture3D<float> noiseTexture, float3 position, uint mip)
 {
-	const float frequency = 0.15;
+    const float frequency = 0.18;
 	return noiseTexture.SampleLevel(bilinearWrap, position * frequency, mip);
 }
 
 float SampleDetailShape(Texture3D<float> noiseTexture, float3 position)
 {
-	const float frequency = 3;
+    const float frequency = 5.5;
 	return noiseTexture.Sample(bilinearWrap, position * frequency);
 }
 
@@ -128,7 +128,7 @@ float SampleCloudDensity(Texture2D<float3> weatherTexture, Texture3D<float> base
 	float3 weather = SampleWeather(weatherTexture, position);
 	float coverage = weather.x;
 	const float type = weather.y;
-
+	
 	const float heightFraction = GetHeightFractionForPoint(position, float2(cloudLayerBottom, cloudLayerTop));
 	// Shorter clouds taper off towards the top, while staying more flat on the bottom.
 	const float shortCoverage = pow(coverage, (heightFraction * 3.8 + 0.1));
