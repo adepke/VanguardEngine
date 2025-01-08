@@ -4,6 +4,7 @@
 #include "Camera.hlsli"
 #include "Geometry.hlsli"
 #include "Atmosphere/Atmosphere.hlsli"
+#include "Atmosphere/ShadowVolume.hlsli"
 
 struct BindData
 {
@@ -43,6 +44,7 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 		return;
 
 	Camera camera = cameraBuffer[bindData.cameraIndex];
+    Camera sunCamera = cameraBuffer[2];  // #TODO: Remove this terrible hardcoding.
 
 	float geometryDepth = geometryDepthTexture[dispatchId.xy];
 	geometryDepth = LinearizeDepth(camera, geometryDepth);
@@ -54,8 +56,10 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	float3 rayDirection = ComputeRayDirection(camera, uv);
 	float3 cameraPosition = ComputeAtmosphereCameraPosition(camera);
 	float3 planetCenter = ComputeAtmospherePlanetCenter(bindData.atmosphere);
-	float shadowLength = 0.f;  // Light shafts are not yet supported.
 
+	// Ray march through the cloud shadow volume to compute the length of the ray in shadow, in kilometers.
+    float shadowLength = RayMarchCloudShadowVolume(camera, uv, sunCamera, cloudsDepth, ResourceDescriptorHeap[bindData.cloudsShadowMap]);
+	
 	float3 perspectiveScattering = 0.xxx;
 	float3 perspectiveTransmittance = 1.xxx;
 	float3 skyScattering = 0.xxx;
@@ -87,10 +91,13 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 		skyScattering = GetSkyRadiance(bindData.atmosphere, transmittanceLut, scatteringLut, bilinearWrap, cameraPosition - planetCenter, rayDirection, shadowLength, sunDirection, skyTransmittance);
 		if (dot(rayDirection, sunDirection) > cos(sunAngularRadius))
 		{
+			// #TODO: still too much even when behind big rain clouds, all direct light should be entirely blocked.
+			// maybe multiply with cloud transmittance?
+			// Look at the sunVisibility parameter in the planet radiance.
     		skyScattering += skyTransmittance * GetSolarRadiance(bindData.atmosphere);
   		}
 
-  		float4 planetRadiance = GetPlanetSurfaceRadiance(bindData.atmosphere, planetCenter, cameraPosition, rayDirection, sunDirection, transmittanceLut, scatteringLut, irradianceLut, bilinearWrap);
+        float4 planetRadiance = GetPlanetSurfaceRadiance(bindData.atmosphere, planetCenter, cameraPosition, rayDirection, shadowLength, sunDirection, transmittanceLut, scatteringLut, irradianceLut, bilinearWrap);
 		skyScattering = lerp(skyScattering, planetRadiance.xyz, planetRadiance.w);
     }
 
@@ -106,44 +113,35 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	// Composite the geometry with the volumetrics and the atmosphere.
 	float3 inputColor = outputTexture[dispatchId.xy].xyz;
 	float3 finalColor = inputColor * skyTransmittance + skyScattering;
-	finalColor = finalColor * cloudsTransmittance + cloudsScattering;
-	finalColor = finalColor * perspectiveTransmittance + perspectiveScattering;
+    finalColor = finalColor * cloudsTransmittance + cloudsScattering;
+    finalColor = finalColor * perspectiveTransmittance + perspectiveScattering;
 	
-	// Overlay cloud shadows.
+#if defined(CLOUDS_RENDER_SHADOWMAP) && (CLOUDS_RENDER_SHADOWMAP > 0)
+	// Explicitly drawing the cloud shadow map can be helpful for debugging.
+	
 	float radius = length(cameraPosition - planetCenter);
 	float rMu = dot(cameraPosition - planetCenter, rayDirection);
 	float mu = rMu / radius;
 	bool rayHitsGround = RayIntersectsGround(bindData.atmosphere, radius, mu);  // Won't work if the camera is in space.
 	if (rayHitsGround && !hitSurface)
-	{
-		float2 surfaceIntersect;
-		RaySphereIntersection(cameraPosition, rayDirection, planetCenter, bindData.atmosphere.radiusBottom, surfaceIntersect);
-		float3 hitPoint = cameraPosition + rayDirection * surfaceIntersect.x;
+    {
+        float2 surfaceIntersect;
+        RaySphereIntersection(cameraPosition, rayDirection, planetCenter, bindData.atmosphere.radiusBottom, surfaceIntersect);
+        float3 hitPoint = cameraPosition + rayDirection * surfaceIntersect.x;
 
-		Camera sunCamera = cameraBuffer[2];  // #TODO: Remove this terrible hardcoding.
-		matrix sunViewProjection = mul(sunCamera.view, sunCamera.projection);
-		float4 hitPointSunSpace = mul(float4(hitPoint, 1.0), sunViewProjection);
-		float3 projectedCoords = hitPointSunSpace.xyz / hitPointSunSpace.w;
-		projectedCoords = projectedCoords * 0.5 + 0.5;
+        matrix sunViewProjection = mul(sunCamera.view, sunCamera.projection);
+        float4 hitPointSunSpace = mul(float4(hitPoint, 1.0), sunViewProjection);
+        float3 projectedCoords = hitPointSunSpace.xyz / hitPointSunSpace.w;
+        projectedCoords = projectedCoords * 0.5 + 0.5;
 
-		Texture2D<float> cloudsShadowMap = ResourceDescriptorHeap[bindData.cloudsShadowMap];
-		float2 shadowMapSize;
-		cloudsShadowMap.GetDimensions(shadowMapSize.x, shadowMapSize.y);
-		const float shadowTexelSize = 1.0 / shadowMapSize.x;
+        Texture2D<float> cloudsShadowMap = ResourceDescriptorHeap[bindData.cloudsShadowMap];
 
-		// PCF-filtered shadow sampling.
-		float shadow = 0;
-		for (int x = -1; x <= 1; ++x)
-		{
-			for (int y = -1; y <= 1; ++y)
-			{
-				float shadowSample = cloudsShadowMap.Sample(downsampleBorder, projectedCoords.xy + float2(x, y) * shadowTexelSize);
-				shadow += (shadowSample > 0 && shadowSample < 10000) ? 1 : 0;
-			}
-		}
-		shadow /= 9.0;
-		finalColor *= 1.0 / (1.0 + shadow * 0.4);
-	}
+        float shadowSample = cloudsShadowMap.Sample(downsampleBorder, projectedCoords.xy);
+        float shadow = (shadowSample > 0 && shadowSample < 10000) ? 1 : 0;
+		
+        finalColor *= 1.0 / (1.0 + shadow * 0.4);
+    }
+#endif
 
 	outputTexture[dispatchId.xy] = float4(finalColor, 1);
 }

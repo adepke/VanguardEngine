@@ -368,26 +368,6 @@ void RenderGraph::Execute(RenderDevice* device)
 
 		if (pass->queue == ExecutionQueue::Graphics)
 		{
-			D3D12_VIEWPORT viewport{
-				.TopLeftX = 0.f,
-				.TopLeftY = 0.f,
-				.Width = static_cast<float>(device->renderWidth),
-				.Height = static_cast<float>(device->renderHeight),
-				.MinDepth = 0.f,
-				.MaxDepth = 1.f
-			};
-
-			list->Native()->RSSetViewports(1, &viewport);
-
-			D3D12_RECT scissor{
-				.left = 0,
-				.top = 0,
-				.right = static_cast<LONG>(device->renderWidth),
-				.bottom = static_cast<LONG>(device->renderHeight)
-			};
-
-			list->Native()->RSSetScissorRects(1, &scissor);
-
 			std::vector<D3D12_CPU_DESCRIPTOR_HANDLE> renderTargets;
 			renderTargets.reserve(pass->outputBindInfo.size());
 			D3D12_CPU_DESCRIPTOR_HANDLE depthStencil;
@@ -430,6 +410,44 @@ void RenderGraph::Execute(RenderDevice* device)
 
 			// #TODO: Replace with render passes.
 			list->Native()->OMSetRenderTargets(renderTargets.size(), renderTargets.size() > 0 ? renderTargets.data() : nullptr, false, hasDepthStencil ? &depthStencil : nullptr);
+
+			// If there's a bound render target, use the dimensions of that for the viewport and scissor. Otherwise, use the
+			// device render size. Maybe someday multiple viewports and scissors will be supported, but I have no use for this
+			// right now.
+			uint32_t viewportWidth = device->renderWidth;
+			uint32_t viewportHeight = device->renderHeight;
+
+			for (const auto& [resource, info] : pass->outputBindInfo)
+			{
+				if (info.first == OutputBind::RTV)
+				{
+					const auto texture = resourceManager->GetTexture(resource);
+					const auto& component = device->GetResourceManager().Get(texture);
+
+					viewportWidth = component.description.width;
+					viewportHeight = component.description.height;
+				}
+			}
+
+			D3D12_VIEWPORT viewport{
+				.TopLeftX = 0.f,
+				.TopLeftY = 0.f,
+				.Width = static_cast<float>(viewportWidth),
+				.Height = static_cast<float>(viewportHeight),
+				.MinDepth = 0.f,
+				.MaxDepth = 1.f
+			};
+
+			list->Native()->RSSetViewports(1, &viewport);
+
+			D3D12_RECT scissor{
+				.left = 0,
+				.top = 0,
+				.right = static_cast<LONG>(viewportWidth),
+				.bottom = static_cast<LONG>(viewportHeight)
+			};
+
+			list->Native()->RSSetScissorRects(1, &scissor);
 
 			// #TODO: This should be the same as the color given during resource creation. Only store this value in one place.
 			const float ClearColor[] = { 0.f, 0.f, 0.f, 1.f };

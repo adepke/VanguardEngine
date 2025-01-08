@@ -25,6 +25,11 @@ struct CameraSystem
 	static void Update(entt::registry& registry, float deltaTime);
 };
 
+struct TimeOfDaySystem
+{
+	static void Update(entt::registry& registry, float deltaTime);
+};
+
 // Hacky macro-based reflection solution since std::reflect isn't out yet.
 VGMakeMemberCheck(materialIndex);
 

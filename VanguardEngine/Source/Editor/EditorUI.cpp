@@ -12,6 +12,7 @@
 #include <Rendering/Clouds.h>
 #include <Rendering/Bloom.h>
 #include <Rendering/ClusteredLightCulling.h>
+#include <Utility/Math.h>
 
 #include <imgui_internal.h>
 
@@ -60,7 +61,7 @@ void EditorUI::DrawFrameTimeHistory()
 	auto* window = ImGui::GetCurrentWindow();
 	auto& style = ImGui::GetStyle();
 
-	const auto frameWidth = ImGui::GetContentRegionAvailWidth() - window->WindowPadding.x - ImGui::CalcTextSize("Mean: 00.000").x;
+	const auto frameWidth = ImGui::GetContentRegionAvail().x - window->WindowPadding.x - ImGui::CalcTextSize("Mean: 00.000").x;
 	const auto frameHeight = (ImGui::GetTextLineHeight() + style.ItemSpacing.y) * 3.f + 10.f;  // Max, mean, min.
 
 	const ImRect frameBoundingBox = { window->DC.CursorPos, window->DC.CursorPos + ImVec2{ frameWidth, frameHeight } };
@@ -379,7 +380,7 @@ void EditorUI::DrawConsole(entt::registry& registry, const ImVec2& min, const Im
 
 	auto& io = ImGui::GetIO();
 	static bool newPress = true;
-	if (io.KeysDown[VK_F2])
+	if (ImGui::IsKeyPressed(ImGuiKey_F2))
 	{
 		if (newPress)
 		{
@@ -399,6 +400,8 @@ void EditorUI::DrawConsole(entt::registry& registry, const ImVec2& min, const Im
 		auto windowMin = min;
 		auto windowMax = max;
 
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0);
+
 		// Limit the height.
 		constexpr auto heightMax = 220.f;
 		const auto height = std::min(max.y - min.y, heightMax);
@@ -406,15 +409,13 @@ void EditorUI::DrawConsole(entt::registry& registry, const ImVec2& min, const Im
 
 		constexpr auto frameColor = IM_COL32(20, 20, 20, 238);
 		constexpr auto frameColorDark = IM_COL32(20, 20, 20, 242);
-		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 0);
-		ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, frameColor);
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 0, 0 });
-
-		ImGui::SetNextWindowBgAlpha(0.f);
-		if (ImGui::BeginChild(ImGui::GetID("Console History"), { 0, height }, ImGuiWindowFlags_NoDecoration | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoBackground))
+		ImGui::PushStyleColor(ImGuiCol_FrameBg, frameColor);
+		ImGui::PushStyleColor(ImGuiCol_ScrollbarBg, IM_COL32(0, 0, 0, 0));
+		
+		if (ImGui::BeginChildFrame(ImGui::GetID("Console History"), { windowMax.x - windowMin.x, height }, ImGuiWindowFlags_NoMove))
 		{
 			auto* window = ImGui::GetCurrentWindow();
-			ImGui::RenderFrame(windowMin, windowMax, frameColor, false);
 
 			ImGui::SetWindowFontScale(0.8f);
 			for (const auto& message : consoleMessages)
@@ -429,12 +430,13 @@ void EditorUI::DrawConsole(entt::registry& registry, const ImVec2& min, const Im
 				needsScrollUpdate = false;
 			}
 
-			consoleFullyScrolled = ImGui::GetCursorPosY() - ImGui::GetScrollY() < 240.f;  // Near the bottom, autoscroll.
+			consoleFullyScrolled = ImGui::GetCursorPosY() - ImGui::GetScrollY() < 300.f;  // Near the bottom, autoscroll.
 		}
 
-		ImGui::EndChild();
-		ImGui::PopStyleVar();
+		ImGui::EndChildFrame();
 		ImGui::PopStyleColor();
+		ImGui::PopStyleColor();
+		ImGui::PopStyleVar();
 
 		const auto inputBoxSize = 25.f;
 
@@ -468,7 +470,7 @@ void EditorUI::DrawConsole(entt::registry& registry, const ImVec2& min, const Im
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, { 2, 2 });
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 2, 0 });
 
-		if (ImGui::BeginChildFrame(ImGui::GetID("Console Input"), { 0, inputBoxSize }, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+		if (ImGui::BeginChildFrame(ImGui::GetID("Console Input"), { windowMax.x - windowMin.x, inputBoxSize }, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
 		{
 			const auto textBarStart = ImGui::GetCursorPos() + ImGui::GetWindowPos();
 
@@ -578,25 +580,29 @@ void EditorUI::DrawConsole(entt::registry& registry, const ImVec2& min, const Im
 				return 0;
 			};
 
-			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + inputBoxSize + style.ItemSpacing.x);
+			const float hintSpacing = style.ItemSpacing.x + 25.f;
+			ImGui::SetCursorPosX(hintSpacing);
+			
+			if (ImGui::IsWindowAppearing() || ImGui::IsItemDeactivatedAfterEdit())
+			{
+				registry.clear<ControlComponent>();
+				ImGui::SetKeyboardFocusHere();
+				consoleInputFocus = true;
+			}
+
+			ImGui::SetItemDefaultFocus();
+			
 			const auto inputFlags = ImGuiInputTextFlags_AutoSelectAll |
 				ImGuiInputTextFlags_EnterReturnsTrue |
 				ImGuiInputTextFlags_CallbackCompletion |
 				ImGuiInputTextFlags_CallbackHistory;
-			if (ImGui::InputTextEx("", "", buffer, std::size(buffer), { windowMax.x - windowMin.x, 0 }, inputFlags, textCallback, (void*)&cvarMatches))
+			if (ImGui::InputTextEx("##", "", buffer, std::size(buffer), { windowMax.x - windowMin.x - hintSpacing, 0 }, inputFlags, textCallback, (void*)&cvarMatches))
 			{
 				if (ExecuteCommand(buffer))
 				{
 					buffer[0] = '\0';  // Clear the field.
 					needsScrollUpdate = true;
 				}
-			}
-			ImGui::SetItemDefaultFocus();
-			if (ImGui::IsWindowAppearing() || ImGui::IsItemDeactivatedAfterEdit())
-			{
-				registry.clear<ControlComponent>();
-				ImGui::SetKeyboardFocusHere();
-				consoleInputFocus = true;
 			}
 
 			// If the user unfocuses the input box, then IsItemDeactivated() will be 0 for a frame.
@@ -695,8 +701,8 @@ void EditorUI::Update()
 void EditorUI::DrawLayout()
 {
 	auto* viewport = ImGui::GetMainViewport();
-	ImGui::SetNextWindowPos(viewport->GetWorkPos());
-	ImGui::SetNextWindowSize(viewport->GetWorkSize());
+	ImGui::SetNextWindowPos(viewport->WorkPos);
+	ImGui::SetNextWindowSize(viewport->WorkSize);
 	ImGui::SetNextWindowViewport(viewport->ID);
 
 	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.f);
@@ -964,7 +970,9 @@ void EditorUI::DrawEntityPropertyViewer(entt::registry& registry)
 					{
 						++componentCount;
 
+						ImGui::PushID(metaID);
 						renderFunction(registry, hierarchySelectedEntity);
+						ImGui::PopID();
 
 						ImGui::Separator();
 					}
@@ -1057,14 +1065,13 @@ void EditorUI::DrawRenderGraph(RenderDevice* device, RenderGraphResourceManager&
 	}
 }
 
-void EditorUI::DrawAtmosphereControls(RenderDevice* device, Atmosphere& atmosphere, Clouds& clouds, TextureHandle weather)
+void EditorUI::DrawAtmosphereControls(RenderDevice* device, entt::registry& registry, Atmosphere& atmosphere, Clouds& clouds, TextureHandle weather)
 {
 	if (atmosphereControlsOpen)
 	{
 		if (ImGui::Begin("Sky Atmosphere", &atmosphereControlsOpen))
 		{
-			constexpr float maxZenithAngle = 3.14159f;
-			ImGui::DragFloat("Solar zenith angle", &atmosphere.solarZenithAngle, 0.005f, -maxZenithAngle, maxZenithAngle, "%.3f");
+			ComponentProperties::RenderTimeOfDayComponent(registry, atmosphere.sunLight);
 
 			ImGui::Separator();
 
@@ -1075,6 +1082,49 @@ void EditorUI::DrawAtmosphereControls(RenderDevice* device, Atmosphere& atmosphe
 			ImGui::DragFloat2("Wind direction", (float*)&clouds.windDirection, 0.01f, -1.f, 1.f);
 
 			ImGui::Image(device, weather, { 0.1f, 0.1f });
+
+			ImGui::Separator();
+
+			ImGui::Text("Clouds");
+
+			static bool rayMarchGroundTruth = *CvarGet("cloudRayMarchQuality", int) > 0;
+			ImGui::Checkbox("Ray march ground truth", &rayMarchGroundTruth);
+
+			if (rayMarchGroundTruth != *CvarGet("cloudRayMarchQuality", int))
+			{
+				CvarSet("cloudRayMarchQuality", rayMarchGroundTruth ? 1 : 0);
+			}
+
+			static int shadowMapResolution = *CvarGet("cloudShadowMapResolution", int);
+			bool shadowMapResolutionValid = IsPowerOf2(shadowMapResolution);
+
+			if (!shadowMapResolutionValid)
+				ImGui::PushStyleVar(ImGuiStyleVar_Alpha, ImGui::GetCurrentContext()->Style.DisabledAlpha);
+			ImGui::InputInt("Shadow map resolution", &shadowMapResolution);
+			if (!shadowMapResolutionValid)
+			{
+				ImGui::PopStyleVar();
+
+				// Show a help when the item is disabled.
+				if (ImGui::BeginItemTooltip())
+				{
+					ImGui::TextUnformatted("Resolution must be a power of 2");
+					ImGui::EndTooltip();
+				}
+			}
+
+			if (shadowMapResolutionValid && shadowMapResolution != *CvarGet("cloudShadowMapResolution", int))
+			{
+				CvarSet("cloudShadowMapResolution", shadowMapResolution);
+			}
+
+			static float shadowMapScale = *CvarGet("cloudShadowMapScale", float);
+			ImGui::DragFloat("Shadow map scale", &shadowMapScale, 0.0002f, 0.000001f, 10.f, "%.4f");
+
+			if (shadowMapScale != *CvarGet("cloudShadowMapScale", float))
+			{
+				CvarSet("cloudShadowMapScale", shadowMapScale);
+			}
 
 			ImGui::Separator();
 

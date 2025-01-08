@@ -26,7 +26,7 @@ namespace ImGui
 		if (!device->GetResourceManager().Valid(handle)) return;
 
 		const auto& textureComponent = device->GetResourceManager().Get(handle);
-		ImGui::ImageButton((ImTextureID)textureComponent.SRV->bindlessIndex, { (float)textureComponent.description.width * scale.x, (float)textureComponent.description.height * scale.y }, uv0, uv1, -1, { 0.f, 0.f, 0.f, 0.f }, tint);
+		ImGui::ImageButton("", (ImTextureID)textureComponent.SRV->bindlessIndex, { (float)textureComponent.description.width * scale.x, (float)textureComponent.description.height * scale.y }, uv0, uv1, tint);
 	}
 
 	inline void StyleColorsVanguard(ImGuiStyle* dst = nullptr)

@@ -164,11 +164,13 @@ void Renderer::UpdateCameraBuffer(const entt::registry& registry)
 		.aspectRatio = static_cast<float>(backBuffer.description.width) / static_cast<float>(backBuffer.description.height)
 	});
 
-	// Sun-view orthographic camera.
+	const auto solarZenithAngle = registry.get<TimeOfDayComponent>(atmosphere.sunLight).solarZenithAngle;
+
+	// Sun-view orthographic camera. In kilometers instead of meters for precision. Shadow map is not accurate otherwise.
 	const float sunNearPlane = 1;
-	const float sunFarPlane = 50000;
-	const float sunHeight = 10000;
-	const auto sunRotationMatrix = XMMatrixRotationY(atmosphere.solarZenithAngle);
+	const float sunFarPlane = 50000 / 1000.f;
+	const float sunHeight = 10000 / 1000.f;
+	const auto sunRotationMatrix = XMMatrixRotationY(solarZenithAngle);
 	const auto sunForward = XMVector4Transform(XMVectorSet(0.f, 0.f, -1.f, 0.f), sunRotationMatrix);
 	const auto sunUpward = XMVector4Transform(XMVectorSet(1.f, 0.f, 0.f, 0.f), sunRotationMatrix);
 	auto sunPosition = XMVectorSet(0, 0, sunHeight, 0);
@@ -176,7 +178,7 @@ void Renderer::UpdateCameraBuffer(const entt::registry& registry)
 	XMFLOAT4 sunPositionFloat;
 	XMStoreFloat4(&sunPositionFloat, sunPosition);
 	auto sunView = XMMatrixLookAtRH(sunPosition, sunPosition + sunForward, sunUpward);
-	const auto viewSize = *CvarGet("sunShadowSize", float);
+	const auto viewSize = *CvarGet("cloudShadowMapResolution", int) * *CvarGet("cloudShadowMapScale", float);
 	auto sunProjection = XMMatrixOrthographicRH(viewSize, viewSize, sunNearPlane, sunFarPlane);
 	cameras.emplace_back(Camera{
 		.position = sunPositionFloat,
@@ -284,8 +286,7 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 	{
 		Renderer::Get().ReloadShaderPipelines();
 	});
-	CvarCreate("sunShadowSize", "Width and height of the orthographic camera used for sun shadow mapping, does not affect the shadow map resolution", 50.f);
-
+	
 	constexpr size_t maxVertices = 32 * 1024 * 1024;
 
 	window = std::move(inWindow);
@@ -530,7 +531,7 @@ void Renderer::Render(entt::registry& registry)
 	
 	// #TODO: Don't have this here.
 	const auto atmosphereResources = atmosphere.ImportResources(graph);
-	const auto [luminanceTexture, sunTransmittance] = atmosphere.RenderEnvironmentMap(graph, atmosphereResources, cameraBufferTag);
+	const auto [luminanceTexture, sunTransmittance] = atmosphere.RenderEnvironmentMap(graph, atmosphereResources, cameraBufferTag, registry);
 
 	// #TODO: Don't have this here.
 	const auto iblResources = ibl.UpdateLuts(graph, luminanceTexture, cameraBufferTag);
@@ -610,7 +611,7 @@ void Renderer::Render(entt::registry& registry)
 	});
 
 	// #TODO: Don't have this here.
-	const auto cloudResources = clouds.Render(graph, atmosphere, outputHDRTag, cameraBufferTag, depthStencilTag, sunTransmittance);
+	const auto cloudResources = clouds.Render(graph, registry, atmosphere, outputHDRTag, cameraBufferTag, depthStencilTag, sunTransmittance);
 
 	// #TODO: Don't have this here.
 	atmosphere.Render(graph, atmosphereResources, cloudResources, cameraBufferTag, depthStencilTag, outputHDRTag, registry);

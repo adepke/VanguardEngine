@@ -20,4 +20,5 @@ namespace ComponentProperties
 	void RenderMeshComponent(entt::registry& registry, entt::entity entity);
 	void RenderCameraComponent(entt::registry& registry, entt::entity entity);
 	void RenderLightComponent(entt::registry& registry, entt::entity entity);
+	void RenderTimeOfDayComponent(entt::registry& registry, entt::entity entity);
 }

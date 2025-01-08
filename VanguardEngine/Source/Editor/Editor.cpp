@@ -44,7 +44,7 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 	// Allow toggling the editor rendering entirely with F1.
 	auto& io = ImGui::GetIO();
 	static bool newPress = true;
-	if (io.KeysDown[VK_F1])
+	if (ImGui::IsKeyPressed(ImGuiKey_F1))
 	{
 		if (newPress)
 		{
@@ -110,7 +110,7 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 			ui->DrawEntityPropertyViewer(registry);
 			ui->DrawMetrics(&device, renderer.lastFrameTime);
 			ui->DrawRenderGraph(&device, resourceManager, resources.GetTexture(depthStencil), resources.GetTexture(outputLDR));
-			ui->DrawAtmosphereControls(&device, renderer.atmosphere, renderer.clouds, resources.GetTexture(weather));
+			ui->DrawAtmosphereControls(&device, registry, renderer.atmosphere, renderer.clouds, resources.GetTexture(weather));
 			ui->DrawBloomControls(renderer.bloom);
 			ui->DrawRenderVisualizer(&device, renderer.clusteredCulling, overlayHandle);
 
@@ -120,8 +120,11 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 
 	else
 	{
-		// No editor rendering, just copy outputLDR to the back buffer.
+		// Have to update the user interface, otherwise we won't be able to return to the editor later.
+		renderer.userInterface->NewFrame();
+		ImGui::EndFrame();
 
+		// No editor rendering, just copy outputLDR to the back buffer.
 		auto& editorPass = graph.AddPass("Editor Pass", ExecutionQueue::Graphics);
 		editorPass.Read(outputLDR, ResourceBind::SRV);
 		editorPass.Output(backBuffer, OutputBind::RTV, LoadType::Preserve);

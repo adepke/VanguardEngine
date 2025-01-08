@@ -50,10 +50,6 @@ PixelIn VSMain(VertexIn input)
 	return output;
 }
 
-// Kilometers.
-static const float cloudLayerBottom = 1400.0 / 1000.0;
-static const float cloudLayerTop = 5000.0 / 1000.0;
-
 float RemapRange(float value, float inMin, float inMax, float outMin, float outMax)
 {
 	return outMin + (((value - inMin) / (inMax - inMin)) * (outMax - outMin));
@@ -62,7 +58,7 @@ float RemapRange(float value, float inMin, float inMax, float outMin, float outM
 float3 SampleWeather(Texture2D<float3> weatherTexture, float3 position)
 {
 	const float frequency = 0.015;
-	return weatherTexture.Sample(bilinearWrap, position.xy * frequency);
+    return weatherTexture.Sample(bilinearWrap, position.xy * frequency + (0.5.xx));
 }
 
 float SampleBaseShape(Texture3D<float> noiseTexture, float3 position, uint mip)
@@ -196,7 +192,7 @@ void ComputeNoiseKernel(float3 lightDirection)
 
 float SampleCloudDensityCone(Texture2D<float3> weatherTexture, Texture3D<float> baseNoise, Texture3D<float> detailNoise, float3 position)
 {
-	const float stepSize = 250.0 / 1000.0;  // 250m.
+	const float stepSize = 375.0 / 1000.0;  // 375m.
 	const int coneSamples = noiseKernelSize;
 	float density = 0.0;
 
@@ -212,7 +208,7 @@ float SampleCloudDensityCone(Texture2D<float3> weatherTexture, Texture3D<float> 
 			break;
 
 		// Apply an increased contribution to the long-distance occluding sample.
-		const float densityMultiplier = max(1.5 * max(i - coneSamples + 3, 0), 1);
+        const float densityMultiplier = max(1.2 * (i - coneSamples + 3), 1);
 
 		// Once the density has reached 0.3, switch to low-detail noise. Refer to slide 86.
 		const bool detailSamples = density < 0.3;
@@ -238,10 +234,11 @@ float ComputePhaseFunction(float nu)
 
 float ComputeInScatterProbability(float localDensity, float heightFraction)
 {
-	const float depthProbability = 0.05 + pow(localDensity * 3.0, max(RemapRange(heightFraction, 0.3, 0.85, 0.5, 2.0), 0.001));
-	const float verticalProbability = pow(saturate(0.07 + RemapRange(heightFraction, 0.07, 0.14, 0.6, 1.0)), 0.8);
+	const float depthProbability = 0.05 + pow(localDensity, max(RemapRange(heightFraction, 0.3, 0.85, 0.5, 2.0), 0.001));
+    //const float verticalProbability = pow(RemapRange(heightFraction, 0.07, 0.14, 0.1, 1.0), 0.8);  // Nubis' implementation.
+    const float verticalProbability = pow(RemapRange(heightFraction, 0.02, 0.15, 0.1, 1.0), 1.8);
 
-	return depthProbability * verticalProbability * 2.0;
+	return depthProbability * verticalProbability;
 }
 
 float ComputeLightEnergy(Texture2D<float3> weatherTexture, Texture3D<float> baseNoise, Texture3D<float> detailNoise, float3 position, float densityToLight, float viewDotLight)
@@ -253,13 +250,13 @@ float ComputeLightEnergy(Texture2D<float3> weatherTexture, Texture3D<float> base
 
 	// Sample the mean density at the sample position using a higher mip level.
 	// #TODO: We might be able to get away with not using the full density sample, try just applying coverage and height gradient?
-	float localDensity = SampleCloudDensity(weatherTexture, baseNoise, detailNoise, position, false, 1);
+	float localDensity = SampleCloudDensity(weatherTexture, baseNoise, detailNoise, position, false, 2);
 
-	const float outScatter = ComputeBeersLaw(densityToLight * 2.4, absorption);
+	const float outScatter = ComputeBeersLaw(densityToLight * 2.5, absorption);
 	const float phase = ComputePhaseFunction(viewDotLight);
 	const float inScatter = ComputeInScatterProbability(localDensity, GetHeightFractionForPoint(position, float2(cloudLayerBottom, cloudLayerTop)));
-
-	return outScatter * phase * inScatter;
+	
+    return outScatter * phase * inScatter;	
 }
 
 void RayMarch(Camera camera, float2 uv, float3 direction, float3 sunDirection, out float3 scatteredLuminance, out float transmittance, out float depth)
@@ -283,18 +280,23 @@ void RayMarch(Camera camera, float2 uv, float3 direction, float3 sunDirection, o
 	depth = 1000000;  // Assume very far away.
 
 	float3 origin = camera.position.xyz;
-
-#ifdef CLOUDS_RENDER_ORTHOGRAPHIC
-	// Find two perpendicular vectors in the plane defined by the ray direction.
-	const float term = 1.0 / sqrt(2.0);  // Used to define a vector where the sun should never align with (while still producing shadow).
-	const float3 planeA = cross(direction, float3(term, 0, term));
-	const float3 planeB = -cross(direction, planeA);
-	const float2 uvScaled = uv * 2.0 - 1.0;
-	origin += uvScaled.x * planeA * CLOUDS_ORTHOGRAPHIC_SCALE;
-	origin += uvScaled.y * planeB * CLOUDS_ORTHOGRAPHIC_SCALE;
+	
+#ifndef CLOUDS_CAMERA_IN_KILOMETERS
+    origin *= 1.0 / 1000.0;  // Meters to kilometers.
 #endif
 
-	origin *= 1.0 / 1000.0;  // Meters to kilometers.
+#ifdef CLOUDS_RENDER_ORTHOGRAPHIC
+	// Find two perpendicular vectors in the plane defined by the ray direction. PlaneA is defined along the Y axis
+	// since the sun will never have a Y component to its vector.
+	const float3 planeA = float3(0.f, 1.f, 0.f);
+	const float3 planeB = cross(direction, planeA);
+	const float2 uvScaled = uv * 2.0 - 1.0;
+	
+	// Not sure why the 0.5 is needed.. oh well
+	origin += uvScaled.x * -planeA * CLOUDS_ORTHOGRAPHIC_SCALE * 0.5f;
+	origin += uvScaled.y * planeB * CLOUDS_ORTHOGRAPHIC_SCALE * 0.5f;
+#endif
+	
 	const float planetRadius = 6360.0;  // #TODO: Get from atmosphere data.
 	float3 planetCenter = float3(0, 0, -(planetRadius + 1));  // Offset since the world origin is 1km off the planet surface.
 
@@ -336,6 +338,9 @@ void RayMarch(Camera camera, float2 uv, float3 direction, float3 sunDirection, o
 	marchStart = max(0, marchStart);
 	marchEnd = max(0, marchEnd);
 
+	// Don't test for a geometry early out, as geometry is not intended to be at or above the cloud layer.
+	// This code as is wouldn't work for sun regardless.
+#ifndef CLOUDS_RENDER_ORTHOGRAPHIC
 	// Early out of the march if we hit opaque geometry.
 	Texture2D<float> geometryDepthTexture = ResourceDescriptorHeap[bindData.geometryDepthTexture];
 	float geometryDepth = geometryDepthTexture.Sample(bilinearClamp, uv);
@@ -345,22 +350,22 @@ void RayMarch(Camera camera, float2 uv, float3 direction, float3 sunDirection, o
 		geometryDepth *= 0.001;  // Meters to kilometers.
 		marchEnd = min(marchEnd, geometryDepth);
 	}
+#endif
 
 	if (marchEnd <= marchStart)
 	{
 		return;
 	}
-
-	const int steps = (128 - 64 * zDot);  // 64 at zenith, 128 at horizon.
+	
+    const int steps = (160 - 80 * zDot);  // 80 at zenith, 160 at horizon.
 	const float marchWidth = marchEnd - marchStart;
 	const float smallStepMultiplier = 0.2;
-	// Dynamic step size causes artifacts when flying through the cloud layer, since the march width varies so much
-	// depending on if the ray hits the bottom layer or the top layer.
-	//const float largeStepSize = marchWidth / (float)steps;
-	const float largeStepSize = 0.08;
-	const float smallStepSize = largeStepSize * smallStepMultiplier;
+	
+	// #TODO: Tweak this some more to reduce artifacts without increasing step counts.
+    float largeStepSize = 0.2f + 0.5f * (marchWidth / (float)steps);
+	float smallStepSize = largeStepSize * smallStepMultiplier;
 	const int stepTransitionMargin = 6;
-
+	
 	// Offset the origin with blue noise to prevent banding artifacts. See: https://www.diva-portal.org/smash/get/diva2:1223894/FULLTEXT01.pdf
 	Texture2D<float> blueNoiseTexture = ResourceDescriptorHeap[bindData.blueNoiseTexture];
 	uint blueNoiseWidth, blueNoiseHeight;
@@ -375,8 +380,17 @@ void RayMarch(Camera camera, float2 uv, float3 direction, float3 sunDirection, o
 	Texture2D<float3> weatherTexture = ResourceDescriptorHeap[bindData.weatherTexture];
 	StructuredBuffer<float3> sunTransmittance = ResourceDescriptorHeap[bindData.sunTransmittanceBuffer];
 
-	//for (int i = 0; i < steps; ++i)
-	for (int i = 0; dist < marchWidth; ++i)  // #TEMP: Reference impl marching to end of cloud layer. Far too expensive.
+#ifdef CLOUDS_MARCH_GROUND_TRUTH_DETAIL
+	// Marching in ground truth detail is very expensive, especially for shadow mapping when the sun is low in the sky.
+	
+	// Fixed size steps that are fairly small for extra detail.
+	largeStepSize = 0.2f;
+	smallStepSize = largeStepSize * smallStepMultiplier;
+	
+	for (int i = 0; dist < marchWidth; ++i)
+#else
+    for (int i = 0; i < steps; ++i)
+#endif
 	{
 		if (dist > marchEnd)
 			break;  // Left the cloud layer.
@@ -411,12 +425,14 @@ void RayMarch(Camera camera, float2 uv, float3 direction, float3 sunDirection, o
 
 			float coneDensity = SampleCloudDensityCone(weatherTexture, baseShapeNoiseTexture, detailShapeNoiseTexture, position);
 			coneDensity = (coneDensity + cloudDensity) / float(noiseKernelSize + 1);
-			float lightEnergy = ComputeLightEnergy(weatherTexture, baseShapeNoiseTexture, detailShapeNoiseTexture, position, coneDensity, viewDotLight);
-			lightEnergy *= 2.0;  // Model loses a bit too much energy, so artificially bring it back here.
+            float lightEnergy = ComputeLightEnergy(weatherTexture, baseShapeNoiseTexture, detailShapeNoiseTexture, position, coneDensity, viewDotLight);
+			
+			const float3 skyTransmittance = sunTransmittance[0];
+			const float3 solarRadiance = sunTransmittance[2];
 
-			const float3 solarTransmittance = sunTransmittance[0];
-			const float3 skyRadiance = sunTransmittance[1];
-			float3 energy = solarTransmittance * lightEnergy + skyRadiance;
+			// Note that this isn't entirely correct. Really, we should be using the radiance + transmittance to the middle of the cloud layer, not to the camera.
+            float3 energy = skyTransmittance * solarRadiance;
+            energy *= lightEnergy * 0.2;  // Attenuate the solar energy by the cloud lighting model.
 
 			float stepSize = smallStepSize * 1000.0;  // Kilometers to meters.
 
@@ -483,6 +499,7 @@ float4 PSMain(PixelIn input) : SV_Target
 	{
 		float3 sunDirection = float3(sin(bindData.solarZenithAngle), 0.f, cos(bindData.solarZenithAngle));
 #ifdef CLOUDS_RENDER_ORTHOGRAPHIC
+		// This is equivalent to -sunDirection.
 		float3 rayDirection = ComputeRayDirection(camera, 0.5.xx);
 #else
 		float3 rayDirection = ComputeRayDirection(camera, input.uv);

@@ -740,7 +740,8 @@ float3 GetSolarRadiance(AtmosphereData atmosphere)
 	return atmosphere.solarIrradiance / (pi * sunAngularRadius * sunAngularRadius);
 }
 
-float4 GetPlanetSurfaceRadiance(AtmosphereData atmosphere, float3 planetCenter, float3 cameraPosition, float3 rayDirection, float3 sunDirection, Texture2D transmittanceLut, Texture3D scatteringLut, Texture2D irradianceLut, SamplerState lutSampler)
+float4 GetPlanetSurfaceRadiance(AtmosphereData atmosphere, float3 planetCenter, float3 cameraPosition, float3 rayDirection, float shadowLength,
+	float3 sunDirection, Texture2D transmittanceLut, Texture3D scatteringLut, Texture2D irradianceLut, SamplerState lutSampler)
 {
 	float3 p = cameraPosition - planetCenter;
 	float pDotRay = dot(p, rayDirection);
@@ -755,11 +756,13 @@ float4 GetPlanetSurfaceRadiance(AtmosphereData atmosphere, float3 planetCenter, 
 		float3 skyIrradiance;
 		GetSunAndSkyIrradiance(atmosphere, transmittanceLut, irradianceLut, lutSampler, surfacePoint - planetCenter, surfaceNormal, sunDirection, sunIrradiance, skyIrradiance);
 		
-		float sunVisibility = 1.f;  // Light shafts are not yet supported.
-		float skyVisibility = 1.f;  // Light shafts are not yet supported.
+		// #TODO: Compute approximate visibilities.
+		// Sun visibility greatly reduces the brightness of the planet surface, sky visibility has little impact.
+		float sunVisibility = 1.f;
+		float skyVisibility = 1.f;
+		
 		float3 radiance = atmosphere.surfaceColor * (1.f / pi) * ((sunIrradiance * sunVisibility) + (skyIrradiance * skyVisibility));
 		
-		float shadowLength = 0.f;  // Light shafts are not yet supported.
 		float3 transmittance;
 		float3 scattering = GetSkyRadianceToPoint(atmosphere, transmittanceLut, scatteringLut, lutSampler, cameraPosition - planetCenter, surfacePoint - planetCenter, shadowLength, sunDirection, transmittance);
 		
@@ -784,9 +787,12 @@ float3 SampleAtmosphere(AtmosphereData atmosphere, Camera camera, float3 directi
 {
 	float3 cameraPosition = ComputeAtmosphereCameraPosition(camera);
 	float3 planetCenter = ComputeAtmospherePlanetCenter(atmosphere);
+    
+	// IBL doesn't support light shafts, likely unnecessary.
+	float shadowLength = 0.f;
 	
 	float3 transmittance;
-	float3 radiance = GetSkyRadiance(atmosphere, transmittanceLut, scatteringLut, lutSampler, cameraPosition - planetCenter, direction, 0.f, sunDirection, transmittance);
+    float3 radiance = GetSkyRadiance(atmosphere, transmittanceLut, scatteringLut, lutSampler, cameraPosition - planetCenter, direction, shadowLength, sunDirection, transmittance);
 	
 	// If the ray intersects the sun, add solar radiance.
 	// We don't want this for specular IBL, since the sun has immense radiant energy that will not
@@ -797,40 +803,10 @@ float3 SampleAtmosphere(AtmosphereData atmosphere, Camera camera, float3 directi
 		radiance += transmittance * GetSolarRadiance(atmosphere);
 	}
 	
-	float4 planetRadiance = GetPlanetSurfaceRadiance(atmosphere, planetCenter, cameraPosition, direction, sunDirection, transmittanceLut, scatteringLut, irradianceLut, lutSampler);
+    float4 planetRadiance = GetPlanetSurfaceRadiance(atmosphere, planetCenter, cameraPosition, direction, shadowLength, sunDirection, transmittanceLut, scatteringLut, irradianceLut, lutSampler);
 	radiance = lerp(radiance, planetRadiance.xyz, planetRadiance.w);
 	
 	return radiance * 10.f;  // 10 is the default exposure used in Bruneton's demo.
-}
-
-void ComputeAtmosphereContributionByDepth(AtmosphereData atmosphere, Camera camera, float3 direction, float3 sunDirection, float depth, Texture2D transmittanceLut, Texture3D scatteringLut, Texture2D irradianceLut, SamplerState lutSampler, out float3 scattering, out float3 transmittance)
-{
-	float3 cameraPosition = ComputeAtmosphereCameraPosition(camera);
-	float3 planetCenter = ComputeAtmospherePlanetCenter(atmosphere);
-	float shadowLength = 0.f;  // Light shafts are not yet supported.
-
-	//if (depth < camera.farPlane)
-	if (true)
-	{
-		depth *= 0.001;  // Meters to kilometers.
-		float3 position = cameraPosition + direction * depth;
-
-		float3 intersectPoint = position - planetCenter;
-		float3 cameraPoint = cameraPosition - planetCenter;
-		scattering = GetSkyRadianceToPoint(atmosphere, transmittanceLut, scatteringLut, lutSampler, cameraPoint, intersectPoint, shadowLength, sunDirection, transmittance);
-	
-		// Shouldn't need this, but we have way too little in-scattered light without it.
-		// This is a close approximation using reference photographs.
-		scattering *= 12;
-	}
-
-	else
-	{
-		scattering = 0.xxx;
-		transmittance = 1.xxx;
-		//transmittance = 0.xxx;
-		//scattering = GetSkyRadiance(atmosphere, transmittanceLut, scatteringLut, lutSampler, cameraPosition - planetCenter, direction, shadowLength, sunDirection, transmittance);
-	}
 }
 
 #endif  // __ATMOSPHERE_HLSLI__

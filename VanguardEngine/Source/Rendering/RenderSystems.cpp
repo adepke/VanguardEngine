@@ -7,6 +7,7 @@
 
 #include <cmath>
 #include <algorithm>
+#include <numbers>
 
 XMMATRIX SpectatorCameraView(TransformComponent& transform, const CameraComponent& camera, float deltaTime, float deltaPitch, float deltaYaw,
 	bool moveForward, bool moveBackward, bool moveLeft, bool moveRight, bool moveUp, bool moveDown, bool moveSprint)
@@ -65,14 +66,13 @@ void CameraSystem::Update(entt::registry& registry, float deltaTime)
 	const auto pitchDelta = io.MouseDelta.y * 0.005f;
 	const auto yawDelta = io.MouseDelta.x * 0.005f;
 
-	// #TODO: Use ImGui::IsKeyDown or ImGui::IsKeyPressed here.
-	if (io.KeysDown[0x57]) moveForward = true;  // W
-	if (io.KeysDown[0x53]) moveBackward = true;  // S
-	if (io.KeysDown[0x41]) moveLeft = true;  // A
-	if (io.KeysDown[0x44]) moveRight = true;  // D
-	if (io.KeysDown[VK_SPACE]) moveUp = true;  // Spacebar
-	if (io.KeysDown[VK_CONTROL]) moveDown = true;  // Ctrl
-	if (io.KeysDown[VK_SHIFT]) moveSprint = true;  // Shift
+	if (ImGui::IsKeyDown(ImGuiKey_W)) moveForward = true;
+	if (ImGui::IsKeyDown(ImGuiKey_S)) moveBackward = true;
+	if (ImGui::IsKeyDown(ImGuiKey_A)) moveLeft = true;
+	if (ImGui::IsKeyDown(ImGuiKey_D)) moveRight = true;
+	if (ImGui::IsKeyDown(ImGuiKey_Space)) moveUp = true;
+	if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl)) moveDown = true;
+	if (ImGui::IsKeyDown(ImGuiKey_LeftShift)) moveSprint = true;
 
 	// Iterate all camera entities that have control.
 	registry.view<TransformComponent, const CameraComponent, const ControlComponent>().each([&](auto entity, auto& transform, const auto& camera)
@@ -87,5 +87,38 @@ void CameraSystem::Update(entt::registry& registry, float deltaTime)
 		globalLastFrameProjectionMatrix = globalProjectionMatrix;
 		globalViewMatrix = viewMatrix;
 		globalProjectionMatrix = projectionMatrix;
+	});
+}
+
+void TimeOfDaySystem::Update(entt::registry& registry, float deltaTime)
+{
+	VGScopedCPUStat("Time of Day System");
+
+	registry.view<TimeOfDayComponent>().each([&](auto entity, auto& timeOfDay)
+	{
+		switch (timeOfDay.animation)
+		{
+		case TimeOfDayAnimation::Static:
+			// Do nothing.
+			break;
+		case TimeOfDayAnimation::Cycle:
+			timeOfDay.solarZenithAngle += timeOfDay.speed * deltaTime * 0.1f;
+			timeOfDay.solarZenithAngle = std::fmodf(timeOfDay.solarZenithAngle, 2.f * std::numbers::pi_v<float>);
+			break;
+		case TimeOfDayAnimation::Oscillate:
+			constexpr float threshold = 0.0001f;
+			const float direction = timeOfDay.speed / std::fabsf(timeOfDay.speed);
+
+			const float angleDelta = 0.25f * std::cosf(2.f * timeOfDay.solarZenithAngle) + 0.3f;
+			timeOfDay.solarZenithAngle += angleDelta * timeOfDay.speed * deltaTime * 0.3f;
+
+			if (std::fabsf(timeOfDay.solarZenithAngle) > std::numbers::pi_v<float> * 0.5f - threshold)
+			{
+				timeOfDay.speed *= -1.f;  // Invert direction.
+				timeOfDay.solarZenithAngle += threshold * timeOfDay.speed;
+			}
+
+			break;
+		}
 	});
 }

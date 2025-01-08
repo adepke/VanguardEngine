@@ -62,3 +62,17 @@ struct LightComponent
 	LightType type;
 	XMFLOAT3 color;
 };
+
+enum class TimeOfDayAnimation
+{
+	Static,
+	Cycle,
+	Oscillate
+};
+
+struct TimeOfDayComponent
+{
+	float solarZenithAngle;
+	float speed;
+	TimeOfDayAnimation animation;
+};

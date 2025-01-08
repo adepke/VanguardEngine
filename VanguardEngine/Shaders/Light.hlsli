@@ -66,7 +66,6 @@ LightSample SampleLight(Light light, Material material, Camera camera, float3 vi
 		case LightType::Directional:
 		{
 			lightDirection = normalize(-light.direction);
-			// #TODO: Directional lights need to be affected the atmosphere's transmittance. Use GetSkyRadiance.
 			break;
 		}
 	}

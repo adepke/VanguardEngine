@@ -102,3 +102,17 @@ void ComponentProperties::RenderLightComponent(entt::registry& registry, entt::e
 
 	ImGui::InputFloat3("Color", (float*)&component.color);
 }
+
+void ComponentProperties::RenderTimeOfDayComponent(entt::registry& registry, entt::entity entity)
+{
+	auto& component = registry.get<TimeOfDayComponent>(entity);
+
+	ImGui::Text("Time of Day");
+
+	constexpr float maxZenithAngle = 3.14159f;
+	ImGui::DragFloat("Solar zenith angle", &component.solarZenithAngle, 0.005f, -maxZenithAngle, maxZenithAngle);
+	ImGui::DragFloat("Speed", &component.speed, 0.01f, -10.f, 10.f);
+
+	const char* animationTypes[] = { "Static", "Cycle", "Oscillate" };
+	ImGui::Combo("Animation", (int*)&component.animation, animationTypes, std::size(animationTypes));
+}

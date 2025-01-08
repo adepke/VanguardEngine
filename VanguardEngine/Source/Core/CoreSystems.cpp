@@ -18,7 +18,7 @@ void ControlSystem::Update(entt::registry& registry)
 		Renderer::Get().window->ShowCursor(false);
 
 		// #TODO: Conditionally compile this out if we're not compiling with the editor.
-		if (ImGui::IsKeyPressed(ImGui::GetKeyIndex(ImGuiKey_Escape)))
+		if (ImGui::IsKeyPressed(ImGuiKey_Escape))
 		{
 			registry.clear<ControlComponent>();  // Rescind all control, returning it to the editor.
 		}
@@ -28,15 +28,5 @@ void ControlSystem::Update(entt::registry& registry)
 	{
 		Renderer::Get().window->RestrainCursor(CursorRestraint::None);
 		Renderer::Get().window->ShowCursor(true);
-
-		if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) || ImGui::IsMouseClicked(ImGuiMouseButton_Right))  // Left or right click gives control.
-		{
-			// GetHoveredViewport()
-			{
-				// #TEMP
-				//entt::registry::entity_type someEntity;
-				//registry.emplace<ControlComponent>(someEntity);
-			}
-		}
 	}
 }

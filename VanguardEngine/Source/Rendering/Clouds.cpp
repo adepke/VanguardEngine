@@ -64,7 +64,9 @@ void Clouds::Initialize(RenderDevice* inDevice)
 {
 	device = inDevice;
 
-	CvarCreate("cloudShadowMapResolution", "Defines the width and height of the sun shadow map for clouds", 1024);
+	CvarCreate("cloudShadowMapResolution", "Defines the width and height of the sun shadow map for clouds", 2048);
+	CvarCreate("cloudShadowMapScale", "Multiplier for the scale of the cloud shadow map. Larger values increase scope but reduce fidelity", 0.05f);
+	CvarCreate("cloudRayMarchQuality", "Controls the ray march quality of the clouds. Increasing quality degrades performance. 0=default, 1=groundTruth", 0);
 
 	weatherLayout = RenderPipelineLayout{}
 		.ComputeShader({ "Clouds/Weather", "Main" });
@@ -74,12 +76,6 @@ void Clouds::Initialize(RenderDevice* inDevice)
 
 	detailNoiseLayout = RenderPipelineLayout{}
 		.ComputeShader({ "Clouds/Shapes", "DetailShapeMain" });
-
-	cloudsLayout = RenderPipelineLayout{}
-		.VertexShader({ "Clouds/Clouds", "VSMain" })
-		.PixelShader({ "Clouds/Clouds", "PSMain" })
-		.BlendMode(false, BlendMode{})
-		.DepthEnabled(false);
 
 	TextureDescription weatherDesc{
 		.bindFlags = BindFlag::ShaderResource | BindFlag::UnorderedAccess,
@@ -125,12 +121,12 @@ void Clouds::Initialize(RenderDevice* inDevice)
 	lastFrameClouds.id = 0;
 }
 
-CloudResources Clouds::Render(RenderGraph& graph, const Atmosphere& atmosphere, const RenderResource hdrSource, const RenderResource cameraBuffer, const RenderResource depthStencil, const RenderResource sunTransmittance)
+CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, const Atmosphere& atmosphere, const RenderResource hdrSource, const RenderResource cameraBuffer, const RenderResource depthStencil, const RenderResource sunTransmittance)
 {
 	const auto weatherTag = graph.Import(weather);
 	const auto baseShapeNoiseTag = graph.Import(baseShapeNoise);
 	const auto detailShapeNoiseTag = graph.Import(detailShapeNoise);
-	const auto solarZenithAngle = atmosphere.solarZenithAngle;
+	const auto solarZenithAngle = registry.get<TimeOfDayComponent>(atmosphere.sunLight).solarZenithAngle;
 	const auto blueNoiseTag = graph.Import(RenderUtils::Get().blueNoise);
 
 	if (dirty)
@@ -188,6 +184,17 @@ CloudResources Clouds::Render(RenderGraph& graph, const Atmosphere& atmosphere, 
 		cameraBuffer, depthStencil, cloudOutput, lastFrame=lastFrameClouds, blueNoiseTag, cloudDepth,
 		sunTransmittance](CommandList& list, RenderPassResources& resources)
 	{
+		auto cloudsLayout = RenderPipelineLayout{}
+			.VertexShader({ "Clouds/Clouds", "VSMain" })
+			.PixelShader({ "Clouds/Clouds", "PSMain" })
+			.BlendMode(false, BlendMode{})
+			.DepthEnabled(false);
+
+		if (*CvarGet("cloudRayMarchQuality", int) > 0)
+		{
+			cloudsLayout.Macro({ "CLOUDS_MARCH_GROUND_TRUTH_DETAIL" });
+		}
+
 		list.BindPipeline(cloudsLayout);
 
 		struct {
@@ -252,7 +259,7 @@ CloudResources Clouds::Render(RenderGraph& graph, const Atmosphere& atmosphere, 
 	shadowPass.Output(shadowMapTag, OutputBind::RTV, LoadType::Preserve);
 	shadowPass.Bind([this, cameraBuffer, weatherTag, baseShapeNoiseTag, shadowMapTag, solarZenithAngle](CommandList& list, RenderPassResources& resources)
 	{
-		const auto sunShadowSize = *CvarGet("sunShadowSize", float);
+		const auto orthographicScale = *CvarGet("cloudShadowMapResolution", int) * *CvarGet("cloudShadowMapScale", float);
 		auto shadowMapLayout = RenderPipelineLayout{}
 			.VertexShader({ "Clouds/Clouds", "VSMain" })
 			.PixelShader({ "Clouds/Clouds", "PSMain" })
@@ -262,7 +269,13 @@ CloudResources Clouds::Render(RenderGraph& graph, const Atmosphere& atmosphere, 
 			.Macro({ "CLOUDS_FULL_RESOLUTION" })
 			.Macro({ "CLOUDS_ONLY_DEPTH" })
 			.Macro({ "CLOUDS_RENDER_ORTHOGRAPHIC" })
-			.Macro({ "CLOUDS_ORTHOGRAPHIC_SCALE", sunShadowSize * 1000.f });  // Kilometers to meters.
+			.Macro({ "CLOUDS_CAMERA_IN_KILOMETERS" })
+			.Macro({ "CLOUDS_ORTHOGRAPHIC_SCALE", orthographicScale });  // Scale is in kilometers.
+
+		if (*CvarGet("cloudRayMarchQuality", int) > 0)
+		{
+			shadowMapLayout.Macro({ "CLOUDS_MARCH_GROUND_TRUTH_DETAIL" });
+		}
 
 		list.BindPipeline(shadowMapLayout);
 

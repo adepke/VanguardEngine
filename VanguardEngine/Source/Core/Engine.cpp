@@ -259,8 +259,8 @@ void EngineLoop()
 		AssetManager::Get().Update();
 
 		ControlSystem::Update(registry);
-
 		CameraSystem::Update(registry, lastDeltaTime);
+		TimeOfDaySystem::Update(registry, lastDeltaTime);
 
 		Renderer::Get().Render(registry);
 

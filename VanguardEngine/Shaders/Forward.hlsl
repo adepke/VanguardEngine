@@ -185,12 +185,17 @@ float4 PSMain(PixelIn input) : SV_Target
 	{
 		uint lightIndex = clusteredLightList[lightInfo.x + i];
 		Light light = lights[lightIndex];
-		// The sun needs to have atmospheric transmittance applied.
-		// This is a very hacky solution.
+		
+		// Directional lights are just the radiance from space (sun/moon).
 		if (light.type == LightType::Directional)
 		{
-			light.color *= sunTransmittance[0];
-		}
+            float3 skyTransmittance = sunTransmittance[0];
+            float3 solarRadiance = sunTransmittance[2];
+			
+			// Ignore sky radiance contribution, since this is already accounted for in the atmosphere compose pass.
+			// Multiply against the existing color to preserve custom light modifications.
+            light.color *= skyTransmittance * solarRadiance;
+        }
 		
 		LightSample sample = SampleLight(light, materialSample, camera, viewDirection, input.position, normalDirection);
 		output.rgb += sample.diffuse.rgb;

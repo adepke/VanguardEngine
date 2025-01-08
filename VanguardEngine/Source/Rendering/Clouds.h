@@ -38,7 +38,6 @@ private:
 	RenderPipelineLayout weatherLayout;
 	RenderPipelineLayout baseNoiseLayout;
 	RenderPipelineLayout detailNoiseLayout;
-	RenderPipelineLayout cloudsLayout;
 
 	TextureHandle weather;  // 2D, channels: coverage, type, precipitation.
 	// Schneider separates density noise into FBM components and composes them while
@@ -58,5 +57,5 @@ public:
 	~Clouds();
 
 	void Initialize(RenderDevice* inDevice);
-	CloudResources Render(RenderGraph& graph, const Atmosphere& atmosphere, const RenderResource hdrSource, const RenderResource cameraBuffer, const RenderResource depthStencil, const RenderResource sunTransmittance);
+	CloudResources Render(RenderGraph& graph, entt::registry& registry, const Atmosphere& atmosphere, const RenderResource hdrSource, const RenderResource cameraBuffer, const RenderResource depthStencil, const RenderResource sunTransmittance);
 };

@@ -234,10 +234,10 @@ void UserInterfaceManager::NewFrame()
 	// Update inputs.
 	Input::UpdateInputDevices(Renderer::Get().window->GetHandle());
 
-	ImGui::NewFrame();
-
-	// Update the mouse after computing the movement delta.
+	// Update the mouse before computing the movement delta in NewFrame().
 	Renderer::Get().window->UpdateCursor();
+
+	ImGui::NewFrame();
 }
 
 void UserInterfaceManager::Render(CommandList& list, BufferHandle cameraBuffer)

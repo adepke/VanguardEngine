@@ -66,7 +66,7 @@ class Atmosphere
 {
 public:
 	AtmosphereData model;
-	float solarZenithAngle = 0.f;
+	entt::entity sunLight;  // Directional light entity for direct solar illumination.
 
 private:
 	RenderDevice* device = nullptr;
@@ -91,15 +91,12 @@ private:
 	void Precompute(CommandList& list, TextureHandle transmittanceHandle, TextureHandle scatteringHandle, TextureHandle irradianceHandle);
 
 	RenderPipelineLayout sunTransmittanceLayout;
-	RenderPipelineLayout composeLayout;
 
 	static constexpr uint32_t luminanceTextureSize = 1024;
 	static_assert(luminanceTextureSize % 8 == 0, "luminanceTextureSize must be evenly divisible by 8.");
 
 	TextureHandle luminanceTexture;
 	RenderPipelineLayout luminancePrecomputeLayout;
-
-	entt::entity sunLight;  // Directional light entity for direct solar illumination.
 
 public:
 	~Atmosphere();
@@ -108,6 +105,7 @@ public:
 	AtmosphereResources ImportResources(RenderGraph& graph);
 	void Render(RenderGraph& graph, AtmosphereResources resourceHandles, CloudResources cloudResources, RenderResource cameraBuffer,
 		RenderResource depthStencil, RenderResource outputHDRs, entt::registry& registry);
-	std::pair<RenderResource, RenderResource> RenderEnvironmentMap(RenderGraph& graph, AtmosphereResources resourceHandles, RenderResource cameraBuffer);
+	std::pair<RenderResource, RenderResource> RenderEnvironmentMap(RenderGraph& graph, AtmosphereResources resourceHandles, RenderResource cameraBuffer,
+		entt::registry& registry);
 	void MarkModelDirty() { dirty = true; }
 };

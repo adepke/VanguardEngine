@@ -20,6 +20,7 @@ namespace EntityReflection
 		{ entt::type_id<ControlComponent>().hash(), &ComponentProperties::RenderControlComponent },
 		{ entt::type_id<MeshComponent>().hash(), &ComponentProperties::RenderMeshComponent },
 		{ entt::type_id<CameraComponent>().hash(), &ComponentProperties::RenderCameraComponent },
-		{ entt::type_id<LightComponent>().hash(), &ComponentProperties::RenderLightComponent }
+		{ entt::type_id<LightComponent>().hash(), &ComponentProperties::RenderLightComponent },
+		{ entt::type_id<TimeOfDayComponent>().hash(), &ComponentProperties::RenderTimeOfDayComponent }
 	};
 }

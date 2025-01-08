@@ -36,10 +36,18 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
     Texture3D<float4> scatteringLut = ResourceDescriptorHeap[bindData.scatteringTexture];
 	Texture2D<float4> irradianceLut = ResourceDescriptorHeap[bindData.irradianceTexture];
 	
+	// Calculate the radiance and transmittance from the sky down to the planet surface. This is an approximation,
+	// and will not be accurate for geometry being lit by the sun off of the surface.
 	float3 transmittance;
-	float3 radiance = GetSkyRadiance(bindData.atmosphere, transmittanceLut, scatteringLut, bilinearClamp, cameraPosition - planetCenter, direction, 0.f, sunDirection, transmittance);
+	float3 skyRadiance = GetSkyRadiance(bindData.atmosphere, transmittanceLut, scatteringLut, bilinearClamp, cameraPosition - planetCenter, direction, 0.f, sunDirection, transmittance);
+    float3 solarRadiance = GetSolarRadiance(bindData.atmosphere);
+	
+	// #TEMP: This is an awful hack, not sure where the problem in my math is but there is way too much energy without this.
+	// Revisit ASAP.
+    const float radianceMultiplier = 0.001;
 	
 	RWStructuredBuffer<float3> sunTransmittance = ResourceDescriptorHeap[bindData.sunTransmittanceBuffer];
 	sunTransmittance[0] = transmittance;
-	sunTransmittance[1] = radiance;
+    sunTransmittance[1] = skyRadiance * radianceMultiplier;
+    sunTransmittance[2] = solarRadiance * radianceMultiplier;
 }

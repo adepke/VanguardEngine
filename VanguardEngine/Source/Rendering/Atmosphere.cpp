@@ -287,6 +287,8 @@ void Atmosphere::Initialize(RenderDevice* inDevice, entt::registry& registry)
 {
 	device = inDevice;
 
+	CvarCreate("renderCloudShadowMap", "Projects the cloud shadow map onto the planet surface, for debugging purposes. 0=off, 1=on", 0);
+
 	transmissionPrecomputeLayout = RenderPipelineLayout{}
 		.ComputeShader({ "Atmosphere/AtmospherePrecompute", "TransmittanceLutMain" });
 
@@ -310,9 +312,6 @@ void Atmosphere::Initialize(RenderDevice* inDevice, entt::registry& registry)
 
 	luminancePrecomputeLayout = RenderPipelineLayout{}
 		.ComputeShader({ "Atmosphere/Luminance", "Main" });
-
-	composeLayout = RenderPipelineLayout{}
-		.ComputeShader({ "Atmosphere/Compose", "Main" });
 
 	TextureDescription transmittanceDesc{
 		.bindFlags = BindFlag::ShaderResource | BindFlag::UnorderedAccess,
@@ -399,9 +398,11 @@ void Atmosphere::Initialize(RenderDevice* inDevice, entt::registry& registry)
 	model.solarIrradiance = { 1.474f, 1.8504f, 1.91198f };
 
 	sunLight = registry.create();
+	registry.emplace<NameComponent>(sunLight, "Sun");
 	registry.emplace<TransformComponent>(sunLight);
-	// Hack while figuring out proper radiometry.
-	registry.emplace<LightComponent>(sunLight, LightComponent{ .type = LightType::Directional, .color = { 30.f, 30.f, 30.f } });
+	// Note that directional light colors act as a multiplier against the sun, unlike other light types.
+	registry.emplace<LightComponent>(sunLight, LightComponent{ .type = LightType::Directional, .color = { 1.f, 1.f, 1.f } });
+	registry.emplace<TimeOfDayComponent>(sunLight, TimeOfDayComponent{ .solarZenithAngle = 0.f, .speed = 1.f, .animation = TimeOfDayAnimation::Oscillate });
 }
 
 AtmosphereResources Atmosphere::ImportResources(RenderGraph& graph)
@@ -430,6 +431,8 @@ void Atmosphere::Render(RenderGraph& graph, AtmosphereResources resourceHandles,
 		dirty = false;
 	}
 
+	const auto solarZenithAngle = registry.get<TimeOfDayComponent>(sunLight).solarZenithAngle;
+
 	// Update the sun light entity.
 	auto& lightTransform = registry.get<TransformComponent>(sunLight);
 	lightTransform.rotation = { 0.f, solarZenithAngle + 3.14159f / 2.f, 0.f };
@@ -447,8 +450,14 @@ void Atmosphere::Render(RenderGraph& graph, AtmosphereResources resourceHandles,
 	composePass.Read(resourceHandles.scatteringHandle, ResourceBind::SRV);
 	composePass.Read(resourceHandles.irradianceHandle, ResourceBind::SRV);
 
-	composePass.Bind([&, cloudResources, cameraBuffer, depthStencil, outputHDR, resourceHandles](CommandList& list, RenderPassResources& resources)
+	composePass.Bind([&, cloudResources, cameraBuffer, depthStencil, outputHDR, resourceHandles, solarZenithAngle](CommandList& list, RenderPassResources& resources)
 	{
+		const auto renderShadowMap = *CvarGet("renderCloudShadowMap", int);
+
+		auto composeLayout = RenderPipelineLayout{}
+			.ComputeShader({ "Atmosphere/Compose", "Main" })
+			.Macro({ "CLOUDS_RENDER_SHADOWMAP", renderShadowMap });
+
 		list.BindPipeline(composeLayout);
 
 		struct {
@@ -489,9 +498,12 @@ void Atmosphere::Render(RenderGraph& graph, AtmosphereResources resourceHandles,
 	});
 }
 
-std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(RenderGraph& graph, AtmosphereResources resourceHandles, RenderResource cameraBuffer)
+std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(RenderGraph& graph, AtmosphereResources resourceHandles, RenderResource cameraBuffer,
+	entt::registry& registry)
 {
 	const auto luminanceTag = graph.Import(luminanceTexture);
+
+	const auto solarZenithAngle = registry.get<TimeOfDayComponent>(sunLight).solarZenithAngle;
 
 	TextureView luminanceView{};
 	luminanceView.UAV("", 0);
@@ -502,7 +514,7 @@ std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(Rende
 	luminancePass.Read(resourceHandles.scatteringHandle, ResourceBind::SRV);
 	luminancePass.Read(resourceHandles.irradianceHandle, ResourceBind::SRV);
 	luminancePass.Write(luminanceTag, luminanceView);
-	luminancePass.Bind([&, cameraBuffer, resourceHandles, luminanceTag](CommandList& list, RenderPassResources& resources)
+	luminancePass.Bind([&, cameraBuffer, resourceHandles, luminanceTag, solarZenithAngle](CommandList& list, RenderPassResources& resources)
 	{
 		struct BindData
 		{
@@ -543,11 +555,11 @@ std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(Rende
 	sunTransmittancePass.Read(resourceHandles.irradianceHandle, ResourceBind::SRV);
 	const auto sunTransmittance = sunTransmittancePass.Create(TransientBufferDescription{
 		.updateRate = ResourceFrequency::Static,  // Unordered access.
-		.size = 2,  // Transmittance, radiance.
+		.size = 3,  // Transmittance, sky radiance, solar radiance.
 		.stride = sizeof(XMFLOAT3)
 	}, VGText("Sun transmittance"));
 	sunTransmittancePass.Write(sunTransmittance, ResourceBind::UAV);
-	sunTransmittancePass.Bind([&, cameraBuffer, resourceHandles, sunTransmittance](CommandList& list, RenderPassResources& resources)
+	sunTransmittancePass.Bind([&, cameraBuffer, resourceHandles, sunTransmittance, solarZenithAngle](CommandList& list, RenderPassResources& resources)
 	{
 		struct BindData
 		{
