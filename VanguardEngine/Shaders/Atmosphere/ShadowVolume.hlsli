@@ -11,13 +11,13 @@
 float2 RayMarchCloudShadowVolume(Camera camera, float2 uv, Camera sunCamera, Texture2D<float> cloudsShadowMap)
 {
     // Crude approximation. Replace this with sampling a depth map, at the same UV coords that we sample the cloudsShadowMap (during raymarch)
-    float topBoundary = cloudLayerBottom + 0.5f * (cloudLayerTop - cloudLayerBottom);
+    float topBoundary = cloudLayerBottom;
     
     const float3 rayDirection = ComputeRayDirection(camera, uv);
     const float3 cameraPosition = ComputeAtmosphereCameraPosition(camera);
 	
-    float marchStart;
-    float marchEnd;
+    float marchStart = 0.f;
+    float marchEnd = 0.f;
 	
     const float planetRadius = 6360.0;  // #TODO: Get from atmosphere data.
     
@@ -31,14 +31,14 @@ float2 RayMarchCloudShadowVolume(Camera camera, float2 uv, Camera sunCamera, Tex
     else
     {
 		// Outside of the cloud layer.
-        return 0.f;
+        return 0.xx;
     }
 
 	// Stop short if we hit the planet.
     float2 planetIntersect;
     if (RaySphereIntersection(cameraPosition, rayDirection, planetCenter, planetRadius, planetIntersect))
     {
-        marchEnd = min(marchEnd, planetIntersect.x);
+        marchEnd = planetIntersect.x;
     }
 
     marchStart = max(0, marchStart);
@@ -49,10 +49,10 @@ float2 RayMarchCloudShadowVolume(Camera camera, float2 uv, Camera sunCamera, Tex
     // Dynamically increase step size at quadradic rate, as detail is important close to the camera
     // but coverage is important far away.
     const float initialStepSize = 0.03;
-	
+    float stepSize = initialStepSize;
+    
     matrix sunViewProjection = mul(sunCamera.view, sunCamera.projection);
 	
-    float stepSize = initialStepSize;
     float totalDistance = 0.f;
     float totalShadow = 0.f;
 	
