@@ -121,7 +121,7 @@ void Clouds::Initialize(RenderDevice* inDevice)
 	lastFrameClouds.id = 0;
 }
 
-CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, const Atmosphere& atmosphere, const RenderResource hdrSource, const RenderResource cameraBuffer, const RenderResource depthStencil, const RenderResource sunTransmittance)
+CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, const Atmosphere& atmosphere, const RenderResource cameraBuffer, const RenderResource depthStencil, const RenderResource atmosphereIrradiance)
 {
 	const auto weatherTag = graph.Import(weather);
 	const auto baseShapeNoiseTag = graph.Import(baseShapeNoise);
@@ -171,7 +171,7 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 	cloudsPass.Output(cloudOutput, OutputBind::RTV, LoadType::Preserve);
 	cloudsPass.Read(lastFrameClouds, ResourceBind::SRV);
 	cloudsPass.Read(blueNoiseTag, ResourceBind::SRV);
-	cloudsPass.Read(sunTransmittance, ResourceBind::SRV);
+	cloudsPass.Read(atmosphereIrradiance, ResourceBind::SRV);
 	const auto cloudDepth = cloudsPass.Create(TransientTextureDescription{
 		.width = 0,
 		.height = 0,
@@ -182,7 +182,7 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 	cloudsPass.Write(cloudDepth, TextureView{}.UAV("", 0));
 	cloudsPass.Bind([this, weatherTag, baseShapeNoiseTag, detailShapeNoiseTag, solarZenithAngle,
 		cameraBuffer, depthStencil, cloudOutput, lastFrame=lastFrameClouds, blueNoiseTag, cloudDepth,
-		sunTransmittance](CommandList& list, RenderPassResources& resources)
+		atmosphereIrradiance](CommandList& list, RenderPassResources& resources)
 	{
 		auto cloudsLayout = RenderPipelineLayout{}
 			.VertexShader({ "Clouds/Clouds", "VSMain" })
@@ -210,7 +210,7 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 			uint32_t depthTexture;
 			uint32_t geometryDepthTexture;
 			uint32_t blueNoiseTexture;
-			uint32_t sunTransmittanceBuffer;
+			uint32_t atmosphereIrradianceBuffer;
 			XMFLOAT2 wind;
 			float time;
 		} bindData;
@@ -226,9 +226,9 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 		time++;
 		bindData.timeSlice = time % 16;
 		
-		const auto& hdrSourceComponent = device->GetResourceManager().Get(resources.GetTexture(cloudOutput));
-		bindData.outputResolution.x = hdrSourceComponent.description.width;
-		bindData.outputResolution.y = hdrSourceComponent.description.height;
+		const auto& cloudOutputComponent = device->GetResourceManager().Get(resources.GetTexture(cloudOutput));
+		bindData.outputResolution.x = cloudOutputComponent.description.width;
+		bindData.outputResolution.y = cloudOutputComponent.description.height;
 
 		bindData.lastFrameTexture = 0;
 		if (lastFrame.id != 0)
@@ -237,7 +237,7 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 		bindData.depthTexture = resources.Get(cloudDepth);
 		bindData.geometryDepthTexture = resources.Get(depthStencil);
 		bindData.blueNoiseTexture = resources.Get(blueNoiseTag);
-		bindData.sunTransmittanceBuffer = resources.Get(sunTransmittance);
+		bindData.atmosphereIrradianceBuffer = resources.Get(atmosphereIrradiance);
 		bindData.wind = { windDirection.x * windStrength, windDirection.y * windStrength };
 		bindData.time = Renderer::Get().GetAppTime();
 
@@ -292,7 +292,7 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 			uint32_t depthTexture;
 			uint32_t geometryDepthTexture;
 			uint32_t blueNoiseTexture;
-			uint32_t sunTransmittanceBuffer;
+			uint32_t atmosphereIrradianceBuffer;
 			XMFLOAT2 wind;
 			float time;
 		} bindData;

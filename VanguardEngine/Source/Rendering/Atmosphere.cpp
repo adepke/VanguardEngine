@@ -288,6 +288,7 @@ void Atmosphere::Initialize(RenderDevice* inDevice, entt::registry& registry)
 	device = inDevice;
 
 	CvarCreate("renderCloudShadowMap", "Projects the cloud shadow map onto the planet surface, for debugging purposes. 0=off, 1=on", 0);
+	CvarCreate("renderLightShafts", "Controls rendering of volumetric light shafts, currently only cast by clouds. 0=off, 1=on", 1);
 
 	transmissionPrecomputeLayout = RenderPipelineLayout{}
 		.ComputeShader({ "Atmosphere/AtmospherePrecompute", "TransmittanceLutMain" });
@@ -307,8 +308,8 @@ void Atmosphere::Initialize(RenderDevice* inDevice, entt::registry& registry)
 	multipleScatteringPrecomputeLayout = RenderPipelineLayout{}
 		.ComputeShader({ "Atmosphere/AtmospherePrecompute", "MultipleScatteringLutMain" });
 
-	sunTransmittanceLayout = RenderPipelineLayout{}
-		.ComputeShader({ "Atmosphere/SunTransmittance", "Main" });
+	separableIrradianceLayout = RenderPipelineLayout{}
+		.ComputeShader({ "Atmosphere/SeparableIrradiance", "Main" });
 
 	luminancePrecomputeLayout = RenderPipelineLayout{}
 		.ComputeShader({ "Atmosphere/Luminance", "Main" });
@@ -414,7 +415,7 @@ AtmosphereResources Atmosphere::ImportResources(RenderGraph& graph)
 	return { transmittanceTag, scatteringTag, irradianceTag };
 }
 
-void Atmosphere::Render(RenderGraph& graph, AtmosphereResources resourceHandles, CloudResources cloudResources, RenderResource cameraBuffer,
+void Atmosphere::Render(RenderGraph& graph, Clouds& clouds, AtmosphereResources resourceHandles, CloudResources cloudResources, RenderResource cameraBuffer,
 	RenderResource depthStencil, RenderResource outputHDR, entt::registry& registry)
 {
 	if (dirty)
@@ -453,10 +454,12 @@ void Atmosphere::Render(RenderGraph& graph, AtmosphereResources resourceHandles,
 	composePass.Bind([&, cloudResources, cameraBuffer, depthStencil, outputHDR, resourceHandles, solarZenithAngle](CommandList& list, RenderPassResources& resources)
 	{
 		const auto renderShadowMap = *CvarGet("renderCloudShadowMap", int);
+		const auto renderLightShafts = *CvarGet("renderLightShafts", int);
 
 		auto composeLayout = RenderPipelineLayout{}
 			.ComputeShader({ "Atmosphere/Compose", "Main" })
-			.Macro({ "CLOUDS_RENDER_SHADOWMAP", renderShadowMap });
+			.Macro({ "CLOUDS_RENDER_SHADOWMAP", renderShadowMap })
+			.Macro({ "RENDER_LIGHT_SHAFTS", renderLightShafts });
 
 		list.BindPipeline(composeLayout);
 
@@ -473,6 +476,7 @@ void Atmosphere::Render(RenderGraph& graph, AtmosphereResources resourceHandles,
 			uint32_t scatteringTexture;
 			uint32_t irradianceTexture;
 			float solarZenithAngle;
+			float globalWeatherCoverage;
 		} bindData;
 
 		bindData.atmosphere = model;
@@ -487,6 +491,7 @@ void Atmosphere::Render(RenderGraph& graph, AtmosphereResources resourceHandles,
 		bindData.scatteringTexture = resources.Get(resourceHandles.scatteringHandle);
 		bindData.irradianceTexture = resources.Get(resourceHandles.irradianceHandle);
 		bindData.solarZenithAngle = solarZenithAngle;
+		bindData.globalWeatherCoverage = clouds.coverage;
 
 		list.BindConstants("bindData", bindData);
 
@@ -548,18 +553,18 @@ std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(Rende
 		device->GetResourceManager().GenerateMipmaps(list, luminanceTexture);
 	});
 
-	auto& sunTransmittancePass = graph.AddPass("Sun Transmittance Pass", ExecutionQueue::Compute);
-	sunTransmittancePass.Read(cameraBuffer, ResourceBind::SRV);
-	sunTransmittancePass.Read(resourceHandles.transmittanceHandle, ResourceBind::SRV);
-	sunTransmittancePass.Read(resourceHandles.scatteringHandle, ResourceBind::SRV);
-	sunTransmittancePass.Read(resourceHandles.irradianceHandle, ResourceBind::SRV);
-	const auto sunTransmittance = sunTransmittancePass.Create(TransientBufferDescription{
+	auto& irradiancePass = graph.AddPass("Atmosphere Separable Irradiance Pass", ExecutionQueue::Compute);
+	irradiancePass.Read(cameraBuffer, ResourceBind::SRV);
+	irradiancePass.Read(resourceHandles.transmittanceHandle, ResourceBind::SRV);
+	irradiancePass.Read(resourceHandles.scatteringHandle, ResourceBind::SRV);
+	irradiancePass.Read(resourceHandles.irradianceHandle, ResourceBind::SRV);
+	const auto separableIrradiance = irradiancePass.Create(TransientBufferDescription{
 		.updateRate = ResourceFrequency::Static,  // Unordered access.
-		.size = 3,  // Transmittance, sky radiance, solar radiance.
+		.size = 4,
 		.stride = sizeof(XMFLOAT3)
-	}, VGText("Sun transmittance"));
-	sunTransmittancePass.Write(sunTransmittance, ResourceBind::UAV);
-	sunTransmittancePass.Bind([&, cameraBuffer, resourceHandles, sunTransmittance, solarZenithAngle](CommandList& list, RenderPassResources& resources)
+	}, VGText("Atmosphere separable irradiance"));
+	irradiancePass.Write(separableIrradiance, ResourceBind::UAV);
+	irradiancePass.Bind([&, cameraBuffer, resourceHandles, separableIrradiance, solarZenithAngle](CommandList& list, RenderPassResources& resources)
 	{
 		struct BindData
 		{
@@ -568,7 +573,7 @@ std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(Rende
 			uint32_t scatteringTexture;
 			uint32_t irradianceTexture;
 			float solarZenithAngle;
-			uint32_t sunTransmittanceBuffer;
+			uint32_t atmosphereIrradianceBuffer;
 			uint32_t cameraBuffer;
 			uint32_t cameraIndex;
 		} bindData;
@@ -578,15 +583,15 @@ std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(Rende
 		bindData.scatteringTexture = resources.Get(resourceHandles.scatteringHandle);
 		bindData.irradianceTexture = resources.Get(resourceHandles.irradianceHandle);
 		bindData.solarZenithAngle = solarZenithAngle;
-		bindData.sunTransmittanceBuffer = resources.Get(sunTransmittance);
+		bindData.atmosphereIrradianceBuffer = resources.Get(separableIrradiance);
 		bindData.cameraBuffer = resources.Get(cameraBuffer);
 		bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
 
-		list.BindPipeline(sunTransmittanceLayout);
+		list.BindPipeline(separableIrradianceLayout);
 		list.BindConstants("bindData", bindData);
 
 		list.Dispatch(1, 1, 1);
 	});
 
-	return std::make_pair(luminanceTag, sunTransmittance);
+	return std::make_pair(luminanceTag, separableIrradiance);
 }

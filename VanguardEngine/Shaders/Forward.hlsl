@@ -8,6 +8,8 @@
 #include "Light.hlsli"
 #include "Clusters/Clusters.hlsli"
 #include "IBL/ImageBasedLighting.hlsli"
+#include "Atmosphere/Atmosphere.hlsli"
+#include "Atmosphere/Visibility.hlsli"
 
 struct ClusterData
 {
@@ -16,7 +18,7 @@ struct ClusterData
 	float logY;
 	int froxelSize;
 	uint3 dimensions;
-	float padding2;
+	float padding;
 };
 
 struct IblData
@@ -33,12 +35,14 @@ struct BindData
 	uint objectBuffer;
 	uint cameraBuffer;
 	uint cameraIndex;
+    uint vertexPositionBuffer;
+    uint vertexExtraBuffer;
 	uint materialBuffer;
 	uint lightBuffer;
-	uint sunTransmittanceBuffer;
-	uint vertexPositionBuffer;
-	uint vertexExtraBuffer;
-	float3 padding;
+	uint atmosphereIrradianceBuffer;
+    uint cloudsShadowMap;
+    float globalWeatherCoverage;
+    float padding;
 	ClusterData clusterData;
 	IblData iblData;
 };
@@ -71,7 +75,7 @@ PixelIn VSMain(VertexIn input)
 	ObjectData object = objectBuffer[bindData.batchId + input.instanceId];
 	StructuredBuffer<Camera> cameraBuffer = ResourceDescriptorHeap[bindData.cameraBuffer];
 	Camera camera = cameraBuffer[bindData.cameraIndex];
-
+	
 	VertexAssemblyData assemblyData;
 	assemblyData.positionBuffer = bindData.vertexPositionBuffer;
 	assemblyData.extraBuffer = bindData.vertexExtraBuffer;
@@ -108,6 +112,7 @@ float4 PSMain(PixelIn input) : SV_Target
 	ObjectData object = objectBuffer[bindData.batchId + input.instanceId];
 	StructuredBuffer<Camera> cameraBuffer = ResourceDescriptorHeap[bindData.cameraBuffer];
 	Camera camera = cameraBuffer[bindData.cameraIndex];
+    Camera sunCamera = cameraBuffer[2];  // #TODO: Remove this terrible hardcoding.
 	StructuredBuffer<MaterialData> materialBuffer = ResourceDescriptorHeap[bindData.materialBuffer];
 	MaterialData material = materialBuffer[object.materialIndex];
 	
@@ -177,7 +182,7 @@ float4 PSMain(PixelIn input) : SV_Target
 	StructuredBuffer<Light> lights = ResourceDescriptorHeap[bindData.lightBuffer];
 	StructuredBuffer<uint> clusteredLightList = ResourceDescriptorHeap[bindData.clusterData.lightListBuffer];
 	StructuredBuffer<uint2> clusteredLightInfo = ResourceDescriptorHeap[bindData.clusterData.lightInfoBuffer];
-	StructuredBuffer<float3> sunTransmittance = ResourceDescriptorHeap[bindData.sunTransmittanceBuffer];
+    StructuredBuffer<float3> atmosphereIrradiance = ResourceDescriptorHeap[bindData.atmosphereIrradianceBuffer];
 	
 	uint3 clusterId = DrawToClusterId(bindData.clusterData.froxelSize, bindData.clusterData.logY, camera, input.positionCS.xy, input.depthVS);
 	uint2 lightInfo = clusteredLightInfo[ClusterId2Index(bindData.clusterData.dimensions, clusterId)];
@@ -186,15 +191,32 @@ float4 PSMain(PixelIn input) : SV_Target
 		uint lightIndex = clusteredLightList[lightInfo.x + i];
 		Light light = lights[lightIndex];
 		
-		// Directional lights are just the radiance from space (sun/moon).
+		// Directional lights are just the combined irradiance of the sun and sky.
 		if (light.type == LightType::Directional)
 		{
-            float3 skyTransmittance = sunTransmittance[0];
-            float3 solarRadiance = sunTransmittance[2];
+            const float3 separatedSunIrradianceNearCamera = atmosphereIrradiance[0];
+            const float3 separatedSkyIrradianceNearCamera = atmosphereIrradiance[1];
 			
-			// Ignore sky radiance contribution, since this is already accounted for in the atmosphere compose pass.
+            float3 cameraPositionAtmoSpace = ComputeAtmosphereCameraPosition(camera);
+            float3 cameraPoint = cameraPositionAtmoSpace - planetCenter;
+			
+            float3 sunIrradiance;
+            float3 skyIrradiance;
+            RecomposeSeparableSunAndSkyIrradiance(cameraPoint, normal, -light.direction, separatedSunIrradianceNearCamera,
+				separatedSkyIrradianceNearCamera, sunIrradiance, skyIrradiance);
+			
+            const float sunVisibility = CalculateSunVisibility(cameraPositionAtmoSpace, sunCamera, ResourceDescriptorHeap[bindData.cloudsShadowMap]);
+            const float skyVisibility = CalculateSkyVisibility(cameraPositionAtmoSpace, bindData.globalWeatherCoverage);
+            
+			// Combine both atmospheric irradiance contributions, attenuated by any visibility modifications, such as
+			// clouds blocking out the sun.
 			// Multiply against the existing color to preserve custom light modifications.
-            light.color *= skyTransmittance * solarRadiance;
+			//light.color *= (sunIrradiance * sunVisibility) + (skyIrradiance * skyVisibility);
+			
+			// Note that the sky irradiance contribution was removed, since this *should* already be getting contributed
+			// by IBL? Comparing IBL lighting with pure skyIrradiance lighting shows that they are nothing alike however,
+			// so this is definitely not the most physically accurate model.
+            light.color *= (sunIrradiance * sunVisibility);
         }
 		
 		LightSample sample = SampleLight(light, materialSample, camera, viewDirection, input.position, normalDirection);

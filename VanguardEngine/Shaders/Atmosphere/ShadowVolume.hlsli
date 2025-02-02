@@ -7,8 +7,8 @@
 #include "Geometry.hlsli"
 #include "Constants.hlsli"
 
-// Returns the length of the camera ray in shadow, in kilometers.
-float RayMarchCloudShadowVolume(Camera camera, float2 uv, Camera sunCamera, float cloudsDepth, Texture2D<float> cloudsShadowMap)
+// Returns the distance traversed by the camera ray, as well as the subset of that ray in shadow, in kilometers.
+float2 RayMarchCloudShadowVolume(Camera camera, float2 uv, Camera sunCamera, Texture2D<float> cloudsShadowMap)
 {
     // Crude approximation. Replace this with sampling a depth map, at the same UV coords that we sample the cloudsShadowMap (during raymarch)
     float topBoundary = cloudLayerBottom + 0.5f * (cloudLayerTop - cloudLayerBottom);
@@ -20,8 +20,7 @@ float RayMarchCloudShadowVolume(Camera camera, float2 uv, Camera sunCamera, floa
     float marchEnd;
 	
     const float planetRadius = 6360.0;  // #TODO: Get from atmosphere data.
-    float3 planetCenter = float3(0, 0, -(planetRadius + 1));  // Offset since the world origin is 1km off the planet surface.
-
+    
     float2 topBoundaryIntersect;
     if (RaySphereIntersection(cameraPosition, rayDirection, planetCenter, planetRadius + topBoundary, topBoundaryIntersect))
     {
@@ -45,18 +44,26 @@ float RayMarchCloudShadowVolume(Camera camera, float2 uv, Camera sunCamera, floa
     marchStart = max(0, marchStart);
     marchEnd = max(0, marchEnd);
 	
-    const int steps = 250;
-    const float stepSize = 0.1;
+    const int steps = 80;
+    
+    // Dynamically increase step size at quadradic rate, as detail is important close to the camera
+    // but coverage is important far away.
+    const float initialStepSize = 0.03;
 	
     matrix sunViewProjection = mul(sunCamera.view, sunCamera.projection);
 	
+    float stepSize = initialStepSize;
+    float totalDistance = 0.f;
     float totalShadow = 0.f;
 	
     for (int i = 0; i < steps; ++i)
     {
-        float3 position = cameraPosition + (rayDirection * stepSize * (float) i);
+        // Model the step size as a parabola for stable growth without runaway
+        stepSize = 0.0002 * pow(i, 2) + 0.001 * i + initialStepSize;
+        
+        float3 position = cameraPosition + (rayDirection * (totalDistance + stepSize));
 		
-        float dist = stepSize * (float)i;
+        float dist = totalDistance + stepSize;
         if (dist > (marchEnd - marchStart))
             break;  // Left the cloud layer.
 		
@@ -65,13 +72,14 @@ float RayMarchCloudShadowVolume(Camera camera, float2 uv, Camera sunCamera, floa
         float3 projectedCoords = positionSunSpace.xyz / positionSunSpace.w;
         projectedCoords = projectedCoords * 0.5 + 0.5;
 		
-        float shadowSample = cloudsShadowMap.Sample(downsampleBorder, projectedCoords.xy);
+        float shadowSample = cloudsShadowMap.Sample(bilinearClamp, projectedCoords.xy);
         // #TODO: Scale the shadow contribution by the transmittance at this point, otherwise the clouds are treated
         // as entirely opaque solid objects.
         totalShadow += (shadowSample > 0 && shadowSample < 10000) ? stepSize : 0;
+        totalDistance += stepSize;
     }
 	
-    return totalShadow;
+    return float2(totalDistance, totalShadow);
 }
 
 #endif  // __SHADOWVOLUME_HLSLI__

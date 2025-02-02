@@ -531,13 +531,16 @@ void Renderer::Render(entt::registry& registry)
 	
 	// #TODO: Don't have this here.
 	const auto atmosphereResources = atmosphere.ImportResources(graph);
-	const auto [luminanceTexture, sunTransmittance] = atmosphere.RenderEnvironmentMap(graph, atmosphereResources, cameraBufferTag, registry);
+	const auto [luminanceTexture, atmosphereIrradiance] = atmosphere.RenderEnvironmentMap(graph, atmosphereResources, cameraBufferTag, registry);
 
 	// #TODO: Don't have this here.
 	const auto iblResources = ibl.UpdateLuts(graph, luminanceTexture, cameraBufferTag);
 
 	// #TODO: Don't have this here.
 	occlusionCulling.Render(graph, cameraFrozen, depthStencilTag);
+
+	// #TODO: Don't have this here.
+	const auto cloudResources = clouds.Render(graph, registry, atmosphere, cameraBufferTag, depthStencilTag, atmosphereIrradiance);
 
 	auto& forwardPass = graph.AddPass("Forward Pass", ExecutionQueue::Graphics);
 	const auto outputHDRTag = forwardPass.Create(TransientTextureDescription{
@@ -555,7 +558,8 @@ void Renderer::Render(entt::registry& registry)
 	forwardPass.Read(iblResources.irradianceTag, ResourceBind::SRV);
 	forwardPass.Read(iblResources.prefilterTag, ResourceBind::SRV);
 	forwardPass.Read(iblResources.brdfTag, ResourceBind::SRV);
-	forwardPass.Read(sunTransmittance, ResourceBind::SRV);
+	forwardPass.Read(atmosphereIrradiance, ResourceBind::SRV);
+	forwardPass.Read(cloudResources.cloudsShadowMap, ResourceBind::SRV);
 	forwardPass.Read(meshIndirectCulledRenderArgsTag, ResourceBind::Indirect);
 	forwardPass.Output(outputHDRTag, OutputBind::RTV, LoadType::Clear);
 	forwardPass.Bind([&](CommandList& list, RenderPassResources& resources)
@@ -581,12 +585,14 @@ void Renderer::Render(entt::registry& registry)
 			uint32_t objectBuffer;
 			uint32_t cameraBuffer;
 			uint32_t cameraIndex;
-			uint32_t materialBuffer;
-			uint32_t lightBuffer;
-			uint32_t sunTransmittanceBuffer;
 			uint32_t vertexPositionBuffer;
 			uint32_t vertexExtraBuffer;
-			XMFLOAT3 padding;
+			uint32_t materialBuffer;
+			uint32_t lightBuffer;
+			uint32_t atmosphereIrradianceBuffer;
+			uint32_t cloudsShadowMap;
+			float globalWeatherCoverage;
+			float padding;
 			ClusterData clusterData;
 			IblData iblData;
 		} bindData;
@@ -597,9 +603,11 @@ void Renderer::Render(entt::registry& registry)
 		bindData.vertexExtraBuffer = resources.Get(meshResources.extraTag);
 		bindData.materialBuffer = resources.Get(materialBufferTag);
 		bindData.lightBuffer = resources.Get(lightBufferTag);
+		bindData.atmosphereIrradianceBuffer = resources.Get(atmosphereIrradiance);
+		bindData.cloudsShadowMap = resources.Get(cloudResources.cloudsShadowMap);
+		bindData.globalWeatherCoverage = clouds.coverage;  // #TODO: Scale by precipitation?
 		bindData.clusterData = clusterData;
 		bindData.iblData = iblData;
-		bindData.sunTransmittanceBuffer = resources.Get(sunTransmittance);
 
 		{
 			VGScopedGPUStat("Opaque", device->GetDirectContext(), list.Native());
@@ -611,10 +619,7 @@ void Renderer::Render(entt::registry& registry)
 	});
 
 	// #TODO: Don't have this here.
-	const auto cloudResources = clouds.Render(graph, registry, atmosphere, outputHDRTag, cameraBufferTag, depthStencilTag, sunTransmittance);
-
-	// #TODO: Don't have this here.
-	atmosphere.Render(graph, atmosphereResources, cloudResources, cameraBufferTag, depthStencilTag, outputHDRTag, registry);
+	atmosphere.Render(graph, clouds, atmosphereResources, cloudResources, cameraBufferTag, depthStencilTag, outputHDRTag, registry);
 
 	// #TODO: Don't have this here.
 	bloom.Render(graph, outputHDRTag);

@@ -57,5 +57,5 @@ public:
 	~Clouds();
 
 	void Initialize(RenderDevice* inDevice);
-	CloudResources Render(RenderGraph& graph, entt::registry& registry, const Atmosphere& atmosphere, const RenderResource hdrSource, const RenderResource cameraBuffer, const RenderResource depthStencil, const RenderResource sunTransmittance);
+	CloudResources Render(RenderGraph& graph, entt::registry& registry, const Atmosphere& atmosphere, const RenderResource cameraBuffer, const RenderResource depthStencil, const RenderResource atmosphereIrradiance);
 };

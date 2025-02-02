@@ -137,7 +137,7 @@ void EngineLoop()
 	};
 
 	TransformComponent spectatorTransform{};
-	spectatorTransform.translation = { 0.f, 0.f, 0.f };
+	spectatorTransform.translation = { 0.f, 0.f, 25.f };
 	spectatorTransform.rotation = { 0.f, 0.f, 0.f };
 
 	const auto spectator = registry.create();

@@ -9,7 +9,7 @@ float2 ReprojectUv(Camera camera, float2 inputUv, float depth)
 {
 	matrix viewProjection = mul(camera.view, camera.projection);
 	matrix inverseViewProjection = mul(camera.lastFrameInverseProjection, camera.lastFrameInverseView);
-
+    
 	// Convert to world space of the previous frame.
 	float4 clipSpace = UvToClipSpace(inputUv);
 	float4 worldSpace = mul(clipSpace, inverseViewProjection);

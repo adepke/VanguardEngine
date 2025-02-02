@@ -1095,6 +1095,14 @@ void EditorUI::DrawAtmosphereControls(RenderDevice* device, entt::registry& regi
 				CvarSet("cloudRayMarchQuality", rayMarchGroundTruth ? 1 : 0);
 			}
 
+			static bool renderLightShafts = *CvarGet("renderLightShafts", int) > 0;
+			ImGui::Checkbox("Render light shafts", &renderLightShafts);
+
+			if (renderLightShafts != *CvarGet("renderLightShafts", int))
+			{
+				CvarSet("renderLightShafts", renderLightShafts ? 1 : 0);
+			}
+
 			static int shadowMapResolution = *CvarGet("cloudShadowMapResolution", int);
 			bool shadowMapResolutionValid = IsPowerOf2(shadowMapResolution);
 

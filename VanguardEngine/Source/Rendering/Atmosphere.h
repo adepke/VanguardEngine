@@ -90,7 +90,7 @@ private:
 
 	void Precompute(CommandList& list, TextureHandle transmittanceHandle, TextureHandle scatteringHandle, TextureHandle irradianceHandle);
 
-	RenderPipelineLayout sunTransmittanceLayout;
+	RenderPipelineLayout separableIrradianceLayout;
 
 	static constexpr uint32_t luminanceTextureSize = 1024;
 	static_assert(luminanceTextureSize % 8 == 0, "luminanceTextureSize must be evenly divisible by 8.");
@@ -103,7 +103,7 @@ public:
 	void Initialize(RenderDevice* inDevice, entt::registry& registry);
 
 	AtmosphereResources ImportResources(RenderGraph& graph);
-	void Render(RenderGraph& graph, AtmosphereResources resourceHandles, CloudResources cloudResources, RenderResource cameraBuffer,
+	void Render(RenderGraph& graph, Clouds& clouds, AtmosphereResources resourceHandles, CloudResources cloudResources, RenderResource cameraBuffer,
 		RenderResource depthStencil, RenderResource outputHDRs, entt::registry& registry);
 	std::pair<RenderResource, RenderResource> RenderEnvironmentMap(RenderGraph& graph, AtmosphereResources resourceHandles, RenderResource cameraBuffer,
 		entt::registry& registry);

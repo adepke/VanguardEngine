@@ -7,6 +7,7 @@
 #include "Reprojection.hlsli"
 #include "Volumetrics/LightIntegration.hlsli"
 #include "Volumetrics/PhaseFunctions.hlsli"
+#include "Atmosphere/Atmosphere.hlsli"
 
 struct BindData
 {
@@ -22,7 +23,7 @@ struct BindData
 	uint depthTexture;
 	uint geometryDepthTexture;
 	uint blueNoiseTexture;
-	uint sunTransmittanceBuffer;
+    uint atmosphereIrradianceBuffer;
 	float2 wind;
 	float time;
 };
@@ -76,8 +77,8 @@ float SampleDetailShape(Texture3D<float> noiseTexture, float3 position)
 float GetHeightFractionForPoint(float3 position, float2 cloudMinMax)
 {
 	// #TODO: Refactor.
-	const float planetRadius = 6360.0;  // #TODO: Get from atmosphere data.
-	float3 planetCenter = float3(0, 0, -(planetRadius + 1));  // Offset since the world origin is 1km off the planet surface.
+    const float planetRadius = 6360.0; // #TODO: Get from atmosphere data.
+	
 	float3 planetVector = position - planetCenter;
 
 	float heightFraction = (length(planetVector) - planetRadius - cloudMinMax.x) / (cloudMinMax.y - cloudMinMax.x);
@@ -297,8 +298,7 @@ void RayMarch(Camera camera, float2 uv, float3 direction, float3 sunDirection, o
 	origin += uvScaled.y * planeB * CLOUDS_ORTHOGRAPHIC_SCALE * 0.5f;
 #endif
 	
-	const float planetRadius = 6360.0;  // #TODO: Get from atmosphere data.
-	float3 planetCenter = float3(0, 0, -(planetRadius + 1));  // Offset since the world origin is 1km off the planet surface.
+    const float planetRadius = 6360.0;  // #TODO: Get from atmosphere data.
 
 	float2 topBoundaryIntersect;
 	if (RaySphereIntersection(origin, direction, planetCenter, planetRadius + cloudLayerTop, topBoundaryIntersect))
@@ -378,7 +378,7 @@ void RayMarch(Camera camera, float2 uv, float3 direction, float3 sunDirection, o
 	origin = origin + direction * marchStart;
 
 	Texture2D<float3> weatherTexture = ResourceDescriptorHeap[bindData.weatherTexture];
-	StructuredBuffer<float3> sunTransmittance = ResourceDescriptorHeap[bindData.sunTransmittanceBuffer];
+    StructuredBuffer<float3> atmosphereIrradiance = ResourceDescriptorHeap[bindData.atmosphereIrradianceBuffer];
 
 #ifdef CLOUDS_MARCH_GROUND_TRUTH_DETAIL
 	// Marching in ground truth detail is very expensive, especially for shadow mapping when the sun is low in the sky.
@@ -427,12 +427,26 @@ void RayMarch(Camera camera, float2 uv, float3 direction, float3 sunDirection, o
 			coneDensity = (coneDensity + cloudDensity) / float(noiseKernelSize + 1);
             float lightEnergy = ComputeLightEnergy(weatherTexture, baseShapeNoiseTexture, detailShapeNoiseTexture, position, coneDensity, viewDotLight);
 			
-			const float3 skyTransmittance = sunTransmittance[0];
-			const float3 solarRadiance = sunTransmittance[2];
+            float3 cameraPositionAtmoSpace = position;  // Position is already in kilometers.
+            float3 cameraPoint = cameraPositionAtmoSpace - planetCenter;
+			
+			// Clouds don't have a surface normal, but they don't need one. Light from the sun hits the media at any angle,
+			// and scatters within it regardless. Therefore, set the normal to be aligned with the sun such that no direct
+			// irradiance is lost.
+            float3 normal = sunDirection;
+			
+            const float3 separatedSunIrradianceClouds = atmosphereIrradiance[2];
+            const float3 separatedSkyIrradianceClouds = atmosphereIrradiance[3];
+			
+            float3 sunIrradiance;
+            float3 skyIrradiance;
+            RecomposeSeparableSunAndSkyIrradiance(cameraPoint, normal, sunDirection, separatedSunIrradianceClouds,
+				separatedSkyIrradianceClouds, sunIrradiance, skyIrradiance);
 
-			// Note that this isn't entirely correct. Really, we should be using the radiance + transmittance to the middle of the cloud layer, not to the camera.
-            float3 energy = skyTransmittance * solarRadiance;
-            energy *= lightEnergy * 0.2;  // Attenuate the solar energy by the cloud lighting model.
+			// The approximate unattenuated energy hitting the clouds is the full combined sun and sky irradiance.
+			// Note that sun/sky visibility is NOT used here, as the clouds are the ones blocking the light from the atmosphere.
+            float3 energy = sunIrradiance + skyIrradiance;
+            energy *= lightEnergy * 0.18;  // Attenuate the atospheric irradiance by the cloud lighting model.
 
 			float stepSize = smallStepSize * 1000.0;  // Kilometers to meters.
 

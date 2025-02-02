@@ -735,6 +735,30 @@ void GetSunAndSkyIrradiance(AtmosphereData atmosphere, Texture2D transmittanceLu
 	skyIrradiance = GetIrradiance(atmosphere, irradianceLut, lutSampler, radius, muS) * (1.f + dot(normal, position) / radius) * 0.5f;
 }
 
+// The below separated variants of GetSunAndSkyIrradiance are used to decouple the atmosphere data from the geometry,
+// which is necessary to render the atmopshere and atompshere-lit geometry in separate passes. Note that this separation
+// is an approximation, since the position is still in the precalculated component, but this is considered acceptable error.
+
+void DecomposeSeparableSunAndSkyIrradiance(AtmosphereData atmosphere, Texture2D transmittanceLut, Texture2D irradianceLut, SamplerState lutSampler,
+	float3 position, float3 sunDirection, out float3 separatedSunIrradiance, out float3 separatedSkyIrradiance)
+{
+    float radius = length(position);
+    float muS = dot(position, sunDirection) / radius;
+	
+	// Separable forms of the equations found in GetSunAndSkyIrradiance
+    separatedSunIrradiance = atmosphere.solarIrradiance * GetTransmittanceToSun(atmosphere, transmittanceLut, lutSampler, radius, muS);
+    separatedSkyIrradiance = GetIrradiance(atmosphere, irradianceLut, lutSampler, radius, muS) * 0.5f;
+}
+
+void RecomposeSeparableSunAndSkyIrradiance(float3 position, float3 normal, float3 sunDirection, float3 separatedSunIrradiance, float3 separatedSkyIrradiance,
+	out float3 sunIrradiance, out float3 skyIrradiance)
+{
+    float radius = length(position);
+	
+    sunIrradiance = separatedSunIrradiance * max(dot(normal, sunDirection), 0.f);
+    skyIrradiance = separatedSkyIrradiance * (1.f + dot(normal, position) / radius);
+}
+
 float3 GetSolarRadiance(AtmosphereData atmosphere)
 {
 	return atmosphere.solarIrradiance / (pi * sunAngularRadius * sunAngularRadius);
@@ -774,13 +798,15 @@ float4 GetPlanetSurfaceRadiance(AtmosphereData atmosphere, float3 planetCenter, 
 
 float3 ComputeAtmosphereCameraPosition(Camera camera)
 {
-	static const float3 surfaceOffset = float3(0.f, 0.f, 1.f);  // The atmosphere looks better off of the surface.
-	return camera.position.xyz / 1000.f + surfaceOffset;  // Atmosphere distances work in terms of kilometers due to floating point precision, so convert.
+	return camera.position.xyz / 1000.f;  // Atmosphere distances work in terms of kilometers due to floating point precision, so convert.
 }
 
 float3 ComputeAtmospherePlanetCenter(AtmosphereData atmosphere)
 {
-	return float3(0.f, 0.f, -atmosphere.radiusBottom);  // World origin is planet surface.
+	// The planet center was pulled out from relying on the atmosphere model, as it's used in a variety of places.
+	return planetCenter;
+	
+	//return float3(0.f, 0.f, -atmosphere.radiusBottom);  // World origin is planet surface.
 }
 
 float3 SampleAtmosphere(AtmosphereData atmosphere, Camera camera, float3 direction, float3 sunDirection, bool directSolarRadiance, Texture2D transmittanceLut, Texture3D scatteringLut, Texture2D irradianceLut, SamplerState lutSampler)
@@ -806,7 +832,8 @@ float3 SampleAtmosphere(AtmosphereData atmosphere, Camera camera, float3 directi
     float4 planetRadiance = GetPlanetSurfaceRadiance(atmosphere, planetCenter, cameraPosition, direction, shadowLength, sunDirection, transmittanceLut, scatteringLut, irradianceLut, lutSampler);
 	radiance = lerp(radiance, planetRadiance.xyz, planetRadiance.w);
 	
-	return radiance * 10.f;  // 10 is the default exposure used in Bruneton's demo.
+	// Multiply the exposure in here since this atmosphere sample is only ever used outside of the main atmosphere compose.
+    return radiance * atmosphereRadianceExposure;
 }
 
 #endif  // __ATMOSPHERE_HLSLI__
