@@ -109,7 +109,7 @@ void RenderUtils::GaussianBlur(CommandList& list, RenderPassResources& resources
 	// Use the intermediate results in the output as the input to the second pass.
 	bindData[0] = resources.Get(outputTexture);
 
-	dispatchX = std::ceil(inputComponent.description.width / 64);
+	dispatchX = std::ceil(inputComponent.description.width / 64.f);
 	dispatchY = inputComponent.description.height;
 
 	list.BindPipeline(horizontalLayout);
