@@ -237,6 +237,7 @@ void WindowFrame::RestrainCursor(CursorRestraint restraint)
 {
 	VGScopedCPUStat("Restrain Window Cursor");
 
+	const auto previousCursorRestraint = activeCursorRestraint;
 	activeCursorRestraint = restraint;
 
 	switch (restraint)
@@ -272,6 +273,37 @@ void WindowFrame::RestrainCursor(CursorRestraint restraint)
 		::ClientToScreen(static_cast<HWND>(handle), &bottomRight);
 
 		cursorLockPosition = std::make_pair(static_cast<int>(topLeft.x + (bottomRight.x - topLeft.x) * 0.5f), static_cast<int>(topLeft.y + (bottomRight.y - topLeft.y) * 0.5f));
+
+		// When re-acquring control, teleport the mouse to the center to prevent a jump
+		// when snapping the cursor. This is effectively doing what ImGui::TeleportMousePos does
+		// without using internal API.
+		if (previousCursorRestraint != CursorRestraint::ToCenter)
+		{
+			if (!::SetCursorPos(cursorLockPosition.first, cursorLockPosition.second))
+			{
+				VGLogWarning(logWindow, "Failed to set cursor position to window center on restraint transition: {}", GetPlatformError());
+			}
+
+			// Match the coordinate convention used by Input::UpdateMouse for AddMousePosEvent:
+			// screen coords when multi-viewport is enabled, client coords otherwise.
+			auto& io = ImGui::GetIO();
+			ImVec2 teleportTarget;
+			if (io.ConfigFlags & ImGuiConfigFlags_ViewportsEnable)
+			{
+				teleportTarget = ImVec2(static_cast<float>(cursorLockPosition.first), static_cast<float>(cursorLockPosition.second));
+			}
+			else
+			{
+				POINT centerInClient = { cursorLockPosition.first, cursorLockPosition.second };
+				::ScreenToClient(static_cast<HWND>(handle), &centerInClient);
+				teleportTarget = ImVec2(static_cast<float>(centerInClient.x), static_cast<float>(centerInClient.y));
+			}
+
+			io.MousePos = teleportTarget;
+			io.MousePosPrev = teleportTarget;
+			io.MouseDelta = ImVec2(0.f, 0.f);
+			io.WantSetMousePos = true;
+		}
 
 		break;
 	}
