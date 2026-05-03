@@ -137,12 +137,14 @@ void ComputeNoiseKernel(float3 lightDirection)
 
 	// Rotate the noise vectors towards the light vector.
 	// https://en.wikipedia.org/wiki/Rodrigues%27_rotation_formula
+	// Use cos/sin derived from the dot product directly; acos+sin loses precision and adds two transcendentals per kernel entry.
 	for (int i = 0; i < noiseKernelSize; ++i)
 	{
 		const float3 vec = noise[i];
 		const float3 rotationAxis = cross(vec, lightDirection);
-		const float theta = acos(dot(vec, lightDirection));
-		noiseKernel[i] = vec * cos(theta) + cross(rotationAxis, vec) * sin(theta) + rotationAxis * dot(rotationAxis, vec) * (1.0 - cos(theta));
+		const float cosTheta = clamp(dot(vec, lightDirection), -1.0, 1.0);
+		const float sinTheta = sqrt(max(1.0 - cosTheta * cosTheta, 0.0));
+		noiseKernel[i] = vec * cosTheta + cross(rotationAxis, vec) * sinTheta + rotationAxis * dot(rotationAxis, vec) * (1.0 - cosTheta);
 	}
 
 	noiseKernel[noiseKernelSize - 1] *= 3;  // Long-distance sample.
@@ -162,7 +164,7 @@ float SampleCloudDensityCone(Texture2D<float3> weatherTexture, Texture3D<float> 
 		float3 samplePosition = position + (stepSize * (float)i * noiseKernel[i]);
 
 		// Cone sample left the cloud layer, bail out. Need to check here since math breaks in SampleCloudDensity if sampling out of bounds.
-		float heightFraction = GetHeightFractionForPoint(position, float2(cloudLayerBottom, cloudLayerTop));
+		float heightFraction = GetHeightFractionForPoint(samplePosition, float2(cloudLayerBottom, cloudLayerTop));
 		if (heightFraction > 1.f)
 			break;
 
@@ -231,7 +233,8 @@ float ComputeLightEnergy(Texture2D<float3> weatherTexture, Texture3D<float> base
 #define RETURN_EARLYOUT
 #endif
 
-// Jitter is in the domain of [-1, 1]
+// ComputeNoiseKernel must have been called prior to this function to setup the cone sampling.
+// Jitter is in the domain of [-1, 1].
 MARCH_RESULT RayMarchInternal(Texture3D<float> baseShapeNoiseTexture, Texture3D<float> detailShapeNoiseTexture,
 	StructuredBuffer<float3> atmosphereIrradiance, Texture2D<float3> weatherTexture, float3 origin, float3 direction, float jitter,
 	float marchStart, float marchEnd, float3 sunDirection, float2 wind, float time, out float3 scatteredLuminance, out float transmittance,
@@ -241,9 +244,6 @@ MARCH_RESULT RayMarchInternal(Texture3D<float> baseShapeNoiseTexture, Texture3D<
 	scatteredLuminance = 0.xxx;
 	transmittance = 1;
 	depth = 1000000;  // Assume very far away.
-	
-	// Cache the noise kernel towards the sun.
-	ComputeNoiseKernel(sunDirection);
 
 	const float zDot = abs(dot(direction, float3(0, 0, 1)));
 	const float viewDotLight = dot(direction, sunDirection);
@@ -271,7 +271,11 @@ MARCH_RESULT RayMarchInternal(Texture3D<float> baseShapeNoiseTexture, Texture3D<
 
 	float dist = 0.f;
 	int detailSteps = 0;  // If >0, march in small steps.
-	
+
+	// 2nd octave accumulators for the multiple-scattering approximation. Total in-scattered radiance is the sum of all octaves.
+	float3 scatteredLuminance2 = 0.xxx;
+	float3 transmittance2 = 1.xxx;
+
 #ifdef CLOUDS_DEBUG_MARCHCOUNT
 	int loopCount = 0;
 #endif
@@ -362,7 +366,7 @@ MARCH_RESULT RayMarchInternal(Texture3D<float> baseShapeNoiseTexture, Texture3D<
 			float stepSize = smallStepSize * 200;
 
 			// Coefficients try to approximate real cloud behavior. Multiple sources were used to derive these numbers,
-			// but I did not do an extensive read into any of them and instead I'm using a bit of artistic license here.
+			// but I did not do an extensive read into any of them and instead I'm using more artistic license here.
 			// References:
 			// 0.05: http://www.patarnott.com/satsens/pdf/opticalPropertiesCloudsReview.pdf
 			// 0.026: https://amt.copernicus.org/articles/14/4959/2021
@@ -376,12 +380,12 @@ MARCH_RESULT RayMarchInternal(Texture3D<float> baseShapeNoiseTexture, Texture3D<
 			transmittance = trans.x;  // Scattering and absorbtion are uniform, so just use one channel.
 
 			// Multiple scattering approximation from Wrenninge.
+			// Octave 2 is integrated independently of octave 1 with attenuated scattering and extinction, sum at the end.
 			// See: https://gitea.yiem.net/QianMo/Real-Time-Rendering-4th-Bibliography-Collection/raw/branch/main/Chapter%201-24/[1909]%20[SIGGRAPH%202013]%20Oz-%20The%20Great%20and%20Volumetric.pdf
-			float msScattMultipler = 0.5;
-			float3 msScatt = scatteredLuminance;
-			float3 msTrans = transmittance.xxx;
-			ComputeScatteringIntegration(cloudDensity, energy, stepSize, scattCoeff * msScattMultipler, absorCoeff, msScatt, msTrans);
-			scatteredLuminance = msScatt;  // Single octave summation.
+			const float msScattAtten = 0.5;
+			const float msExtAtten = 0.5;
+			ComputeScatteringIntegration(cloudDensity, energy, stepSize, scattCoeff * msScattAtten, absorCoeff * msExtAtten,
+				scatteredLuminance2, transmittance2);
 #else
 			// Very simple approximation of transmittance.
 			float simpleExtinction = 0.08;
@@ -408,7 +412,11 @@ MARCH_RESULT RayMarchInternal(Texture3D<float> baseShapeNoiseTexture, Texture3D<
 		if (transmittance < 0.01f)
 			break;
 	}
-	
+
+	// Sum the second-octave multiple-scattering contribution into the final radiance.
+	// Intentionally don't MS accumulate the transmittance as well.
+	scatteredLuminance += scatteredLuminance2;
+
 #ifdef CLOUDS_DEBUG_MARCHCOUNT
 	return loopCount;
 #endif
@@ -515,7 +523,10 @@ MARCH_RESULT RayMarchClouds(Texture3D<float> baseShapeNoiseTexture, Texture3D<fl
 	// Low detail clouds cannot afford a well-jittered sample.
 	jitter *= 0.4;
 #endif
-	
+
+	// Precompute the noise kernel once per pixel. RayMarchInternal expects this to be set up before being called.
+	ComputeNoiseKernel(sunDirection);
+
 #ifdef CLOUDS_DEBUG_MARCHCOUNT
 	return RayMarchInternal(baseShapeNoiseTexture, detailShapeNoiseTexture, atmosphereIrradiance, weatherTexture, origin, direction,
 		jitter, marchStart, marchEnd, sunDirection, wind, time, scatteredLuminance, transmittance, depth);

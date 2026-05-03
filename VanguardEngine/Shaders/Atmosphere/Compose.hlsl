@@ -132,33 +132,39 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	
 	float3 finalColor = 0.xxx;
 	float lastDepth = -1;  // The depth needs to be tracked to compose volumetrics.
-	
+	// Track whether the current endpoint is the actual planet surface vs. an object in the air. Drives
+	// endpointIsGround passed to GetSkyRadianceToPoint to keep continuous geometry crossing the horizon
+	// line in a single LUT half. See Atmosphere.hlsli::GetSkyRadianceToPoint.
+	bool lastDepthIsGround = false;
+
 	bool hitSurface = geometryDepth < camera.farPlane;
 	if (hitSurface)
 	{
 		// Hit solid geometry, the direct lighting is already done in the forward pass.
-		
+
 		float depth = geometryDepth * 0.001;  // Meters to kilometers.
 		lastDepth = depth;
-		
+		lastDepthIsGround = false;  // Can't hit planet surface if a mesh is in front.
+
 		float3 inputColor = outputTexture[dispatchId.xy].xyz;
 		finalColor = inputColor;
 	}
-	
+
 	else
 	{
 		// Didn't hit any geometry, but could've hit the planet surface.
-		
+
 		float3 p = cameraPosition - planetCenter;
 		float pDotRay = dot(p, rayDirection);
 		float intersectionDistance = -pDotRay - sqrt(planetCenter.z * planetCenter.z - (dot(p, p) - (pDotRay * pDotRay)));
-	
+
 		if (intersectionDistance > 0.f)
 		{
 			// Hit the planet, compute the sun and sky light reflecting off, with the aerial perspective to that point.
-			
+
 			float3 hitPosition = cameraPosition + rayDirection * intersectionDistance;
 			lastDepth = intersectionDistance;
+			lastDepthIsGround = true;  // True planet surface hit.
 			float3 surfaceNormal = normalize(hitPosition - planetCenter);
 			
 			float3 sunIrradiance;
@@ -182,7 +188,8 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 			
 			float3 hitPosition;
 			float3 cirrusColor = SampleCirrusClouds(cloudsCirrusTexture, planetCenter, cameraPosition, rayDirection, hitPosition);
-			lastDepth = length(hitPosition) - 0.00001; // Subtract a small number so that no hit corresponds with a negative depth.
+			lastDepth = length(hitPosition) - 0.00001;  // Subtract a small number so that no hit corresponds with a negative depth.
+			lastDepthIsGround = false;
 			
 			// Start at the cirrus layer and end in space. Note that there's no shadow above the cirrus clouds.
 			float3 perspectiveTransmittance;
@@ -242,18 +249,18 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 		float3 backPosition = cameraPosition + rayDirection * lastDepth;
 		float3 cloudPosition = cameraPosition + rayDirection * depth;
 		lastDepth = depth;
-		
+
 		// Debug rendering should not have aerial perspective applied.
 #if defined(CLOUDS_DEBUG_MARCHCOUNT)
 		finalColor = finalColor * cloudsTransmittance + cloudsScattering;
 #elif defined(CLOUDS_DEBUG_TRANSMITTANCE)
 		finalColor = cloudsTransmittance;
-#else	
+#else
 		// Compute the aerial perspective between the last depth position behind the cloud, and the cloud itself.
 		// Note that the shadowLength here is intentionally 0, as we don't care about the shadow behind the cloud, which
 		// is probably extremely small if not actually 0 anyways.
 		float3 perspectiveTransmittance;
-		float3 perspectiveScattering = GetSkyRadianceToPoint(atmosphere, transmittanceLut, scatteringLut, bilinearWrap, cloudPosition - planetCenter, backPosition - planetCenter, 0.f, sunDirection, perspectiveTransmittance);
+		float3 perspectiveScattering = GetSkyRadianceToPoint(atmosphere, transmittanceLut, scatteringLut, bilinearWrap, cloudPosition - planetCenter, backPosition - planetCenter, lastDepthIsGround, 0.f, sunDirection, perspectiveTransmittance);
 		
 		// Composite.
 		perspectiveScattering *= atmosphereRadianceExposure;
@@ -261,6 +268,10 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 		finalColor = finalColor * perspectiveTransmittance + perspectiveScattering;
 		finalColor = finalColor * cloudsTransmittance + cloudsScattering;
 #endif
+		
+		// Clouds aren't a surface hit, reset for next composition stage.
+		// Note this is after the radiance computation since the previous hit was important.
+		lastDepthIsGround = false;
 	}
 	
 	// Done composing intermediary volumetrics, now apply final aerial perspective on top.
@@ -285,8 +296,8 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 		
 		float3 perspectiveTransmittanceNear;
 		float3 perspectiveTransmittanceFar;
-		float3 perspectiveScatteringNear = GetSkyRadianceToPoint(atmosphere, transmittanceLut, scatteringLut, bilinearWrap, cameraPosition - planetCenter, hitPosition - planetCenter, shadowLength, sunDirection, perspectiveTransmittanceNear);
-		float3 perspectiveScatteringFar = GetSkyRadianceToPointNearShadow(atmosphere, transmittanceLut, scatteringLut, bilinearWrap, cameraPosition - planetCenter, hitPosition - planetCenter, shadowLength, sunDirection, perspectiveTransmittanceFar);
+		float3 perspectiveScatteringNear = GetSkyRadianceToPoint(atmosphere, transmittanceLut, scatteringLut, bilinearWrap, cameraPosition - planetCenter, hitPosition - planetCenter, lastDepthIsGround, shadowLength, sunDirection, perspectiveTransmittanceNear);
+		float3 perspectiveScatteringFar = GetSkyRadianceToPointNearShadow(atmosphere, transmittanceLut, scatteringLut, bilinearWrap, cameraPosition - planetCenter, hitPosition - planetCenter, lastDepthIsGround, shadowLength, sunDirection, perspectiveTransmittanceFar);
 		
 		// Blend between the near and far values.
 #ifdef ENABLE_FAR_SHADOW_FIX

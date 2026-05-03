@@ -198,29 +198,29 @@ float4 PSMain(PixelIn input) : SV_Target
 		{
 			const float3 separatedSunIrradianceNearCamera = atmosphereIrradiance[0];
 			const float3 separatedSkyIrradianceNearCamera = atmosphereIrradiance[1];
-			
+
 			float3 cameraPositionAtmoSpace = ComputeAtmosphereCameraPosition(camera);
-			float3 cameraPoint = cameraPositionAtmoSpace - planetCenter;
 			// Convert to kilometers. The atmosphere should probably provide a helper function to convert, but oh well.
 			float3 hitPositionAtmoSpace = input.position / 1000.f;
-			
+			// The irradiance is computed at the camera's position, so the further the hit point is from the camera,
+			// the less accurate the irradiance.
+			float3 surfacePoint = hitPositionAtmoSpace - planetCenter;
+
 			float3 sunIrradiance;
 			float3 skyIrradiance;
-			RecomposeSeparableSunAndSkyIrradiance(cameraPoint, normal, -light.direction, separatedSunIrradianceNearCamera,
+			RecomposeSeparableSunAndSkyIrradiance(surfacePoint, normal, -light.direction, separatedSunIrradianceNearCamera,
 				separatedSkyIrradianceNearCamera, sunIrradiance, skyIrradiance);
-			
+
 			const float sunVisibility = CalculateSunVisibility(hitPositionAtmoSpace, light.direction, weatherTexture);
 			const float skyVisibility = CalculateSkyVisibility(cameraPositionAtmoSpace, bindData.globalWeatherCoverage);
-			
-			// Combine both atmospheric irradiance contributions, attenuated by any visibility modifications, such as
-			// clouds blocking out the sun.
+
+			// The IBL irradiance map captures the sky's appearance but is NOT yet modulated by cloud transmittance,
+			// so without an analytic sky term gated by skyVisibility, surfaces underneath thick clouds receive
+			// incorrect ambient illumination. Note that this currently double-counts some sky energy with IBL diffuse.
 			// Multiply against the existing color to preserve custom light modifications.
-			//light.color *= (sunIrradiance * sunVisibility) + (skyIrradiance * skyVisibility);
-			
-			// Note that the sky irradiance contribution was removed, since this *should* already be getting contributed
-			// by IBL? Comparing IBL lighting with pure skyIrradiance lighting shows that they are nothing alike however,
-			// so this is definitely not the most physically accurate model.
-			light.color *= (sunIrradiance * sunVisibility);
+			// #TODO: Either skip IBL diffuse here (since the analytic sky covers it) or rebuild IBL with cloud transmittance
+			// applied to the sky luminance.
+			light.color *= (sunIrradiance * sunVisibility) + (skyIrradiance * skyVisibility);
 		}
 		
 		LightSample sample = SampleLight(light, materialSample, camera, viewDirection, input.position, normalDirection);

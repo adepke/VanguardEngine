@@ -91,20 +91,20 @@ float RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uint
 	float2 blueNoiseSamplePos = jitteredUv * uint2(width, height) * upscaleResolutionMultiplier;
 	blueNoiseSamplePos = blueNoiseSamplePos / float2(blueNoiseWidth, blueNoiseHeight);
 	float rayOffset = blueNoiseTexture.Sample(pointWrap, blueNoiseSamplePos);
-	float jitter = (rayOffset - 0.5f) * 2.f;  // Rescale to [-1, 1]
-	jitter *= 0.5;
-	
-	// #TODO: jittering this is a bit of a bandaid, producing a very stochastic output and relying on blurring to
-	// resolve the output. Should improve the underlying rendering here.
-	
+	float jitter = saturate(rayOffset);  // [0, 1]
+
 	float stepSize = (marchEnd - marchStart) / 20;
 	dist += jitter * stepSize;
-	
+
+	// Precompute the noise kernel once for this pixel.
+	ComputeNoiseKernel(sunDirection);
+
 	float totalShadow = 0.f;
+	float accumulatedTransmittance = 1.f;  // Used for early out once the ray is fully shadowed
 #ifdef CLOUDS_DEBUG_MARCHCOUNT
 	int totalSteps = 0;
 #endif
-	
+
 	while (dist < marchEnd)
 	{
 		float3 position = origin + rayDirection * dist;
@@ -117,9 +117,9 @@ float RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uint
 		if (RaySphereIntersection(position, sunDirection, planetCenter, planetRadius + cloudLayerTop, topBoundaryIntersect))
 		{
 			localMarchEnd = topBoundaryIntersect.y;
-			
+
 			float2 bottomBoundaryIntersect;
-			if (RaySphereIntersection(origin, sunDirection, planetCenter, planetRadius + cloudLayerBottom, bottomBoundaryIntersect))
+			if (RaySphereIntersection(position, sunDirection, planetCenter, planetRadius + cloudLayerBottom, bottomBoundaryIntersect))
 			{
 				float top = all(topBoundaryIntersect > 0) ? min(topBoundaryIntersect.x, topBoundaryIntersect.y) : max(topBoundaryIntersect.x, topBoundaryIntersect.y);
 				float bottom = all(bottomBoundaryIntersect > 0) ? min(bottomBoundaryIntersect.x, bottomBoundaryIntersect.y) : max(bottomBoundaryIntersect.x, bottomBoundaryIntersect.y);
@@ -148,12 +148,17 @@ float RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uint
 		// Experimenting with weighted contribution to reduce shadows far away.
 		float weight = 15.f - 0.12 * pow(dist, 1.5f);
 		weight = saturate(weight);
-		
+
 		if (transmittance < 1.f)
 		{
 			totalShadow += stepSize * (1.f - transmittance) * weight;
+			accumulatedTransmittance *= transmittance;
 		}
-		
+
+		// Early out if the sample is fully shadowed OR the effective contribution is 0.
+		if (accumulatedTransmittance < 0.01f || weight <= 0.f)
+			break;
+
 		dist += stepSize;
 	}
 	

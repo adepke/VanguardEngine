@@ -9,6 +9,16 @@
 
 // Atmospheric scattering, inspired by "Precomputed Atmospheric Rendering" [https://hal.inria.fr/inria-00288758/en]
 // and with additions from Frostbite [https://media.contentapi.ea.com/content/dam/eacom/frostbite/files/s2016-pbs-frostbite-sky-clouds-new.pdf]
+// Then, some additional modifications for this project:
+//   1. GetSkyRadiance applies a horizon bias on mu. This is to fix the horizon LUT disparity for mountains.
+//   2. Both GetSkyRadiance and GetSkyRadianceToPoint apply the bias symmetrically (reverse bias on
+//      ground-intersecting rays). Bruneton only biases sky-side rays.
+//   3. GetSkyRadianceToPoint takes an explicit `endpointIsGround` parameter instead of computing
+//      rayIntersectsGround from the idealized camera-ray vs planet-sphere check. Required to handle
+//      object hits (terrain meshes, clouds) that obstruct the ray before it would reach the planet
+//      sphere. Without it, mountains cross the horizon line sample two different LUT halves and
+//      show a nasty visible break. Ref: ebruneton/precomputed_atmospheric_scattering#26.
+//   4. GetSkyRadianceToPointNearShadow is a custom radiance handler for near-camera shadows. #TODO: remove this hack.
 
 // Density = exponentialCoefficient * exp(exponentialScale * height) + heightScale * height + offset
 struct DensityLayer
@@ -618,7 +628,7 @@ float3 GetSkyRadiance(AtmosphereData atmosphere, Texture2D transmittanceLut, Tex
 	float radius = length(cameraPosition);
 	float rMu = dot(cameraPosition, viewDirection);
 	float distanceToAtmosphereTop = -rMu - sqrt(rMu * rMu - radius * radius + atmosphere.radiusTop * atmosphere.radiusTop);
-	
+
 	// If the camera is in space, move the position to be at the atmosphere top.
 	if (distanceToAtmosphereTop > 0.f)
 	{
@@ -626,21 +636,28 @@ float3 GetSkyRadiance(AtmosphereData atmosphere, Texture2D transmittanceLut, Tex
 		radius = atmosphere.radiusTop;
 		rMu += distanceToAtmosphereTop;
 	}
-	
+
 	// View ray doesn't intersect the atmosphere.
 	else if (radius > atmosphere.radiusTop)
-	{        
+	{
 		transmittance = 1.f;
 		return 0.f;
 	}
-	
+
 	float mu = rMu / radius;
 	float muS = dot(cameraPosition, sunDirection) / radius;
 	float nu = dot(viewDirection, sunDirection);
 	bool rayIntersectsGround = RayIntersectsGround(atmosphere, radius, mu);
-	
+
+	// Symmetric horizon bias. Reference applies no bias here at all, and applies only the sky-side bias inside
+	// GetSkyRadianceToPoint. We bias both functions and both sides of the seam so the LUT — whose two
+	// precomputed halves are independent and don't align across mu = muHorizon — is never sampled at the
+	// discontinuity. Required for continuity where Compose flips between this and ToPoint.
+	const float muHorizon = -sqrt(max(1.f - (atmosphere.radiusBottom / radius) * (atmosphere.radiusBottom / radius), 0.f));
+	mu = rayIntersectsGround ? min(mu, muHorizon - 0.004f) : max(mu, muHorizon + 0.004f);
+
 	transmittance = rayIntersectsGround ? 0.f : GetTransmittanceToAtmosphereTop(atmosphere, transmittanceLut, lutSampler, radius, mu);
-	
+
 	float3 singleMieScattering;
 	float3 scattering;
 	
@@ -666,8 +683,9 @@ float3 GetSkyRadiance(AtmosphereData atmosphere, Texture2D transmittanceLut, Tex
 	return scattering * RayleighPhase(nu) + singleMieScattering * MiePhase(nu, mieAnisotropy);
 }
 
+// endpointIsGround is only true when the position lies on the planet surface (i.e. no mesh/volume is in front).
 float3 GetSkyRadianceToPoint(AtmosphereData atmosphere, Texture2D transmittanceLut, Texture3D scatteringLut, SamplerState lutSampler,
-	float3 cameraPosition, float3 position, float shadowLength, float3 sunDirection, out float3 transmittance)
+	float3 cameraPosition, float3 position, bool endpointIsGround, float shadowLength, float3 sunDirection, out float3 transmittance)
 {
 	float3 viewDirection = normalize(position - cameraPosition);
 	float radius = length(cameraPosition);
@@ -680,19 +698,19 @@ float3 GetSkyRadianceToPoint(AtmosphereData atmosphere, Texture2D transmittanceL
 		radius = atmosphere.radiusTop;
 		radiusMu += distanceToAtmosphereTop;
 	}
-	
+
 	float mu = radiusMu / radius;
 	float muS = dot(cameraPosition, sunDirection) / radius;
 	float nu = dot(viewDirection, sunDirection);
 	float d = length(position - cameraPosition);
-	bool rayIntersectsGround = RayIntersectsGround(atmosphere, radius, mu);
-	
-	// Avoid rendering artifacts near the horizon, see: https://github.com/ebruneton/precomputed_atmospheric_scattering/pull/32#issuecomment-480523982
-	if (!rayIntersectsGround)
-	{
-		float muHorizon = -sqrt(max(1.f - (atmosphere.radiusBottom / radius) * (atmosphere.radiusBottom / radius), 0.f));
-		mu = max(mu, muHorizon + 0.004f);
-	}
+
+	// The caller has more information about the geometry than the atmosphere, so don't bother computing a ground intersection here
+	// and just have the caller handle that.
+	bool rayIntersectsGround = endpointIsGround;
+
+	// Symmetric horizon bias for LUT seam.
+	const float muHorizon = -sqrt(max(1.f - (atmosphere.radiusBottom / radius) * (atmosphere.radiusBottom / radius), 0.f));
+	mu = rayIntersectsGround ? min(mu, muHorizon - 0.004f) : max(mu, muHorizon + 0.004f);
 	
 	transmittance = GetTransmittance(atmosphere, transmittanceLut, lutSampler, radius, mu, d, rayIntersectsGround);
 	
@@ -729,7 +747,7 @@ float3 GetSkyRadianceToPoint(AtmosphereData atmosphere, Texture2D transmittanceL
 // Custom variation that treats the shadowLength term as distance along the view ray to omit scattering, starting from
 // the camera outwards, as opposed to starting at the end of the ray and backwards with GetSkyRadianceToPoint
 float3 GetSkyRadianceToPointNearShadow(AtmosphereData atmosphere, Texture2D transmittanceLut, Texture3D scatteringLut, SamplerState lutSampler,
-	float3 cameraPosition, float3 position, float shadowLength, float3 sunDirection, out float3 transmittance)
+	float3 cameraPosition, float3 position, bool endpointIsGround, float shadowLength, float3 sunDirection, out float3 transmittance)
 {
 	float3 viewDirection = normalize(position - cameraPosition);
 	float radius = length(cameraPosition);
@@ -742,19 +760,16 @@ float3 GetSkyRadianceToPointNearShadow(AtmosphereData atmosphere, Texture2D tran
 		radius = atmosphere.radiusTop;
 		radiusMu += distanceToAtmosphereTop;
 	}
-	
+
 	float mu = radiusMu / radius;
 	float muS = dot(cameraPosition, sunDirection) / radius;
 	float nu = dot(viewDirection, sunDirection);
 	float d = length(position - cameraPosition);
-	bool rayIntersectsGround = RayIntersectsGround(atmosphere, radius, mu);
-	
-	// Avoid rendering artifacts near the horizon, see: https://github.com/ebruneton/precomputed_atmospheric_scattering/pull/32#issuecomment-480523982
-	if (!rayIntersectsGround)
-	{
-		float muHorizon = -sqrt(max(1.f - (atmosphere.radiusBottom / radius) * (atmosphere.radiusBottom / radius), 0.f));
-		mu = max(mu, muHorizon + 0.004f);
-	}
+	bool rayIntersectsGround = endpointIsGround;
+
+	// Same symmetric horizon bias as GetSkyRadianceToPoint.
+	const float muHorizon = -sqrt(max(1.f - (atmosphere.radiusBottom / radius) * (atmosphere.radiusBottom / radius), 0.f));
+	mu = rayIntersectsGround ? min(mu, muHorizon - 0.004f) : max(mu, muHorizon + 0.004f);
 	
 	transmittance = GetTransmittance(atmosphere, transmittanceLut, lutSampler, radius, mu, d, rayIntersectsGround);
 	
@@ -852,8 +867,9 @@ float4 GetPlanetSurfaceRadiance(AtmosphereData atmosphere, float3 planetCenter, 
 		float3 radiance = atmosphere.surfaceColor * (1.f / pi) * ((sunIrradiance * sunVisibility) + (skyIrradiance * skyVisibility));
 		
 		float3 transmittance;
-		float3 scattering = GetSkyRadianceToPoint(atmosphere, transmittanceLut, scatteringLut, lutSampler, cameraPosition - planetCenter, surfacePoint - planetCenter, shadowLength, sunDirection, transmittance);
-		
+		// The endpoint here is the actual planet surface, so endpointIsGround = true.
+		float3 scattering = GetSkyRadianceToPoint(atmosphere, transmittanceLut, scatteringLut, lutSampler, cameraPosition - planetCenter, surfacePoint - planetCenter, true, shadowLength, sunDirection, transmittance);
+
 		return float4(radiance * transmittance + scattering, 1.f);
 	}
 	
