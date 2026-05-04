@@ -52,6 +52,7 @@ void CameraSystem::Update(entt::registry& registry, float deltaTime)
 {
 	VGScopedCPUStat("Camera System");
 
+	// #TODO: don't use a cvar for this.
 	CvarCreate("cameraSpeed", "How fast the camera should move", 1.f);
 
 	bool moveForward = false;
@@ -73,6 +74,18 @@ void CameraSystem::Update(entt::registry& registry, float deltaTime)
 	if (ImGui::IsKeyDown(ImGuiKey_Space)) moveUp = true;
 	if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl)) moveDown = true;
 	if (ImGui::IsKeyDown(ImGuiKey_LeftShift)) moveSprint = true;
+
+	if (io.MouseWheel != 0.f && registry.view<const ControlComponent>().size() > 0)
+	{
+		if (auto cvar = CvarGet("cameraSpeed", float); cvar)
+		{
+			constexpr float scrollStepFactor = 1.15f;  // ~15% per scroll.
+			constexpr float minCameraSpeed = 0.05f;
+			constexpr float maxCameraSpeed = 200.f;
+			const float updated = std::clamp(*cvar * std::pow(scrollStepFactor, io.MouseWheel), minCameraSpeed, maxCameraSpeed);
+			CvarSet("cameraSpeed", updated);
+		}
+	}
 
 	// Iterate all camera entities that have control.
 	registry.view<TransformComponent, const CameraComponent, const ControlComponent>().each([&](auto entity, auto& transform, const auto& camera)
