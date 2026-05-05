@@ -298,32 +298,46 @@ namespace Input
 
 		auto cursor = ImGui::GetMouseCursor();
 
-		if (cursor == ImGuiMouseCursor_None || io.MouseDrawCursor)
-		{
-			::SetCursor(nullptr);  // Hide the cursor.
-		}
+		// Only override the OS cursor when it is within the client area.
+		// When the cursor is on a non-client area (e.g. resize border, title bar),
+		// Windows manages the cursor via WM_SETCURSOR / DefWindowProc, and
+		// overriding it here every frame causes flickering between the resize
+		// cursor and the arrow cursor.
+		POINT clientPoint = mouse_screen_pos;
+		::ScreenToClient(hWnd, &clientPoint);
+		RECT clientRect;
+		::GetClientRect(hWnd, &clientRect);
+		const bool inClientArea = has_mouse_screen_pos && ::PtInRect(&clientRect, clientPoint);
 
-		else
+		if (inClientArea)
 		{
-			// Default to arrow.
-			LPTSTR platformCursor = IDC_ARROW;
-
-			switch (cursor)
+			if (cursor == ImGuiMouseCursor_None || io.MouseDrawCursor)
 			{
-			case ImGuiMouseCursor_Arrow: platformCursor = IDC_ARROW; break;
-			case ImGuiMouseCursor_TextInput: platformCursor = IDC_IBEAM; break;
-			case ImGuiMouseCursor_ResizeAll: platformCursor = IDC_SIZEALL; break;
-			case ImGuiMouseCursor_ResizeEW: platformCursor = IDC_SIZEWE; break;
-			case ImGuiMouseCursor_ResizeNS: platformCursor = IDC_SIZENS; break;
-			case ImGuiMouseCursor_ResizeNESW: platformCursor = IDC_SIZENESW; break;
-			case ImGuiMouseCursor_ResizeNWSE: platformCursor = IDC_SIZENWSE; break;
-			case ImGuiMouseCursor_Hand: platformCursor = IDC_HAND; break;
-			case ImGuiMouseCursor_NotAllowed: platformCursor = IDC_NO; break;
+				::SetCursor(nullptr);  // Hide the cursor.
 			}
 
-			if (!::SetCursor(::LoadCursor(nullptr, platformCursor)))
+			else
 			{
-				VGLogWarning(logCore, "Failed to set cursor: {}", GetPlatformError());
+				// Default to arrow.
+				LPTSTR platformCursor = IDC_ARROW;
+
+				switch (cursor)
+				{
+				case ImGuiMouseCursor_Arrow: platformCursor = IDC_ARROW; break;
+				case ImGuiMouseCursor_TextInput: platformCursor = IDC_IBEAM; break;
+				case ImGuiMouseCursor_ResizeAll: platformCursor = IDC_SIZEALL; break;
+				case ImGuiMouseCursor_ResizeEW: platformCursor = IDC_SIZEWE; break;
+				case ImGuiMouseCursor_ResizeNS: platformCursor = IDC_SIZENS; break;
+				case ImGuiMouseCursor_ResizeNESW: platformCursor = IDC_SIZENESW; break;
+				case ImGuiMouseCursor_ResizeNWSE: platformCursor = IDC_SIZENWSE; break;
+				case ImGuiMouseCursor_Hand: platformCursor = IDC_HAND; break;
+				case ImGuiMouseCursor_NotAllowed: platformCursor = IDC_NO; break;
+				}
+
+				if (!::SetCursor(::LoadCursor(nullptr, platformCursor)))
+				{
+					VGLogWarning(logCore, "Failed to set cursor: {}", GetPlatformError());
+				}
 			}
 		}
 	}
