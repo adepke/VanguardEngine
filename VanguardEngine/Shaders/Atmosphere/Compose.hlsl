@@ -79,7 +79,7 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	StructuredBuffer<AtmosphereData> atmosphereBuffer = ResourceDescriptorHeap[bindData.atmosphereBuffer];
 	Texture2D<float4> cloudsScatteringTransmittanceTexture = ResourceDescriptorHeap[bindData.cloudsScatteringTransmittanceTexture];
 	Texture2D<float> cloudsDepthTexture = ResourceDescriptorHeap[bindData.cloudsDepthTexture];
-	Texture2D<float> cloudsVisibilityTexture = ResourceDescriptorHeap[bindData.cloudsVisibilityTexture];
+	Texture2D<float2> cloudsVisibilityTexture = ResourceDescriptorHeap[bindData.cloudsVisibilityTexture];
 	Texture2D<float4> cloudsCirrusTexture = ResourceDescriptorHeap[bindData.cloudsCirrusTexture];
 	Texture2D<float3> weatherTexture = ResourceDescriptorHeap[bindData.weatherTexture];
 	Texture2D<float> geometryDepthTexture = ResourceDescriptorHeap[bindData.geometryDepthTexture];
@@ -111,17 +111,20 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	float3 cameraPosition = ComputeAtmosphereCameraPosition(camera);
 	float3 planetCenter = ComputeAtmospherePlanetCenter(atmosphere);
 	
-	bool hitPlanet = false;
+	// Atomspheric in-scatter is omitted along the ray in the bounds of [shadowStart, shadowStart + shadowLength].
+	float shadowStart  = 0.f;
 	float shadowLength = 0.f;
-	
+
 #if defined(RENDER_LIGHT_SHAFTS) && (RENDER_LIGHT_SHAFTS > 0)
-	shadowLength = cloudsVisibilityTexture.Sample(bilinearClamp, uv);
-	
+	float2 visibilitySample = cloudsVisibilityTexture.Sample(bilinearClamp, uv);
+	shadowStart  = visibilitySample.x;
+	shadowLength = visibilitySample.y;
+
 	// Soften the shadows a bit, except when looking at the sun. Shadows cast by clouds when looking at the sun
 	// should be more dramatic to make the effect obvious.
 	const float muS = dot(rayDirection, sunDirection);
-	shadowLength *= 0.5 * smoothstep(0.85, 1.0, muS) + 0.5;
-	
+	shadowLength *= smoothstep(0.85, 1.0, muS) + 1.0;
+
 	// Hack the light shadows to fade in when the sun is at the horizon.
 	float lightshaftFadeHack = smoothstep(0.01, 0.04, dot(normalize(cameraPosition - planetCenter), sunDirection));
 	shadowLength = max(0.f, shadowLength * lightshaftFadeHack);
@@ -177,8 +180,6 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 			
 			float3 radiance = atmosphere.surfaceColor * (1.f / pi) * ((sunIrradiance * sunVisibility) + (skyIrradiance * skyVisibility));
 			finalColor = radiance * atmosphereRadianceExposure;
-			
-			hitPlanet = true;
 		}
 		
 		else
@@ -191,9 +192,10 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 			lastDepth = length(hitPosition) - 0.00001;  // Subtract a small number so that no hit corresponds with a negative depth.
 			lastDepthIsGround = false;
 			
-			// Start at the cirrus layer and end in space. Note that there's no shadow above the cirrus clouds.
+			// Start at the cirrus layer and end in space. Note that there's no shadow above the cirrus clouds, so
+			// shadow segment is (0, 0).
 			float3 perspectiveTransmittance;
-			float3 perspectiveScattering = GetSkyRadiance(atmosphere, transmittanceLut, scatteringLut, bilinearWrap, hitPosition - planetCenter, rayDirection, 0.f, sunDirection, perspectiveTransmittance);
+			float3 perspectiveScattering = GetSkyRadiance(atmosphere, transmittanceLut, scatteringLut, bilinearWrap, hitPosition - planetCenter, rayDirection, 0.f, 0.f, sunDirection, perspectiveTransmittance);
 			
 			// Branchless version of: if lastDepth < 0: perspectiveScattering = 0
 			// Necessary so that negative depth (no hit) doesn't contribute any aerial perspective.
@@ -257,10 +259,10 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 		finalColor = cloudsTransmittance;
 #else
 		// Compute the aerial perspective between the last depth position behind the cloud, and the cloud itself.
-		// Note that the shadowLength here is intentionally 0, as we don't care about the shadow behind the cloud, which
-		// is probably extremely small if not actually 0 anyways.
+		// Shadow segment is (0, 0): we don't model cloud-cast shadow within the cloud-to-back-endpoint segment
+		// because the cloud itself is the dominant occluder there.
 		float3 perspectiveTransmittance;
-		float3 perspectiveScattering = GetSkyRadianceToPoint(atmosphere, transmittanceLut, scatteringLut, bilinearWrap, cloudPosition - planetCenter, backPosition - planetCenter, lastDepthIsGround, 0.f, sunDirection, perspectiveTransmittance);
+		float3 perspectiveScattering = GetSkyRadianceToPoint(atmosphere, transmittanceLut, scatteringLut, bilinearWrap, cloudPosition - planetCenter, backPosition - planetCenter, lastDepthIsGround, 0.f, 0.f, sunDirection, perspectiveTransmittance);
 		
 		// Composite.
 		perspectiveScattering *= atmosphereRadianceExposure;
@@ -282,42 +284,13 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	if (lastDepth >= 0.f)
 	{
 		float3 hitPosition = cameraPosition + rayDirection * lastDepth;
-		
-		// This is a horrible hack, possibly one of the worst in the whole project.
-		// GetSkyRadianceToPoint treats shadows as omission of scattering near the camera, while
-		// GetSkyRadiance treats shadows as omission away from the camera, at the other end of the view ray.
-		// This disparity causes far away clouds, which are viewed by a ray that is traversing some volume
-		// of shadow, to appear too bright against a darkened sky, as all that in-scattered light from the sky
-		// is not occluded at the eye, while the surrouding sky does account for that.
-		// As a result, GetSkyRadianceToPointNearShadow was created, which is not at all correct but a good
-		// enough approximation for distant objects. Ideally, there would be no blending done here and the
-		// GetSkyRadianceToPointNearShadow function would be used, but I don't have the time to properly
-		// fix that function to be correct.
-		
-		float3 perspectiveTransmittanceNear;
-		float3 perspectiveTransmittanceFar;
-		float3 perspectiveScatteringNear = GetSkyRadianceToPoint(atmosphere, transmittanceLut, scatteringLut, bilinearWrap, cameraPosition - planetCenter, hitPosition - planetCenter, lastDepthIsGround, shadowLength, sunDirection, perspectiveTransmittanceNear);
-		float3 perspectiveScatteringFar = GetSkyRadianceToPointNearShadow(atmosphere, transmittanceLut, scatteringLut, bilinearWrap, cameraPosition - planetCenter, hitPosition - planetCenter, lastDepthIsGround, shadowLength, sunDirection, perspectiveTransmittanceFar);
-		
-		// Blend between the near and far values.
-#ifdef ENABLE_FAR_SHADOW_FIX
-		float blendFactor = smoothstep(20, 90, lastDepth);
-		
-		if (hitPlanet)
-		{
-			blendFactor = 1.f;
-		}
-#else
-		float blendFactor = 0.f;
-#endif
-		
-		perspectiveScattering = lerp(perspectiveScatteringNear, perspectiveScatteringFar, blendFactor);
-		perspectiveTransmittance = lerp(perspectiveTransmittanceNear, perspectiveTransmittanceFar, blendFactor);
+
+		perspectiveScattering = GetSkyRadianceToPoint(atmosphere, transmittanceLut, scatteringLut, bilinearWrap, cameraPosition - planetCenter, hitPosition - planetCenter, lastDepthIsGround, shadowStart, shadowLength, sunDirection, perspectiveTransmittance);
 	}
-	
+
 	else
 	{
-		perspectiveScattering = GetSkyRadiance(atmosphere, transmittanceLut, scatteringLut, bilinearWrap, cameraPosition - planetCenter, rayDirection, shadowLength, sunDirection, perspectiveTransmittance);
+		perspectiveScattering = GetSkyRadiance(atmosphere, transmittanceLut, scatteringLut, bilinearWrap, cameraPosition - planetCenter, rayDirection, shadowStart, shadowLength, sunDirection, perspectiveTransmittance);
 	}
 	
 	perspectiveScattering *= atmosphereRadianceExposure;

@@ -1076,7 +1076,6 @@ void EditorUI::DrawAtmosphereControls(RenderDevice* device, entt::registry& regi
 		{
 			ImGui::Text("General");
 			ComponentProperties::RenderTimeOfDayComponent(registry, atmosphere.sunLight);
-			CvarHelpers::Checkbox("farVolumetricShadowFix", "Far volume shadow fix enabled");
 
 			ImGui::Separator();
 

@@ -290,8 +290,6 @@ void Atmosphere::Initialize(RenderDevice* inDevice, entt::registry& registry)
 	device = inDevice;
 
 	CvarCreate("renderLightShafts", "Controls rendering of volumetric light shafts, currently only cast by clouds. 0=off, 1=on", 1);
-	CvarCreate("farVolumetricShadowFix", "Enables a fix for very distant objects that are masked by volumetric shadows, which normally "
-		"show up too brightly against the surrounding sky", 1);
 
 	transmissionPrecomputeLayout = RenderPipelineLayout{}
 		.ComputeShader({ "Atmosphere/AtmospherePrecompute", "TransmittanceLutMain" });
@@ -476,8 +474,6 @@ void Atmosphere::Render(RenderGraph& graph, Clouds& clouds, AtmosphereResources 
 			.ComputeShader({ "Atmosphere/Compose", "Main" })
 			.Macro({ "RENDER_LIGHT_SHAFTS", renderLightShafts });
 
-		if (*CvarGet("farVolumetricShadowFix", int) > 0)
-			composeLayout.Macro({ "ENABLE_FAR_SHADOW_FIX" });
 		if (*CvarGet("cloudDebugMarchCount", int) > 0)
 			composeLayout.Macro({ "CLOUDS_DEBUG_MARCHCOUNT" });
 		if (*CvarGet("cloudDebugTransmittance", int) > 0)

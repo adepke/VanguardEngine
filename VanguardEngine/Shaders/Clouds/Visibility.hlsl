@@ -26,8 +26,10 @@ struct BindData
 
 ConstantBuffer<BindData> bindData : register(b0);
 
-float RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uint height)
-{	
+// Returns (shadowStart, shadowLength) describing a single contiguous shadow segment along the camera view ray, in
+// kilometers.
+float2 RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uint height)
+{
 	float3 sunDirection = float3(sin(bindData.solarZenithAngle), 0.f, cos(bindData.solarZenithAngle));
 	float3 rayDirection = ComputeRayDirection(camera, jitteredUv);
 
@@ -37,15 +39,15 @@ float RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uint
 	Texture2D<float3> weatherTexture = ResourceDescriptorHeap[bindData.weatherTexture];
 	Texture2D<float> geometryDepthTexture = ResourceDescriptorHeap[bindData.geometryDepthTexture];
 	Texture2D<float> blueNoiseTexture = ResourceDescriptorHeap[bindData.blueNoiseTexture];
-	
+
 	const float planetRadius = 6360.0;  // #TODO: Get from atmosphere data.
-	
+
 	float dist = 0.f;
 	float3 origin = ComputeAtmosphereCameraPosition(camera);
-	
+
 	float marchStart = 0;
 	float marchEnd;
-	
+
 	float2 topBoundaryIntersect;
 	if (RaySphereIntersection(origin, rayDirection, planetCenter, planetRadius + cloudLayerTop, topBoundaryIntersect))
 	{
@@ -54,7 +56,7 @@ float RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uint
 	else
 	{
 		// Outside of the cloud layer.
-		return 0;
+		return float2(0, 0);
 	}
 
 	// Stop short if we hit the planet.
@@ -66,7 +68,7 @@ float RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uint
 
 	// Limit the march distance. Far away clouds won't meaningfully contribute shadow and are simply too expensive to march to.
 	marchEnd = clamp(marchEnd, 0, 50);
-	
+
 	// Early out of the march if we hit opaque geometry.
 	// Using the base UV instead of jittered provides slightly better edges around geometry.
 	float geometryDepth = geometryDepthTexture.Sample(bilinearClamp, baseUv);
@@ -76,12 +78,12 @@ float RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uint
 		geometryDepth *= 0.001;  // Meters to kilometers.
 		marchEnd = min(marchEnd, geometryDepth);
 	}
-	
-	// TODO: early out if we hit a cloud in screenspace too!
+
+	// #TODO: early out if we hit a cloud in screenspace too!
 
 	if (marchEnd <= marchStart)
 	{
-		return 0;
+		return float2(0, 0);
 	}
 	
 	uint blueNoiseWidth, blueNoiseHeight;
@@ -98,8 +100,13 @@ float RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uint
 
 	// Precompute the noise kernel once for this pixel.
 	ComputeNoiseKernel(sunDirection);
-
+	
 	float totalShadow = 0.f;
+	// First moment (distance-weighted shadow). totalShadowWeighted / totalShadow gives the centroid distance of the
+	// shadow distribution along the ray. With this, we can express the shadow as a single contiguous segment
+	// centered at the centroid, which lets the atmosphere model omit in-scattering at the correct location along
+	// the view ray rather than always at one end. See atmosphere shadow-segment formulation for the consumer side.
+	float totalShadowWeighted = 0.f;
 	float accumulatedTransmittance = 1.f;  // Used for early out once the ray is fully shadowed
 #ifdef CLOUDS_DEBUG_MARCHCOUNT
 	int totalSteps = 0;
@@ -145,27 +152,37 @@ float RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uint
 			scatteredLuminance, transmittance, depth);
 #endif
 		
-		// Experimenting with weighted contribution to reduce shadows far away.
-		float weight = 15.f - 0.12 * pow(dist, 1.5f);
-		weight = saturate(weight);
-
+		// Use the atmosphere's transmittance for natural shadow attenuation.
 		if (transmittance < 1.f)
 		{
-			totalShadow += stepSize * (1.f - transmittance) * weight;
+			const float contribution = stepSize * (1.f - transmittance);
+			totalShadow += contribution;
+			totalShadowWeighted += contribution * dist;  // First moment for centroid extraction.
 			accumulatedTransmittance *= transmittance;
 		}
 
-		// Early out if the sample is fully shadowed OR the effective contribution is 0.
-		if (accumulatedTransmittance < 0.01f || weight <= 0.f)
+		// Skip the remaining samples once the ray is essentially fully shadowed.
+		if (accumulatedTransmittance < 0.01f)
 			break;
 
 		dist += stepSize;
 	}
-	
+
 #ifdef CLOUDS_DEBUG_MARCHCOUNT
-	return float(totalSteps);
+	return float2(totalSteps, 0);
 #else
-	return totalShadow;
+	// Convert the moments to a contiguous shadow segment: centered at the centroid distance with length equal to
+	// the integrated shadow contribution. This collapses the real (potentially multi-modal) shadow distribution to
+	// a single block, but for typical cloud scenes the dominant cloud accounts for nearly all of the shadow and
+	// the centroid approximation is close enough.
+	const float shadowLength = totalShadow;
+	float shadowStart = 0.f;
+	if (totalShadow > 0.0001f)
+	{
+		const float shadowCentroid = totalShadowWeighted / totalShadow;
+		shadowStart = max(shadowCentroid - shadowLength * 0.5f, 0.f);
+	}
+	return float2(shadowStart, shadowLength);
 #endif
 }
 
@@ -173,24 +190,24 @@ float RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uint
 [numthreads(8, 8, 1)]
 void Main(uint3 dispatchId : SV_DispatchThreadID)
 {
-	RWTexture2D<float> outputTexture = ResourceDescriptorHeap[bindData.outputTexture];
-	
+	RWTexture2D<float2> outputTexture = ResourceDescriptorHeap[bindData.outputTexture];
+
 	uint width, height;
 	outputTexture.GetDimensions(width, height);
-	
+
 	if (dispatchId.x >= width || dispatchId.y >= height)
 		return;
-	
+
 	StructuredBuffer<Camera> cameraBuffer = ResourceDescriptorHeap[bindData.cameraBuffer];
 	Camera camera = cameraBuffer[bindData.cameraIndex];
-	
+
 	float2 uv = (dispatchId.xy + 0.5.xx) / float2(width, height);
 	// Get the UV coordinates that are top-left aligned.
 	float2 alignedUv = floor(uv * uint2(width, height)) / float2(width, height);
 	// Jitter the UV coordinates for temporal accumulation.
 	float2 jitteredUv = JitterUv(alignedUv, bindData.upscaledResolution, bindData.timeSlice);
-	
-	float shadowLength = RayMarch(camera, uv, jitteredUv, width, height);
-	
-	outputTexture[dispatchId.xy] = shadowLength;
+
+	float2 shadowSegment = RayMarch(camera, uv, jitteredUv, width, height);
+
+	outputTexture[dispatchId.xy] = shadowSegment;
 }

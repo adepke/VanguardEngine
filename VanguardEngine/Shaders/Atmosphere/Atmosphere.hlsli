@@ -18,7 +18,14 @@
 //      object hits (terrain meshes, clouds) that obstruct the ray before it would reach the planet
 //      sphere. Without it, mountains cross the horizon line sample two different LUT halves and
 //      show a nasty visible break. Ref: ebruneton/precomputed_atmospheric_scattering#26.
-//   4. GetSkyRadianceToPointNearShadow is a custom radiance handler for near-camera shadows. #TODO: remove this hack.
+//   4. The scalar `shadowLength` is replaced by a `(shadowStart, shadowLength)` segment that places the
+//      shadow at an arbitrary location along the ray. Both atmosphere functions use the same shadow
+//      representation, fixing bad behavior with the Bruneton's end-of-ray convention. Centroid is
+//      computed in Clouds/Visibility.hlsl from shadow moments.
+//      #TODO: Replace the scalar shadow with clustered (froxel) volumetrics. Ideally split into
+//      a near, fine cluster for ground-level fog/smoke/dust and a far, coarse cluster for clouds and
+//      other large media. This will improve shadow distribution and remove the single-segment hack
+//      entirely.
 
 // Density = exponentialCoefficient * exp(exponentialScale * height) + heightScale * height + offset
 struct DensityLayer
@@ -622,8 +629,19 @@ float3 GetCombinedScattering(AtmosphereData atmosphere, Texture3D scatteringLut,
 	return combined.xyz;
 }
 
+// Note Bruneton's model only takes a shadowLength and assumes the shadow is a contiguous block at
+// the camera end of the ray (in GetSkyRadiance) OR at the far end (in GetSkyRadianceToPoint).
+// This works for terrain and but has poor behavior with large shadow casting media like clouds.
+// Adding a shadowStart term here helps mitigate this, but is still an approximation - eventually
+// move to clustered volumetrics for a more correct general solution.
+//
+// Math (linearity of the LUT subtraction trick, generalized to a middle-of-ray segment):
+//   S_visible(x->inf) = S(x->inf) − T(x->s_start) x S(s_start->inf) + T(x->s_end) x S(s_end->inf)
+//   S_visible(x->y) = S_visible(x->inf) − T(x->y) x S(y->inf)
+// Reduces to the standard Bruneton end-of-ray cases when shadowStart is 0 (sky-side shadow) or
+// shadowStart = d − shadowLength (far-side shadow).
 float3 GetSkyRadiance(AtmosphereData atmosphere, Texture2D transmittanceLut, Texture3D scatteringLut, SamplerState lutSampler,
-	float3 cameraPosition, float3 viewDirection, float shadowLength, float3 sunDirection, out float3 transmittance)
+	float3 cameraPosition, float3 viewDirection, float shadowStart, float shadowLength, float3 sunDirection, out float3 transmittance)
 {
 	float radius = length(cameraPosition);
 	float rMu = dot(cameraPosition, viewDirection);
@@ -658,34 +676,45 @@ float3 GetSkyRadiance(AtmosphereData atmosphere, Texture2D transmittanceLut, Tex
 
 	transmittance = rayIntersectsGround ? 0.f : GetTransmittanceToAtmosphereTop(atmosphere, transmittanceLut, lutSampler, radius, mu);
 
+	// Base scattering: full integration from camera to the nearest atmosphere edge with no shadow.
 	float3 singleMieScattering;
-	float3 scattering;
-	
-	if (shadowLength == 0.f)
+	float3 scattering = GetCombinedScattering(atmosphere, scatteringLut, lutSampler, radius, mu, muS, nu, rayIntersectsGround, singleMieScattering);
+
+	// Shadow segment correction. Skipped entirely when shadowLength is zero so the unshadowed fast path costs the
+	// same as before (1 scattering LUT + 1 transmittance LUT). With a shadow, this adds 2 scattering LUTs and
+	// 2 transmittance LUTs.
+	if (shadowLength > 0.f)
 	{
-		scattering = GetCombinedScattering(atmosphere, scatteringLut, lutSampler, radius, mu, muS, nu, rayIntersectsGround, singleMieScattering);
+		const float dStart = max(shadowStart, 0.f);
+		const float dEnd   = shadowStart + shadowLength;
+
+		// LUT lookup at s_start.
+		const float radiusS = clamp(sqrt(dStart * dStart + 2.f * radius * mu * dStart + radius * radius), atmosphere.radiusBottom, atmosphere.radiusTop);
+		const float muSc    = (radius * mu  + dStart)      / radiusS;
+		const float muSSc   = (radius * muS + dStart * nu) / radiusS;
+		float3 mieAtStart;
+		const float3 scatAtStart  = GetCombinedScattering(atmosphere, scatteringLut, lutSampler, radiusS, muSc, muSSc, nu, rayIntersectsGround, mieAtStart);
+		const float3 transToStart = GetTransmittance(atmosphere, transmittanceLut, lutSampler, radius, mu, dStart, rayIntersectsGround);
+
+		// LUT lookup at s_end.
+		const float radiusE = clamp(sqrt(dEnd * dEnd + 2.f * radius * mu * dEnd + radius * radius), atmosphere.radiusBottom, atmosphere.radiusTop);
+		const float muEc    = (radius * mu  + dEnd)      / radiusE;
+		const float muSEc   = (radius * muS + dEnd * nu) / radiusE;
+		float3 mieAtEnd;
+		const float3 scatAtEnd  = GetCombinedScattering(atmosphere, scatteringLut, lutSampler, radiusE, muEc, muSEc, nu, rayIntersectsGround, mieAtEnd);
+		const float3 transToEnd = GetTransmittance(atmosphere, transmittanceLut, lutSampler, radius, mu, dEnd, rayIntersectsGround);
+
+		scattering          = scattering          - transToStart * scatAtStart + transToEnd * scatAtEnd;
+		singleMieScattering = singleMieScattering - transToStart * mieAtStart  + transToEnd * mieAtEnd;
+		singleMieScattering = GetExtrapolatedSingleMieScattering(atmosphere, float4(scattering, singleMieScattering.r));
 	}
-	
-	else
-	{
-		float d = shadowLength;
-		float radiusP = clamp(sqrt(d * d + 2.f * radius * mu * d + radius * radius), atmosphere.radiusBottom, atmosphere.radiusTop);
-		float muP = (radius * mu + d) / radiusP;
-		float muSP = (radius * muS + d * nu) / radiusP;
-		
-		scattering = GetCombinedScattering(atmosphere, scatteringLut, lutSampler, radiusP, muP, muSP, nu, rayIntersectsGround, singleMieScattering);
-		
-		float3 shadowTransmittance = GetTransmittance(atmosphere, transmittanceLut, lutSampler, radius, mu, shadowLength, rayIntersectsGround);
-		scattering *= shadowTransmittance;
-		singleMieScattering *= shadowTransmittance;
-	}
-	
+
 	return scattering * RayleighPhase(nu) + singleMieScattering * MiePhase(nu, mieAnisotropy);
 }
 
-// endpointIsGround is only true when the position lies on the planet surface (i.e. no mesh/volume is in front).
+// See GetSkyRadiance shadowStart term.
 float3 GetSkyRadianceToPoint(AtmosphereData atmosphere, Texture2D transmittanceLut, Texture3D scatteringLut, SamplerState lutSampler,
-	float3 cameraPosition, float3 position, bool endpointIsGround, float shadowLength, float3 sunDirection, out float3 transmittance)
+	float3 cameraPosition, float3 position, bool endpointIsGround, float shadowStart, float shadowLength, float3 sunDirection, out float3 transmittance)
 {
 	float3 viewDirection = normalize(position - cameraPosition);
 	float radius = length(cameraPosition);
@@ -703,102 +732,64 @@ float3 GetSkyRadianceToPoint(AtmosphereData atmosphere, Texture2D transmittanceL
 	float muS = dot(cameraPosition, sunDirection) / radius;
 	float nu = dot(viewDirection, sunDirection);
 	float d = length(position - cameraPosition);
-
-	// The caller has more information about the geometry than the atmosphere, so don't bother computing a ground intersection here
-	// and just have the caller handle that.
 	bool rayIntersectsGround = endpointIsGround;
 
 	// Symmetric horizon bias for LUT seam.
 	const float muHorizon = -sqrt(max(1.f - (atmosphere.radiusBottom / radius) * (atmosphere.radiusBottom / radius), 0.f));
 	mu = rayIntersectsGround ? min(mu, muHorizon - 0.004f) : max(mu, muHorizon + 0.004f);
-	
+
 	transmittance = GetTransmittance(atmosphere, transmittanceLut, lutSampler, radius, mu, d, rayIntersectsGround);
-	
+
 	// Having some pretty bad artifacts here, especially with strong mie scattering. Appears to be an issue with my implementation, but
 	// I haven't determine the cause. Could be precomputation related, as my LUTs don't quite match Bruneton's. Solving this would require
 	// an extensive analysis and debug, which I don't have time for now.
+
+	// Base S(x->y) using Bruneton's standard subtraction trick: S(x->inf) − T(x->y) x S(y->∞).
 	float3 singleMieScattering;
 	float3 scattering = GetCombinedScattering(atmosphere, scatteringLut, lutSampler, radius, mu, muS, nu, rayIntersectsGround, singleMieScattering);
-	
-	d = max(d - shadowLength, 0.f);
-	float radiusP = clamp(sqrt(d * d + 2.f * radius * mu * d + radius * radius), atmosphere.radiusBottom, atmosphere.radiusTop);
-	float muP = (radius * mu + d) / radiusP;
-	float muSP = (radius * muS + d * nu) / radiusP;
-	
-	float3 singleMieScatteringP;
-	float3 scatteringP = GetCombinedScattering(atmosphere, scatteringLut, lutSampler, radiusP, muP, muSP, nu, rayIntersectsGround, singleMieScatteringP);
-	
-	float3 shadowTransmittance = transmittance;
+
+	const float radiusY = clamp(sqrt(d * d + 2.f * radius * mu * d + radius * radius), atmosphere.radiusBottom, atmosphere.radiusTop);
+	const float muY     = (radius * mu  + d)      / radiusY;
+	const float muSY    = (radius * muS + d * nu) / radiusY;
+	float3 mieAtY;
+	const float3 scatAtY = GetCombinedScattering(atmosphere, scatteringLut, lutSampler, radiusY, muY, muSY, nu, rayIntersectsGround, mieAtY);
+
+	scattering          -= transmittance * scatAtY;
+	singleMieScattering -= transmittance * mieAtY;
+
+	// Apply the segment correction as: −T(x->s_start) x S(s_start->inf) + T(x->s_end) x S(s_end->inf)
+	// which is the linearized form of "omit in-scattering across [s_start, s_end] of the camera-to-y path." The
+	// shadow is clamped to lie within [0, d] so it never extends past the geometry endpoint.
 	if (shadowLength > 0.f)
 	{
-		shadowTransmittance = GetTransmittance(atmosphere, transmittanceLut, lutSampler, radius, mu, d, rayIntersectsGround);
+		const float dStart = clamp(shadowStart, 0.f, d);
+		const float dEnd   = clamp(shadowStart + shadowLength, dStart, d);
+
+		// LUT lookup at s_start.
+		const float radiusS = clamp(sqrt(dStart * dStart + 2.f * radius * mu * dStart + radius * radius), atmosphere.radiusBottom, atmosphere.radiusTop);
+		const float muSc    = (radius * mu  + dStart)      / radiusS;
+		const float muSSc   = (radius * muS + dStart * nu) / radiusS;
+		float3 mieAtStart;
+		const float3 scatAtStart  = GetCombinedScattering(atmosphere, scatteringLut, lutSampler, radiusS, muSc, muSSc, nu, rayIntersectsGround, mieAtStart);
+		const float3 transToStart = GetTransmittance(atmosphere, transmittanceLut, lutSampler, radius, mu, dStart, rayIntersectsGround);
+
+		// LUT lookup at s_end.
+		const float radiusE = clamp(sqrt(dEnd * dEnd + 2.f * radius * mu * dEnd + radius * radius), atmosphere.radiusBottom, atmosphere.radiusTop);
+		const float muEc    = (radius * mu  + dEnd)      / radiusE;
+		const float muSEc   = (radius * muS + dEnd * nu) / radiusE;
+		float3 mieAtEnd;
+		const float3 scatAtEnd  = GetCombinedScattering(atmosphere, scatteringLut, lutSampler, radiusE, muEc, muSEc, nu, rayIntersectsGround, mieAtEnd);
+		const float3 transToEnd = GetTransmittance(atmosphere, transmittanceLut, lutSampler, radius, mu, dEnd, rayIntersectsGround);
+
+		scattering          = scattering          - transToStart * scatAtStart + transToEnd * scatAtEnd;
+		singleMieScattering = singleMieScattering - transToStart * mieAtStart  + transToEnd * mieAtEnd;
 	}
-	
-	scattering = scattering - shadowTransmittance * scatteringP;
-	singleMieScattering = singleMieScattering - shadowTransmittance * singleMieScatteringP;
+
 	singleMieScattering = GetExtrapolatedSingleMieScattering(atmosphere, float4(scattering, singleMieScattering.r));
-	
-	// Avoid rendering artifacts when the sun is below the horizon.
-	singleMieScattering *= smoothstep(0.f, 0.01f, muS);
-	
-	return scattering * RayleighPhase(nu) + singleMieScattering * MiePhase(nu, mieAnisotropy);
-}
-
-// Custom variation that treats the shadowLength term as distance along the view ray to omit scattering, starting from
-// the camera outwards, as opposed to starting at the end of the ray and backwards with GetSkyRadianceToPoint
-float3 GetSkyRadianceToPointNearShadow(AtmosphereData atmosphere, Texture2D transmittanceLut, Texture3D scatteringLut, SamplerState lutSampler,
-	float3 cameraPosition, float3 position, bool endpointIsGround, float shadowLength, float3 sunDirection, out float3 transmittance)
-{
-	float3 viewDirection = normalize(position - cameraPosition);
-	float radius = length(cameraPosition);
-	float radiusMu = dot(cameraPosition, viewDirection);
-	float distanceToAtmosphereTop = -radiusMu - sqrt(radiusMu * radiusMu - radius * radius + atmosphere.radiusTop * atmosphere.radiusTop);
-
-	if (distanceToAtmosphereTop > 0.f)
-	{
-		cameraPosition += viewDirection * distanceToAtmosphereTop;
-		radius = atmosphere.radiusTop;
-		radiusMu += distanceToAtmosphereTop;
-	}
-
-	float mu = radiusMu / radius;
-	float muS = dot(cameraPosition, sunDirection) / radius;
-	float nu = dot(viewDirection, sunDirection);
-	float d = length(position - cameraPosition);
-	bool rayIntersectsGround = endpointIsGround;
-
-	// Same symmetric horizon bias as GetSkyRadianceToPoint.
-	const float muHorizon = -sqrt(max(1.f - (atmosphere.radiusBottom / radius) * (atmosphere.radiusBottom / radius), 0.f));
-	mu = rayIntersectsGround ? min(mu, muHorizon - 0.004f) : max(mu, muHorizon + 0.004f);
-	
-	transmittance = GetTransmittance(atmosphere, transmittanceLut, lutSampler, radius, mu, d, rayIntersectsGround);
-	
-	float3 singleMieScattering;
-	float3 scattering = GetCombinedScattering(atmosphere, scatteringLut, lutSampler, radius, mu, muS, nu, rayIntersectsGround, singleMieScattering);
-	
-	if (shadowLength == 0.f)
-	{
-		scattering = GetCombinedScattering(atmosphere, scatteringLut, lutSampler, radius, mu, muS, nu, rayIntersectsGround, singleMieScattering);
-	}
-	else
-	{
-		// This is not correct, but appears somewhat close for far distances.
-		d = min(d, shadowLength);
-		
-		float radiusP = clamp(sqrt(d * d + 2.f * radius * mu * d + radius * radius), atmosphere.radiusBottom, atmosphere.radiusTop);
-		float muP = (radius * mu + d) / radiusP;
-		float muSP = (radius * muS + d * nu) / radiusP;
-		
-		scattering = GetCombinedScattering(atmosphere, scatteringLut, lutSampler, radiusP, muP, muSP, nu, rayIntersectsGround, singleMieScattering);
-		
-		float3 shadowTransmittance = GetTransmittance(atmosphere, transmittanceLut, lutSampler, radius, mu, shadowLength, rayIntersectsGround);
-		scattering *= shadowTransmittance;
-		singleMieScattering *= shadowTransmittance;
-	}
 
 	// Avoid rendering artifacts when the sun is below the horizon.
 	singleMieScattering *= smoothstep(0.f, 0.01f, muS);
-	
+
 	return scattering * RayleighPhase(nu) + singleMieScattering * MiePhase(nu, mieAnisotropy);
 }
 
@@ -843,36 +834,37 @@ float3 GetSolarRadiance(AtmosphereData atmosphere)
 	return atmosphere.solarIrradiance / (pi * sunAngularRadius * sunAngularRadius);
 }
 
-float4 GetPlanetSurfaceRadiance(AtmosphereData atmosphere, float3 planetCenter, float3 cameraPosition, float3 rayDirection, float shadowLength,
+float4 GetPlanetSurfaceRadiance(AtmosphereData atmosphere, float3 planetCenter, float3 cameraPosition, float3 rayDirection,
+	float shadowStart, float shadowLength,
 	float3 sunDirection, Texture2D transmittanceLut, Texture3D scatteringLut, Texture2D irradianceLut, SamplerState lutSampler)
 {
 	float3 p = cameraPosition - planetCenter;
 	float pDotRay = dot(p, rayDirection);
 	float intersectionDistance = -pDotRay - sqrt(planetCenter.z * planetCenter.z - (dot(p, p) - (pDotRay * pDotRay)));
-	
+
 	if (intersectionDistance > 0.f)
 	{
 		float3 surfacePoint = cameraPosition + rayDirection * intersectionDistance;
 		float3 surfaceNormal = normalize(surfacePoint - planetCenter);
-		
+
 		float3 sunIrradiance;
 		float3 skyIrradiance;
 		GetSunAndSkyIrradiance(atmosphere, transmittanceLut, irradianceLut, lutSampler, surfacePoint - planetCenter, surfaceNormal, sunDirection, sunIrradiance, skyIrradiance);
-		
+
 		// #TODO: Compute approximate visibilities.
 		// Sun visibility greatly reduces the brightness of the planet surface, sky visibility has little impact.
 		float sunVisibility = 1.f;
 		float skyVisibility = 1.f;
-		
+
 		float3 radiance = atmosphere.surfaceColor * (1.f / pi) * ((sunIrradiance * sunVisibility) + (skyIrradiance * skyVisibility));
-		
+
 		float3 transmittance;
 		// The endpoint here is the actual planet surface, so endpointIsGround = true.
-		float3 scattering = GetSkyRadianceToPoint(atmosphere, transmittanceLut, scatteringLut, lutSampler, cameraPosition - planetCenter, surfacePoint - planetCenter, true, shadowLength, sunDirection, transmittance);
+		float3 scattering = GetSkyRadianceToPoint(atmosphere, transmittanceLut, scatteringLut, lutSampler, cameraPosition - planetCenter, surfacePoint - planetCenter, true, shadowStart, shadowLength, sunDirection, transmittance);
 
 		return float4(radiance * transmittance + scattering, 1.f);
 	}
-	
+
 	return 0.f;
 }
 
@@ -893,13 +885,14 @@ float3 SampleAtmosphere(AtmosphereData atmosphere, Camera camera, float3 directi
 {
 	float3 cameraPosition = ComputeAtmosphereCameraPosition(camera);
 	float3 planetCenter = ComputeAtmospherePlanetCenter(atmosphere);
-	
+
 	// IBL doesn't support light shafts, likely unnecessary.
-	float shadowLength = 0.f;
-	
+	const float shadowStart  = 0.f;
+	const float shadowLength = 0.f;
+
 	float3 transmittance;
-	float3 radiance = GetSkyRadiance(atmosphere, transmittanceLut, scatteringLut, lutSampler, cameraPosition - planetCenter, direction, shadowLength, sunDirection, transmittance);
-	
+	float3 radiance = GetSkyRadiance(atmosphere, transmittanceLut, scatteringLut, lutSampler, cameraPosition - planetCenter, direction, shadowStart, shadowLength, sunDirection, transmittance);
+
 	// If the ray intersects the sun, add solar radiance.
 	// We don't want this for specular IBL, since the sun has immense radiant energy that will not
 	// be represented properly in the prefilter map. Instead, the specular highlight of the sun is
@@ -908,10 +901,10 @@ float3 SampleAtmosphere(AtmosphereData atmosphere, Camera camera, float3 directi
 	{
 		radiance += transmittance * GetSolarRadiance(atmosphere);
 	}
-	
-	float4 planetRadiance = GetPlanetSurfaceRadiance(atmosphere, planetCenter, cameraPosition, direction, shadowLength, sunDirection, transmittanceLut, scatteringLut, irradianceLut, lutSampler);
+
+	float4 planetRadiance = GetPlanetSurfaceRadiance(atmosphere, planetCenter, cameraPosition, direction, shadowStart, shadowLength, sunDirection, transmittanceLut, scatteringLut, irradianceLut, lutSampler);
 	radiance = lerp(radiance, planetRadiance.xyz, planetRadiance.w);
-	
+
 	// Multiply the exposure in here since this atmosphere sample is only ever used outside of the main atmosphere compose.
 	return radiance * atmosphereRadianceExposure;
 }

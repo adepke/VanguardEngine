@@ -257,7 +257,7 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 		.height = 0,
 		.depth = 1,
 		.resolutionScale = cloudRenderScale,
-		.format = DXGI_FORMAT_R16_FLOAT
+		.format = DXGI_FORMAT_R16G16_FLOAT
 	}, VGText("Clouds visibility map"));
 	visibilityPass.Read(cameraBuffer, ResourceBind::SRV);
 	visibilityPass.Read(weatherTag, ResourceBind::SRV);
@@ -343,7 +343,7 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 		.height = 0,
 		.depth = 1,
 		.resolutionScale = 1.f,
-		.format = DXGI_FORMAT_R16_FLOAT
+		.format = DXGI_FORMAT_R16G16_FLOAT
 	}, VGText("Clouds upscaled sky visibility"));
 	upscalePass.Read(cameraBuffer, ResourceBind::SRV);
 	upscalePass.Read(depthStencil, ResourceBind::SRV);
