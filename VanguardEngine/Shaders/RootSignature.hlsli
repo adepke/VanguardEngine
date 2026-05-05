@@ -4,7 +4,7 @@
 #define __ROOTSIGNATURE_HLSLI__
 
 #define RS \
-	"RootFlags(CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED | SAMPLER_HEAP_DIRECTLY_INDEXED)," \
+	"RootFlags(CBV_SRV_UAV_HEAP_DIRECTLY_INDEXED)," \
 	"RootConstants(b0, num32BitConstants = 64)," \
 	"StaticSampler(" \
 		"s0," \
