@@ -65,6 +65,10 @@ private:
 	bool renderOverlayOnScene = false;
 	float overlayAlpha = 0.5f;
 
+	// Gizmo state. Stored as ints to avoid pulling ImGuizmo into this header.
+	int gizmoOperation = 7;  // TRANSLATE_X | TRANSLATE_Y | TRANSLATE_Z
+	int gizmoMode = 1;  // WORLD
+
 public:
 	// Debug/visualization overlay state.
 	RenderOverlay activeOverlay = RenderOverlay::None;
@@ -80,6 +84,7 @@ private:
 	void DrawRenderOverlayProxy(RenderDevice* device, const ImVec2& min, const ImVec2& max);
 	bool ExecuteCommand(const std::string& command);
 	void DrawConsole(entt::registry& registry, const ImVec2& min, const ImVec2& max);
+	void DrawSelectionGizmo(entt::registry& registry);
 
 public:
 	void Update();

@@ -9,6 +9,8 @@
 #include <Editor/EntityReflection.h>
 #include <Editor/ImGuiExtensions.h>
 #include <Editor/CvarHelpers.h>
+#include <Editor/Picking.h>
+#include <Rendering/Base.h>
 #include <Rendering/Atmosphere.h>
 #include <Rendering/Clouds.h>
 #include <Rendering/Bloom.h>
@@ -16,6 +18,7 @@
 #include <Utility/Math.h>
 
 #include <imgui_internal.h>
+#include <ImGuizmo.h>
 
 #include <algorithm>
 #include <numeric>
@@ -771,6 +774,94 @@ void EditorUI::DrawDemoWindow()
 	ImGui::ShowDemoWindow(&demoWindowOpen);
 }
 
+void EditorUI::DrawSelectionGizmo(entt::registry& registry)
+{
+	if (hierarchySelectedEntity == entt::null
+		|| !registry.valid(hierarchySelectedEntity)
+		|| !registry.all_of<TransformComponent>(hierarchySelectedEntity))
+	{
+		return;
+	}
+
+	// Hotkeys for switching gizmo operation/mode. Only honored when the scene window is focused
+	// and a camera isn't being controlled.
+	if (ImGui::IsWindowFocused() && registry.view<const ControlComponent>().size() == 0)
+	{
+		if (ImGui::IsKeyPressed(ImGuiKey_1))
+			gizmoOperation = ImGuizmo::TRANSLATE;
+		if (ImGui::IsKeyPressed(ImGuiKey_2))
+			gizmoOperation = ImGuizmo::ROTATE;
+		if (ImGui::IsKeyPressed(ImGuiKey_3))
+			gizmoOperation = ImGuizmo::SCALE;
+		if (ImGui::IsKeyPressed(ImGuiKey_X))
+			gizmoMode = (gizmoMode == ImGuizmo::WORLD) ? ImGuizmo::LOCAL : ImGuizmo::WORLD;
+	}
+
+	auto& transform = registry.get<TransformComponent>(hierarchySelectedEntity);
+	const auto translation = XMVectorSet(transform.translation.x, transform.translation.y, transform.translation.z, 0.f);
+
+	// Behind-camera early-out. ImGuizmo has its own check, but it doesn't work with reverse Z.
+	// Do the test in view space, where the projection quirk doesn't apply: in RH view space,
+	// in-front points have z < 0. Allow an in-progress drag to keep updating even if the entity
+	// briefly crosses behind the camera.
+	const XMVECTOR worldPos = XMVectorSetW(translation, 1.f);
+	const XMVECTOR viewPos = XMVector4Transform(worldPos, globalViewMatrix);
+	if (XMVectorGetZ(viewPos) >= 0.f && !ImGuizmo::IsUsing())
+	{
+		return;
+	}
+
+	ImGuizmo::SetDrawlist();
+	ImGuizmo::SetOrthographic(false);
+
+	const float visibleWidth = sceneViewportMax.x - sceneViewportMin.x;
+	const float visibleHeight = sceneViewportMax.y - sceneViewportMin.y;
+	ImGuizmo::SetRect(sceneViewportMin.x, sceneViewportMin.y, visibleWidth, visibleHeight);
+
+	const auto scaling = XMVectorSet(transform.scale.x, transform.scale.y, transform.scale.z, 0.f);
+	const auto scalingMat = XMMatrixScalingFromVector(scaling);
+	const auto rotationMat = XMMatrixRotationX(-transform.rotation.x) * XMMatrixRotationY(-transform.rotation.y) * XMMatrixRotationZ(-transform.rotation.z);
+	const auto translationMat = XMMatrixTranslationFromVector(translation);
+
+	XMFLOAT4X4 model;
+	XMStoreFloat4x4(&model, scalingMat * rotationMat * translationMat);
+
+	// The scene image is a UV-cropped view of a render target that may be larger than the visible
+	// window: the renderer projects to the FULL render target's NDC range, but the user only sees
+	// the central [sceneWidthUV, 1 - sceneWidthUV] slice. Since SetRect is locked to the visible
+	// rect (so the hard clip above doesn't escape the scene window), we instead compose a scale
+	// onto the projection that "zooms" the visible NDC slice to fill [-1, 1]. The math:
+	//   visible NDC range = [-1 + 2*uv, 1 - 2*uv] → width 2*(1 - 2*uv).
+	//   To map that to [-1, 1] (full NDC for ImGuizmo's SetRect), scale by 1/(1 - 2*uv).
+	// This produces the same screen position the renderer does, and works the same for ImGuizmo's
+	// inverse-projection mouse picking on gizmo handles.
+	const float zoomX = 1.f / std::max(1.f - 2.f * sceneWidthUV, 1e-4f);
+	const float zoomY = 1.f / std::max(1.f - 2.f * sceneHeightUV, 1e-4f);
+	const auto cropScale = XMMatrixScaling(zoomX, zoomY, 1.f);
+
+	XMFLOAT4X4 view, projection;
+	XMStoreFloat4x4(&view, globalViewMatrix);
+	XMStoreFloat4x4(&projection, globalProjectionMatrix * cropScale);
+
+	const auto op = static_cast<ImGuizmo::OPERATION>(gizmoOperation);
+	const auto mode = static_cast<ImGuizmo::MODE>(gizmoMode);
+
+	if (ImGuizmo::Manipulate(&view.m[0][0], &projection.m[0][0], op, mode, &model.m[0][0]))
+	{
+		// Write the updated components back to the entity.
+		float t[3], r[3], s[3];
+		ImGuizmo::DecomposeMatrixToComponents(&model.m[0][0], t, r, s);
+
+		transform.translation = { t[0], t[1], t[2] };
+		transform.rotation = {
+			-XMConvertToRadians(r[0]),
+			-XMConvertToRadians(r[1]),
+			-XMConvertToRadians(r[2]),
+		};
+		transform.scale = { s[0], s[1], s[2] };
+	}
+}
+
 void EditorUI::DrawScene(RenderDevice* device, entt::registry& registry, TextureHandle sceneTexture)
 {
 	const auto& sceneDescription = device->GetResourceManager().Get(sceneTexture).description;
@@ -794,6 +885,9 @@ void EditorUI::DrawScene(RenderDevice* device, entt::registry& registry, Texture
 
 		ImGui::Image(device, sceneTexture, { 1.f, 1.f }, { widthUV, heightUV }, { 1.f + widthUV, 1.f + heightUV });
 
+		// Draw the manipulation gizmo before click handling to account for gizmo hover.
+		DrawSelectionGizmo(registry);
+
 		// Double clicking the viewport grants control.
 		const bool shouldReacquireControl = consoleClosedThisFrame && consoleInputFocus;
 		if ((ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && ImGui::IsWindowHovered(ImGuiHoveredFlags_None)) || shouldReacquireControl)
@@ -806,6 +900,23 @@ void EditorUI::DrawScene(RenderDevice* device, entt::registry& registry, Texture
 					registry.emplace<ControlComponent>(entity);
 				}
 			});
+		}
+
+		// Single click tries to select an entity in the scene. Skipped when the gizmo is being interacted with.
+		if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
+			!ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) &&
+			ImGui::IsWindowHovered(ImGuiHoveredFlags_None) &&
+			!ImGuizmo::IsOver() &&
+			!ImGuizmo::IsUsing() &&
+			registry.view<const ControlComponent>().size() == 0)
+		{
+			const ImVec2 mouseLocal = ImGui::GetMousePos() - sceneViewportMin;
+			const ImVec2 viewportPixels = sceneViewportMax - sceneViewportMin;
+
+			XMVECTOR rayOrigin, rayDirection;
+			Picking::ProjectUIToWorld(mouseLocal.x, mouseLocal.y, viewportPixels.x, viewportPixels.y, sceneWidthUV, sceneHeightUV,
+				globalViewMatrix, globalProjectionMatrix, rayOrigin, rayDirection);
+			hierarchySelectedEntity = Picking::Pick(registry, rayOrigin, rayDirection);
 		}
 
 		// Use a dummy object to get proper drag drop bounds.

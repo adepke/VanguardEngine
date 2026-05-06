@@ -11,6 +11,7 @@ function IncludeThirdParty()
 	includedirs "VanguardEngine/ThirdParty/entt/single_include"
 	includedirs "VanguardEngine/ThirdParty/json/single_include/nlohmann"
 	includedirs "VanguardEngine/ThirdParty/imgui"
+	includedirs "VanguardEngine/ThirdParty/imguizmo/src"
 	includedirs "VanguardEngine/ThirdParty/Tracy"
 	includedirs "VanguardEngine/ThirdParty/D3D12MemoryAllocator/include"
 	includedirs "VanguardEngine/ThirdParty/DirectXShaderCompiler"
@@ -24,6 +25,7 @@ end
 
 function LinkThirdParty()
 	libdirs "Build/ThirdParty/imgui/Bin/*"
+	libdirs "Build/ThirdParty/imguizmo/Bin/*"
 	libdirs "Build/ThirdParty/Tracy/Bin/*"
 	libdirs "Build/ThirdParty/D3D12MemoryAllocator/Bin/*"
 	libdirs "Build/ThirdParty/spdlog/Bin/*"
@@ -31,6 +33,7 @@ function LinkThirdParty()
 	libdirs "VanguardEngine/ThirdParty/PIX"
 	
 	links "imgui"
+	links "imguizmo"
 	links "TracyClient"
 	links "D3D12MemoryAllocator"
 	links "spdlog"
@@ -42,6 +45,7 @@ end
 function RunThirdParty()
 	group "ThirdParty"
 	include "VanguardEngine/ThirdParty/imgui"
+	include "VanguardEngine/ThirdParty/imguizmo"
 	include "VanguardEngine/ThirdParty/Tracy"
 	include "VanguardEngine/ThirdParty/D3D12MemoryAllocator"
 	include "VanguardEngine/ThirdParty/spdlog"

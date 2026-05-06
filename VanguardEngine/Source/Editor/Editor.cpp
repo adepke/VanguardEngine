@@ -11,6 +11,7 @@
 #include <Rendering/ClusteredLightCulling.h>
 
 #include <imgui.h>
+#include <ImGuizmo.h>
 #endif
 
 Editor::Editor()
@@ -107,6 +108,7 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 		editorPass.Bind([&, cameraBuffer, depthStencil, outputLDR, weather, activeOverlayTag](CommandList& list, RenderPassResources& resources)
 		{
 			renderer.userInterface->NewFrame();
+			ImGuizmo::BeginFrame();
 
 			TextureHandle overlayHandle{};
 			if (ui->activeOverlay != RenderOverlay::None)
@@ -134,6 +136,7 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 	{
 		// Have to update the user interface, otherwise we won't be able to return to the editor later.
 		renderer.userInterface->NewFrame();
+		ImGuizmo::BeginFrame();
 		ImGui::EndFrame();
 
 		// No editor rendering, just copy outputLDR to the back buffer.
