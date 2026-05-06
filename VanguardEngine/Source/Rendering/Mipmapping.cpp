@@ -100,8 +100,8 @@ void Mipmapper::Generate2D(RenderDevice& device, CommandList& list, TextureHandl
 				uavDescriptors.emplace_back(std::move(descriptor));
 			}
 
-			list.BindPipelineState(layout2dState);
 			list.BindDescriptorAllocator(device.GetDescriptorAllocator());
+			list.BindPipelineState(layout2dState);
 			list.BindConstants("bindData", bindData);
 
 			list.Dispatch(std::max((uint32_t)std::ceil(baseMipWidth / (2.f * 8.f)), 1u), std::max((uint32_t)std::ceil(baseMipHeight / (2.f * 8.f)), 1u), 1);
@@ -163,8 +163,8 @@ void Mipmapper::Generate3D(RenderDevice& device, CommandList& list, TextureHandl
 
 		device.GetResourceManager().AddFrameDescriptor(device.GetFrameIndex(), std::move(descriptor));
 
-		list.BindPipelineState(layout3dState);
 		list.BindDescriptorAllocator(device.GetDescriptorAllocator());
+		list.BindPipelineState(layout3dState);
 		list.BindConstants("bindData", bindData);
 
 		auto dispatchX = std::max((uint32_t)std::ceil(baseMipWidth / (2.f * 8.f)), 1u);

@@ -112,8 +112,8 @@ void Atmosphere::Precompute(CommandList& list, TextureHandle transmittanceHandle
 	list.TransitionBarrier(transmittanceHandle, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	list.FlushBarriers();
 
-	list.BindPipeline(transmissionPrecomputeLayout);
 	list.BindDescriptorAllocator(device->GetDescriptorAllocator());
+	list.BindPipeline(transmissionPrecomputeLayout);
 	list.BindConstants("bindData", bindData);
 	list.Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
 	list.UAVBarrier(transmittanceHandle);
@@ -137,8 +137,8 @@ void Atmosphere::Precompute(CommandList& list, TextureHandle transmittanceHandle
 	list.TransitionBarrier(deltaIrradianceTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	list.FlushBarriers();
 
-	list.BindPipeline(directIrradiancePrecomputeLayout);
 	list.BindDescriptorAllocator(device->GetDescriptorAllocator());
+	list.BindPipeline(directIrradiancePrecomputeLayout);
 	list.BindConstants("bindData", bindData);
 	list.Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
 	list.UAVBarrier(deltaIrradianceTexture);
@@ -164,8 +164,8 @@ void Atmosphere::Precompute(CommandList& list, TextureHandle transmittanceHandle
 	list.TransitionBarrier(deltaMieTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	list.FlushBarriers();
 
-	list.BindPipeline(singleScatteringPrecomputeLayout);
 	list.BindDescriptorAllocator(device->GetDescriptorAllocator());
+	list.BindPipeline(singleScatteringPrecomputeLayout);
 	list.BindConstants("bindData", bindData);
 	list.Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
 	list.UAVBarrier(deltaRayleighTexture);
@@ -199,8 +199,8 @@ void Atmosphere::Precompute(CommandList& list, TextureHandle transmittanceHandle
 		list.TransitionBarrier(deltaIrradianceTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		list.FlushBarriers();
 
-		list.BindPipeline(scatteringDensityPrecomputeLayout);
 		list.BindDescriptorAllocator(device->GetDescriptorAllocator());
+		list.BindPipeline(scatteringDensityPrecomputeLayout);
 		list.BindConstants("bindData", bindData);
 		list.Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
 		list.UAVBarrier(deltaScatteringDensityTexture);
@@ -226,8 +226,8 @@ void Atmosphere::Precompute(CommandList& list, TextureHandle transmittanceHandle
 		list.TransitionBarrier(deltaIrradianceTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		list.FlushBarriers();
 
-		list.BindPipeline(indirectIrradiancePrecomputeLayout);
 		list.BindDescriptorAllocator(device->GetDescriptorAllocator());
+		list.BindPipeline(indirectIrradiancePrecomputeLayout);
 		list.BindConstants("bindData", bindData);
 		list.Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
 		list.UAVBarrier(deltaIrradianceTexture);
@@ -253,8 +253,8 @@ void Atmosphere::Precompute(CommandList& list, TextureHandle transmittanceHandle
 		list.TransitionBarrier(deltaScatteringDensityTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 		list.FlushBarriers();
 
-		list.BindPipeline(multipleScatteringPrecomputeLayout);
 		list.BindDescriptorAllocator(device->GetDescriptorAllocator());
+		list.BindPipeline(multipleScatteringPrecomputeLayout);
 		list.BindConstants("bindData", bindData);
 		list.Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, (uint32_t)dispatchZ);
 		list.UAVBarrier(deltaRayleighTexture);
