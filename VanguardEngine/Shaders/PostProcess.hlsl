@@ -41,7 +41,7 @@ float4 PSMain(PSInput input) : SV_Target
 #ifdef ENABLE_TONEMAPPING
 	const float3 toneMapped = ToneMap(mainOutputHDR.rgb);
 #else
-    const float3 toneMapped = mainOutputHDR.rgb;
+	const float3 toneMapped = mainOutputHDR.rgb;
 #endif
 
 	return float4(toneMapped, 1.f);

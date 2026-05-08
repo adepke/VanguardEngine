@@ -15,6 +15,7 @@
 #include <Rendering/Clouds.h>
 #include <Rendering/Bloom.h>
 #include <Rendering/ClusteredLightCulling.h>
+#include <Rendering/DebugDraw.h>
 #include <Utility/Math.h>
 
 #include <imgui_internal.h>
@@ -799,6 +800,32 @@ void EditorUI::DrawSelectionGizmo(entt::registry& registry)
 
 	auto& transform = registry.get<TransformComponent>(hierarchySelectedEntity);
 	const auto translation = XMVectorSet(transform.translation.x, transform.translation.y, transform.translation.z, 0.f);
+
+	// Draw a debug bounding sphere around the selected entity whenever it has mesh geometry.
+	// Placed before the behind-camera early-out so the sphere is always rendered while something
+	// is selected, even if the entity drifts behind the camera (DebugShapes is world-space and
+	// handled by the renderer, unlike the ImGuizmo overlay which has its own camera limits).
+	if (registry.all_of<MeshComponent>(hierarchySelectedEntity))
+	{
+		const auto& mesh = registry.get<MeshComponent>(hierarchySelectedEntity);
+		if (!mesh.subsets.empty())
+		{
+			// Gather the largest bounding sphere radius across all subsets so a single sphere
+			// fully encloses the whole mesh regardless of how many material regions it has.
+			float maxRadius = 0.f;
+			for (const auto& subset : mesh.subsets)
+			{
+				maxRadius = std::max(maxRadius, subset.boundingSphereRadius);
+			}
+
+			// Scale the local-space radius up by the largest axis scale to approximate the
+			// world-space bounding sphere under non-uniform scaling.
+			const float maxScale = std::max({ transform.scale.x, transform.scale.y, transform.scale.z });
+
+			// Render without depth so the sphere is always visible.
+			Draw::Sphere(transform.translation, maxRadius * maxScale, { 0.f, 1.f, 0.f, 1.f }, false);
+		}
+	}
 
 	// Behind-camera early-out. ImGuizmo has its own check, but it doesn't work with reverse Z.
 	// Do the test in view space, where the projection quirk doesn't apply: in RH view space,

@@ -29,7 +29,8 @@ enum class DepthTestFunction
 {
 	Equal,
 	Greater,
-	GreaterEqual
+	GreaterEqual,
+	Always
 };
 
 class RenderPipelineLayout
@@ -170,6 +171,7 @@ public:
 		case DepthTestFunction::Equal: std::get<GraphicsDesc>(description).depthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_EQUAL; break;
 		case DepthTestFunction::Greater: std::get<GraphicsDesc>(description).depthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_GREATER; break;
 		case DepthTestFunction::GreaterEqual: std::get<GraphicsDesc>(description).depthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_GREATER_EQUAL; break;
+		case DepthTestFunction::Always: std::get<GraphicsDesc>(description).depthStencilDescription.DepthFunc = D3D12_COMPARISON_FUNC_ALWAYS; break;
 		}
 		return *this;
 	}

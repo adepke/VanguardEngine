@@ -11,6 +11,7 @@
 #include <Rendering/ShaderStructs.h>
 #include <Core/Config.h>
 #include <Rendering/RenderUtils.h>
+#include <Rendering/DebugDraw.h>
 #include <Editor/Editor.h>
 #include <Utility/Math.h>
 
@@ -289,6 +290,7 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 		Renderer::Get().ReloadShaderPipelines();
 	});
 	CvarCreate("toneMappingEnabled", "Controls tone mapping as a post process step", 1);
+	CvarCreate("referenceGridEnabled", "Controls if the reference grid is visible", 1);
 	
 	constexpr size_t maxVertices = 32 * 1024 * 1024;
 
@@ -331,6 +333,7 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 	bloom.Initialize(device.get());
 	occlusionCulling.Initialize(device.get());
 	clouds.Initialize(device.get());
+	DebugDraw::Get().Initialize(device.get());
 
 	std::vector<D3D12_INDIRECT_ARGUMENT_DESC> meshIndirectArgDescs;
 	meshIndirectArgDescs.emplace_back(D3D12_INDIRECT_ARGUMENT_DESC{
@@ -655,6 +658,63 @@ void Renderer::Render(entt::registry& registry)
 
 		list.DrawFullscreenQuad();
 	});
+
+	// #TODO: Don't have this here.
+	auto& gridPass = graph.AddPass("Reference Grid Pass", ExecutionQueue::Graphics, *CvarGet("referenceGridEnabled", int) != 0);
+	gridPass.Read(cameraBufferTag, ResourceBind::SRV);
+	gridPass.Read(depthStencilTag, ResourceBind::DSV);
+	gridPass.Output(outputLDRTag, OutputBind::RTV, LoadType::Preserve);
+	gridPass.Bind([&](CommandList& list, RenderPassResources& resources)
+	{
+		BlendMode alphaBlend{
+			.srcBlend = D3D12_BLEND_SRC_ALPHA,
+			.destBlend = D3D12_BLEND_INV_SRC_ALPHA,
+			.blendOp = D3D12_BLEND_OP_ADD,
+			.srcBlendAlpha = D3D12_BLEND_ONE,
+			.destBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA,
+			.blendOpAlpha = D3D12_BLEND_OP_ADD,
+		};
+
+		// Depth tested, read only.
+		const auto gridLayout = RenderPipelineLayout{}
+			.VertexShader({ "ReferenceGrid", "VSMain" })
+			.PixelShader({ "ReferenceGrid", "PSMain" })
+			.BlendMode(true, alphaBlend)
+			.CullMode(D3D12_CULL_MODE_NONE)
+			.DepthEnabled(true, false, DepthTestFunction::Greater);
+
+		list.BindPipeline(gridLayout);
+
+		struct {
+			uint32_t cameraBuffer;
+			uint32_t cameraIndex;
+			float gridHeightMeters;
+			float majorCellMeters;
+			float minorCellMeters;
+			float gridAlpha;
+			float fadeStartMeters;
+			float fadeEndMeters;
+			XMFLOAT3 gridColor;
+			float padding;
+		} bindData;
+
+		bindData.cameraBuffer = resources.Get(cameraBufferTag);
+		bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
+		bindData.gridHeightMeters = 100.0;  // Offset a bit off the planet surface, since precision breaks down.
+		bindData.majorCellMeters = 1000.0;  // Kilometer squares.
+		bindData.minorCellMeters = 100.0;  // 100-meter squares.
+		bindData.gridAlpha = 0.5;
+		bindData.fadeStartMeters = 2000.0;
+		bindData.fadeEndMeters = 8000.0;
+		bindData.gridColor = { 0.7, 0.7, 0.7 };
+		
+		list.BindConstants("bindData", bindData);
+
+		list.DrawFullscreenQuad();
+	});
+
+	// #TODO: Don't have this here.
+	DebugDraw::Get().Render(graph, cameraBufferTag, depthStencilTag, outputLDRTag);
 
 	// #TODO: Don't have this here.
 	Editor::Get().Render(graph, *device, *this, *graph.resourceManager, registry, cameraBufferTag, depthStencilTag, outputLDRTag, backBufferTag, clusterResources, cloudResources.weather);
