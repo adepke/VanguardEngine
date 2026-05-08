@@ -292,17 +292,15 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 		VGLogCritical(logRendering, "Failed to make window association: {}", result);
 	}
 
-	syncValues.resize(frameCount, 0);
+	syncFenceValues.resize(frameCount, 0);
 
-	result = device->CreateFence(syncValues[GetFrameIndex()], D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(syncFence.Indirect()));
+	result = device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(syncFence.Indirect()));
 	if (FAILED(result))
 	{
 		VGLogCritical(logRendering, "Failed to create sync fence: {}", result);
 	}
 
-	++syncValues[GetFrameIndex()];
-
-	if (syncEvent = ::CreateEvent(nullptr, false, false, VGText("Sync fence event")); !syncEvent)
+	if (syncEvent = ::CreateEvent(nullptr, false, false, nullptr); !syncEvent)
 	{
 		VGLogCritical(logRendering, "Failed to create sync event: {}", GetPlatformError());
 	}
@@ -525,23 +523,23 @@ void RenderDevice::Synchronize()
 {
 	VGScopedCPUStat("Synchronize");
 
+	++syncLastValue;
+
 	// Dispatch a signal at the end of the command queue. This will ensure all commands
 	// have finished execution.
-	auto result = directCommandQueue->Signal(syncFence.Get(), syncValues[GetFrameIndex()]);
+	auto result = directCommandQueue->Signal(syncFence.Get(), syncLastValue);
 	if (FAILED(result))
 	{
 		VGLogCritical(logRendering, "Failed to signal the sync fence during synchronization: {}", result);
 	}
 
-	result = syncFence->SetEventOnCompletion(syncValues[GetFrameIndex()], syncEvent);
+	result = syncFence->SetEventOnCompletion(syncLastValue, syncEvent);
 	if (FAILED(result))
 	{
 		VGLogCritical(logRendering, "Failed to set fence completion event during synchronization: {}", result);
 	}
 
 	WaitForSingleObject(syncEvent, INFINITE);
-
-	++syncValues[GetFrameIndex()];
 }
 
 void RenderDevice::Present()
@@ -556,18 +554,22 @@ void RenderDevice::AdvanceCPU()
 	VGScopedCPUStat("CPU Frame Advance");
 
 	// Make sure we don't get too many CPU frames ahead of the GPU.
-	const auto fenceValue = syncValues[GetFrameIndex()];
+	const auto frameIndex = GetFrameIndex();
 	const auto nextFrameIndex = (frame + 1) % frameCount;
 
-	auto result = directCommandQueue->Signal(syncFence.Get(), fenceValue);
+	++syncLastValue;
+	syncFenceValues[frameIndex] = syncLastValue;
+
+	auto result = directCommandQueue->Signal(syncFence.Get(), syncLastValue);
 	if (FAILED(result))
 	{
 		VGLogCritical(logRendering, "Failed to signal the sync fence during CPU advance: {}", result);
 	}
 
-	if (syncFence->GetCompletedValue() < syncValues[nextFrameIndex])
+	const auto target = syncFenceValues[nextFrameIndex];
+	if (target != 0 && syncFence->GetCompletedValue() < target)
 	{
-		result = syncFence->SetEventOnCompletion(syncValues[nextFrameIndex], syncEvent);
+		result = syncFence->SetEventOnCompletion(target, syncEvent);
 		if (FAILED(result))
 		{
 			VGLogCritical(logRendering, "Failed to set fence completion event during CPU advance: {}", result);
@@ -577,8 +579,6 @@ void RenderDevice::AdvanceCPU()
 
 		WaitForSingleObjectEx(syncEvent, INFINITE, false);
 	}
-
-	syncValues[nextFrameIndex] = fenceValue + 1;
 
 	// The frame has finished, cleanup its resources. #TODO: Will leave additional GPU gaps if we're bottlenecking on the CPU, consider deferred cleanup?
 	frameBufferOffsets[nextFrameIndex] = 0;  // GPU has fully consumed the frame resources, we can now reuse the buffer.
@@ -606,12 +606,6 @@ void RenderDevice::SetResolution(uint32_t width, uint32_t height, bool fullscree
 	VGScopedCPUStat("Render Device Change Resolution");
 
 	Synchronize();
-
-	// Reset the sync values to the active sync value for this frame.
-	for (auto& syncValue : syncValues)
-	{
-		syncValue = syncValues[GetFrameIndex()];
-	}
 
 	renderWidth = width;
 	renderHeight = height;

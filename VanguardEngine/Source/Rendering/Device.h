@@ -47,7 +47,8 @@ private:
 	ResourcePtr<IDXGISwapChain3> swapChain;
 	size_t frame = 0;  // Stores the actual frame number. Refers to the current CPU frame being run, stepped after finishing CPU pass.
 
-	std::vector<uint64_t> syncValues;
+	size_t syncLastValue = 0;  // The most recently signalled value, from the CPU.
+	std::vector<uint64_t> syncFenceValues;
 	ResourcePtr<ID3D12Fence> syncFence;
 	HANDLE syncEvent;
 
