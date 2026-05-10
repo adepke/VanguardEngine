@@ -13,6 +13,7 @@
 #include <Editor/ImGuiExtensions.h>
 
 #include <imgui.h>
+#include <IconsFontAwesome5.h>
 #include <d3dcompiler.h>
 
 #include <cstring>
@@ -190,6 +191,18 @@ UserInterfaceManager::UserInterfaceManager(RenderDevice* inDevice) : device(inDe
 	if (!io.Fonts->AddFontFromFileTTF(fontPath.generic_string().c_str(), 15.f, nullptr, nullptr))
 	{
 		VGLogWarning(logCore, "Failed to load custom font, falling back to default font.");
+	}
+
+	static const ImWchar iconRanges[] = { ICON_MIN_FA, ICON_MAX_FA, 0 };
+	ImFontConfig iconConfig;
+	iconConfig.MergeMode = true;  // Merge into the previously added font.
+	iconConfig.PixelSnapH = true;  // Icons render best when snapped to the pixel grid.
+	iconConfig.GlyphMinAdvanceX = 13.f;  // Force a fixed advance so icons line up with the text column.
+	iconConfig.GlyphOffset = { 0.f, 1.f };  // Nudge down so FA solid sits on the Cousine baseline.
+	const auto iconFontPath = Config::fontsPath / "FontAwesome_Solid.ttf";
+	if (!io.Fonts->AddFontFromFileTTF(iconFontPath.generic_string().c_str(), 13.f, &iconConfig, iconRanges))
+	{
+		VGLogWarning(logCore, "Failed to load icon font, icons will not render.");
 	}
 
 	frameResources = new FrameResources[device->frameCount];

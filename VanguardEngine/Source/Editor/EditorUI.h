@@ -69,6 +69,14 @@ private:
 	int gizmoOperation = 7;  // TRANSLATE_X | TRANSLATE_Y | TRANSLATE_Z
 	int gizmoMode = 1;  // WORLD
 
+	// Smoothed opacity used to fade the floating scene toolbar based on cursor proximity.
+	// Held across frames so the fade animates rather than snapping.
+	float sceneToolbarOpacity = 0.25f;
+	// Screen-space rect of the floating toolbar, populated each frame by DrawSceneToolbar so
+	// the picking code can suppress entity picks when a click lands on a toolbar button.
+	ImVec2 sceneToolbarMin = { 0.f, 0.f };
+	ImVec2 sceneToolbarMax = { 0.f, 0.f };
+
 public:
 	// Debug/visualization overlay state.
 	RenderOverlay activeOverlay = RenderOverlay::None;
@@ -85,6 +93,7 @@ private:
 	bool ExecuteCommand(const std::string& command);
 	void DrawConsole(entt::registry& registry, const ImVec2& min, const ImVec2& max);
 	void DrawSelectionGizmo(entt::registry& registry);
+	void DrawSceneToolbar(const ImVec2& viewportMin, const ImVec2& viewportMax);
 
 public:
 	void Update();

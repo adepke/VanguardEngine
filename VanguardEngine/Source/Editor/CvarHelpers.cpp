@@ -65,3 +65,20 @@ void CvarHelpers::Slider(const entt::hashed_string cvar, const std::string& name
 		CvarManager::Get().SetVariable<int>(cvar, value);
 	}
 }
+
+void CvarHelpers::Combo(const entt::hashed_string cvar, const std::string& name, const char* const* items, int itemCount)
+{
+	auto* cvarPtr = CvarManager::Get().GetVariable<int>(cvar);
+
+	if (!cvarPtr)
+	{
+		InvalidCvar(cvar);
+		return;
+	}
+
+	int value = *cvarPtr;
+	if (ImGui::Combo(name.c_str(), &value, items, itemCount))
+	{
+		CvarManager::Get().SetVariable<int>(cvar, value);
+	}
+}

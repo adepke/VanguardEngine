@@ -8,6 +8,8 @@
 
 #include <imgui.h>
 
+#include <algorithm>
+
 namespace ImGui
 {
 	// Note: we need to use static descriptors instead of dynamic descriptors, since ImGui uses the texture ID as component of the item id, so it cannot change between frames.
@@ -27,6 +29,50 @@ namespace ImGui
 
 		const auto& textureComponent = device->GetResourceManager().Get(handle);
 		ImGui::ImageButton("", (ImTextureID)textureComponent.SRV->bindlessIndex, { (float)textureComponent.description.width * scale.x, (float)textureComponent.description.height * scale.y }, uv0, uv1, tint);
+	}
+
+	// A semi-transparent rounded icon button intended for use as a floating overlay control.
+	inline bool FloatingIconButton(const char* label, const char* tooltip, bool selected, float opacity = 1.f, const ImVec2& size = { 28.f, 28.f })
+	{
+		opacity = std::clamp(opacity, 0.f, 1.f);
+
+		// Base color palette for the button. Selected uses a brighter background so the active
+		// mode is clearly highlighted within a group of buttons.
+		const ImVec4 baseColor = selected
+			? ImVec4(0.55f, 0.55f, 0.55f, 0.85f)
+			: ImVec4(0.10f, 0.10f, 0.10f, 0.55f);
+		const ImVec4 hoveredColor = ImVec4(0.30f, 0.30f, 0.30f, 0.85f);
+		const ImVec4 activeColor = ImVec4(0.65f, 0.65f, 0.65f, 0.95f);
+
+		const auto applyOpacity = [opacity](ImVec4 color)
+		{
+			color.w *= opacity;
+			return color;
+		};
+
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 6.f);
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.f);
+		ImGui::PushStyleColor(ImGuiCol_Button, applyOpacity(baseColor));
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, applyOpacity(hoveredColor));
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, applyOpacity(activeColor));
+
+		// Fade the glyph itself with the same opacity so the icon and frame stay in lockstep.
+		const ImVec4 textColor = applyOpacity(ImGui::GetStyleColorVec4(ImGuiCol_Text));
+		ImGui::PushStyleColor(ImGuiCol_Text, textColor);
+
+		const bool clicked = ImGui::Button(label, size);
+
+		ImGui::PopStyleColor(4);
+		ImGui::PopStyleVar(2);
+
+		// Tooltips render at full opacity regardless of the button fade so the label is readable
+		// the moment the cursor lands on the control.
+		if (tooltip && ImGui::IsItemHovered())
+		{
+			ImGui::SetTooltip("%s", tooltip);
+		}
+
+		return clicked;
 	}
 
 	inline void StyleColorsVanguard(ImGuiStyle* dst = nullptr)

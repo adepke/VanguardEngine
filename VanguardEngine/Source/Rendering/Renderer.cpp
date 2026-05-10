@@ -289,8 +289,10 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 	{
 		Renderer::Get().ReloadShaderPipelines();
 	});
-	CvarCreate("toneMappingEnabled", "Controls tone mapping as a post process step", 1);
-	CvarCreate("referenceGridEnabled", "Controls if the reference grid is visible", 1);
+	CvarCreate("exposure", "Linear scene exposure multiplier applied before tone mapping", 10.0f);
+	// Keep in sync with ToneMapping.hlsli
+	CvarCreate("toneMapper", "Selects the tone mapping operator (0=disabled, 1=ACES Hill, 2=ACES Narkowicz, 3=AgX, 4=Khronos PBR Neutral, 5=Reinhard)", 3);
+	CvarCreate("referenceGridEnabled", "Controls if the reference grid is visible", 0);
 	
 	constexpr size_t maxVertices = 32 * 1024 * 1024;
 
@@ -648,13 +650,19 @@ void Renderer::Render(entt::registry& registry)
 			.PixelShader({ "PostProcess", "PSMain" })
 			.DepthEnabled(false);
 
-		if (*CvarGet("toneMappingEnabled", int) > 0)
-		{
-			postProcessLayout.Macro({ "ENABLE_TONEMAPPING" });
-		}
-
 		list.BindPipeline(postProcessLayout);
-		list.BindConstants("bindData", { resources.Get(outputHDRTag) });
+
+		struct {
+			uint32_t mainOutput;
+			uint32_t toneMapper;
+			float exposure;
+			float padding;
+		} bindData;
+
+		bindData.mainOutput = resources.Get(outputHDRTag);
+		bindData.toneMapper = static_cast<uint32_t>(*CvarGet("toneMapper", int));
+		bindData.exposure = *CvarGet("exposure", float);
+		list.BindConstants("bindData", bindData);
 
 		list.DrawFullscreenQuad();
 	});

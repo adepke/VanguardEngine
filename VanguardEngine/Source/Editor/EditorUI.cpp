@@ -20,6 +20,7 @@
 
 #include <imgui_internal.h>
 #include <ImGuizmo.h>
+#include <IconsFontAwesome5.h>
 
 #include <algorithm>
 #include <numeric>
@@ -889,6 +890,75 @@ void EditorUI::DrawSelectionGizmo(entt::registry& registry)
 	}
 }
 
+void EditorUI::DrawSceneToolbar(const ImVec2& viewportMin, const ImVec2& viewportMax)
+{
+	const float buttonSize = 28.f;
+	const float buttonSpacing = 4.f;     // Spacing between adjacent buttons in the same group.
+	const float groupSpacing = 10.f;     // Wider gap between the grid button and the gizmo cluster.
+	const float padding = 12.f;          // Distance from the scene viewport edges.
+	const float fadedOpacity = 0.25f;    // Baseline opacity when the cursor is far away.
+	const float proximityRadius = 80.f;  // Distance at which the toolbar starts to fade in.
+
+	// 1 grid button + 3 gizmo mode buttons.
+	const float toolbarWidth = buttonSize * 4.f + buttonSpacing * 3.f + groupSpacing;
+	const float toolbarHeight = buttonSize;
+
+	const ImVec2 toolbarPos = {
+		viewportMax.x - toolbarWidth - padding,
+		viewportMin.y + padding,
+	};
+	const ImVec2 toolbarRectMax = toolbarPos + ImVec2{ toolbarWidth, toolbarHeight };
+
+	// Track the toolbar bounds so other code can use it, like Picking.
+	sceneToolbarMin = toolbarPos;
+	sceneToolbarMax = toolbarRectMax;
+
+	// Drive the fade from the cursor's distance to the toolbar rect. If the cursor is inside
+	// the rect the distance is zero. Outside, we use the closest-point distance and fade in as
+	// it approaches the edge so the buttons "wake up" before the cursor reaches them.
+	const ImVec2 mouse = ImGui::GetIO().MousePos;
+	const float dx = std::max({ toolbarPos.x - mouse.x, 0.f, mouse.x - toolbarRectMax.x });
+	const float dy = std::max({ toolbarPos.y - mouse.y, 0.f, mouse.y - toolbarRectMax.y });
+	const float distance = std::sqrt(dx * dx + dy * dy);
+	const float proximity = std::clamp(1.f - distance / proximityRadius, 0.f, 1.f);
+	const float targetOpacity = std::lerp(fadedOpacity, 1.f, proximity);
+
+	// Exponential smoothing toward the target so the fade animates rather than snaps.
+	const float dt = std::max(ImGui::GetIO().DeltaTime, 0.f);
+	const float smoothingRate = 14.f;
+	const float blend = 1.f - std::exp(-dt * smoothingRate);
+	sceneToolbarOpacity = std::lerp(sceneToolbarOpacity, targetOpacity, blend);
+
+	ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { buttonSpacing, 0.f });
+
+	// SetCursorPos expects window-local coordinates. The scene window does not scroll, so
+	// converting the screen-space toolbar position with GetWindowPos is sufficient.
+	bool gridEnabled = *CvarGet("referenceGridEnabled", int) != 0;
+	ImGui::SetCursorPos(ImVec2{ toolbarPos.x - ImGui::GetWindowPos().x, toolbarPos.y - ImGui::GetWindowPos().y });
+	if (ImGui::FloatingIconButton((char*)ICON_FA_BORDER_ALL, "Toggle reference grid", gridEnabled, sceneToolbarOpacity, { buttonSize, buttonSize }))
+	{
+		CvarSet("referenceGridEnabled", gridEnabled ? 0 : 1);
+	}
+
+	ImGui::SameLine(0.f, groupSpacing);
+	if (ImGui::FloatingIconButton((char*)ICON_FA_ARROWS_ALT, "Translate (1)", gizmoOperation == ImGuizmo::TRANSLATE, sceneToolbarOpacity, { buttonSize, buttonSize }))
+	{
+		gizmoOperation = ImGuizmo::TRANSLATE;
+	}
+	ImGui::SameLine(0.f, buttonSpacing);
+	if (ImGui::FloatingIconButton((char*)ICON_FA_SYNC_ALT, "Rotate (2)", gizmoOperation == ImGuizmo::ROTATE, sceneToolbarOpacity, { buttonSize, buttonSize }))
+	{
+		gizmoOperation = ImGuizmo::ROTATE;
+	}
+	ImGui::SameLine(0.f, buttonSpacing);
+	if (ImGui::FloatingIconButton((char*)ICON_FA_EXPAND_ALT, "Scale (3)", gizmoOperation == ImGuizmo::SCALE, sceneToolbarOpacity, { buttonSize, buttonSize }))
+	{
+		gizmoOperation = ImGuizmo::SCALE;
+	}
+
+	ImGui::PopStyleVar();
+}
+
 void EditorUI::DrawScene(RenderDevice* device, entt::registry& registry, TextureHandle sceneTexture)
 {
 	const auto& sceneDescription = device->GetResourceManager().Get(sceneTexture).description;
@@ -915,6 +985,12 @@ void EditorUI::DrawScene(RenderDevice* device, entt::registry& registry, Texture
 		// Draw the manipulation gizmo before click handling to account for gizmo hover.
 		DrawSelectionGizmo(registry);
 
+		// Only draw the toolbar if not in control.
+		if (registry.view<const ControlComponent>().size() == 0)
+		{
+			DrawSceneToolbar(sceneViewportMin, sceneViewportMax);
+		}
+
 		// Double clicking the viewport grants control.
 		const bool shouldReacquireControl = consoleClosedThisFrame && consoleInputFocus;
 		if ((ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) && ImGui::IsWindowHovered(ImGuiHoveredFlags_None)) || shouldReacquireControl)
@@ -929,12 +1005,13 @@ void EditorUI::DrawScene(RenderDevice* device, entt::registry& registry, Texture
 			});
 		}
 
-		// Single click tries to select an entity in the scene. Skipped when the gizmo is being interacted with.
+		// Single click tries to select an entity in the scene.
 		if (ImGui::IsMouseClicked(ImGuiMouseButton_Left) &&
 			!ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left) &&
 			ImGui::IsWindowHovered(ImGuiHoveredFlags_None) &&
 			!ImGuizmo::IsOver() &&
 			!ImGuizmo::IsUsing() &&
+			!ImGui::IsMouseHoveringRect(sceneToolbarMin, sceneToolbarMax, false) &&
 			registry.view<const ControlComponent>().size() == 0)
 		{
 			const ImVec2 mouseLocal = ImGui::GetMousePos() - sceneViewportMin;
@@ -1014,7 +1091,17 @@ void EditorUI::DrawControls(RenderDevice* device)
 				Renderer::Get().ReloadShaderPipelines();
 			}
 
-			CvarHelpers::Checkbox("toneMappingEnabled", "Tone mapping");
+			static const char* toneMappers[] = {
+				"Disabled",
+				"ACES (Hill)",
+				"ACES (Narkowicz)",
+				"AgX",
+				"Khronos PBR Neutral",
+				"Reinhard"
+			};
+			CvarHelpers::Combo("toneMapper", "Tone mapper", toneMappers, IM_ARRAYSIZE(toneMappers));
+
+			CvarHelpers::Slider("exposure", "Exposure", 0.f, 50.f);
 		}
 
 		ImGui::End();

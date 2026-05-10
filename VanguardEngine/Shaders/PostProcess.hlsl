@@ -6,7 +6,9 @@
 struct BindData
 {
 	uint mainOutput;
-	float3 padding;
+	uint toneMapper;  // Tone mapping function
+	float exposure;
+	float padding;
 };
 
 ConstantBuffer<BindData> bindData : register(b0);
@@ -37,12 +39,10 @@ float4 PSMain(PSInput input) : SV_Target
 {
 	Texture2D<float4> mainOutput = ResourceDescriptorHeap[bindData.mainOutput];
 	const float4 mainOutputHDR = mainOutput.Sample(bilinearWrap, input.uv);
-	
-#ifdef ENABLE_TONEMAPPING
-	const float3 toneMapped = ToneMap(mainOutputHDR.rgb);
-#else
-	const float3 toneMapped = mainOutputHDR.rgb;
-#endif
+
+	// Apply scene exposure prior to tone mapping.
+	const float3 hdrColor = mainOutputHDR.rgb * bindData.exposure;
+	const float3 toneMapped = ToneMap(hdrColor, bindData.toneMapper);
 
 	return float4(toneMapped, 1.f);
 }
