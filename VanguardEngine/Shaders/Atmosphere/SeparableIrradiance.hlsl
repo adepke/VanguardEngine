@@ -51,10 +51,9 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
     float3 separatedSkyIrradianceClouds;
     DecomposeSeparableSunAndSkyIrradiance(bindData.atmosphere, transmittanceLut, irradianceLut, bilinearClamp, positionCloudLayer - planetCenter, sunDirection, separatedSunIrradianceClouds, separatedSkyIrradianceClouds);
 	
-    // Multiply the exposure in here since the separated irradiance is only ever used outside of the main atmosphere compose.
     RWStructuredBuffer<float3> atmosphereIrradiance = ResourceDescriptorHeap[bindData.atmosphereIrradianceBuffer];
-    atmosphereIrradiance[0] = separatedSunIrradianceNearCamera * atmosphereRadianceExposure;
-    atmosphereIrradiance[1] = separatedSkyIrradianceNearCamera * atmosphereRadianceExposure;
-    atmosphereIrradiance[2] = separatedSunIrradianceClouds * atmosphereRadianceExposure;
-    atmosphereIrradiance[3] = separatedSkyIrradianceClouds * atmosphereRadianceExposure;
+    atmosphereIrradiance[0] = separatedSunIrradianceNearCamera;
+    atmosphereIrradiance[1] = separatedSkyIrradianceNearCamera;
+    atmosphereIrradiance[2] = separatedSunIrradianceClouds;
+    atmosphereIrradiance[3] = separatedSkyIrradianceClouds;
 }

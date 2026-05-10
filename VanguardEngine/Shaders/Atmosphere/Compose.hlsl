@@ -178,8 +178,7 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 			float sunVisibility = CalculateSunVisibility(hitPosition, sunDirection, weatherTexture);
 			float skyVisibility = CalculateSkyVisibility(hitPosition, bindData.globalWeatherCoverage);
 			
-			float3 radiance = atmosphere.surfaceColor * (1.f / pi) * ((sunIrradiance * sunVisibility) + (skyIrradiance * skyVisibility));
-			finalColor = radiance * atmosphereRadianceExposure;
+			finalColor = atmosphere.surfaceColor * (1.f / pi) * ((sunIrradiance * sunVisibility) + (skyIrradiance * skyVisibility));
 		}
 		
 		else
@@ -212,7 +211,7 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 			cirrusColor *= (sunIrradiance + skyIrradiance);
 			
 			// Composite. No need to apply transmittance, the prior color is empty.
-			finalColor = cirrusColor + perspectiveScattering * atmosphereRadianceExposure;
+			finalColor = cirrusColor + perspectiveScattering;
 			
 			// If the view ray intersects the sun disk, add the direct radiance of the sun on top.
 			if (dot(rayDirection, sunDirection) > cos(sunAngularRadius))
@@ -263,10 +262,8 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 		// because the cloud itself is the dominant occluder there.
 		float3 perspectiveTransmittance;
 		float3 perspectiveScattering = GetSkyRadianceToPoint(atmosphere, transmittanceLut, scatteringLut, bilinearWrap, cloudPosition - planetCenter, backPosition - planetCenter, lastDepthIsGround, 0.f, 0.f, sunDirection, perspectiveTransmittance);
-		
+
 		// Composite.
-		perspectiveScattering *= atmosphereRadianceExposure;
-		
 		finalColor = finalColor * perspectiveTransmittance + perspectiveScattering;
 		finalColor = finalColor * cloudsTransmittance + cloudsScattering;
 #endif
@@ -293,7 +290,6 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 		perspectiveScattering = GetSkyRadiance(atmosphere, transmittanceLut, scatteringLut, bilinearWrap, cameraPosition - planetCenter, rayDirection, shadowStart, shadowLength, sunDirection, perspectiveTransmittance);
 	}
 	
-	perspectiveScattering *= atmosphereRadianceExposure;
 	finalColor = finalColor * perspectiveTransmittance + perspectiveScattering;
 	
 	outputTexture[dispatchId.xy] = float4(finalColor, 1);

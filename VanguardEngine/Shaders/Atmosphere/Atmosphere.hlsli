@@ -905,8 +905,8 @@ float3 SampleAtmosphere(AtmosphereData atmosphere, Camera camera, float3 directi
 	float4 planetRadiance = GetPlanetSurfaceRadiance(atmosphere, planetCenter, cameraPosition, direction, shadowStart, shadowLength, sunDirection, transmittanceLut, scatteringLut, irradianceLut, lutSampler);
 	radiance = lerp(radiance, planetRadiance.xyz, planetRadiance.w);
 
-	// Multiply the exposure in here since this atmosphere sample is only ever used outside of the main atmosphere compose.
-	return radiance * atmosphereRadianceExposure;
+	// Native units, apply exposure in post.
+	return radiance;
 }
 
 #endif  // __ATMOSPHERE_HLSLI__

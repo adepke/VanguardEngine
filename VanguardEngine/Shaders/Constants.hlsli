@@ -11,10 +11,6 @@ static const float alphaTestThreshold = 0.5;
 // just for this value is not very practical.
 static const float3 planetCenter = float3(0.f, 0.f, -6360.f);
 
-// Atmosphere
-// Scene exposure has been refactored into a unified post-process stage. Remove this.
-static const float atmosphereRadianceExposure = 1.f;
-
 // Clouds
 static const float cloudLayerBottom = 1400.0 / 1000.0;  // Kilometers.
 static const float cloudLayerTop = 5000.0 / 1000.0;  // Kilometers.
