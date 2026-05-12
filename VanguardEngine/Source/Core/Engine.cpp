@@ -60,6 +60,7 @@ void EngineBoot()
 	logAsset = logCore->clone("asset");
 	logEditor = logCore->clone("editor");
 	logRendering = logCore->clone("rendering");
+	logScene = logCore->clone("scene");
 	logThreading = logCore->clone("threading");
 	logUtility = logCore->clone("utility");
 	logWindow = logCore->clone("window");

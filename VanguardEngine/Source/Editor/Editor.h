@@ -32,7 +32,7 @@ public:
 	Editor();
 	~Editor();
 
-	void Update();
+	void Update(RenderDevice& device);
 	void Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer, RenderGraphResourceManager& resourceManager, entt::registry& registry,
 		RenderResource cameraBuffer, RenderResource depthStencil, RenderResource outputLDR, RenderResource backBuffer, const ClusterResources& clusterResources,
 		RenderResource weather);

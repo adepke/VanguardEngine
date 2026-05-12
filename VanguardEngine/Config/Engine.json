@@ -2,5 +2,6 @@
   "ShadersPath": "Shaders",
   "FontsPath": "Assets/Fonts",
   "MaterialsPath": "Assets/Materials",
-  "UtilitiesPath": "Assets/Utilities"
+  "UtilitiesPath": "Assets/Utilities",
+  "ScenesPath": "Assets/Scenes"
 }

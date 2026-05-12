@@ -16,6 +16,7 @@
 #include <Rendering/Bloom.h>
 #include <Rendering/ClusteredLightCulling.h>
 #include <Rendering/DebugDraw.h>
+#include <Core/Config.h>
 #include <Utility/Math.h>
 
 #include <imgui_internal.h>
@@ -695,12 +696,18 @@ void EditorUI::DrawConsole(entt::registry& registry, const ImVec2& min, const Im
 	}
 }
 
-void EditorUI::Update()
+void EditorUI::Update(RenderDevice& device)
 {
 	if (fullscreen != Renderer::Get().window->IsFullscreen())
 	{
 		const auto [width, height] = Renderer::Get().GetResolution();
 		Renderer::Get().window->SetSize(width, height, fullscreen);
+	}
+
+	if (!hasLoadedScenes)
+	{
+		hasLoadedScenes = true;
+		loadedScenes = Scene::List(device);
 	}
 }
 
@@ -959,6 +966,91 @@ void EditorUI::DrawSceneToolbar(const ImVec2& viewportMin, const ImVec2& viewpor
 	ImGui::PopStyleVar();
 }
 
+void EditorUI::DrawSceneIcon(RenderDevice* device, entt::registry& registry, const SceneMetadata& scene)
+{
+	// Card geometry. The thumbnail occupies the upper square region, the name is rendered below
+	// it, and the whole rect is a single click target so the user can target either the image
+	// or the label.
+	constexpr float thumbnailSize = 96.f;
+	constexpr float padding = 6.f;
+	const float textHeight = ImGui::GetTextLineHeight();
+	const ImVec2 cardSize{ thumbnailSize + padding * 2.f, thumbnailSize + textHeight + padding * 3.f };
+
+	ImGui::PushID(scene.path.generic_string().c_str());
+
+	const ImVec2 cardMin = ImGui::GetCursorScreenPos();
+	const bool clicked = ImGui::InvisibleButton("##scene_card", cardSize);
+	const bool hovered = ImGui::IsItemHovered();
+	const bool held = ImGui::IsItemActive();
+	const ImVec2 cardMax = cardMin + cardSize;
+
+	auto* drawList = ImGui::GetWindowDrawList();
+	const auto& style = ImGui::GetStyle();
+	const float rounding = style.FrameRounding;
+
+	// Card background reacts to hover/press so the user gets standard button feedback even
+	// though the contents are drawn directly to the draw list.
+	const ImU32 backgroundColor = ImGui::GetColorU32(
+		held ? ImGuiCol_ButtonActive : (hovered ? ImGuiCol_ButtonHovered : ImGuiCol_Button));
+	drawList->AddRectFilled(cardMin, cardMax, backgroundColor, rounding);
+	drawList->AddRect(cardMin, cardMax, ImGui::GetColorU32(ImGuiCol_Border), rounding, 0, 1.f);
+
+	// Thumbnail region — image when a valid texture is available, otherwise a sunken panel
+	// with a centered placeholder label.
+	const ImVec2 thumbMin = cardMin + ImVec2{ padding, padding };
+	const ImVec2 thumbMax = thumbMin + ImVec2{ thumbnailSize, thumbnailSize };
+
+	if (device && device->GetResourceManager().Valid(scene.thumbnail))
+	{
+		const auto& textureComponent = device->GetResourceManager().Get(scene.thumbnail);
+		drawList->AddImageRounded(
+			(ImTextureID)textureComponent.SRV->bindlessIndex,
+			thumbMin, thumbMax,
+			{ 0.f, 0.f }, { 1.f, 1.f },
+			IM_COL32_WHITE,
+			rounding);
+	}
+
+	else
+	{
+		drawList->AddRectFilled(thumbMin, thumbMax, ImGui::GetColorU32(ImGuiCol_FrameBg), rounding);
+
+		const char* placeholder = "No Thumbnail";
+		const ImVec2 placeholderSize = ImGui::CalcTextSize(placeholder);
+		const ImVec2 placeholderPos{
+			thumbMin.x + (thumbnailSize - placeholderSize.x) * 0.5f,
+			thumbMin.y + (thumbnailSize - placeholderSize.y) * 0.5f
+		};
+		drawList->AddText(placeholderPos, ImGui::GetColorU32(ImGuiCol_TextDisabled), placeholder);
+	}
+
+	// Centered, hard-clipped name strip directly under the thumbnail. Clipping prevents long
+	// scene names from spilling outside the card footprint.
+	const ImVec2 nameSize = ImGui::CalcTextSize(scene.name.c_str());
+	const ImVec2 nameClipMin{ thumbMin.x, thumbMax.y + padding };
+	const ImVec2 nameClipMax{ thumbMax.x, nameClipMin.y + textHeight };
+	const ImVec2 namePos{
+		thumbMin.x + std::max(0.f, (thumbnailSize - nameSize.x) * 0.5f),
+		nameClipMin.y
+	};
+	drawList->PushClipRect(nameClipMin, nameClipMax, true);
+	drawList->AddText(namePos, ImGui::GetColorU32(ImGuiCol_Text), scene.name.c_str());
+	drawList->PopClipRect();
+
+	// Tooltip shows the full scene path on hover.
+	if (hovered)
+	{
+		ImGui::SetTooltip("%s", scene.path.generic_string().c_str());
+	}
+
+	if (clicked)
+	{
+		Scene::Load(registry, scene.path);
+	}
+
+	ImGui::PopID();
+}
+
 void EditorUI::DrawScene(RenderDevice* device, entt::registry& registry, TextureHandle sceneTexture)
 {
 	const auto& sceneDescription = device->GetResourceManager().Get(sceneTexture).description;
@@ -1078,6 +1170,69 @@ void EditorUI::DrawScene(RenderDevice* device, entt::registry& registry, Texture
 	ImGui::End();
 
 	ImGui::PopStyleVar();
+}
+
+void EditorUI::DrawSceneSelector(RenderDevice* device, entt::registry& registry)
+{
+	if (ImGui::Begin("Scene Selector"))
+	{
+		if (ImGui::Button("Clear scene"))
+		{
+			Scene::Clear(registry);
+
+			// Restore a simple spectator camera.
+			TransformComponent spectatorTransform{};
+			spectatorTransform.translation = { 0.f, 0.f, 100.f };
+			spectatorTransform.rotation = { 0.f, 0.f, 0.f };
+
+			const auto spectator = registry.create();
+			registry.emplace<NameComponent>(spectator, "Spectator");
+			registry.emplace<TransformComponent>(spectator, std::move(spectatorTransform));
+			registry.emplace<CameraComponent>(spectator);
+		}
+
+		if (ImGui::Button("Save scene"))
+		{
+			Scene::Save(registry, Config::scenesPath / "new.scene");
+		}
+
+		ImGui::Separator();
+
+		if (loadedScenes.size() == 0)
+		{
+			ImGui::TextDisabled("No scenes found.");
+		}
+		else
+		{
+			// Keep the card width here in sync with the geometry used by DrawSceneIcon so the
+			// wrapping math lines up with what is actually rendered.
+			constexpr float thumbnailSize = 96.f;
+			constexpr float padding = 6.f;
+			const float cardWidth = thumbnailSize + padding * 2.f;
+
+			const float available = ImGui::GetContentRegionAvail().x;
+			const float spacing = ImGui::GetStyle().ItemSpacing.x;
+			const int columns = std::max(1, static_cast<int>((available + spacing) / (cardWidth + spacing)));
+
+			int column = 0;
+			for (const auto& scene : loadedScenes)
+			{
+				if (column != 0)
+				{
+					ImGui::SameLine();
+				}
+
+				DrawSceneIcon(device, registry, scene);
+
+				if (++column >= columns)
+				{
+					column = 0;
+				}
+			}
+		}
+	}
+
+	ImGui::End();
 }
 
 void EditorUI::DrawControls(RenderDevice* device)
@@ -1300,7 +1455,10 @@ void EditorUI::DrawAtmosphereControls(RenderDevice* device, entt::registry& regi
 		if (ImGui::Begin("Sky Atmosphere", &atmosphereControlsOpen))
 		{
 			ImGui::Text("General");
-			ComponentProperties::RenderTimeOfDayComponent(registry, atmosphere.sunLight);
+			if (registry.valid(atmosphere.sunLight))
+			{
+				ComponentProperties::RenderTimeOfDayComponent(registry, atmosphere.sunLight);
+			}
 
 			ImGui::Separator();
 

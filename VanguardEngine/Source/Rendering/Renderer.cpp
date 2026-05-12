@@ -171,7 +171,11 @@ void Renderer::UpdateCameraBuffer(const entt::registry& registry)
 		.aspectRatio = static_cast<float>(backBuffer.description.width) / static_cast<float>(backBuffer.description.height)
 	});
 
-	const auto solarZenithAngle = registry.get<TimeOfDayComponent>(atmosphere.sunLight).solarZenithAngle;
+	float solarZenithAngle = 0.f;
+	if (registry.valid(atmosphere.sunLight))
+	{
+		solarZenithAngle = registry.get<TimeOfDayComponent>(atmosphere.sunLight).solarZenithAngle;
+	}
 
 	// Sun-view orthographic camera. In kilometers instead of meters for precision. Shadow map is not accurate otherwise.
 	const float sunNearPlane = 1;
@@ -227,7 +231,7 @@ BufferHandle Renderer::CreateLightBuffer(const entt::registry& registry)
 	VGScopedCPUStat("Create Light Buffer");
 
 	const auto lightView = registry.view<const TransformComponent, const LightComponent>();
-	const auto viewSize = lightView.size_hint();
+	const auto viewSize = std::max(lightView.size_hint(), 1ull);  // Prevent a zero-sized buffer from being created.
 
 	BufferDescription lightBufferDescription;
 	lightBufferDescription.updateRate = ResourceFrequency::Dynamic;
@@ -260,6 +264,21 @@ BufferHandle Renderer::CreateLightBuffer(const entt::registry& registry)
 		lights.emplace_back(instance);
 		++index;
 	});
+
+	// If no lights exist, create a dummy light that does nothing.
+	// This is a bit of a hack since the resource manager cannot create empty resources,
+	// and the render graph can't handle null resources - so we have to make something.
+	// There's almost certainly a better solution here.
+	if (index == 0)
+	{
+		lights.emplace_back(Light{
+			.position = { 0.f, 0.f, 0.f },
+			.type = static_cast<uint32_t>(LightType::Point),
+			.color = { 0.f, 0.f, 0.f },
+			.luminance = 0.f
+		});
+		++index;
+	}
 
 	device->GetResourceManager().Write(bufferHandle, lights);
 
@@ -742,7 +761,7 @@ void Renderer::Render(entt::registry& registry)
 	device->Present();
 	device->AdvanceGPU();
 
-	Editor::Get().Update();
+	Editor::Get().Update(*device);
 
 	appFrame++;
 }

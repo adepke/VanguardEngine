@@ -132,8 +132,13 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 	const auto baseShapeNoiseTag = graph.Import(baseShapeNoise);
 	const auto detailShapeNoiseTag = graph.Import(detailShapeNoise);
 	const auto cirrusTag = graph.Import(cirrusClouds);
-	const auto solarZenithAngle = registry.get<TimeOfDayComponent>(atmosphere.sunLight).solarZenithAngle;
 	const auto blueNoiseTag = graph.Import(RenderUtils::Get().blueNoise);
+
+	auto solarZenithAngle = 0.f;
+	if (registry.valid(atmosphere.sunLight))
+	{
+		solarZenithAngle = registry.get<TimeOfDayComponent>(atmosphere.sunLight).solarZenithAngle;
+	}
 
 	if (dirty)
 	{

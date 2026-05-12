@@ -3,6 +3,7 @@
 #pragma once
 
 #include <Rendering/ResourceHandle.h>
+#include <Scene/SceneManager.h>
 
 #include <entt/entt.hpp>
 #include <imgui.h>
@@ -77,6 +78,11 @@ private:
 	ImVec2 sceneToolbarMin = { 0.f, 0.f };
 	ImVec2 sceneToolbarMax = { 0.f, 0.f };
 
+	// For now, only load scenes once on startup. #TODO: instead of a static list, listen for
+	// file changes in the Scenes folder, and reload on change.
+	bool hasLoadedScenes = false;
+	std::vector<SceneMetadata> loadedScenes;
+
 public:
 	// Debug/visualization overlay state.
 	RenderOverlay activeOverlay = RenderOverlay::None;
@@ -94,12 +100,14 @@ private:
 	void DrawConsole(entt::registry& registry, const ImVec2& min, const ImVec2& max);
 	void DrawSelectionGizmo(entt::registry& registry);
 	void DrawSceneToolbar(const ImVec2& viewportMin, const ImVec2& viewportMax);
+	void DrawSceneIcon(RenderDevice* device, entt::registry& registry, const SceneMetadata& scene);
 
 public:
-	void Update();
+	void Update(RenderDevice& device);
 	void DrawLayout();
 	void DrawDemoWindow();
 	void DrawScene(RenderDevice* device, entt::registry& registry, TextureHandle sceneTexture);
+	void DrawSceneSelector(RenderDevice* device, entt::registry& registry);
 	void DrawControls(RenderDevice* device);
 	void DrawEntityHierarchy(entt::registry& registry);
 	void DrawEntityPropertyViewer(entt::registry& registry);

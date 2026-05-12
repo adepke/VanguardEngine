@@ -15,6 +15,7 @@ namespace Config
 	inline std::filesystem::path fontsPath;
 	inline std::filesystem::path materialsPath;
 	inline std::filesystem::path utilitiesPath;
+	inline std::filesystem::path scenesPath;
 
 	void Initialize();
 };

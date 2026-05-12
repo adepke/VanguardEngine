@@ -447,11 +447,14 @@ void Atmosphere::Render(RenderGraph& graph, Clouds& clouds, AtmosphereResources 
 		dirty = false;
 	}
 
-	const auto solarZenithAngle = registry.get<TimeOfDayComponent>(sunLight).solarZenithAngle;
-
-	// Update the sun light entity.
-	auto& lightTransform = registry.get<TransformComponent>(sunLight);
-	lightTransform.rotation = { 0.f, solarZenithAngle + 3.14159f / 2.f, 0.f };
+	auto solarZenithAngle = 0.f;
+	if (registry.valid(sunLight))
+	{
+		solarZenithAngle = registry.get<TimeOfDayComponent>(sunLight).solarZenithAngle;
+		// Update the sun light entity.
+		auto& lightTransform = registry.get<TransformComponent>(sunLight);
+		lightTransform.rotation = { 0.f, solarZenithAngle + 3.14159f / 2.f, 0.f };
+	}
 
 	auto& composePass = graph.AddPass("Sky Atmosphere Compose Pass", ExecutionQueue::Compute);
 	composePass.Read(cameraBuffer, ResourceBind::SRV);
@@ -534,7 +537,11 @@ std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(Rende
 {
 	const auto luminanceTag = graph.Import(luminanceTexture);
 
-	const auto solarZenithAngle = registry.get<TimeOfDayComponent>(sunLight).solarZenithAngle;
+	float solarZenithAngle = 0.f;
+	if (registry.valid(sunLight))
+	{
+		solarZenithAngle = registry.get<TimeOfDayComponent>(sunLight).solarZenithAngle;
+	}
 
 	TextureView luminanceView{};
 	luminanceView.UAV("", 0);

@@ -42,6 +42,7 @@ extern std::shared_ptr<spdlog::logger> logAsset;
 extern std::shared_ptr<spdlog::logger> logCore;
 extern std::shared_ptr<spdlog::logger> logEditor;
 extern std::shared_ptr<spdlog::logger> logRendering;
+extern std::shared_ptr<spdlog::logger> logScene;
 extern std::shared_ptr<spdlog::logger> logThreading;
 extern std::shared_ptr<spdlog::logger> logUtility;
 extern std::shared_ptr<spdlog::logger> logWindow;

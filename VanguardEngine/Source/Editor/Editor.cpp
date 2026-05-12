@@ -43,7 +43,7 @@ Editor::~Editor()
 	// Destroys the UI.
 }
 
-void Editor::Update()
+void Editor::Update(RenderDevice& device)
 {
 	// Creating editor cvars here is simple and doesn't matter if we recreate them every frame.
 	CvarCreate("showFps", "Toggles display of FPS on the scene window", +[]()
@@ -63,7 +63,9 @@ void Editor::Update()
 		state = pressed;
 	}
 
-	ui->Update();
+#if ENABLE_EDITOR
+	ui->Update(device);
+#endif
 }
 
 void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer, RenderGraphResourceManager& resourceManager, entt::registry& registry,
@@ -119,6 +121,7 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 			ui->DrawLayout();
 			ui->DrawDemoWindow();
 			ui->DrawScene(&device, registry, resources.GetTexture(outputLDR));
+			ui->DrawSceneSelector(&device, registry);
 			ui->DrawControls(&device);
 			ui->DrawEntityHierarchy(registry);
 			ui->DrawEntityPropertyViewer(registry);

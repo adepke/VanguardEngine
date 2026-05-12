@@ -61,5 +61,6 @@ namespace Config
 		fontsPath = engineRootPath / engineConfig["FontsPath"].get<std::string>();
 		materialsPath = engineRootPath / engineConfig["MaterialsPath"].get<std::string>();
 		utilitiesPath = engineRootPath / engineConfig["UtilitiesPath"].get<std::string>();
+		scenesPath = engineRootPath / engineConfig["ScenesPath"].get<std::string>();
 	}
 }

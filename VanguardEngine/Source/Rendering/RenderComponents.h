@@ -6,6 +6,9 @@
 #include <Rendering/ResourceHandle.h>
 #include <Rendering/ShaderStructs.h>
 
+// #TODO: Huge header leakage for serialization, json_fwd doesn't help here either.
+#include <json.hpp>
+
 #include <vector>
 
 struct PrimitiveOffset
@@ -46,6 +49,8 @@ struct MeshComponent
 
 struct CameraComponent
 {
+	NLOHMANN_DEFINE_TYPE_INTRUSIVE(CameraComponent, nearPlane, farPlane, fieldOfView);
+
 	float nearPlane = 0.1f;
 	float farPlane = 10000.f;
 	float fieldOfView = 1.57079633f;  // 90 Degrees.
@@ -59,6 +64,8 @@ enum class LightType
 
 struct LightComponent
 {
+	NLOHMANN_DEFINE_TYPE_INTRUSIVE(LightComponent, type, color);
+
 	LightType type;
 	XMFLOAT3 color;
 };
@@ -72,6 +79,8 @@ enum class TimeOfDayAnimation
 
 struct TimeOfDayComponent
 {
+	NLOHMANN_DEFINE_TYPE_INTRUSIVE(TimeOfDayComponent, solarZenithAngle, speed, animation);
+
 	float solarZenithAngle;
 	float speed;
 	TimeOfDayAnimation animation;
