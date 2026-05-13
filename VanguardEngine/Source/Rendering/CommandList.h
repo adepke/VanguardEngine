@@ -15,6 +15,8 @@ class PipelineState;
 class RenderPipelineLayout;
 class DescriptorAllocator;
 struct PipelineStateReflection;
+struct BufferComponent;
+struct TextureComponent;
 
 class CommandList
 {
@@ -59,8 +61,13 @@ public:
 	void BindResourceOptional(const std::string& bindName, BufferHandle handle, size_t offset = 0);
 	void BindResourceTable(const std::string& bindName, D3D12_GPU_DESCRIPTOR_HANDLE descriptor);
 
+	// Wrap the native API to handle null pipelines.
 	void Dispatch(uint32_t x, uint32_t y, uint32_t z);
 	void DrawFullscreenQuad();
+	void DrawInstanced(uint32_t verticesPerInstance, uint32_t instanceCount, uint32_t vertexStart, uint32_t instanceStart);
+	void ExecuteIndirect(ResourcePtr<ID3D12CommandSignature>& commandSignature, uint32_t maxCommands,
+		BufferComponent& argumentBuffer, uint64_t argumentBufferOffset, BufferComponent* countBuffer,
+		uint64_t countBufferOffset);
 
 	void Copy(BufferHandle destination, BufferHandle source);
 	void Copy(TextureHandle destination, TextureHandle source);

@@ -155,7 +155,7 @@ void DebugDraw::Render(RenderGraph& graph, RenderResource cameraBuffer, RenderRe
 				list.BindConstants("bindData", bindData);
 
 				const auto count = static_cast<uint32_t>(queuedCubes[mode].size());
-				list.Native()->DrawInstanced(cubeVertexCount, count, 0, 0);
+				list.DrawInstanced(cubeVertexCount, count, 0, 0);
 			}
 
 			if (!queuedSpheres[mode].empty())
@@ -166,7 +166,7 @@ void DebugDraw::Render(RenderGraph& graph, RenderResource cameraBuffer, RenderRe
 				list.BindConstants("bindData", bindData);
 
 				const auto count = static_cast<uint32_t>(queuedSpheres[mode].size());
-				list.Native()->DrawInstanced(sphereVertexCount, count, 0, 0);
+				list.DrawInstanced(sphereVertexCount, count, 0, 0);
 			}
 		}
 	});

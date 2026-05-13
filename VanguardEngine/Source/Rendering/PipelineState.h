@@ -72,11 +72,12 @@ private:
 	void CreateRootSignature(RenderDevice& device);
 
 public:
-	ResourcePtr<ID3D12RootSignature> rootSignature;
+	ResourcePtr<ID3D12RootSignature> rootSignature;  // Can be null if the shaders failed to compile.
 	std::unique_ptr<Shader> vertexShader;
 	std::unique_ptr<Shader> pixelShader;
 	std::unique_ptr<Shader> computeShader;
 
+	bool Valid() const noexcept { return pipeline.Get(); }
 	auto* Native() const noexcept { return pipeline.Get(); }
 
 	auto* GetReflectionData() const noexcept { return &reflection; }

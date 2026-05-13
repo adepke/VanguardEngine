@@ -4,6 +4,7 @@
 #include <Rendering/Device.h>
 #include <Rendering/RenderGraph.h>
 #include <Rendering/PipelineState.h>
+#include <Rendering/Resource.h>
 
 void ValidateTransition(const BufferDescription& description, D3D12_RESOURCE_STATES newState)
 {
@@ -68,6 +69,12 @@ void CommandList::TransitionBarrierInternal(ID3D12Resource* resource, D3D12_RESO
 void CommandList::BindResourceInternal(const std::string& bindName, BufferHandle handle, size_t offset, bool optional)
 {
 	VGAssert(boundPipeline, "Attempted to bind resource without first binding a pipeline.");
+
+	// Binding is a no-op if the pipeline is null.
+	if (!boundPipeline->Valid())
+	{
+		return;
+	}
 
 	const auto hasBinding = boundPipeline->GetReflectionData()->resourceIndexMap.contains(bindName);
 	if (optional && !hasBinding)
@@ -216,13 +223,15 @@ void CommandList::BindPipelineState(const PipelineState& state)
 
 	boundPipeline = &state;
 
-	if (state.vertexShader)
+	// If the pipeline isn't valid, early out but still capture the binding.
+	if (!state.Valid())
 	{
-		list->IASetPrimitiveTopology(state.graphicsDescription.topology);
+		return;
 	}
 
 	if (state.vertexShader)
 	{
+		list->IASetPrimitiveTopology(state.graphicsDescription.topology);
 		list->SetGraphicsRootSignature(state.rootSignature.Get());
 	}
 
@@ -256,6 +265,13 @@ void CommandList::BindDescriptorAllocator(DescriptorAllocator& allocator, bool v
 void CommandList::BindConstants(const std::string& bindName, const std::vector<uint32_t>& data, size_t offset)
 {
 	VGAssert(boundPipeline, "Attempted to bind resource without first binding a pipeline.");
+
+	// Binding is a no-op if the pipeline is null.
+	if (!boundPipeline->Valid())
+	{
+		return;
+	}
+
 	VGAssert(boundPipeline->GetReflectionData()->resourceIndexMap.contains(bindName), "Shader does not contain constant bind '%s'", bindName.c_str());
 
 	const auto& bindMetadata = boundPipeline->GetReflectionData()->resourceIndexMap.at(bindName);  // Can't use operator[] due to lack of const-ness.
@@ -282,6 +298,13 @@ void CommandList::BindConstants(const std::string& bindName, const std::vector<u
 void CommandList::BindResourceTable(const std::string& bindName, D3D12_GPU_DESCRIPTOR_HANDLE descriptor)
 {
 	VGAssert(boundPipeline, "Attempted to bind resource without first binding a pipeline.");
+
+	// Binding is a no-op if the pipeline is null.
+	if (!boundPipeline->Valid())
+	{
+		return;
+	}
+
 	VGAssert(boundPipeline->GetReflectionData()->resourceIndexMap.contains(bindName), "Shader does not contain resource table bind '%s'", bindName.c_str());
 
 	const auto& bindMetadata = boundPipeline->GetReflectionData()->resourceIndexMap.at(bindName);  // Can't use operator[] due to lack of const-ness.
@@ -299,12 +322,59 @@ void CommandList::BindResourceTable(const std::string& bindName, D3D12_GPU_DESCR
 
 void CommandList::Dispatch(uint32_t x, uint32_t y, uint32_t z)
 {
+	VGAssert(boundPipeline, "Attempted to dispatch without first binding a pipeline.");
+
+	// Dispatching is a no-op if the pipeline is null.
+	if (!boundPipeline->Valid())
+	{
+		return;
+	}
+
 	list->Dispatch(x, y, z);
 }
 
 void CommandList::DrawFullscreenQuad()
 {
+	VGAssert(boundPipeline, "Attempted to draw without first binding a pipeline.");
+
+	// Drawing is a no-op if the pipeline is null.
+	if (!boundPipeline->Valid())
+	{
+		return;
+	}
+
 	list->DrawInstanced(3, 1, 0, 0);
+}
+
+void CommandList::DrawInstanced(uint32_t verticesPerInstance, uint32_t instanceCount, uint32_t vertexStart, uint32_t instanceStart)
+{
+	VGAssert(boundPipeline, "Attempted to draw without first binding a pipeline.");
+
+	// Drawing is a no-op if the pipeline is null.
+	if (!boundPipeline->Valid())
+	{
+		return;
+	}
+
+	list->DrawInstanced(verticesPerInstance, instanceCount, vertexStart, instanceStart);
+}
+
+void CommandList::ExecuteIndirect(ResourcePtr<ID3D12CommandSignature>& commandSignature, uint32_t maxCommands,
+	BufferComponent& argumentBuffer, uint64_t argumentBufferOffset, BufferComponent* countBuffer,
+	uint64_t countBufferOffset)
+{
+	VGAssert(boundPipeline, "Attempted to execute indirect without first binding a pipeline.");
+
+	// Executing is a no-op if the pipeline is null.
+	if (!boundPipeline->Valid())
+	{
+		return;
+	}
+
+	auto* const cBuffer = countBuffer ? countBuffer->Native() : nullptr;
+
+	list->ExecuteIndirect(commandSignature.Get(), maxCommands, argumentBuffer.Native(), argumentBufferOffset,
+		cBuffer, countBufferOffset);
 }
 
 void CommandList::Copy(BufferHandle destination, BufferHandle source)

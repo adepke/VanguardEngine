@@ -349,7 +349,7 @@ ClusterResources ClusteredLightCulling::Render(RenderGraph& graph, const entt::r
 		list.BindConstants("bindData", bindData);
 
 		auto& indirectComponent = device->GetResourceManager().Get(resources.GetBuffer(indirectBufferTag));
-		list.Native()->ExecuteIndirect(binningIndirectSignature.Get(), 1, indirectComponent.allocation->GetResource(), 0, nullptr, 0);
+		list.ExecuteIndirect(binningIndirectSignature, 1, indirectComponent, 0, nullptr, 0);
 	});
 
 	return { lightListTag, lightInfoTag, clusterVisibilityTag };

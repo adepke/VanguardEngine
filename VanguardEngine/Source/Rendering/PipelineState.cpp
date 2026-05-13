@@ -225,7 +225,7 @@ void PipelineState::Build(RenderDevice& device, const GraphicsPipelineStateDescr
 	const auto result = device.Native()->CreateGraphicsPipelineState(&graphicsDesc, IID_PPV_ARGS(pipeline.Indirect()));
 	if (FAILED(result))
 	{
-		VGLogCritical(logRendering, "Failed to create graphics pipeline state: {}", result);
+		VGLogError(logRendering, "Failed to create graphics pipeline state: {}", result);
 	}
 }
 
@@ -236,6 +236,14 @@ void PipelineState::Build(RenderDevice& device, const ComputePipelineStateDescri
 	computeDescription = inDescription;
 
 	CreateShaders(device, inDescription.macros);
+
+	if (!computeShader)
+	{
+		VGLogError(logRendering, "Missing required compute shader for compute pipeline state.");
+
+		return;
+	}
+
 	CreateRootSignature(device);
 
 	D3D12_COMPUTE_PIPELINE_STATE_DESC computeDesc{};
@@ -248,6 +256,6 @@ void PipelineState::Build(RenderDevice& device, const ComputePipelineStateDescri
 	const auto result = device.Native()->CreateComputePipelineState(&computeDesc, IID_PPV_ARGS(pipeline.Indirect()));
 	if (FAILED(result))
 	{
-		VGLogCritical(logRendering, "Failed to create compute pipeline state: {}", result);
+		VGLogError(logRendering, "Failed to create compute pipeline state: {}", result);
 	}
 }

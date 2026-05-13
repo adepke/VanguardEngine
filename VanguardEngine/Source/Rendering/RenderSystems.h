@@ -52,5 +52,5 @@ void MeshSystem::Render(Renderer& renderer, const entt::registry& registry, Comm
 	auto& indirectBuffer = Renderer::Get().device->GetResourceManager().Get(indirectRenderArgs);
 	auto& counterBuffer = Renderer::Get().device->GetResourceManager().Get(indirectBuffer.counterBuffer);
 
-	list.Native()->ExecuteIndirect(Renderer::Get().meshIndirectCommandSignature.Get(), Renderer::Get().renderableCount, indirectBuffer.Native(), 0, counterBuffer.Native(), 0);
+	list.ExecuteIndirect(Renderer::Get().meshIndirectCommandSignature, Renderer::Get().renderableCount, indirectBuffer, 0, &counterBuffer, 0);
 }
