@@ -100,6 +100,9 @@ public:
 	void Write(BufferHandle target, const std::vector<uint8_t>& source, size_t targetOffset = 0);
 	void Write(TextureHandle target, const std::vector<uint8_t>& source);
 
+	// Maps a readback buffer and copies its contents into output.
+	void Read(BufferHandle source, std::vector<uint8_t>& output);
+
 	void Destroy(BufferHandle handle);
 	void Destroy(TextureHandle handle);
 

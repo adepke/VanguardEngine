@@ -16,18 +16,23 @@
 #include <Rendering/Bloom.h>
 #include <Rendering/ClusteredLightCulling.h>
 #include <Rendering/DebugDraw.h>
+#include <Rendering/CommandList.h>
+#include <Rendering/Resource.h>
 #include <Core/Config.h>
 #include <Utility/Math.h>
+#include <Utility/StringTools.h>
 
 #include <imgui_internal.h>
 #include <ImGuizmo.h>
 #include <IconsFontAwesome5.h>
+#include <stb_image_write.h>
 
 #include <algorithm>
 #include <numeric>
 #include <string>
 #include <sstream>
 #include <optional>
+#include <cstring>
 
 void EditorUI::DrawMenu()
 {
@@ -696,7 +701,7 @@ void EditorUI::DrawConsole(entt::registry& registry, const ImVec2& min, const Im
 	}
 }
 
-void EditorUI::Update(RenderDevice& device)
+void EditorUI::Update(RenderDevice& device, entt::registry& registry)
 {
 	if (fullscreen != Renderer::Get().window->IsFullscreen())
 	{
@@ -704,11 +709,169 @@ void EditorUI::Update(RenderDevice& device)
 		Renderer::Get().window->SetSize(width, height, fullscreen);
 	}
 
-	if (!hasLoadedScenes)
+	FlushPendingSave(device, registry);
+}
+
+void EditorUI::CaptureThumbnail(RenderDevice& device, CommandList& list, TextureHandle ldr)
+{
+	// Nothing to do unless a save is pending and we haven't already queued the copy this
+	// frame.
+	if (!pendingSavePath.has_value() || pendingSaveCaptureEnqueued)
 	{
-		hasLoadedScenes = true;
-		loadedScenes = Scene::List(device);
+		return;
 	}
+
+	auto& resourceManager = device.GetResourceManager();
+	if (!resourceManager.Valid(ldr))
+	{
+		return;
+	}
+
+	auto& ldrComponent = resourceManager.Get(ldr);
+
+	// Walk the D3D12 footprint to learn the row pitch that the GPU will use when copying
+	// into a buffer. This is typically aligned up to D3D12_TEXTURE_DATA_PITCH_ALIGNMENT
+	// (256 bytes), so the readback buffer is usually larger than width * height * bpp.
+	const auto resourceDesc = ldrComponent.Native()->GetDesc();
+	D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
+	uint64_t requiredSize = 0;
+	device.Native()->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &footprint, nullptr, nullptr, &requiredSize);
+
+	pendingSaveWidth = ldrComponent.description.width;
+	pendingSaveHeight = ldrComponent.description.height;
+	pendingSaveRowPitch = footprint.Footprint.RowPitch;
+
+	BufferDescription readbackDesc{};
+	readbackDesc.updateRate = ResourceFrequency::Readback;
+	readbackDesc.bindFlags = 0;
+	readbackDesc.accessFlags = AccessFlag::CPURead;
+	readbackDesc.size = static_cast<size_t>(requiredSize);
+	readbackDesc.stride = 1;
+	pendingSaveReadback = resourceManager.Create(readbackDesc, VGText("Editor Thumbnail"));
+
+	// Transition the texture to COPY_SOURCE, all other UI work must be completed before this.
+	list.TransitionBarrier(ldr, D3D12_RESOURCE_STATE_COPY_SOURCE);
+	list.FlushBarriers();
+
+	auto& readbackComponent = resourceManager.Get(pendingSaveReadback);
+
+	D3D12_TEXTURE_COPY_LOCATION sourceCopy{};
+	sourceCopy.pResource = ldrComponent.Native();
+	sourceCopy.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
+	sourceCopy.SubresourceIndex = 0;
+
+	D3D12_TEXTURE_COPY_LOCATION destCopy{};
+	destCopy.pResource = readbackComponent.Native();
+	destCopy.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
+	destCopy.PlacedFootprint = footprint;
+
+	list.Native()->CopyTextureRegion(&destCopy, 0, 0, 0, &sourceCopy, nullptr);
+
+	pendingSaveCaptureEnqueued = true;
+}
+
+void EditorUI::FlushPendingSave(RenderDevice& device, entt::registry& registry)
+{
+	// Only do real work once the copy has actually been recorded into a GPU command list.
+	if (!pendingSavePath.has_value() || !pendingSaveCaptureEnqueued)
+	{
+		return;
+	}
+
+	// Full sync on the GPU to ensure the readback was populated. Pretty terrible but thumbnails
+	// don't get saved often so good enough for now.
+	device.Synchronize();
+
+	auto& resourceManager = device.GetResourceManager();
+
+	std::vector<uint8_t> rawBytes;
+	resourceManager.Read(pendingSaveReadback, rawBytes);
+
+	std::vector<uint8_t> packed;
+	if (!rawBytes.empty() && pendingSaveWidth > 0 && pendingSaveHeight > 0)
+	{
+		// Strip the GPU row pitch padding so what we hand to stb_image_write is a tightly
+		// packed RGBA8 buffer matching the texture's logical width.
+		const size_t tightRowBytes = static_cast<size_t>(pendingSaveWidth) * 4;
+		packed.resize(tightRowBytes * pendingSaveHeight);
+		for (uint32_t row = 0; row < pendingSaveHeight; ++row)
+		{
+			std::memcpy(
+				packed.data() + row * tightRowBytes,
+				rawBytes.data() + static_cast<size_t>(row) * pendingSaveRowPitch,
+				tightRowBytes);
+		}
+	}
+
+	std::vector<uint8_t> pngBytes;
+	if (!packed.empty())
+	{
+		const auto writeFunction = [](void* context, void* data, int size)
+		{
+			auto* output = static_cast<std::vector<uint8_t>*>(context);
+			const auto* bytes = static_cast<const uint8_t*>(data);
+			output->insert(output->end(), bytes, bytes + size);
+		};
+
+		stbi_write_png_to_func(
+			writeFunction, &pngBytes,
+			static_cast<int>(pendingSaveWidth),
+			static_cast<int>(pendingSaveHeight),
+			4,
+			packed.data(),
+			static_cast<int>(pendingSaveWidth * 4));
+	}
+
+	Scene::Save(registry, *pendingSavePath, pngBytes);
+
+	// Tear down the readback buffer and reset the state machine. Also invalidate the
+	// cached scene list so the newly-saved scene (and its thumbnail) appear in the
+	// selector on the next frame.
+	resourceManager.Destroy(pendingSaveReadback);
+	pendingSavePath.reset();
+	pendingSaveCaptureEnqueued = false;
+	pendingSaveWidth = 0;
+	pendingSaveHeight = 0;
+	pendingSaveRowPitch = 0;
+
+	refreshScenes = true;
+}
+
+void EditorUI::RefreshScenes(RenderDevice& device)
+{
+	// Mark any existing loaded scene thumbnails for cleanup.
+	auto& resourceManager = device.GetResourceManager();
+	for (auto& scene : loadedScenes)
+	{
+		if (resourceManager.Valid(scene.thumbnail))
+		{
+			resourceManager.AddFrameResource(device.GetFrameIndex(), scene.thumbnail);
+		}
+	}
+
+	loadedScenes = Scene::List(device);
+	refreshScenes = false;
+}
+
+std::filesystem::path EditorUI::PickNextNewScenePath() const
+{
+	// Find the next scene file name, of the format "new-N.scene".
+	const auto baseDir = Config::scenesPath;
+	auto candidate = baseDir / "new.scene";
+	std::error_code ec;
+	if (!std::filesystem::exists(candidate, ec))
+	{
+		return candidate;
+	}
+	for (int i = 1; i < 10000; ++i)
+	{
+		candidate = baseDir / ("new-" + std::to_string(i) + ".scene");
+		if (!std::filesystem::exists(candidate, ec))
+		{
+			return candidate;
+		}
+	}
+	return baseDir / "new.scene";
 }
 
 void EditorUI::DrawLayout()
@@ -984,6 +1147,24 @@ void EditorUI::DrawSceneIcon(RenderDevice* device, entt::registry& registry, con
 	const bool held = ImGui::IsItemActive();
 	const ImVec2 cardMax = cardMin + cardSize;
 
+	// Right-click context menu. All filesystem work is deferred.
+	if (ImGui::BeginPopupContextItem("##scene_card_context"))
+	{
+		if (ImGui::MenuItem("Rename"))
+		{
+			renamingScenePath = scene.path;
+			const auto stem = scene.path.stem().string();
+			const auto copyLen = std::min(stem.size(), sizeof(renameBuffer) - 1);
+			std::memcpy(renameBuffer, stem.data(), copyLen);
+			renameBuffer[copyLen] = '\0';
+		}
+		if (ImGui::MenuItem("Delete"))
+		{
+			pendingDeletePath = scene.path;
+		}
+		ImGui::EndPopup();
+	}
+
 	auto* drawList = ImGui::GetWindowDrawList();
 	const auto& style = ImGui::GetStyle();
 	const float rounding = style.FrameRounding;
@@ -1174,6 +1355,13 @@ void EditorUI::DrawScene(RenderDevice* device, entt::registry& registry, Texture
 
 void EditorUI::DrawSceneSelector(RenderDevice* device, entt::registry& registry)
 {
+	// Handle scene refresh inside the render pass since thumbnail uploading might happen.
+	if (refreshScenes)
+	{
+		refreshScenes = false;
+		loadedScenes = Scene::List(*device);
+	}
+
 	if (ImGui::Begin("Scene Selector"))
 	{
 		if (ImGui::Button("Clear scene"))
@@ -1191,10 +1379,24 @@ void EditorUI::DrawSceneSelector(RenderDevice* device, entt::registry& registry)
 			registry.emplace<CameraComponent>(spectator);
 		}
 
+		ImGui::SameLine();
 		if (ImGui::Button("Save scene"))
 		{
-			Scene::Save(registry, Config::scenesPath / "new.scene");
+			pendingSavePath = PickNextNewScenePath();
+			pendingSaveCaptureEnqueued = false;
 		}
+
+		ImGui::SameLine();
+		ImGui::PushID("refresh_scenes");
+		if (ImGui::Button((char*)ICON_FA_SYNC))
+		{
+			RefreshScenes(*device);
+		}
+		if (ImGui::IsItemHovered())
+		{
+			ImGui::SetTooltip("Reload scenes");
+		}
+		ImGui::PopID();
 
 		ImGui::Separator();
 
@@ -1233,6 +1435,75 @@ void EditorUI::DrawSceneSelector(RenderDevice* device, entt::registry& registry)
 	}
 
 	ImGui::End();
+
+	// Handle scene mutations after the draw loop is complete.
+	if (pendingDeletePath.has_value())
+	{
+		std::error_code ec;
+		std::filesystem::remove(*pendingDeletePath, ec);
+		if (ec)
+		{
+			VGLogWarning(logEditor, "Failed to delete scene '{}': {}",
+				pendingDeletePath->generic_wstring(), Str2WideStr(ec.message()));
+		}
+		pendingDeletePath.reset();
+		if (device)
+		{
+			RefreshScenes(*device);
+		}
+	}
+
+	if (renamingScenePath.has_value())
+	{
+		if (!ImGui::IsPopupOpen("Rename Scene"))
+		{
+			ImGui::OpenPopup("Rename Scene");
+		}
+	}
+	if (ImGui::BeginPopupModal("Rename Scene", nullptr, ImGuiWindowFlags_AlwaysAutoResize))
+	{
+		ImGui::Text("New name (no extension):");
+		if (ImGui::IsWindowAppearing())
+		{
+			ImGui::SetKeyboardFocusHere();
+		}
+		const bool committed = ImGui::InputText("##rename_scene_input", renameBuffer, sizeof(renameBuffer),
+			ImGuiInputTextFlags_EnterReturnsTrue | ImGuiInputTextFlags_AutoSelectAll);
+
+		const bool okPressed = ImGui::Button("OK") || committed;
+		ImGui::SameLine();
+		const bool cancelPressed = ImGui::Button("Cancel");
+
+		if (okPressed && renamingScenePath.has_value())
+		{
+			const std::string newStem = renameBuffer;
+			if (!newStem.empty())
+			{
+				const auto newPath = renamingScenePath->parent_path() / (newStem + ".scene");
+				std::error_code ec;
+				std::filesystem::rename(*renamingScenePath, newPath, ec);
+				if (ec)
+				{
+					VGLogWarning(logEditor, "Failed to rename scene '{}' to '{}': {}",
+						renamingScenePath->generic_wstring(), newPath.generic_wstring(),
+						Str2WideStr(ec.message()));
+				}
+			}
+			renamingScenePath.reset();
+			ImGui::CloseCurrentPopup();
+			if (device)
+			{
+				RefreshScenes(*device);
+			}
+		}
+		else if (cancelPressed)
+		{
+			renamingScenePath.reset();
+			ImGui::CloseCurrentPopup();
+		}
+
+		ImGui::EndPopup();
+	}
 }
 
 void EditorUI::DrawControls(RenderDevice* device)

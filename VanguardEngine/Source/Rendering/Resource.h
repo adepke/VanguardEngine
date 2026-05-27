@@ -17,6 +17,7 @@ enum class ResourceFrequency
 {
 	Static,  // Resource is updated at most every few frames. Default heap.
 	Dynamic,  // Resource is updated at least once per frame. Upload heap.
+	Readback,  // GPU writes, CPU reads. Readback heap. Buffer-only.
 };
 
 enum BindFlag

@@ -43,7 +43,7 @@ Editor::~Editor()
 	// Destroys the UI.
 }
 
-void Editor::Update(RenderDevice& device)
+void Editor::Update(RenderDevice& device, entt::registry& registry)
 {
 	// Creating editor cvars here is simple and doesn't matter if we recreate them every frame.
 	CvarCreate("showFps", "Toggles display of FPS on the scene window", +[]()
@@ -64,7 +64,7 @@ void Editor::Update(RenderDevice& device)
 	}
 
 #if ENABLE_EDITOR
-	ui->Update(device);
+	ui->Update(device, registry);
 #endif
 }
 
@@ -132,6 +132,11 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 			ui->DrawRenderVisualizer(&device, renderer.clusteredCulling, overlayHandle);
 
 			renderer.userInterface->Render(list, resources.GetBuffer(cameraBuffer));
+
+			// UI rendering is complete, now capture the thumbnail. This is intentionally *after* UI work,
+			// since the UI pass reads from the scene texture, so we don't want to transition the state
+			// too early.
+			ui->CaptureThumbnail(device, list, resources.GetTexture(outputLDR));
 		});
 	}
 

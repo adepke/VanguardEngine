@@ -379,7 +379,12 @@ const BufferHandle ResourceManager::Create(const BufferDescription& description,
 	}
 
 	D3D12MA::ALLOCATION_DESC allocationDesc{};
-	allocationDesc.HeapType = description.updateRate == ResourceFrequency::Static ? D3D12_HEAP_TYPE_DEFAULT : D3D12_HEAP_TYPE_UPLOAD;
+	switch (description.updateRate)
+	{
+	case ResourceFrequency::Static: allocationDesc.HeapType = D3D12_HEAP_TYPE_DEFAULT; break;
+	case ResourceFrequency::Dynamic: allocationDesc.HeapType = D3D12_HEAP_TYPE_UPLOAD; break;
+	case ResourceFrequency::Readback: allocationDesc.HeapType = D3D12_HEAP_TYPE_READBACK; break;
+	}
 	allocationDesc.Flags = D3D12MA::ALLOCATION_FLAG_NONE;
 
 	auto resourceState = D3D12_RESOURCE_STATE_COPY_DEST;
@@ -387,6 +392,11 @@ const BufferHandle ResourceManager::Create(const BufferDescription& description,
 	if (description.updateRate == ResourceFrequency::Dynamic)
 	{
 		resourceState = D3D12_RESOURCE_STATE_GENERIC_READ;
+	}
+	else if (description.updateRate == ResourceFrequency::Readback)
+	{
+		// Readback heap resources must be created in COPY_DEST and stay there.
+		resourceState = D3D12_RESOURCE_STATE_COPY_DEST;
 	}
 
 	ID3D12Resource* rawResource = nullptr;
@@ -588,6 +598,36 @@ const TextureHandle ResourceManager::CreateFromSwapChain(void* surface, const st
 	return handle;
 }
 
+void ResourceManager::Read(BufferHandle source, std::vector<uint8_t>& output)
+{
+	VGScopedCPUStat("Buffer Read");
+
+	auto& component = Get(source);
+
+	VGAssert(component.description.updateRate == ResourceFrequency::Readback,
+		"Failed to read buffer, only readback heap buffers can be read back to the CPU.");
+
+	const auto byteWidth = ComputeBufferWidth(component.description);
+	output.resize(byteWidth);
+
+	// Read the entire allocated buffer range. In the future, the resource manager could accept
+	// a specific range to read instead of the whole thing.
+	D3D12_RANGE readRange{ 0, byteWidth };
+	void* mapped = nullptr;
+	if (FAILED(component.Native()->Map(0, &readRange, &mapped)) || !mapped)
+	{
+		VGLogError(logRendering, "Failed to map readback buffer.");
+		output.clear();
+		return;
+	}
+
+	std::memcpy(output.data(), mapped, byteWidth);
+
+	// We didn't write anything, so the written range is empty.
+	D3D12_RANGE writtenRange{ 0, 0 };
+	component.Native()->Unmap(0, &writtenRange);
+}
+
 void ResourceManager::Write(BufferHandle target, const std::vector<uint8_t>& source, size_t targetOffset)
 {
 	auto& component = Get(target);
@@ -686,26 +726,24 @@ void ResourceManager::Write(TextureHandle target, const std::vector<uint8_t>& so
 		// Log a message since this isn't a cheap and should probably be avoided.
 		VGLog(logRendering, "Texture write misalignment, padding out source data.");
 
-		alignedSource.resize(
-			sourceCopyDesc.PlacedFootprint.Footprint.RowPitch *
-			component.description.height *
-			component.description.depth *
-			(GetResourceFormatSize(component.description.format) / 8));
+		const auto bytesPerPixel = static_cast<size_t>(GetResourceFormatSize(component.description.format) / 8);
+		const auto tightRowBytes = static_cast<size_t>(component.description.width) * bytesPerPixel;
+		const auto paddedRowBytes = static_cast<size_t>(sourceCopyDesc.PlacedFootprint.Footprint.RowPitch);
+		const auto paddedSliceBytes = paddedRowBytes * component.description.height;
 
-		VGAssert(source.size() < alignedSource.size(), "Expected different aligned size, something probably broke with texture writes.");
+		alignedSource.assign(paddedSliceBytes * component.description.depth, 0);
+
+		VGAssert(source.size() <= alignedSource.size(), "Expected different aligned size, something probably broke with texture writes.");
 
 		// #TODO: Assuming a full resource write here.
 		for (int i = 0; i < component.description.depth; ++i)
 		{
 			for (int j = 0; j < component.description.height; ++j)
 			{
-				const auto rowSize = sourceCopyDesc.PlacedFootprint.Footprint.RowPitch;
-				const auto sliceSize = rowSize * component.description.height;
+				const auto destOffset = j * paddedRowBytes + i * paddedSliceBytes;
+				const auto sourceOffset = (j + i * component.description.height) * tightRowBytes;
 
-				const auto destOffset = j * rowSize + i * sliceSize;
-				const auto sourceOffset = j * component.description.width + i * component.description.width * component.description.height;
-
-				std::memcpy(alignedSource.data() + destOffset, source.data() + sourceOffset, component.description.width);
+				std::memcpy(alignedSource.data() + destOffset, source.data() + sourceOffset, tightRowBytes);
 			}
 		}
 

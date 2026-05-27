@@ -17,6 +17,7 @@ struct SceneMetadata
 {
 	std::string name;
 	std::filesystem::path path;
+	std::filesystem::file_time_type lastModified;
 	TextureHandle thumbnail;  // May be invalid if no thumbnail.
 };
 
@@ -26,8 +27,9 @@ namespace Scene
 	std::vector<SceneMetadata> List(RenderDevice& device);
 	// Blocking load of an entity scene, into the given registry. Clears the registry.
 	bool Load(entt::registry& registry, const std::filesystem::path& path);
-	// Saves the current registry into the given scene file.
-	bool Save(const entt::registry& registry, const std::filesystem::path& path);
+	// Saves the current registry into the given scene file, with an optional byte encoded thumbnail.
+	bool Save(const entt::registry& registry, const std::filesystem::path& path,
+		const std::vector<uint8_t>& thumbnail = {});
 	// Unloads a scene, clearing all entities.
 	void Clear(entt::registry& registry);
 };

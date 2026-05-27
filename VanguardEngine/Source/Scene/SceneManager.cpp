@@ -14,7 +14,9 @@
 #include <sqlite3.h>
 #include <stb_image.h>
 
+#include <algorithm>
 #include <cstring>
+#include <system_error>
 
 // All components must be specified here. When adding new components, do not forget to update
 // this list, or they won't get serialized.
@@ -114,6 +116,13 @@ namespace Scene
 
 		meta.name = path.filename().replace_extension().string();
 		meta.path = path;
+		std::error_code timeError;
+		meta.lastModified = std::filesystem::last_write_time(path, timeError);
+		if (timeError)
+		{
+			// Fall back to epoch so the entry still sorts deterministically.
+			meta.lastModified = std::filesystem::file_time_type{};
+		}
 		meta.thumbnail = UploadThumbnail(device, thumbnail, thumbnailSize);
 
 		sqlite3_finalize(statement);
@@ -143,6 +152,12 @@ namespace Scene
 			}
 			sceneMetas.emplace_back(std::move(meta));
 		}
+
+		std::stable_sort(sceneMetas.begin(), sceneMetas.end(),
+			[](const SceneMetadata& a, const SceneMetadata& b)
+			{
+				return a.lastModified > b.lastModified;
+			});
 
 		return sceneMetas;
 	}
@@ -188,7 +203,7 @@ namespace Scene
 		return true;
 	}
 
-	bool Save(const entt::registry &registry, const std::filesystem::path &path)
+	bool Save(const entt::registry &registry, const std::filesystem::path &path, const std::vector<uint8_t>& thumbnail)
 	{
 		sqlite3* db;
 		if (const auto code = sqlite3_open(path.generic_string().c_str(), &db); code != 0)
@@ -229,13 +244,16 @@ namespace Scene
 			sqlite3_close(db);
 			return false;
 		}
-		// #TODO: implement thumbnails.
-		/*if (const auto code = sqlite3_bind_blob(statement, 2, thumbnail.data(), thumbnail.size(), SQLITE_STATIC); code != SQLITE_OK)
+		// If a thumbnail was provided, bind it directly, otherwise use NULL.
+		const auto thumbnailBindResult = thumbnail.empty()
+			? sqlite3_bind_null(statement, 2)
+			: sqlite3_bind_blob(statement, 2, thumbnail.data(), static_cast<int>(thumbnail.size()), SQLITE_STATIC);
+		if (thumbnailBindResult != SQLITE_OK)
 		{
 			VGLogError(logScene, "Failed to save scene: {}", Str2WideStr(sqlite3_errmsg(db)));
 			sqlite3_close(db);
 			return false;
-		}*/
+		}
 		if (const auto code = sqlite3_step(statement); code != SQLITE_DONE)
 		{
 			VGLogError(logScene, "Failed to save scene: {}", Str2WideStr(sqlite3_errmsg(db)));

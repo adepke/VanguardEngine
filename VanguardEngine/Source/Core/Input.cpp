@@ -421,9 +421,9 @@ namespace Input
 		{
 			size_t mouseButton = 0;  // Default to left click.
 
-			if (message == WM_RBUTTONDOWN || message == WM_RBUTTONDBLCLK) mouseButton = 1;
-			if (message == WM_MBUTTONDOWN || message == WM_MBUTTONDBLCLK) mouseButton = 2;
-			if (message == WM_XBUTTONDOWN || message == WM_XBUTTONDBLCLK) mouseButton = (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) ? 3 : 4;
+			if (message == WM_RBUTTONUP) mouseButton = 1;
+			if (message == WM_MBUTTONUP) mouseButton = 2;
+			if (message == WM_XBUTTONUP) mouseButton = (GET_XBUTTON_WPARAM(wParam) == XBUTTON1) ? 3 : 4;
 
 			io.MouseDown[mouseButton] = false;
 

@@ -10,6 +10,8 @@
 
 #include <deque>
 #include <string>
+#include <filesystem>
+#include <optional>
 
 enum class RenderOverlay
 {
@@ -24,6 +26,7 @@ class Atmosphere;
 class Clouds;
 class Bloom;
 class ClusteredLightCulling;
+class CommandList;
 
 class EditorUI
 {
@@ -80,8 +83,23 @@ private:
 
 	// For now, only load scenes once on startup. #TODO: instead of a static list, listen for
 	// file changes in the Scenes folder, and reload on change.
-	bool hasLoadedScenes = false;
+	bool refreshScenes = true;
 	std::vector<SceneMetadata> loadedScenes;
+
+	// The thumbnail saving is pretty hacky and not extensible, instead the render graph should
+	// probably handle this seamlessly. For instance, a pass could request a texture resource
+	// as CPU readback and all the sync + state management is handled by the graph.
+	std::optional<std::filesystem::path> pendingSavePath;
+	BufferHandle pendingSaveReadback;
+	uint32_t pendingSaveWidth = 0;
+	uint32_t pendingSaveHeight = 0;
+	uint32_t pendingSaveRowPitch = 0;
+	bool pendingSaveCaptureEnqueued = false;
+
+	// Scene context menu state.
+	std::optional<std::filesystem::path> pendingDeletePath;
+	std::optional<std::filesystem::path> renamingScenePath;
+	char renameBuffer[256] = { 0 };
 
 public:
 	// Debug/visualization overlay state.
@@ -102,8 +120,13 @@ private:
 	void DrawSceneToolbar(const ImVec2& viewportMin, const ImVec2& viewportMax);
 	void DrawSceneIcon(RenderDevice* device, entt::registry& registry, const SceneMetadata& scene);
 
+	// Scene handling
+	void FlushPendingSave(RenderDevice& device, entt::registry& registry);
+	void RefreshScenes(RenderDevice& device);
+	std::filesystem::path PickNextNewScenePath() const;
+
 public:
-	void Update(RenderDevice& device);
+	void Update(RenderDevice& device, entt::registry& registry);
 	void DrawLayout();
 	void DrawDemoWindow();
 	void DrawScene(RenderDevice* device, entt::registry& registry, TextureHandle sceneTexture);
@@ -118,4 +141,7 @@ public:
 	void DrawRenderVisualizer(RenderDevice* device, ClusteredLightCulling& clusteredCulling, TextureHandle overlay);
 
 	void AddConsoleMessage(const std::string& message);
+
+	// Saves a copy of the texture to CPU-readback memory.
+	void CaptureThumbnail(RenderDevice& device, CommandList& list, TextureHandle ldr);
 };

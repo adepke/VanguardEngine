@@ -761,7 +761,7 @@ void Renderer::Render(entt::registry& registry)
 	device->Present();
 	device->AdvanceGPU();
 
-	Editor::Get().Update(*device);
+	Editor::Get().Update(*device, registry);
 
 	appFrame++;
 }
