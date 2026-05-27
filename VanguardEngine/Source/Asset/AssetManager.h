@@ -6,6 +6,7 @@
 #include <Rendering/RenderComponents.h>
 #include <Rendering/ResourceHandle.h>
 
+#include <entt/entt.hpp>
 #include <tiny_gltf.h>
 
 #include <filesystem>
@@ -33,6 +34,9 @@ public:
 
 	// Blocking load of the mesh data, will load materials over time.
 	MeshComponent LoadModel(const std::filesystem::path& path);
+
+	// Identifies entities with unloaded AssetComponents and loads them.
+	void ResolveMeshes(entt::registry& registry);
 
 	// Instead of loading all model materials in one frame, stagger loading out over multiple frames.
 	size_t EnqueueMaterialLoad(const tinygltf::Material& material);

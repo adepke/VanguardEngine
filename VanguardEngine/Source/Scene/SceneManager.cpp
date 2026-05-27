@@ -9,6 +9,8 @@
 #include <Rendering/RenderComponents.h>
 #include <Rendering/Device.h>
 #include <Rendering/Resource.h>
+#include <Asset/AssetManager.h>
+#include <Asset/AssetComponents.h>
 #include <Scene/Serialize.h>  // Always include after components.
 
 #include <sqlite3.h>
@@ -22,7 +24,8 @@
 // this list, or they won't get serialized.
 #define ALL_COMPONENTS(archive) \
 	.component<NameComponent, TransformComponent>(archive) \
-	.component<CameraComponent, LightComponent, TimeOfDayComponent>(archive)
+	.component<CameraComponent, LightComponent, TimeOfDayComponent>(archive) \
+	.component<AssetComponent>(archive)
 
 constexpr auto sqlCreate = R"(
 	CREATE TABLE scene(
@@ -198,6 +201,9 @@ namespace Scene
 		snapshot
 			.entities(archive)
 			ALL_COMPONENTS(archive);
+
+		// Rebuild GPU-side asset data.
+		AssetManager::Get().ResolveMeshes(registry);
 
 		VGLog(logScene, "Loaded scene '{}'", path.generic_wstring());
 		return true;

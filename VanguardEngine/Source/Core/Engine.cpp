@@ -26,6 +26,7 @@
 #include <Asset/AssetLoader.h>
 #include <Utility/Random.h>
 #include <Asset/AssetManager.h>
+#include <Asset/AssetComponents.h>
 //
 
 entt::registry registry;
@@ -55,7 +56,7 @@ void EngineBoot()
 	auto msvcSink = std::make_shared<spdlog::sinks::msvc_sink_mt>();
 	auto tracySink = std::make_shared<TracySink_mt>();
 	auto editorSink = std::make_shared<EditorSink_mt>();
-	
+
 	logCore = std::make_shared<spdlog::logger>("core", spdlog::sinks_init_list{ fileSink, msvcSink, tracySink, editorSink });
 	logAsset = logCore->clone("asset");
 	logEditor = logCore->clone("editor");
@@ -82,8 +83,8 @@ void EngineBoot()
 
 	Input::EnableDPIAwareness();
 
-	constexpr uint32_t defaultWindowSizeX = 1600;
-	constexpr uint32_t defaultWindowSizeY = 900;
+	constexpr uint32_t defaultWindowSizeX = 1920;
+	constexpr uint32_t defaultWindowSizeY = 1080;
 
 	auto window = std::make_unique<WindowFrame>(VGText("Vanguard"), defaultWindowSizeX, defaultWindowSizeY);
 	window->onFocusChanged = &OnFocusChanged;
@@ -107,38 +108,87 @@ void EngineBoot()
 
 void EngineLoop()
 {
+	// #TEMP: Get all of this scene setup out of here.
+
 	const auto AddHelmet = [](const TransformComponent& transform)
 	{
+		const auto path = Config::shadersPath / "../Assets/Models/DamagedHelmet/HelmetTangents.glb";
 		const auto entity = registry.create();
 		registry.emplace<NameComponent>(entity, "Helmet");
 		registry.emplace<TransformComponent>(entity, transform);
-		registry.emplace<MeshComponent>(entity, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/DamagedHelmet/HelmetTangents.glb"));
+		registry.emplace<AssetComponent>(entity, path);
+		registry.emplace<MeshComponent>(entity, AssetManager::Get().LoadModel(path));
 
 		return entity;
 	};
 
 	const auto AddSponza = [](const TransformComponent& transform)
 	{
+		const auto path = Config::shadersPath / "../Assets/Models/Sponza/glTF/Sponza.gltf";
 		const auto entity = registry.create();
 		registry.emplace<NameComponent>(entity, "Sponza");
 		registry.emplace<TransformComponent>(entity, transform);
-		registry.emplace<MeshComponent>(entity, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/Sponza/glTF/Sponza.gltf"));
+		registry.emplace<AssetComponent>(entity, path);
+		registry.emplace<MeshComponent>(entity, AssetManager::Get().LoadModel(path));
 
 		return entity;
 	};
 
 	const auto AddBistro = [](const TransformComponent& transform)
 	{
+		const auto path = Config::shadersPath / "../Assets/Models/Bistro/Bistro2.gltf";
 		const auto entity = registry.create();
 		registry.emplace<NameComponent>(entity, "Bistro");
 		registry.emplace<TransformComponent>(entity, transform);
-		registry.emplace<MeshComponent>(entity, AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/Bistro/Bistro2.gltf"));
+		registry.emplace<AssetComponent>(entity, path);
+		registry.emplace<MeshComponent>(entity, AssetManager::Get().LoadModel(path));
 
 		return entity;
 	};
 
+	const auto AddTerrain = []()
+	{
+		TransformComponent transform{};
+		transform.translation = { 532.f, -2700.f, 0.f };
+		transform.rotation = { 90 * 3.14159f / 180.f, 0.f, 13 * 3.14159f / 180.f };
+		transform.scale = { 15000.f, 13000.f, 15000.f };
+
+		const auto path = Config::shadersPath / "../Assets/Models/deathValley.glb";
+		const auto entity = registry.create();
+		registry.emplace<NameComponent>(entity, "Terrain");
+		registry.emplace<TransformComponent>(entity, transform);
+		registry.emplace<AssetComponent>(entity, path);
+		registry.emplace<MeshComponent>(entity, AssetManager::Get().LoadModel(path));
+
+		return entity;
+	};
+
+	const auto AddSanMiguel = []()
+	{
+		TransformComponent transform{};
+
+		const auto path = Config::shadersPath / "../Assets/Models/SanMiguel.glb";
+		const auto entity = registry.create();
+		registry.emplace<NameComponent>(entity, "San Miguel");
+		registry.emplace<TransformComponent>(entity, transform);
+		registry.emplace<AssetComponent>(entity, path);
+		registry.emplace<MeshComponent>(entity, AssetManager::Get().LoadModel(path));
+
+		return entity;
+	};
+
+	//AddSanMiguel();
+
+	AddTerrain();
+
+	AddHelmet({
+		.scale = { 100.f, 100.f, 100.f },
+		.rotation = { -169.5f * 3.14159f / 180.f, 0.f, 121.5f * 3.14159f / 180.f },
+		.translation = { 78.f, 0.f, -5.f }
+	});
+
 	TransformComponent spectatorTransform{};
-	spectatorTransform.translation = { 0.f, 0.f, 70.f };
+	spectatorTransform.translation = { 0.f, 0.f, 238.f };
 	spectatorTransform.rotation = { 0.f, 0.f, 0.f };
 
 	const auto spectator = registry.create();
@@ -147,12 +197,7 @@ void EngineLoop()
 	registry.emplace<CameraComponent>(spectator);
 	registry.emplace<ControlComponent>(spectator);  // #TEMP
 
-	//AddHelmet({
-	//	.scale = { 100.f, 100.f, 100.f },
-	//	.rotation = { -169.5f * 3.14159f / 180.f, 0.f, 121.5f * 3.14159f / 180.f },
-	//	.translation = { 78.f, 0.f, -5.f }
-	//});
-	const auto h = AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/DamagedHelmet/HelmetTangents.glb");
+	/*const auto h = AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/DamagedHelmet/HelmetTangents.glb");
 	for (int i = 0; i < 6; i++)
 	{
 		float s = i*i * 19.f + 5;
@@ -166,14 +211,14 @@ void EngineLoop()
 		const auto entity = registry.create();
 		registry.emplace<TransformComponent>(entity, transform);
 		registry.emplace<MeshComponent>(entity, h);
-	}
+	}*/
 	//
 	//AddHelmet({
 	//	.scale = { 10.f, 10.f, 10.f },
 	//	.rotation = { 169.5f * 3.14159f / 180.f, 0.f, -20.5f * 3.14159f / 180.f },
 	//	.translation = { 50.f, -20.f, 8.f }
 	//});
-	
+
 	//AddSponza({
 	//	.scale = { 1.f, 1.f, 1.f },
 	//	.rotation = { -90.f * 3.14159f / 180.f, 0.f, 0.f },
@@ -181,7 +226,8 @@ void EngineLoop()
 	//	.translation = { 120.f, -3.f, -3500.f }
 	//});
 
-	const auto helmetMesh = AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/DamagedHelmet/HelmetTangents.glb");
+	const auto helmetPath = Config::shadersPath / "../Assets/Models/DamagedHelmet/HelmetTangents.glb";
+	const auto helmetMesh = AssetManager::Get().LoadModel(helmetPath);
 	int perAxis = 0;
 	float spacing = 50.f;
 	for (int i = 0; i < perAxis; i++)
@@ -202,6 +248,7 @@ void EngineLoop()
 
 				const auto entity = registry.create();
 				registry.emplace<TransformComponent>(entity, transform);
+				registry.emplace<AssetComponent>(entity, helmetPath);
 				registry.emplace<MeshComponent>(entity, helmetMesh);
 			}
 		}
@@ -223,7 +270,7 @@ void EngineLoop()
 			.rotation = { 0.f, 0.f, 0.f },
 			.translation = { (float)Rand(-150.0, 150.0), (float)Rand(-65.0, 65.0), (float)Rand(0.0, 120.0) }
 		};
-		
+
 		// Sun temple lights.
 		//TransformComponent transform{
 		//	.scale = { 1.f, 1.f, 1.f },

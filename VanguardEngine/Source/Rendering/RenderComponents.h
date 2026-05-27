@@ -29,6 +29,7 @@ struct PrimitiveOffset
 	}
 };
 
+// Do not serialize this component, it is rebuilt at runtime from an AssetComponent.
 // #TODO: Array of mesh materials bound to vertex/index offsets to enable multiple materials per mesh.
 struct MeshComponent
 {

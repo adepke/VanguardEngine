@@ -2,12 +2,40 @@
 
 #include <Asset/AssetManager.h>
 #include <Asset/AssetLoader.h>
+#include <Asset/AssetComponents.h>
+#include <Core/Base.h>
 #include <Rendering/Renderer.h>
 #include <Rendering/ShaderStructs.h>
 
 MeshComponent AssetManager::LoadModel(const std::filesystem::path& path)
 {
 	return AssetLoader::LoadMesh(*device, *Renderer::Get().meshFactory, path);
+}
+
+void AssetManager::ResolveMeshes(entt::registry& registry)
+{
+	// Get all entities with an AssetComponent but without a MeshComponent. These entities are pending
+	// load. #TODO: This won't work in the future when there's non-mesh assets, consider a flag in the
+	// AssetComponent like "loaded"?
+	const auto view = registry.view<AssetComponent>(entt::exclude<MeshComponent>);
+	for (const auto entity : view)
+	{
+		const auto& asset = view.get<AssetComponent>(entity);
+		// Prefer the relative, fall back to absolute.
+		auto path = asset.relativePath;
+		if (!std::filesystem::exists(path))
+		{
+			path = asset.absolutePath;
+			if (!std::filesystem::exists(path))
+			{
+				VGLogWarning(logAsset, "Asset path '{}' not found for entity, skipping resolution.",
+					path.generic_wstring());
+				continue;
+			}
+		}
+
+		registry.emplace<MeshComponent>(entity, LoadModel(path));
+	}
 }
 
 size_t AssetManager::EnqueueMaterialLoad(const tinygltf::Material& material)
