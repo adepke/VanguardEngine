@@ -158,6 +158,7 @@ std::unique_ptr<Shader> CompileShader(const std::filesystem::path& path, ShaderT
 	//compileArguments.emplace_back(DXC_ARG_PACK_MATRIX_ROW_MAJOR);  // Row major matrices. #TODO: Use uniform packing, ImGui uses column major currently.
 	compileArguments.emplace_back(VGText("-HV"));
 	compileArguments.emplace_back(VGText("2021"));
+	compileArguments.emplace_back(VGText("-enable-16bit-types"));  // MJP's spherical harmonics uses 16 bit types.
 #if BUILD_DEBUG || BUILD_DEVELOPMENT
 	compileArguments.emplace_back(DXC_ARG_DEBUG);  // Enable debug information.
 	compileArguments.emplace_back(VGText("-Qembed_debug"));  // Embed the PDB.
