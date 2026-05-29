@@ -136,6 +136,11 @@ namespace Scene
 
 	std::vector<SceneMetadata> List(RenderDevice& device)
 	{
+		if (!std::filesystem::exists(Config::scenesPath))
+		{
+			return {};
+		}
+
 		std::vector<std::filesystem::path> scenes;
 		for (const auto& scene : std::filesystem::directory_iterator(Config::scenesPath))
 		{

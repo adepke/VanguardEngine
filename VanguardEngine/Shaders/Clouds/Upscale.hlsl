@@ -87,7 +87,6 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	
 	// UV coordinates are centered on the middle of the pixel, not the aligned corner.
 	float2 newUv = (dispatchId.xy + 0.5.xx) / float2(width, height);
-	// #TODO: oldUv is having some issues, maybe precision issues? Crazy motion smears happens on some pixels when not moving.
 	float2 oldUv = ReprojectUv(camera, newUv, newDepth);
 	
 	// Perform a bilinear blur while sampling the visibility texture to denoise a bit.

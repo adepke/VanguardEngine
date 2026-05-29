@@ -42,24 +42,15 @@ float JitterAlignedPixel(float2 inputUv, uint2 resolution, int time)
 
 float2 ReprojectUv(Camera camera, float2 inputUv, float depth)
 {
-	matrix viewProjection = mul(camera.view, camera.projection);
-	matrix inverseViewProjection = mul(camera.lastFrameInverseProjection, camera.lastFrameInverseView);
-	
-	// Convert to world space of the previous frame.
-	float4 clipSpace = UvToClipSpace(inputUv);
-	float4 worldSpace = mul(clipSpace, inverseViewProjection);
-	worldSpace /= worldSpace.w;
+	float3 rayDirection = ComputeRayDirection(camera, inputUv);
+	float3 worldSpace = camera.position.xyz + rayDirection * (depth * 1000.f);  // Convert depth KM to meters.
 
-	// Scale by the depth.
-	float3 ray = normalize(worldSpace.xyz - camera.lastFramePosition.xyz);
-	worldSpace = float4(camera.position.xyz + ray * depth, 1.f);
-	
-	// Convert back to clip space of the current frame.
-	float4 reprojected = mul(worldSpace, viewProjection);
+	// Project that world position into the previous frame's clip space.
+	matrix lastFrameViewProjection = mul(camera.lastFrameView, camera.lastFrameProjection);
+	float4 reprojected = mul(float4(worldSpace, 1.f), lastFrameViewProjection);
 	reprojected /= reprojected.w;
 
-	float2 delta = inputUv - ClipSpaceToUv(reprojected);
-	return inputUv + delta;
+	return ClipSpaceToUv(reprojected);
 }
 
 #endif  // __REPROJECTION_HLSLI__
