@@ -527,7 +527,7 @@ void Renderer::Render(entt::registry& registry)
 	
 	auto& prePass = graph.AddPass("Prepass", ExecutionQueue::Graphics);
 	auto depthStencilTag = prePass.Create(TransientTextureDescription{
-		.format = DXGI_FORMAT_R24G8_TYPELESS
+		.format = DXGI_FORMAT_R32_TYPELESS  // Note: can switch to R24G8 if I ever want the stencil, 24 bits is plenty.
 	}, VGText("Depth stencil"));
 	prePass.Read(instanceBufferTag, ResourceBind::SRV);
 	prePass.Read(cameraBufferTag, ResourceBind::SRV);
