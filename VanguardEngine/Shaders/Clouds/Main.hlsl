@@ -11,6 +11,7 @@ struct BindData
 	uint weatherTexture;
 	uint baseShapeNoiseTexture;
 	uint detailShapeNoiseTexture;
+	uint curlNoiseTexture;
 	uint cameraBuffer;
 	uint cameraIndex;
 	float solarZenithAngle;
@@ -19,10 +20,10 @@ struct BindData
 	uint geometryDepthTexture;
 	uint blueNoiseTexture;
 	uint atmosphereIrradianceBuffer;
-	float time;
-	float2 wind;
 	uint2 outputResolution;
 	uint2 upscaledResolution;
+	float time;
+	float2 wind;
 };
 
 ConstantBuffer<BindData> bindData : register(b0);
@@ -75,6 +76,7 @@ float4 PSMain(PixelIn input) : SV_Target
 
 	Texture3D<float> baseShapeNoiseTexture = ResourceDescriptorHeap[bindData.baseShapeNoiseTexture];
 	Texture3D<float> detailShapeNoiseTexture = ResourceDescriptorHeap[bindData.detailShapeNoiseTexture];
+	Texture3D<float4> curlNoiseTexture = ResourceDescriptorHeap[bindData.curlNoiseTexture];
 	StructuredBuffer<float3> atmosphereIrradiance = ResourceDescriptorHeap[bindData.atmosphereIrradianceBuffer];
 	Texture2D<float3> weatherTexture = ResourceDescriptorHeap[bindData.weatherTexture];
 	Texture2D<float> geometryDepthTexture = ResourceDescriptorHeap[bindData.geometryDepthTexture];
@@ -84,11 +86,11 @@ float4 PSMain(PixelIn input) : SV_Target
 	float transmittance;
 	float depth;  // Kilometers.
 #ifdef CLOUDS_DEBUG_MARCHCOUNT
-	int stepCount = RayMarchClouds(baseShapeNoiseTexture, detailShapeNoiseTexture, atmosphereIrradiance, weatherTexture,
-		geometryDepthTexture, blueNoiseTexture, camera, input.uv, jitteredUv, bindData.outputResolution, rayDirection,
-		sunDirection, bindData.wind, bindData.time, scatteredLuminance, transmittance, depth);
+	int stepCount = RayMarchClouds(baseShapeNoiseTexture, detailShapeNoiseTexture, curlNoiseTexture, atmosphereIrradiance,
+		weatherTexture, geometryDepthTexture, blueNoiseTexture, camera, input.uv, jitteredUv, bindData.outputResolution,
+		rayDirection, sunDirection, bindData.wind, bindData.time, scatteredLuminance, transmittance, depth);
 #else
-	RayMarchClouds(baseShapeNoiseTexture, detailShapeNoiseTexture, atmosphereIrradiance, weatherTexture,
+	RayMarchClouds(baseShapeNoiseTexture, detailShapeNoiseTexture, curlNoiseTexture, atmosphereIrradiance, weatherTexture,
 		geometryDepthTexture, blueNoiseTexture, camera, input.uv, jitteredUv, bindData.outputResolution, rayDirection,
 		sunDirection, bindData.wind, bindData.time, scatteredLuminance, transmittance, depth);
 #endif

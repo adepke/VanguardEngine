@@ -13,6 +13,7 @@ ConstantBuffer<BindData> bindData : register(b0);
 
 static const uint baseSize = 128;
 static const uint detailSize = 32;
+static const uint curlSize = 48;
 
 [RootSignature(RS)]
 [numthreads(baseSize, 1, 1)]
@@ -92,6 +93,28 @@ void DetailShapeMain(uint3 dispatchId : SV_DispatchThreadID)
 
 			float value = worleyFBM0 * 0.625f + worleyFBM1 * 0.25f + worleyFBM2 * 0.125f;
 			outputTexture[uint3(dispatchId.x, i, j)] = value;
+		}
+	}
+}
+
+[RootSignature(RS)]
+[numthreads(curlSize, 1, 1)]
+void CurlNoiseMain(uint3 dispatchId : SV_DispatchThreadID)
+{
+	RWTexture3D<float4> outputTexture = ResourceDescriptorHeap[bindData.outputTexture];
+
+	const float frequency = 4;  // Large, smooth swirls.
+
+	for (uint i = 0; i < curlSize; ++i)
+	{
+		for (uint j = 0; j < curlSize; ++j)
+		{
+			float3 coord = float3(dispatchId.x, i, j) * (1.0 / curlSize);
+
+			float3 curl = CurlNoise3D(coord, frequency) * 2.0;  // Double to bring it into roughly [-1, 1].
+			curl = clamp(curl, -1.0, 1.0);
+
+			outputTexture[uint3(dispatchId.x, i, j)] = float4(curl, 0.0);
 		}
 	}
 }

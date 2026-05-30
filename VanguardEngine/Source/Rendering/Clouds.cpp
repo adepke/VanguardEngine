@@ -37,7 +37,7 @@ void Clouds::GenerateWeather(CommandList& list, uint32_t weatherTexture)
 	list.Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, 1);
 }
 
-void Clouds::GenerateNoise(CommandList& list, uint32_t baseShapeTexture, uint32_t detailShapeTexture)
+void Clouds::GenerateNoise(CommandList& list, uint32_t baseShapeTexture, uint32_t detailShapeTexture, uint32_t curlShapeTexture)
 {
 	struct {
 		uint32_t outputTexture;
@@ -52,12 +52,18 @@ void Clouds::GenerateNoise(CommandList& list, uint32_t baseShapeTexture, uint32_
 	bindData.outputTexture = detailShapeTexture;
 	list.BindConstants("bindData", bindData);
 	list.Dispatch(1, 1, 1);
+
+	list.BindPipeline(curlNoiseLayout);
+	bindData.outputTexture = curlShapeTexture;
+	list.BindConstants("bindData", bindData);
+	list.Dispatch(1, 1, 1);
 }
 
 Clouds::~Clouds()
 {
 	device->GetResourceManager().Destroy(baseShapeNoise);
 	device->GetResourceManager().Destroy(detailShapeNoise);
+	device->GetResourceManager().Destroy(curlShapeNoise);
 }
 
 void Clouds::Initialize(RenderDevice* inDevice)
@@ -77,6 +83,9 @@ void Clouds::Initialize(RenderDevice* inDevice)
 
 	detailNoiseLayout = RenderPipelineLayout{}
 		.ComputeShader({ "Clouds/Shapes", "DetailShapeMain" });
+
+	curlNoiseLayout = RenderPipelineLayout{}
+		.ComputeShader({ "Clouds/Shapes", "CurlNoiseMain" });
 
 	TextureDescription weatherDesc{
 		.bindFlags = BindFlag::ShaderResource | BindFlag::UnorderedAccess,
@@ -109,15 +118,15 @@ void Clouds::Initialize(RenderDevice* inDevice)
 	};
 	detailShapeNoise = device->GetResourceManager().Create(detailShapeNoiseDesc, VGText("Clouds detail shape noise"));
 
-	//TextureDescription distortionNoiseDesc{
-	//	.bindFlags = BindFlag::ShaderResource,
-	//	.accessFlags = AccessFlag::GPUWrite,
-	//	.width = 128,
-	//	.height = 128,
-	//	.depth = 1,
-	//	.format = DXGI_FORMAT_R11G11B10_FLOAT
-	//};
-	//distortionNoise = device->GetResourceManager().Create(distortionNoiseDesc, VGText("Clouds distortion noise"));
+	TextureDescription curlShapeNoiseDesc{
+		.bindFlags = BindFlag::ShaderResource | BindFlag::UnorderedAccess,
+		.accessFlags = AccessFlag::GPUWrite,
+		.width = 48,
+		.height = 48,
+		.depth = 48,
+		.format = DXGI_FORMAT_R16G16B16A16_FLOAT
+	};
+	curlShapeNoise = device->GetResourceManager().Create(curlShapeNoiseDesc, VGText("Clouds curl shape noise"));
 
 	cirrusClouds = AssetLoader::LoadTexture(*device, Config::utilitiesPath / "Cirrus4k.png", false);
 
@@ -131,6 +140,7 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 	const auto weatherTag = graph.Import(weather);
 	const auto baseShapeNoiseTag = graph.Import(baseShapeNoise);
 	const auto detailShapeNoiseTag = graph.Import(detailShapeNoise);
+	const auto curlShapeNoiseTag = graph.Import(curlShapeNoise);
 	const auto cirrusTag = graph.Import(cirrusClouds);
 	const auto blueNoiseTag = graph.Import(RenderUtils::Get().blueNoise);
 
@@ -145,9 +155,10 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 		auto& noisePass = graph.AddPass("Clouds Noise Pass", ExecutionQueue::Compute);
 		noisePass.Write(baseShapeNoiseTag, TextureView{}.UAV("", 0));
 		noisePass.Write(detailShapeNoiseTag, TextureView{}.UAV("", 0));
-		noisePass.Bind([this, baseShapeNoiseTag, detailShapeNoiseTag](CommandList& list, RenderPassResources& resources)
+		noisePass.Write(curlShapeNoiseTag, TextureView{}.UAV("", 0));
+		noisePass.Bind([this, baseShapeNoiseTag, detailShapeNoiseTag, curlShapeNoiseTag](CommandList& list, RenderPassResources& resources)
 		{
-			GenerateNoise(list, resources.Get(baseShapeNoiseTag), resources.Get(detailShapeNoiseTag));
+			GenerateNoise(list, resources.Get(baseShapeNoiseTag), resources.Get(detailShapeNoiseTag), resources.Get(curlShapeNoiseTag));
 
 			list.UAVBarrier(baseShapeNoise);
 			list.FlushBarriers();
@@ -187,12 +198,13 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 	cloudsPass.Read(weatherTag, ResourceBind::SRV);
 	cloudsPass.Read(baseShapeNoiseTag, ResourceBind::SRV);
 	cloudsPass.Read(detailShapeNoiseTag, ResourceBind::SRV);
+	cloudsPass.Read(curlShapeNoiseTag, ResourceBind::SRV);
 	cloudsPass.Read(depthStencil, ResourceBind::SRV);
 	cloudsPass.Read(blueNoiseTag, ResourceBind::SRV);
 	cloudsPass.Read(atmosphereIrradiance, ResourceBind::SRV);
 	cloudsPass.Output(cloudOutput, OutputBind::RTV, LoadType::Preserve);
 	cloudsPass.Write(cloudDepth, TextureView{}.UAV("", 0));
-	cloudsPass.Bind([this, weatherTag, baseShapeNoiseTag, detailShapeNoiseTag, solarZenithAngle,
+	cloudsPass.Bind([this, weatherTag, baseShapeNoiseTag, detailShapeNoiseTag, curlShapeNoiseTag, solarZenithAngle,
 		cameraBuffer, depthStencil, cloudOutput, blueNoiseTag, cloudDepth, atmosphereIrradiance]
 		(CommandList& list, RenderPassResources& resources)
 	{
@@ -215,6 +227,7 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 			uint32_t weatherTexture;
 			uint32_t baseShapeNoiseTexture;
 			uint32_t detailShapeNoiseTexture;
+			uint32_t curlShapeNoiseTexture;
 			uint32_t cameraBuffer;
 			uint32_t cameraIndex;
 			float solarZenithAngle;
@@ -223,15 +236,16 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 			uint32_t geometryDepthTexture;
 			uint32_t blueNoiseTexture;
 			uint32_t atmosphereIrradianceBuffer;
-			float time;
-			XMFLOAT2 wind;
 			uint32_t outputResolution[2];
 			uint32_t upscaledResolution[2];
+			float time;
+			XMFLOAT2 wind;
 		} bindData;
 
 		bindData.weatherTexture = resources.Get(weatherTag);
 		bindData.baseShapeNoiseTexture = resources.Get(baseShapeNoiseTag);
 		bindData.detailShapeNoiseTexture = resources.Get(detailShapeNoiseTag);
+		bindData.curlShapeNoiseTexture = resources.Get(curlShapeNoiseTag);
 		bindData.cameraBuffer = resources.Get(cameraBuffer);
 		bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
 		bindData.solarZenithAngle = solarZenithAngle;
@@ -267,12 +281,13 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 	visibilityPass.Read(cameraBuffer, ResourceBind::SRV);
 	visibilityPass.Read(weatherTag, ResourceBind::SRV);
 	visibilityPass.Read(baseShapeNoiseTag, ResourceBind::SRV);
+	visibilityPass.Read(curlShapeNoiseTag, ResourceBind::SRV);
 	visibilityPass.Read(depthStencil, ResourceBind::SRV);
 	visibilityPass.Read(blueNoiseTag, ResourceBind::SRV);
 	visibilityPass.Read(atmosphereIrradiance, ResourceBind::SRV);
 	visibilityPass.Write(cloudVisibility, TextureView{}
 		.UAV("", 0));
-	visibilityPass.Bind([this, cameraBuffer, weatherTag, baseShapeNoiseTag, depthStencil, blueNoiseTag, atmosphereIrradiance,
+	visibilityPass.Bind([this, cameraBuffer, weatherTag, baseShapeNoiseTag, curlShapeNoiseTag, depthStencil, blueNoiseTag, atmosphereIrradiance,
 		cloudVisibility, solarZenithAngle](CommandList& list, RenderPassResources& resources)
 	{
 		auto visibilityLayout = RenderPipelineLayout{}
@@ -292,6 +307,7 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 			uint32_t outputTexture;
 			uint32_t weatherTexture;
 			uint32_t baseShapeNoiseTexture;
+			uint32_t curlShapeNoiseTexture;
 			uint32_t cameraBuffer;
 			uint32_t cameraIndex;
 			float solarZenithAngle;
@@ -299,14 +315,15 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 			uint32_t geometryDepthTexture;
 			uint32_t blueNoiseTexture;
 			uint32_t atmosphereIrradianceBuffer;
-			uint32_t upscaledResolution[2];
-			XMFLOAT2 wind;
 			float time;
+			XMFLOAT2 wind;
+			uint32_t upscaledResolution[2];
 		} bindData;
 
 		bindData.outputTexture = resources.Get(cloudVisibility);
 		bindData.weatherTexture = resources.Get(weatherTag);
 		bindData.baseShapeNoiseTexture = resources.Get(baseShapeNoiseTag);
+		bindData.curlShapeNoiseTexture = resources.Get(curlShapeNoiseTag);
 		bindData.cameraBuffer = resources.Get(cameraBuffer);
 		bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
 		bindData.solarZenithAngle = solarZenithAngle;
@@ -314,10 +331,10 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 		bindData.geometryDepthTexture = resources.Get(depthStencil);
 		bindData.blueNoiseTexture = resources.Get(blueNoiseTag);
 		bindData.atmosphereIrradianceBuffer = resources.Get(atmosphereIrradiance);
+		bindData.time = Renderer::Get().GetAppTime();
+		bindData.wind = { windDirection.x * windStrength, windDirection.y * windStrength };
 		bindData.upscaledResolution[0] = device->renderWidth;
 		bindData.upscaledResolution[1] = device->renderHeight;
-		bindData.wind = { windDirection.x * windStrength, windDirection.y * windStrength };
-		bindData.time = Renderer::Get().GetAppTime();
 
 		list.BindConstants("bindData", bindData);
 

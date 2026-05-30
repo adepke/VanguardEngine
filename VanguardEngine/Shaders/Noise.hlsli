@@ -4,26 +4,27 @@
 #define __NOISE_HLSLI__
 
 // Noise ported from: https://github.com/sebh/TileableVolumeNoise
+// With curl additions.
 
 // HLSL and GLM/GLSL have different behavior in how they treat negative divisors with mod()/fmod(). Replicate the GLM behavior.
 float Mod(float x, float y)
 {
-    return x - y * floor(x / y);
+	return x - y * floor(x / y);
 }
 
 float2 Mod(float2 x, float2 y)
 {
-    return x - y * floor(x / y);
+	return x - y * floor(x / y);
 }
 
 float3 Mod(float3 x, float3 y)
 {
-    return x - y * floor(x / y);
+	return x - y * floor(x / y);
 }
 
 float4 Mod(float4 x, float4 y)
 {
-    return x - y * floor(x / y);
+	return x - y * floor(x / y);
 }
 
 float Hash(float n)
@@ -73,8 +74,8 @@ float4 Fade(float4 x)
 
 float Perlin(float4 p, float4 frequency)
 {
-    float4 Pi0 = Mod(floor(p), frequency);
-    float4 Pi1 = Mod(Pi0 + 1.0, frequency);
+	float4 Pi0 = Mod(floor(p), frequency);
+	float4 Pi1 = Mod(Pi0 + 1.0, frequency);
 	float4 Pf0 = frac(p);
 	float4 Pf1 = Pf0 - 1.0;
 	float4 ix = float4(Pi0.x, Pi1.x, Pi0.x, Pi1.x);
@@ -228,6 +229,39 @@ float PerlinNoise2D(float2 p, float frequency, float octaves)
 	return PerlinNoise3D(float3(p, 0.f), frequency, octaves);
 }
 
+// A tileable Perlin vector potential, formed from three decorrelated scalar Perlin fields.
+// See: "Curl-Noise for Procedural Fluid Flow" (SIGGRAPH 2007).
+float3 CurlNoisePotential(float3 p, float frequency)
+{
+	const float3 offset1 = float3(0.00, 0.00, 0.00);
+	const float3 offset2 = float3(0.37, 0.21, 0.59);
+	const float3 offset3 = float3(0.81, 0.66, 0.13);
+
+	float a = Perlin(float4((p + offset1) * frequency, 0), frequency.xxxx);
+	float b = Perlin(float4((p + offset2) * frequency, 0), frequency.xxxx);
+	float c = Perlin(float4((p + offset3) * frequency, 0), frequency.xxxx);
+	return float3(a, b, c);
+}
+
+// Divergence-free 3D curl noise, tileable over the unit cube for an integer frequency.
+float3 CurlNoise3D(float3 p, float frequency)
+{
+	const float e = 0.05;  // Central-difference step, in tile space.
+	const float3 dx = float3(e, 0, 0);
+	const float3 dy = float3(0, e, 0);
+	const float3 dz = float3(0, 0, e);
+
+	const float3 dPdx = CurlNoisePotential(p + dx, frequency) - CurlNoisePotential(p - dx, frequency);
+	const float3 dPdy = CurlNoisePotential(p + dy, frequency) - CurlNoisePotential(p - dy, frequency);
+	const float3 dPdz = CurlNoisePotential(p + dz, frequency) - CurlNoisePotential(p - dz, frequency);
+
+	float3 curl;
+	curl.x = dPdy.z - dPdz.y;
+	curl.y = dPdz.x - dPdx.z;
+	curl.z = dPdx.y - dPdy.x;
+	return curl;
+}
+
 float WorleyNoise3D(float3 p, float cellCount)
 {
 	const float3 pCell = p * cellCount;
@@ -240,7 +274,7 @@ float WorleyNoise3D(float3 p, float cellCount)
 			{
 				float3 tp = floor(pCell) + float3(xo, yo, zo);
 
-                tp = pCell - tp - Noise(Mod(tp, cellCount.xxx)).xxx;
+				tp = pCell - tp - Noise(Mod(tp, cellCount.xxx)).xxx;
 
 				d = min(d, dot(tp, tp));
 			}

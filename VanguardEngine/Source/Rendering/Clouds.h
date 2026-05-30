@@ -39,6 +39,7 @@ private:
 	RenderPipelineLayout weatherLayout;
 	RenderPipelineLayout baseNoiseLayout;
 	RenderPipelineLayout detailNoiseLayout;
+	RenderPipelineLayout curlNoiseLayout;
 
 	TextureHandle weather;  // 2D, channels: coverage, type, precipitation.
 	// Schneider separates density noise into FBM components and composes them while
@@ -46,6 +47,7 @@ private:
 	// loss (see frostbite slides).
 	TextureHandle baseShapeNoise;  // 3D, single channel.
 	TextureHandle detailShapeNoise;  // 3D, single channel.
+	TextureHandle curlShapeNoise;  // 3D, 4 channel (3 in use).
 
 	// Cirrus clouds are not raymarched, they come from a painted texture.
 	TextureHandle cirrusClouds;
@@ -55,7 +57,7 @@ private:
 	RenderResource lastFrameVisibilityUpscaled;
 
 	void GenerateWeather(CommandList& list, uint32_t weatherTexture);
-	void GenerateNoise(CommandList& list, uint32_t baseShapeTexture, uint32_t detailShapeTexture);
+	void GenerateNoise(CommandList& list, uint32_t baseShapeTexture, uint32_t detailShapeTexture, uint32_t curlShapeTexture);
 
 public:
 	~Clouds();

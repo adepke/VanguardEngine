@@ -12,6 +12,7 @@ struct BindData
 	uint outputTexture;
 	uint weatherTexture;
 	uint baseShapeNoiseTexture;
+	uint curlNoiseTexture;
 	uint cameraBuffer;
 	uint cameraIndex;
 	float solarZenithAngle;
@@ -19,9 +20,9 @@ struct BindData
 	uint geometryDepthTexture;
 	uint blueNoiseTexture;
 	uint atmosphereIrradianceBuffer;
-	uint2 upscaledResolution;
-	float2 wind;
 	float time;
+	float2 wind;
+	uint2 upscaledResolution;
 };
 
 ConstantBuffer<BindData> bindData : register(b0);
@@ -34,7 +35,8 @@ float2 RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uin
 	float3 rayDirection = ComputeRayDirection(camera, jitteredUv);
 
 	Texture3D<float> baseShapeNoiseTexture = ResourceDescriptorHeap[bindData.baseShapeNoiseTexture];
-	Texture3D<float> detailShapeNoiseTexture;  // Null texture.
+	Texture3D<float> detailShapeNoiseTexture;  // Null texture (visibility always marches at low detail).
+	Texture3D<float4> curlNoiseTexture = ResourceDescriptorHeap[bindData.curlNoiseTexture];
 	StructuredBuffer<float3> atmosphereIrradiance = ResourceDescriptorHeap[bindData.atmosphereIrradianceBuffer];
 	Texture2D<float3> weatherTexture = ResourceDescriptorHeap[bindData.weatherTexture];
 	Texture2D<float> geometryDepthTexture = ResourceDescriptorHeap[bindData.geometryDepthTexture];
@@ -142,12 +144,12 @@ float2 RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uin
 		float transmittance;
 		float depth;  // Kilometers.
 #ifdef CLOUDS_DEBUG_MARCHCOUNT
-		int stepCount = RayMarchInternal(baseShapeNoiseTexture, detailShapeNoiseTexture, atmosphereIrradiance, weatherTexture,
+		int stepCount = RayMarchInternal(baseShapeNoiseTexture, detailShapeNoiseTexture, curlNoiseTexture, atmosphereIrradiance, weatherTexture,
 			position, sunDirection, 0.f, localMarchStart, localMarchEnd, sunDirection, bindData.wind, bindData.time,
 			scatteredLuminance, transmittance, depth);
 		totalSteps += stepCount;
 #else
-		RayMarchInternal(baseShapeNoiseTexture, detailShapeNoiseTexture, atmosphereIrradiance, weatherTexture,
+		RayMarchInternal(baseShapeNoiseTexture, detailShapeNoiseTexture, curlNoiseTexture, atmosphereIrradiance, weatherTexture,
 			position, sunDirection, 0.f, localMarchStart, localMarchEnd, sunDirection, bindData.wind, bindData.time,
 			scatteredLuminance, transmittance, depth);
 #endif
