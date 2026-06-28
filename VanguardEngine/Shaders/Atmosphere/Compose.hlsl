@@ -232,6 +232,7 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 				
 				// Intentionally blow away prior work, the sun is so bright it doesn't matter what came before.
 				finalColor = GetSolarRadiance(atmosphere) * sunVisibility;
+				lastDepth = -1.f;  // Reset the depth tracking so the point-to-point contribution isn't used.
 			}
 		}
 	}
