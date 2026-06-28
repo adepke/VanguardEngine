@@ -6,9 +6,8 @@
 // More energy-conserving approximation from Frostbite.
 // See: http://advances.realtimerendering.com/s2015/Frostbite%20PB%20and%20unified%20volumetrics.pptx
 void ComputeScatteringIntegration(float density, float3 luminance, float dist, float3 scatteringCoeff,
-	float3 absorptionCoeff, inout float3 scatteredLuminance, inout float3 transmittance)
+	float3 extinctionCoeff, inout float3 scatteredLuminance, inout float3 transmittance)
 {
-	const float3 extinctionCoeff = scatteringCoeff + absorptionCoeff;
 	const float3 extinction = max(extinctionCoeff * density, 0.0000001.xxx);
 	const float3 transmittanceSample = exp(-extinction * dist);
 

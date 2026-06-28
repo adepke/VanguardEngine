@@ -309,8 +309,8 @@ void Atmosphere::Initialize(RenderDevice* inDevice, entt::registry& registry)
 	multipleScatteringPrecomputeLayout = RenderPipelineLayout{}
 		.ComputeShader({ "Atmosphere/AtmospherePrecompute", "MultipleScatteringLutMain" });
 
-	separableIrradianceLayout = RenderPipelineLayout{}
-		.ComputeShader({ "Atmosphere/SeparableIrradiance", "Main" });
+	skyAmbientPrecomputeLayout = RenderPipelineLayout{}
+		.ComputeShader({ "Atmosphere/SkyAmbientPrecompute", "Main" });
 
 	luminancePrecomputeLayout = RenderPipelineLayout{}
 		.ComputeShader({ "Atmosphere/Luminance", "Main" });
@@ -477,10 +477,13 @@ void Atmosphere::Render(RenderGraph& graph, Clouds& clouds, AtmosphereResources 
 			.ComputeShader({ "Atmosphere/Compose", "Main" })
 			.Macro({ "RENDER_LIGHT_SHAFTS", renderLightShafts });
 
-		if (*CvarGet("cloudDebugMarchCount", int) > 0)
-			composeLayout.Macro({ "CLOUDS_DEBUG_MARCHCOUNT" });
-		if (*CvarGet("cloudDebugTransmittance", int) > 0)
+		const int cloudDebugMode = *CvarGet("cloudDebugVisualization", int);
+		if (cloudDebugMode == 1)
 			composeLayout.Macro({ "CLOUDS_DEBUG_TRANSMITTANCE" });
+		else if (cloudDebugMode == 2)
+			composeLayout.Macro({ "CLOUDS_DEBUG_MARCHCOUNT" });
+		else if (cloudDebugMode == 3)
+			composeLayout.Macro({ "CLOUDS_DEBUG_NORMALVECTOR" });
 
 		list.BindPipeline(composeLayout);
 
@@ -586,25 +589,24 @@ std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(Rende
 		device->GetResourceManager().GenerateMipmaps(list, luminanceTexture);
 	});
 
-	auto& irradiancePass = graph.AddPass("Atmosphere Separable Irradiance Pass", ExecutionQueue::Compute);
-	irradiancePass.Read(cameraBuffer, ResourceBind::SRV);
-	irradiancePass.Read(resourceHandles.transmittanceHandle, ResourceBind::SRV);
-	irradiancePass.Read(resourceHandles.scatteringHandle, ResourceBind::SRV);
-	irradiancePass.Read(resourceHandles.irradianceHandle, ResourceBind::SRV);
-	const auto separableIrradiance = irradiancePass.Create(TransientBufferDescription{
+	// Gather sky ambient lighting at multiple probes, captured in spherical harmonics.
+	auto& ambientPass = graph.AddPass("Atmosphere Sky Ambient Precompute Pass", ExecutionQueue::Compute);
+	ambientPass.Read(cameraBuffer, ResourceBind::SRV);
+	ambientPass.Read(resourceHandles.transmittanceHandle, ResourceBind::SRV);
+	ambientPass.Read(resourceHandles.scatteringHandle, ResourceBind::SRV);
+	const auto skyAmbient = ambientPass.Create(TransientBufferDescription{
 		.updateRate = ResourceFrequency::Static,  // Unordered access.
-		.size = 4,
+		.size = 20,
 		.stride = sizeof(XMFLOAT3)
-	}, VGText("Atmosphere separable irradiance"));
-	irradiancePass.Write(separableIrradiance, ResourceBind::UAV);
-	irradiancePass.Bind([&, cameraBuffer, resourceHandles, separableIrradiance, solarZenithAngle](CommandList& list, RenderPassResources& resources)
+	}, VGText("Atmosphere sky ambient"));
+	ambientPass.Write(skyAmbient, ResourceBind::UAV);
+	ambientPass.Bind([&, cameraBuffer, resourceHandles, skyAmbient, solarZenithAngle](CommandList& list, RenderPassResources& resources)
 	{
 		struct BindData
 		{
 			AtmosphereData atmosphere;
 			uint32_t transmissionTexture;
 			uint32_t scatteringTexture;
-			uint32_t irradianceTexture;
 			float solarZenithAngle;
 			uint32_t atmosphereIrradianceBuffer;
 			uint32_t cameraBuffer;
@@ -614,17 +616,16 @@ std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(Rende
 		bindData.atmosphere = model;
 		bindData.transmissionTexture = resources.Get(resourceHandles.transmittanceHandle);
 		bindData.scatteringTexture = resources.Get(resourceHandles.scatteringHandle);
-		bindData.irradianceTexture = resources.Get(resourceHandles.irradianceHandle);
 		bindData.solarZenithAngle = solarZenithAngle;
-		bindData.atmosphereIrradianceBuffer = resources.Get(separableIrradiance);
+		bindData.atmosphereIrradianceBuffer = resources.Get(skyAmbient);
 		bindData.cameraBuffer = resources.Get(cameraBuffer);
 		bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
 
-		list.BindPipeline(separableIrradianceLayout);
+		list.BindPipeline(skyAmbientPrecomputeLayout);
 		list.BindConstants("bindData", bindData);
 
 		list.Dispatch(1, 1, 1);
 	});
 
-	return std::make_pair(luminanceTag, separableIrradiance);
+	return std::make_pair(luminanceTag, skyAmbient);
 }

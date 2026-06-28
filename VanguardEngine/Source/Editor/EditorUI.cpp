@@ -1745,6 +1745,9 @@ void EditorUI::DrawAtmosphereControls(RenderDevice* device, entt::registry& regi
 
 			ImGui::Text("Clouds");
 
+			ImGui::DragFloat("Density scale", &clouds.densityMultiplier, 0.01f, 0.f, 20.f);
+			ImGui::SliderInt("Multi-scatter octaves", &clouds.msOctaves, 1, 10);
+
 			static int rayMarchQuality = *CvarGet("cloudRayMarchQuality", int);
 			static int lastRayMarchQuality = rayMarchQuality;
 			ImGui::TextDisabled("Ray march quality");
@@ -1767,8 +1770,13 @@ void EditorUI::DrawAtmosphereControls(RenderDevice* device, entt::registry& regi
 			CvarHelpers::Slider("cloudRenderScale", "Render scale", 0.1f, 1.f);
 
 			// Debug tools.
-			CvarHelpers::Checkbox("cloudDebugMarchCount", "Debug march count");
-			CvarHelpers::Checkbox("cloudDebugTransmittance", "Debug transmittance");
+			static const char* cloudDebugModes[] = {
+				"None",
+				"Transmittance",
+				"Ray march count",
+				"Normal vector",
+			};
+			CvarHelpers::Combo("cloudDebugVisualization", "Debug view", cloudDebugModes, IM_ARRAYSIZE(cloudDebugModes));
 			
 			ImGui::Separator();
 

@@ -43,6 +43,9 @@ float2 RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uin
 	Texture2D<float> blueNoiseTexture = ResourceDescriptorHeap[bindData.blueNoiseTexture];
 
 	const float planetRadius = 6360.0;  // #TODO: Get from atmosphere data.
+	// How dense the cloud media is. Use a fairly high density so that ray marches early out quickly rather
+	// than stepping through lots of semi translucent clouds.
+	const float densityMultiplier = 2.8f;
 
 	float dist = 0.f;
 	float3 origin = ComputeAtmosphereCameraPosition(camera);
@@ -146,12 +149,12 @@ float2 RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uin
 #ifdef CLOUDS_DEBUG_MARCHCOUNT
 		int stepCount = RayMarchInternal(baseShapeNoiseTexture, detailShapeNoiseTexture, curlNoiseTexture, atmosphereIrradiance, weatherTexture,
 			position, sunDirection, 0.f, localMarchStart, localMarchEnd, sunDirection, bindData.wind, bindData.time,
-			scatteredLuminance, transmittance, depth);
+			densityMultiplier, scatteredLuminance, transmittance, depth);
 		totalSteps += stepCount;
 #else
 		RayMarchInternal(baseShapeNoiseTexture, detailShapeNoiseTexture, curlNoiseTexture, atmosphereIrradiance, weatherTexture,
 			position, sunDirection, 0.f, localMarchStart, localMarchEnd, sunDirection, bindData.wind, bindData.time,
-			scatteredLuminance, transmittance, depth);
+			densityMultiplier, scatteredLuminance, transmittance, depth);
 #endif
 		
 		// Use the atmosphere's transmittance for natural shadow attenuation.

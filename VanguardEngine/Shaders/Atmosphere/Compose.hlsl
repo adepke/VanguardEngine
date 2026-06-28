@@ -66,7 +66,7 @@ float3 SampleCirrusClouds(Texture2D<float4> cirrusTexture, float3 planetCenter, 
 	// so scale faster than the rest of the clouds.
 	uv += bindData.wind * bindData.time * 0.038;
 	
-	float opacityScale = smoothstep(0.f, 0.4f, bindData.globalWeatherCoverage);
+	float opacityScale = smoothstep(0.f, 0.4f, bindData.globalWeatherCoverage) * 0.35f;
 	
 	return cirrusTexture.Sample(bilinearWrap, uv).aaa * opacityScale;
 }
@@ -252,7 +252,7 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 		lastDepth = depth;
 
 		// Debug rendering should not have aerial perspective applied.
-#if defined(CLOUDS_DEBUG_MARCHCOUNT)
+#if defined(CLOUDS_DEBUG_MARCHCOUNT) || defined(CLOUDS_DEBUG_NORMALVECTOR)
 		finalColor = finalColor * cloudsTransmittance + cloudsScattering;
 #elif defined(CLOUDS_DEBUG_TRANSMITTANCE)
 		finalColor = cloudsTransmittance;

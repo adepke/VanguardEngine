@@ -805,28 +805,20 @@ void GetSunAndSkyIrradiance(AtmosphereData atmosphere, Texture2D transmittanceLu
 	skyIrradiance = GetIrradiance(atmosphere, irradianceLut, lutSampler, radius, muS) * (1.f + dot(normal, position) / radius) * 0.5f;
 }
 
-// The below separated variants of GetSunAndSkyIrradiance are used to decouple the atmosphere data from the geometry,
-// which is necessary to render the atmopshere and atompshere-lit geometry in separate passes. Note that this separation
-// is an approximation, since the position is still in the precalculated component, but this is considered acceptable error.
+// GetSeparableSunIrradiance is a geometry-decoupled variant of the direct-sun term in
+// GetSunAndSkyIrradiance, used to render the atmosphere and atmosphere-lit geometry in separate
+// passes. Note that this separation is an approximation, but this is considered acceptable error.
+// Lambertian cosine should be applied by the caller.
 
-void DecomposeSeparableSunAndSkyIrradiance(AtmosphereData atmosphere, Texture2D transmittanceLut, Texture2D irradianceLut, SamplerState lutSampler,
-	float3 position, float3 sunDirection, out float3 separatedSunIrradiance, out float3 separatedSkyIrradiance)
+float3 GetSeparableSunIrradiance(AtmosphereData atmosphere, Texture2D transmittanceLut, SamplerState lutSampler,
+	float3 position, float3 sunDirection)
 {
 	float radius = length(position);
 	float muS = dot(position, sunDirection) / radius;
-	
-	// Separable forms of the equations found in GetSunAndSkyIrradiance
-	separatedSunIrradiance = atmosphere.solarIrradiance * GetTransmittanceToSun(atmosphere, transmittanceLut, lutSampler, radius, muS);
-	separatedSkyIrradiance = GetIrradiance(atmosphere, irradianceLut, lutSampler, radius, muS) * 0.5f;
-}
 
-void RecomposeSeparableSunAndSkyIrradiance(float3 position, float3 normal, float3 sunDirection, float3 separatedSunIrradiance, float3 separatedSkyIrradiance,
-	out float3 sunIrradiance, out float3 skyIrradiance)
-{
-	float radius = length(position);
-	
-	sunIrradiance = separatedSunIrradiance * max(dot(normal, sunDirection), 0.f);
-	skyIrradiance = separatedSkyIrradiance * (1.f + dot(normal, position) / radius);
+	// Separable form of the direct-irradiance term in GetSunAndSkyIrradiance. No need for indirect (sky) as well,
+	// SH can be used for this instead.
+	return atmosphere.solarIrradiance * GetTransmittanceToSun(atmosphere, transmittanceLut, lutSampler, radius, muS);
 }
 
 float3 GetSolarRadiance(AtmosphereData atmosphere)

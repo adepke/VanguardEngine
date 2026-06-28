@@ -72,8 +72,7 @@ void Clouds::Initialize(RenderDevice* inDevice)
 
 	CvarCreate("cloudRayMarchQuality", "Controls the ray march quality of the clouds. Increasing quality degrades performance. 0=lowDetail, 1=default, 2=groundTruth", 1);
 	CvarCreate("cloudRenderScale", "Controls the render scale of the volumetric clouds", 0.25f);
-	CvarCreate("cloudDebugMarchCount", "Debug cloud ray march steps", 0);
-	CvarCreate("cloudDebugTransmittance", "Debug cloud transmittance", 0);
+	CvarCreate("cloudDebugVisualization", "Cloud debug visualisation: 0=off, 1=transmittance, 2=march count, 3=normal vector", 0);
 
 	weatherLayout = RenderPipelineLayout{}
 		.ComputeShader({ "Clouds/Weather", "Main" });
@@ -218,8 +217,16 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 			cloudsLayout.Macro({ "CLOUDS_LOW_DETAIL" });
 		else if (*CvarGet("cloudRayMarchQuality", int) > 1)
 			cloudsLayout.Macro({ "CLOUDS_MARCH_GROUND_TRUTH_DETAIL" });
-		if (*CvarGet("cloudDebugMarchCount", int) > 0)
+		
+		cloudsLayout.Macro({ "CLOUDS_MS_OCTAVES", msOctaves });
+
+		const int cloudDebugMode = *CvarGet("cloudDebugVisualization", int);
+		if (cloudDebugMode == 1)
+			cloudsLayout.Macro({ "CLOUDS_DEBUG_TRANSMITTANCE" });
+		else if (cloudDebugMode == 2)
 			cloudsLayout.Macro({ "CLOUDS_DEBUG_MARCHCOUNT" });
+		else if (cloudDebugMode == 3)
+			cloudsLayout.Macro({ "CLOUDS_DEBUG_NORMALVECTOR" });
 
 		list.BindPipeline(cloudsLayout);
 
@@ -240,6 +247,8 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 			uint32_t upscaledResolution[2];
 			float time;
 			XMFLOAT2 wind;
+			float densityMultiplier;
+			float padding;
 		} bindData;
 
 		bindData.weatherTexture = resources.Get(weatherTag);
@@ -256,6 +265,7 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 		bindData.atmosphereIrradianceBuffer = resources.Get(atmosphereIrradiance);
 		bindData.time = Renderer::Get().GetAppTime();
 		bindData.wind = { windDirection.x * windStrength, windDirection.y * windStrength };
+		bindData.densityMultiplier = densityMultiplier;
 
 		const auto& cloudOutputComponent = device->GetResourceManager().Get(resources.GetTexture(cloudOutput));
 		bindData.outputResolution[0] = cloudOutputComponent.description.width;
@@ -292,13 +302,15 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 	{
 		auto visibilityLayout = RenderPipelineLayout{}
 			.ComputeShader({ "Clouds/Visibility", "Main" })
-			.Macro({ "CLOUDS_LOW_DETAIL" });  // Always low detail, no matter the quality setting
+			.Macro({ "CLOUDS_LOW_DETAIL" })  // Always low detail, no matter the quality setting
+			.Macro({ "CLOUDS_MS_OCTAVES", 1 });  // No multi-scattering.
 			// Interestingly, applying the ONLY_DEPTH macro does not appear to help performance. The issue there is likely the transmittance
 			// approximation being too conservative and allowing too many steps into the cloud. However, if this is done then small clouds
 			// will yield too much shadow and does not look visibily correct.
 			//.Macro({ "CLOUDS_ONLY_DEPTH" });
 		
-		if (*CvarGet("cloudDebugMarchCount", int) > 0)
+		// Only really useful with an inspector attached, no visual cue of the step count here.
+		if (*CvarGet("cloudDebugVisualization", int) == 2)
 			visibilityLayout.Macro({ "CLOUDS_DEBUG_MARCHCOUNT" });
 
 		list.BindPipeline(visibilityLayout);

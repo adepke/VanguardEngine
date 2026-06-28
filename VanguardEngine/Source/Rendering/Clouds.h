@@ -27,6 +27,8 @@ public:
 	float precipitation = 0.3f;
 	float windStrength = 0.2f;
 	XMFLOAT2 windDirection = { 1, 0 };
+	float densityMultiplier = 1.3f;
+	int msOctaves = 5;  // Number of multiple-scattering octaves
 
 private:
 	RenderDevice* device;

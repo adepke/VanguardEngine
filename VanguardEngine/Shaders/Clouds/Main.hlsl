@@ -24,6 +24,8 @@ struct BindData
 	uint2 upscaledResolution;
 	float time;
 	float2 wind;
+	float densityMultiplier;
+	float padding;
 };
 
 ConstantBuffer<BindData> bindData : register(b0);
@@ -85,14 +87,18 @@ float4 PSMain(PixelIn input) : SV_Target
 	float3 scatteredLuminance;
 	float transmittance;
 	float depth;  // Kilometers.
-#ifdef CLOUDS_DEBUG_MARCHCOUNT
-	int stepCount = RayMarchClouds(baseShapeNoiseTexture, detailShapeNoiseTexture, curlNoiseTexture, atmosphereIrradiance,
-		weatherTexture, geometryDepthTexture, blueNoiseTexture, camera, input.uv, jitteredUv, bindData.outputResolution,
-		rayDirection, sunDirection, bindData.wind, bindData.time, scatteredLuminance, transmittance, depth);
+#if defined(CLOUDS_DEBUG_MARCHCOUNT)
+	int stepCount = RayMarchClouds(baseShapeNoiseTexture, detailShapeNoiseTexture, curlNoiseTexture, atmosphereIrradiance, weatherTexture,
+		geometryDepthTexture, blueNoiseTexture, camera, input.uv, jitteredUv, bindData.outputResolution, rayDirection,
+		sunDirection, bindData.wind, bindData.time, bindData.densityMultiplier, scatteredLuminance, transmittance, depth);
+#elif defined(CLOUDS_DEBUG_NORMALVECTOR)
+	float3 normal = RayMarchClouds(baseShapeNoiseTexture, detailShapeNoiseTexture, curlNoiseTexture, atmosphereIrradiance, weatherTexture,
+		geometryDepthTexture, blueNoiseTexture, camera, input.uv, jitteredUv, bindData.outputResolution, rayDirection,
+		sunDirection, bindData.wind, bindData.time, bindData.densityMultiplier, scatteredLuminance, transmittance, depth);
 #else
 	RayMarchClouds(baseShapeNoiseTexture, detailShapeNoiseTexture, curlNoiseTexture, atmosphereIrradiance, weatherTexture,
 		geometryDepthTexture, blueNoiseTexture, camera, input.uv, jitteredUv, bindData.outputResolution, rayDirection,
-		sunDirection, bindData.wind, bindData.time, scatteredLuminance, transmittance, depth);
+		sunDirection, bindData.wind, bindData.time, bindData.densityMultiplier, scatteredLuminance, transmittance, depth);
 #endif
 
 #ifdef CLOUDS_ONLY_DEPTH
@@ -102,8 +108,11 @@ float4 PSMain(PixelIn input) : SV_Target
 	depthTexture[input.uv * bindData.outputResolution] = depth;
 
 	float4 output;
-#ifdef CLOUDS_DEBUG_MARCHCOUNT
+#if defined(CLOUDS_DEBUG_MARCHCOUNT)
 	output = float4(MapToRainbow(stepCount / 200.f), 0.f);
+#elif defined(CLOUDS_DEBUG_NORMALVECTOR)
+	// Remap from [-1, 1] to [0, 1]
+	output = float4(normal * 0.5f + 0.5f, 0.f);
 #else
 	output.rgb = scatteredLuminance;
 	output.a = transmittance;

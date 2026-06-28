@@ -10,6 +10,15 @@
 #include "Volumetrics/LightIntegration.hlsli"
 #include "Volumetrics/PhaseFunctions.hlsli"
 #include "Atmosphere/Atmosphere.hlsli"
+#include "Atmosphere/SkyAmbient.hlsli"
+
+struct CloudLightInput
+{
+	float precipitation;
+	float opticalDepthToSun;  // Cone-sampled from hit towards sun
+	float ambientVisibility;  // Sky visibility, approximated via height fraction
+	float viewDotLight;
+};
 
 float3 SampleWeather(Texture2D<float3> weatherTexture, float3 position)
 {
@@ -124,10 +133,33 @@ float SampleCloudDensity(Texture2D<float3> weatherTexture, Texture3D<float> base
 		// Erode the final shape.
 		finalShape = RemapRange(finalShape, detailShape * 0.2, 1.0, 0.0, 1.0);
 	}
-
-	const float densityMultiplier = 2.416;
 	
-	return max(finalShape, 0) * densityMultiplier;  // #TODO: Should be able to remove the max.
+	return max(finalShape, 0);  // #TODO: Should be able to remove the max.
+}
+
+// Approximate the volume's "outwards" vector. This is extremely expensive and run often, a very
+// large contender for places to optimize and rethink.
+float3 ComputeCloudNormal(Texture2D<float3> weatherTexture, Texture3D<float> baseNoise, Texture3D<float> detailNoise,
+	Texture3D<float4> curlNoise, float3 position, float2 wind, float time)
+{
+	const float h = 0.1f;  // km. larger = smoother normal, smaller = more local
+	const uint mip = 2;  // Use a coarse mip
+	const float dxp = SampleCloudDensity(weatherTexture, baseNoise, detailNoise, curlNoise, position + float3(h, 0, 0), wind, time, false, mip);
+	const float dxn = SampleCloudDensity(weatherTexture, baseNoise, detailNoise, curlNoise, position - float3(h, 0, 0), wind, time, false, mip);
+	const float dyp = SampleCloudDensity(weatherTexture, baseNoise, detailNoise, curlNoise, position + float3(0, h, 0), wind, time, false, mip);
+	const float dyn = SampleCloudDensity(weatherTexture, baseNoise, detailNoise, curlNoise, position - float3(0, h, 0), wind, time, false, mip);
+	const float dzp = SampleCloudDensity(weatherTexture, baseNoise, detailNoise, curlNoise, position + float3(0, 0, h), wind, time, false, mip);
+	const float dzn = SampleCloudDensity(weatherTexture, baseNoise, detailNoise, curlNoise, position - float3(0, 0, h), wind, time, false, mip);
+
+	const float3 gradient = float3(dxp - dxn, dyp - dyn, dzp - dzn);
+	const float gradLen = length(gradient);
+	
+	// Default to vertical normal in a uniform-ish region.
+	if (gradLen < 1e-4f)
+		return float3(0, 0, 1);
+
+	// Normal points from interior (high density) to exterior (low density).
+	return -gradient / gradLen;
 }
 
 // The noise kernel is a global segment, cached once when the ray march begins.
@@ -148,46 +180,94 @@ void ComputeNoiseKernel(float3 lightDirection)
 
 	// Rotate the noise vectors towards the light vector.
 	// https://en.wikipedia.org/wiki/Rodrigues%27_rotation_formula
-	// Use cos/sin derived from the dot product directly; acos+sin loses precision and adds two transcendentals per kernel entry.
+	const float3 rotationAxisRaw = cross(float3(1, 0, 0), lightDirection);
+	const float sinTheta = length(rotationAxisRaw);
+	const float cosTheta = clamp(lightDirection.x, -1.0, 1.0);  // dot(+X, L).
+
 	for (int i = 0; i < noiseKernelSize; ++i)
 	{
 		const float3 vec = noise[i];
-		const float3 rotationAxis = cross(vec, lightDirection);
-		const float cosTheta = clamp(dot(vec, lightDirection), -1.0, 1.0);
-		const float sinTheta = sqrt(max(1.0 - cosTheta * cosTheta, 0.0));
-		noiseKernel[i] = vec * cosTheta + cross(rotationAxis, vec) * sinTheta + rotationAxis * dot(rotationAxis, vec) * (1.0 - cosTheta);
+		if (sinTheta > 0.00001)
+		{
+			const float3 k = rotationAxisRaw / sinTheta;
+			noiseKernel[i] = vec * cosTheta + cross(k, vec) * sinTheta + k * dot(k, vec) * (1.0 - cosTheta);
+		}
+		else
+		{
+			// Light is parallel to the cone axis: identity, or mirrored for an anti-parallel light.
+			noiseKernel[i] = cosTheta > 0.0 ? vec : float3(-vec.x, vec.y, -vec.z);
+		}
 	}
 
 	noiseKernel[noiseKernelSize - 1] *= 3;  // Long-distance sample.
 }
 
-float SampleCloudDensityCone(Texture2D<float3> weatherTexture, Texture3D<float> baseNoise, Texture3D<float> detailNoise,
-	Texture3D<float4> curlNoise, float3 position, float2 wind, float time)
+// Cloud particle coefficients, per meter at density 1. Coefficients try to approximate real
+// cloud behavior. Multiple sources were used to derive these numbers, but I did not do an
+// extensive read into any of them and instead I'm using more artistic license here.
+// References:
+// 0.05/m: http://www.patarnott.com/satsens/pdf/opticalPropertiesCloudsReview.pdf
+// 0.026/m: https://amt.copernicus.org/articles/14/4959/2021
+#ifndef CLOUDS_LOW_DETAIL
+static const float3 cloudScatteringCoeff = 0.03.xxx;
+#else
+static const float3 cloudScatteringCoeff = 0.04.xxx;  // Compensates the sparse low-detail march.
+#endif
+static const float3 cloudAbsorptionCoeff = 0.xxx;  // Cloud albedo ~= 1.
+static const float3 cloudExtinctionCoeff = cloudScatteringCoeff + cloudAbsorptionCoeff;
+
+// Floor of the sky-ambient visibility estimate at the very bottom of the cloud layer.
+static const float cloudAmbientFloor = 0.25;
+
+// Effective water-droplet diameter. Typical cumulus cloud droplets are 5-15 um. Larger
+// values (20-50 um) produce a sharper forward peak / silver lining.
+static const float cloudDropletDiameter = 12.0;  // Microns
+
+// Wrenninge multiple-scattering octave attenuations.
+//   a = scattering attenuation per octave: scattering coefficient *= a^n.
+//   b = extinction attenuation per octave: optical depth *= b^n.
+//   c = phase attenuation per octave: phase function blends toward isotropic with c^n weight.
+// Reducing these values produces a more diffuse/flatter multi-scatter contribution. Increasing
+// them makes successive octaves preserve more of the single-scatter character.
+static const float msScattAttenuation = 0.5;
+static const float msExtinctionAttenuation = 0.7;  // Must be > scattering attenuation.
+static const float msPhaseAttenuation = 0.5;
+
+#ifndef CLOUDS_MS_OCTAVES
+#define CLOUDS_MS_OCTAVES 3
+#endif
+#if CLOUDS_MS_OCTAVES < 1
+#error CLOUDS_MS_OCTAVES must be at least 1.
+#endif
+
+float SampleCloudOpticalDepthCone(Texture2D<float3> weatherTexture, Texture3D<float> baseNoise, Texture3D<float> detailNoise,
+	Texture3D<float4> curlNoise, float3 position, float2 wind, float time, float densityMultiplier)
 {
-	const float stepSize = 375.0 / 1000.0;  // 375m.
+	const float stepSizeMeters = 375.0;
 	const int coneSamples = noiseKernelSize;
-	float density = 0.0;
+	float opticalDepth = 0.0;
 
 	// N-1 samples nearby, 1 far away to capture shadows cast by distant clouds.
 	// See slide 85 of: https://www.guerrilla-games.com/media/News/Files/The-Real-time-Volumetric-Cloudscapes-of-Horizon-Zero-Dawn.pdf
 	for (int i = 0; i < coneSamples; ++i)
 	{
-		float3 samplePosition = position + (stepSize * (float)i * noiseKernel[i]);
+		float3 samplePosition = position + ((stepSizeMeters / 1000.0) * (float)i * noiseKernel[i]);
 
 		// Cone sample left the cloud layer, bail out. Need to check here since math breaks in SampleCloudDensity if sampling out of bounds.
 		float heightFraction = GetHeightFractionForPoint(samplePosition, float2(cloudLayerBottom, cloudLayerTop));
 		if (heightFraction > 1.f)
 			break;
+		
+		// Quadrature weighting to appropriately capture the extra influence of the long distance sample.
+		const float segmentMeters = (i == coneSamples - 1) ? stepSizeMeters * 2.0 * (float)(coneSamples - 1) : stepSizeMeters;
 
-		// Apply an increased contribution to the long-distance occluding sample.
-		const float densityMultiplier = max(1.2 * (i - coneSamples + 3), 1);
-
-		// Once the density has reached 0.3, switch to low-detail noise. Refer to slide 86.
-		const bool detailSamples = density < 0.3;
-		density += SampleCloudDensity(weatherTexture, baseNoise, detailNoise, curlNoise, samplePosition, wind, time, detailSamples, 0) * densityMultiplier;
+		// Switch to cheap low detail samples if the media is sufficiently dense.
+		const bool detailSamples = opticalDepth < 0.3;
+		const float density = SampleCloudDensity(weatherTexture, baseNoise, detailNoise, curlNoise, samplePosition, wind, time, detailSamples, 0) * densityMultiplier;
+		opticalDepth += cloudExtinctionCoeff.x * density * segmentMeters;
 	}
 
-	return max(density, 0);
+	return max(opticalDepth, 0);
 }
 
 float ComputeBeersLaw(float value, float absorption)
@@ -199,45 +279,63 @@ float ComputePhaseFunction(float nu)
 {
 	// Dual-lobe from Frostbite, better accounts for back scattering.
 	// #TODO: Experiment with a triple HG phase.
+	/*
 	float a = HenyeyGreensteinPhase(nu, -0.48);
 	float b = HenyeyGreensteinPhase(nu, 0.75);
 	return (a + b) / 2.0;
-}
-
-float ComputeInScatterProbability(float localDensity, float heightFraction)
-{
-	const float depthProbability = 0.05 + pow(localDensity, max(RemapRange(heightFraction, 0.3, 0.85, 0.5, 2.0), 0.001));
-	//const float verticalProbability = pow(RemapRange(heightFraction, 0.07, 0.14, 0.1, 1.0), 0.8);  // Nubis' implementation.
-	const float verticalProbability = pow(RemapRange(heightFraction, 0.02, 0.15, 0.1, 1.0), 1.8);
-
-	return depthProbability * verticalProbability;
-}
-
-float ComputeLightEnergy(Texture2D<float3> weatherTexture, Texture3D<float> baseNoise, Texture3D<float> detailNoise,
-	Texture3D<float4> curlNoise, float3 position, float densityToLight, float viewDotLight, float2 wind, float time)
-{
-	// Lighting model inspired by GPU Pro 7 page 119, Frostbite, and Nubis 2017 real-time volumetric cloudscapes.
-
-	float3 weather = SampleWeather(weatherTexture, position);
-	float absorption = weather.z;
-
-	// Sample the mean density at the sample position using a higher mip level.
-	// #TODO: We might be able to get away with not using the full density sample, try just applying coverage and height gradient?
-	float localDensity = SampleCloudDensity(weatherTexture, baseNoise, detailNoise, curlNoise, position, wind, time, false, 2);
+	*/
 	
-	// Restrict the minimum local density, otherwise very thin edges will have nearly 0 density and thus no in scattering light.
-	localDensity += 2;
-
-	const float outScatter = ComputeBeersLaw(densityToLight * 0.8, absorption);
-	const float phase = ComputePhaseFunction(viewDotLight);
-	const float inScatter = ComputeInScatterProbability(localDensity, GetHeightFractionForPoint(position, float2(cloudLayerBottom, cloudLayerTop)));
-
-	return outScatter * phase * inScatter;
+	// Testing a new phase that accounts for water droplet size. Appears to be current state of the art.
+	return JendersieDEonPhase(nu, cloudDropletDiameter);
 }
 
-#ifdef CLOUDS_DEBUG_MARCHCOUNT
+// Blends the single-scatter phase towards isotropic as light continues to bounce.
+float ComputePhaseFunctionMS(float nu, float singleScatterWeight)
+{
+	const float isotropic = IsotropicPhase(0.f);  // Theta ignored.
+	const float singleScatter = ComputePhaseFunction(nu);
+	return lerp(isotropic, singleScatter, singleScatterWeight);
+}
+
+CloudLightInput PrepareCloudLighting(Texture2D<float3> weatherTexture, float3 position, float opticalDepthToSun, float viewDotLight)
+{
+	CloudLightInput light;
+	light.precipitation = SampleWeather(weatherTexture, position).z;
+	light.opticalDepthToSun = opticalDepthToSun;
+	light.viewDotLight = viewDotLight;
+	const float heightFraction = GetHeightFractionForPoint(position, float2(cloudLayerBottom, cloudLayerTop));
+	light.ambientVisibility = lerp(cloudAmbientFloor, 1.0, heightFraction);
+
+	return light;
+}
+
+// Per-octave light energy, contributed by sun and sky. These are multipliers instead of total energy.
+struct CloudLightWeight
+{
+	float direct;
+	float ambient;
+};
+
+CloudLightWeight ComputeLightEnergy(CloudLightInput lighting, float extinctionAttenuationN, float directPhase)
+{
+	const float outScatter = ComputeBeersLaw(lighting.opticalDepthToSun * extinctionAttenuationN, lighting.precipitation);
+
+	// Use the powder effect for in-scatter to provide silver lining.
+	const float powder = 1.0 - exp(-2.0 * lighting.opticalDepthToSun * extinctionAttenuationN);
+	const float powderBlend = lerp(powder, 1.0, saturate(lighting.viewDotLight * 0.5 + 0.5));
+
+	CloudLightWeight w;
+	w.direct  = outScatter * powderBlend * directPhase;
+	w.ambient = lighting.ambientVisibility;
+	return w;
+}
+
+#if defined(CLOUDS_DEBUG_MARCHCOUNT)
 #define MARCH_RESULT int
 #define RETURN_EARLYOUT 0
+#elif defined(CLOUDS_DEBUG_NORMALVECTOR)
+#define MARCH_RESULT float3
+#define RETURN_EARLYOUT 0.xxx
 #else
 // Standard rendering.
 #define MARCH_RESULT void
@@ -248,8 +346,8 @@ float ComputeLightEnergy(Texture2D<float3> weatherTexture, Texture3D<float> base
 // Jitter is in the domain of [-1, 1].
 MARCH_RESULT RayMarchInternal(Texture3D<float> baseShapeNoiseTexture, Texture3D<float> detailShapeNoiseTexture, Texture3D<float4> curlNoiseTexture,
 	StructuredBuffer<float3> atmosphereIrradiance, Texture2D<float3> weatherTexture, float3 origin, float3 direction, float jitter,
-	float marchStart, float marchEnd, float3 sunDirection, float2 wind, float time, out float3 scatteredLuminance, out float transmittance,
-	out float depth)
+	float marchStart, float marchEnd, float3 sunDirection, float2 wind, float time, float density, out float3 scatteredLuminance,
+	out float transmittance, out float depth)
 {
 	// Clear again in case the outer caller didn't.
 	scatteredLuminance = 0.xxx;
@@ -258,7 +356,36 @@ MARCH_RESULT RayMarchInternal(Texture3D<float> baseShapeNoiseTexture, Texture3D<
 
 	const float zDot = abs(dot(direction, float3(0, 0, 1)));
 	const float viewDotLight = dot(direction, sunDirection);
-	
+
+#if !defined(CLOUDS_ONLY_DEPTH)
+	// Load common lighting info for the march. The sky SH comes from a probe in the cloud layer,
+	// no need to have more than 1 probe in the clouds, so sky ambience can be loaded here too.
+	// Note no Lambertian consine factor is applied since clouds are a volume not a surface.
+	const float3 sunIrradiance = LoadSunIrradianceCloud(atmosphereIrradiance);
+	const SH::L2_RGB skySH = LoadSkySHCloud(atmosphereIrradiance);
+
+	// Precompute the phase function constants, since it only varies by V*L. Need to profile, but if
+	// this is fairly expensive, consider moving to offline lookup table.
+	float msScattAttenN[CLOUDS_MS_OCTAVES];
+	float msExtAttenN[CLOUDS_MS_OCTAVES];
+	float msDirectPhase[CLOUDS_MS_OCTAVES];
+	{
+		float a = 1.f;
+		float b = 1.f;
+		float c = 1.f;
+		[unroll]
+		for (int octave = 0; octave < CLOUDS_MS_OCTAVES; ++octave)
+		{
+			msScattAttenN[octave] = a;
+			msExtAttenN[octave] = b;
+			msDirectPhase[octave] = ComputePhaseFunctionMS(viewDotLight, c);
+			a *= msScattAttenuation;
+			b *= msExtinctionAttenuation;
+			c *= msPhaseAttenuation;
+		}
+	}
+#endif  // !CLOUDS_ONLY_DEPTH
+
 	// Low detail reduces step count as well.
 #ifndef CLOUDS_LOW_DETAIL
 	const int baseStepCount = 150;
@@ -283,12 +410,23 @@ MARCH_RESULT RayMarchInternal(Texture3D<float> baseShapeNoiseTexture, Texture3D<
 	float dist = 0.f;
 	int detailSteps = 0;  // If >0, march in small steps.
 
-	// 2nd octave accumulators for the multiple-scattering approximation. Total in-scattered radiance is the sum of all octaves.
-	float3 scatteredLuminance2 = 0.xxx;
-	float3 transmittance2 = 1.xxx;
+#if CLOUDS_MS_OCTAVES > 1
+	float3 scatteredLuminanceMS[CLOUDS_MS_OCTAVES - 1];
+	float3 transmittanceMS[CLOUDS_MS_OCTAVES - 1];
+	[unroll]
+	for (int octave = 0; octave < CLOUDS_MS_OCTAVES - 1; ++octave)
+	{
+		scatteredLuminanceMS[octave] = 0.xxx;
+		transmittanceMS[octave] = 1.xxx;
+	}
+#endif
 
 #ifdef CLOUDS_DEBUG_MARCHCOUNT
 	int loopCount = 0;
+#elif CLOUDS_DEBUG_NORMALVECTOR
+	// Get the normal of the surface, not of the interior.
+	float3 debugFirstNormal = 0.0.xxx;
+	bool debugFirstNormalCaptured = false;
 #endif
 
 #ifdef CLOUDS_MARCH_GROUND_TRUTH_DETAIL
@@ -338,65 +476,54 @@ MARCH_RESULT RayMarchInternal(Texture3D<float> baseShapeNoiseTexture, Texture3D<
 			}
 
 			detailSteps = stepTransitionMargin;
+			
+			// Scale the density from the non-cone sample, which doesn't already factor in the multiplier.
+			cloudDensity *= density;
 
-			float coneDensity = SampleCloudDensityCone(weatherTexture, baseShapeNoiseTexture, detailShapeNoiseTexture, curlNoiseTexture, position, wind, time);
-			coneDensity = (coneDensity + cloudDensity) / float(noiseKernelSize + 1);
-			
-#ifdef CLOUDS_LOW_DETAIL
-			coneDensity *= 5;
-#endif
-			
 			// Depth-only rendering does not need to evaluate the lighting model.
-#if !defined(CLOUDS_ONLY_DEPTH) && !defined(CLOUDS_DEPTH_ACCURATE_MODEL)
-			float lightEnergy = ComputeLightEnergy(weatherTexture, baseShapeNoiseTexture, detailShapeNoiseTexture, curlNoiseTexture, position, coneDensity, viewDotLight, wind, time);
+#if !defined(CLOUDS_ONLY_DEPTH)
+			const float opticalDepthToSun = SampleCloudOpticalDepthCone(weatherTexture, baseShapeNoiseTexture, detailShapeNoiseTexture, curlNoiseTexture, position, wind, time, density);
 
-			float3 cameraPositionAtmoSpace = position;  // Position is already in kilometers.
-			float3 cameraPoint = cameraPositionAtmoSpace - planetCenter;
+			const float3 cloudNormal = ComputeCloudNormal(weatherTexture, baseShapeNoiseTexture, detailShapeNoiseTexture, curlNoiseTexture, position, wind, time);
+			const float3 skyAmbient = max(SH::CalculateIrradiance(skySH, cloudNormal), 0.0.xxx) / SH::Pi;
 
-			// Clouds don't have a surface normal, but they don't need one. Light from the sun hits the media at any angle,
-			// and scatters within it regardless. Therefore, set the normal to be aligned with the sun such that no direct
-			// irradiance is lost.
-			float3 normal = sunDirection;
-
-			const float3 separatedSunIrradianceClouds = atmosphereIrradiance[2];
-			const float3 separatedSkyIrradianceClouds = atmosphereIrradiance[3];
-
-			float3 sunIrradiance;
-			float3 skyIrradiance;
-			RecomposeSeparableSunAndSkyIrradiance(cameraPoint, normal, sunDirection, separatedSunIrradianceClouds,
-				separatedSkyIrradianceClouds, sunIrradiance, skyIrradiance);
-
-			// The approximate unattenuated energy hitting the clouds is the full combined sun and sky irradiance.
-			// Note that sun/sky visibility is NOT used here, as the clouds are the ones blocking the light from the atmosphere.
-			float3 energy = sunIrradiance + skyIrradiance;
-			energy *= lightEnergy * 0.118;  // Attenuate the atmospheric irradiance by the cloud lighting model.
+			// The light input is used for all MS octaves.
+			CloudLightInput lightInput = PrepareCloudLighting(weatherTexture, position, opticalDepthToSun, viewDotLight);
 			
-			//float stepSize = smallStepSize * 1000.0;  // Kilometers to meters.
-			// Don't perform a physically accurate scattering integration, as numerical precision issues are happening.
-			// Instead, a bit of artistic license is leveraged here.
-			float stepSize = smallStepSize * 200;
-
-			// Coefficients try to approximate real cloud behavior. Multiple sources were used to derive these numbers,
-			// but I did not do an extensive read into any of them and instead I'm using more artistic license here.
-			// References:
-			// 0.05: http://www.patarnott.com/satsens/pdf/opticalPropertiesCloudsReview.pdf
-			// 0.026: https://amt.copernicus.org/articles/14/4959/2021
-			float3 scattCoeff = 0.124.xxx;
-			float3 absorCoeff = 0.xxx;  // Cloud albedo ~= 1.
-			float3 trans = transmittance.xxx;
-#ifdef CLOUDS_LOW_DETAIL
-			scattCoeff = 0.04.xxx;
+#ifdef CLOUDS_DEBUG_NORMALVECTOR
+			if (!debugFirstNormalCaptured)
+			{
+				debugFirstNormal = cloudNormal;
+				debugFirstNormalCaptured = true;
+			}
 #endif
-			ComputeScatteringIntegration(cloudDensity, energy, stepSize, scattCoeff, absorCoeff, scatteredLuminance, trans);
-			transmittance = trans.x;  // Scattering and absorbtion are uniform, so just use one channel.
 
-			// Multiple scattering approximation from Wrenninge.
-			// Octave 2 is integrated independently of octave 1 with attenuated scattering and extinction, sum at the end.
+			float stepSize = smallStepSize * 1000.0;  // Kilometers to meters.
+
+			const float3 scattCoeff = cloudScatteringCoeff;
+			const float3 extCoeff = cloudExtinctionCoeff * lightInput.precipitation;
+
+			// Multiple-scattering approximation from Wrenninge
 			// See: https://gitea.yiem.net/QianMo/Real-Time-Rendering-4th-Bibliography-Collection/raw/branch/main/Chapter%201-24/[1909]%20[SIGGRAPH%202013]%20Oz-%20The%20Great%20and%20Volumetric.pdf
-			const float msScattAtten = 0.5;
-			const float msExtAtten = 0.5;
-			ComputeScatteringIntegration(cloudDensity, energy, stepSize, scattCoeff * msScattAtten, absorCoeff * msExtAtten,
-				scatteredLuminance2, transmittance2);
+			{
+				// Octave 0
+				const CloudLightWeight w0 = ComputeLightEnergy(lightInput, msExtAttenN[0], msDirectPhase[0]);
+				const float3 octaveEnergy0 = sunIrradiance * w0.direct + skyAmbient * w0.ambient;
+				float3 trans = transmittance.xxx;
+				ComputeScatteringIntegration(cloudDensity, octaveEnergy0, stepSize, scattCoeff, extCoeff, scatteredLuminance, trans);
+				transmittance = trans.x;  // Scattering and extinction are uniform, so just use one channel.
+
+#if CLOUDS_MS_OCTAVES > 1
+				// Octaves 1..N-1
+				[unroll]
+				for (int octave = 1; octave < CLOUDS_MS_OCTAVES; ++octave)
+				{
+					const CloudLightWeight w = ComputeLightEnergy(lightInput, msExtAttenN[octave], msDirectPhase[octave]);
+					const float3 octaveEnergy = sunIrradiance * w.direct + skyAmbient * w.ambient;
+					ComputeScatteringIntegration(cloudDensity, octaveEnergy, stepSize, scattCoeff * msScattAttenN[octave], extCoeff * msExtAttenN[octave], scatteredLuminanceMS[octave - 1], transmittanceMS[octave - 1]);
+				}
+#endif
+			}
 #else
 			// Very simple approximation of transmittance.
 			float simpleExtinction = 0.08;
@@ -424,19 +551,28 @@ MARCH_RESULT RayMarchInternal(Texture3D<float> baseShapeNoiseTexture, Texture3D<
 			break;
 	}
 
-	// Sum the second-octave multiple-scattering contribution into the final radiance.
+	// Sum the higher-order multiple-scattering octaves into the final radiance.
 	// Intentionally don't MS accumulate the transmittance as well.
-	scatteredLuminance += scatteredLuminance2;
+#if CLOUDS_MS_OCTAVES > 1
+	[unroll]
+	for (int msSum = 0; msSum < CLOUDS_MS_OCTAVES - 1; ++msSum)
+	{
+		scatteredLuminance += scatteredLuminanceMS[msSum];
+	}
+#endif
 
 #ifdef CLOUDS_DEBUG_MARCHCOUNT
 	return loopCount;
 #endif
+#ifdef CLOUDS_DEBUG_NORMALVECTOR
+	return debugFirstNormal;
+#endif
 }
 
-MARCH_RESULT RayMarchClouds(Texture3D<float> baseShapeNoiseTexture, Texture3D<float> detailShapeNoiseTexture, Texture3D<float4> curlNoiseTexture,
-	StructuredBuffer<float3> atmosphereIrradiance, Texture2D<float3> weatherTexture, Texture2D<float> geometryDepthTexture, Texture2D<float> blueNoiseTexture,
-	Camera camera, float2 baseUv, float2 jitteredUv, uint2 outputResolution, float3 direction, float3 sunDirection, float2 wind, float time,
-	out float3 scatteredLuminance, out float transmittance, out float depth)
+MARCH_RESULT RayMarchClouds(Texture3D<float> baseShapeNoiseTexture, Texture3D<float> detailShapeNoiseTexture, Texture3D<float4> curlNoiseTexture, StructuredBuffer<float3> atmosphereIrradiance,
+	Texture2D<float3> weatherTexture, Texture2D<float> geometryDepthTexture, Texture2D<float> blueNoiseTexture, Camera camera, float2 baseUv, float2 jitteredUv,
+	uint2 outputResolution, float3 direction, float3 sunDirection, float2 wind, float time, float density, out float3 scatteredLuminance, out float transmittance,
+	out float depth)
 {
 	// Necessary in case this outer call early-outs.
 	scatteredLuminance = 0.xxx;
@@ -538,12 +674,12 @@ MARCH_RESULT RayMarchClouds(Texture3D<float> baseShapeNoiseTexture, Texture3D<fl
 	// Precompute the noise kernel once per pixel. RayMarchInternal expects this to be set up before being called.
 	ComputeNoiseKernel(sunDirection);
 
-#ifdef CLOUDS_DEBUG_MARCHCOUNT
+#if defined(CLOUDS_DEBUG_MARCHCOUNT) || defined(CLOUDS_DEBUG_NORMALVECTOR)
 	return RayMarchInternal(baseShapeNoiseTexture, detailShapeNoiseTexture, curlNoiseTexture, atmosphereIrradiance, weatherTexture, origin, direction,
-		jitter, marchStart, marchEnd, sunDirection, wind, time, scatteredLuminance, transmittance, depth);
+		jitter, marchStart, marchEnd, sunDirection, wind, time, density, scatteredLuminance, transmittance, depth);
 #else
 	RayMarchInternal(baseShapeNoiseTexture, detailShapeNoiseTexture, curlNoiseTexture, atmosphereIrradiance, weatherTexture, origin, direction, jitter,
-		marchStart, marchEnd, sunDirection, wind, time, scatteredLuminance, transmittance, depth);
+		marchStart, marchEnd, sunDirection, wind, time, density, scatteredLuminance, transmittance, depth);
 #endif
 }
 

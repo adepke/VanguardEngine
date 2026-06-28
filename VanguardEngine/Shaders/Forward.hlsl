@@ -9,6 +9,7 @@
 #include "Clusters/Clusters.hlsli"
 #include "IBL/ImageBasedLighting.hlsli"
 #include "Atmosphere/Atmosphere.hlsli"
+#include "Atmosphere/SkyAmbient.hlsli"
 #include "Atmosphere/Visibility.hlsli"
 
 struct ClusterData
@@ -196,48 +197,40 @@ float4 PSMain(PixelIn input) : SV_Target
 		// Directional lights are just the combined irradiance of the sun and sky.
 		if (light.type == LightType::Directional)
 		{
-			const float3 separatedSunIrradianceNearCamera = atmosphereIrradiance[0];
-			const float3 separatedSkyIrradianceNearCamera = atmosphereIrradiance[1];
-
 			float3 cameraPositionAtmoSpace = ComputeAtmosphereCameraPosition(camera);
 			// Convert to kilometers. The atmosphere should probably provide a helper function to convert, but oh well.
 			float3 hitPositionAtmoSpace = input.position / 1000.f;
-			// The irradiance is computed at the camera's position, so the further the hit point is from the camera,
-			// the less accurate the irradiance.
-			float3 surfacePoint = hitPositionAtmoSpace - planetCenter;
-
-			float3 sunIrradiance;
-			float3 skyIrradiance;
-			RecomposeSeparableSunAndSkyIrradiance(surfacePoint, normal, -light.direction, separatedSunIrradianceNearCamera,
-				separatedSkyIrradianceNearCamera, sunIrradiance, skyIrradiance);
 
 			const float sunVisibility = CalculateSunVisibility(hitPositionAtmoSpace, light.direction, weatherTexture);
 			const float skyVisibility = CalculateSkyVisibility(cameraPositionAtmoSpace, bindData.globalWeatherCoverage);
-
-			// The IBL irradiance map captures the sky's appearance but is NOT yet modulated by cloud transmittance,
-			// so without an analytic sky term gated by skyVisibility, surfaces underneath thick clouds receive
-			// incorrect ambient illumination. Note that this currently double-counts some sky energy with IBL diffuse.
-			// Multiply against the existing color to preserve custom light modifications.
-			// #TODO: Either skip IBL diffuse here (since the analytic sky covers it) or rebuild IBL with cloud transmittance
-			// applied to the sky luminance.
-			light.color *= (sunIrradiance * sunVisibility) + (skyIrradiance * skyVisibility);
+			
+			// Sun contribution is directional, so feed it into the BRDF path.
+			const float3 sunIrradiance = LoadSunIrradianceCamera(atmosphereIrradiance);
+			light.color *= sunIrradiance * sunVisibility;
+			
+			// Sky contribution comes from a SH probe at the camera. Note the clamp is to prevent negatives
+			// on sharp peaks.
+			const SH::L2_RGB skySH = LoadSkySHCamera(atmosphereIrradiance);
+			const float3 skyIrradiance = max(SH::CalculateIrradiance(skySH, normal), 0.0.xxx);
+			
+			// Feed sky diffuse directly into the output, without going through the directional BRDF, as sky contribution
+			// is from the entire hemisphere.
+			// #TODO: refactor this out of the light loop.
+			const float3 skyDiffuseAlbedo = materialSample.baseColor.rgb * (1.0 - materialSample.metalness);
+			output.rgb += (skyVisibility * materialSample.occlusion) * skyIrradiance * skyDiffuseAlbedo / pi;
 		}
 		
 		LightSample sample = SampleLight(light, materialSample, camera, viewDirection, input.position, normalDirection);
 		output.rgb += sample.diffuse.rgb;
 	}
 	
-	TextureCube<float4> irradianceMap = ResourceDescriptorHeap[bindData.iblData.irradianceTexture];
+	// Ambient diffuse comes from the SH sky, while ambient specular comes from IBL.
 	TextureCube<float4> prefilterMap = ResourceDescriptorHeap[bindData.iblData.prefilterTexture];
 	Texture2D<float4> brdfMap = ResourceDescriptorHeap[bindData.iblData.brdfTexture];
+	output.rgb += ComputeIBLSpecular(normalDirection, viewDirection, materialSample, bindData.iblData.prefilterLevels,
+		prefilterMap, brdfMap, anisotropicWrap);
 	
-	float width, height, prefilterMipCount;
-	prefilterMap.GetDimensions(0, width, height, prefilterMipCount);
-
-	float3 ibl = ComputeIBL(normalDirection, viewDirection, materialSample, bindData.iblData.prefilterLevels, irradianceMap, prefilterMap, brdfMap, anisotropicWrap);
-	output.rgb += ibl;
-
 	output.rgb += materialSample.emissive;
-	
+
 	return output;
 }

@@ -95,7 +95,7 @@ private:
 	// so cache it in a buffer and pass that around instead.
 	BufferHandle modelBuffer;
 
-	RenderPipelineLayout separableIrradianceLayout;
+	RenderPipelineLayout skyAmbientPrecomputeLayout;
 
 	static constexpr uint32_t luminanceTextureSize = 1024;
 	static_assert(luminanceTextureSize % 8 == 0, "luminanceTextureSize must be evenly divisible by 8.");
