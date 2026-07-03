@@ -28,7 +28,7 @@ float3 ComputeIBLSpecular(float3 normalDirection, float3 viewDirection, Material
 	// Note that prefilterLevels is most likely smaller than the mip levels of the prefilter map. This reduces glowing rim artifacts on
 	// highly rough metals due to losing too much data in the prefilter map.
 	float3 prefilterSample = prefilterLut.SampleLevel(lutSampler, reflectionDirection, material.roughness * (prefilterLevels - 1.f)).rgb;
-	float2 brdf = brdfLut.Sample(lutSampler, float2(saturate(dot(normalDirection, viewDirection)), material.roughness)).xy;
+	float2 brdf = brdfLut.Sample(lutSampler, float2(saturate(dot(normalDirection, viewDirection)), 1.f - material.roughness)).xy;
 
 	float3 fNaught = lerp(0.04.xxx, material.baseColor.rgb, material.metalness);
 	float3 fresnel = FresnelSchlick(saturate(dot(normalDirection, viewDirection)), fNaught, material.roughness);
