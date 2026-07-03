@@ -17,7 +17,7 @@ float3 ComputeDirection(float2 uv, uint z)
 		case 3:
 			return float3(uv.x, -1.f, -uv.y);
 		case 4:
-			return float3(uv.x, uv.y, 1.f);
+			return float3(uv.x, -uv.y, 1.f);
 		case 5:
 			return float3(-uv.x, -uv.y, -1.f);
 	}
