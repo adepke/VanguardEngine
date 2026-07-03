@@ -19,8 +19,11 @@
 #include <Rendering/Bloom.h>
 #include <Rendering/OcclusionCulling.h>
 #include <Rendering/Clouds.h>
+#include <Rendering/TextureCapture.h>
 
 #include <entt/entt.hpp>
+
+#include <filesystem>
 
 struct MeshRenderable
 {
@@ -78,6 +81,12 @@ private:
 
 	bool shouldReloadShaders = false;
 
+	// State for capture requests.
+	bool capturePending = false;
+	std::filesystem::path capturePath;
+	TextureCapture::PendingReadback pendingCapture;
+	bool lastCaptureSucceeded = false;
+
 private:
 	void CreateRootSignature();
 	std::vector<MeshRenderable> UpdateObjects(const entt::registry& registry);
@@ -105,6 +114,11 @@ public:
 	void FreezeCamera();
 	void ReloadShaderPipelines();
 	void ResetAppTime();
+
+	// Called before rendering, requests that the upcoming frame get written to the specified file path.
+	void RequestCapture(const std::filesystem::path& path);
+	// Checks if the previous capture was successful.
+	bool CaptureSucceeded() const noexcept { return lastCaptureSucceeded; }
 };
 
 inline void Renderer::SubmitFrameTime(uint32_t timeUs)

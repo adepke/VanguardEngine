@@ -11,6 +11,9 @@
 #include <Core/CoreSystems.h>
 #include <Core/CrashHandler.h>
 #include <Core/LogSinks.h>
+#include <Core/CommandLine.h>
+#include <Scene/SceneManager.h>
+#include <Editor/Editor.h>
 
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
@@ -48,68 +51,9 @@ void OnSizeChanged(uint32_t width, uint32_t height)
 	Renderer::Get().SetResolution(width, height, false);
 }
 
-void EngineBoot()
+// This function doesn't belong here, refactor.
+void SetupDefaultScene()
 {
-	VGScopedCPUStat("Engine Boot");
-
-	auto fileSink = std::make_shared<spdlog::sinks::basic_file_sink_mt>("Log.txt", true);
-	auto msvcSink = std::make_shared<spdlog::sinks::msvc_sink_mt>();
-	auto tracySink = std::make_shared<TracySink_mt>();
-	auto editorSink = std::make_shared<EditorSink_mt>();
-
-	logCore = std::make_shared<spdlog::logger>("core", spdlog::sinks_init_list{ fileSink, msvcSink, tracySink, editorSink });
-	logAsset = logCore->clone("asset");
-	logEditor = logCore->clone("editor");
-	logRendering = logCore->clone("rendering");
-	logScene = logCore->clone("scene");
-	logThreading = logCore->clone("threading");
-	logUtility = logCore->clone("utility");
-	logWindow = logCore->clone("window");
-
-	spdlog::set_default_logger(logCore);
-	spdlog::set_pattern("[%H:%M:%S.%e][tid:%t][%n.%l] %v");
-	spdlog::flush_on(spdlog::level::err);
-	spdlog::flush_every(1s);
-
-	// Not useful to set an error handler, this isn't invoked unless exceptions are enabled.
-	// With exceptions disabled, spdlog just writes to stderr.
-	// #TODO: Consider changing the behavior of error handling with exceptions disabled.
-	//spdlog::set_error_handler([](const std::string& msg)
-	//{
-	//	VGLogError(logCore, "Logger: {}", msg);
-	//});
-
-	Config::Initialize();
-
-	Input::EnableDPIAwareness();
-
-	constexpr uint32_t defaultWindowSizeX = 1920;
-	constexpr uint32_t defaultWindowSizeY = 1080;
-
-	auto window = std::make_unique<WindowFrame>(VGText("Vanguard"), defaultWindowSizeX, defaultWindowSizeY);
-	window->onFocusChanged = &OnFocusChanged;
-	window->onSizeChanged = &OnSizeChanged;
-
-#if BUILD_DEBUG || BUILD_DEVELOPMENT
-	constexpr auto enableDebugging = true;
-#else
-	constexpr auto enableDebugging = false;
-#endif
-
-	auto device = std::make_unique<RenderDevice>(static_cast<HWND>(window->GetHandle()), false, enableDebugging);
-	Renderer::Get().Initialize(std::move(window), std::move(device), registry);
-
-	// The input requires the user interface to be created first.
-	Input::Initialize(Renderer::Get().window->GetHandle());
-
-	// #TEMP
-	AssetManager::Get().Initialize(Renderer::Get().device.get());
-}
-
-void EngineLoop()
-{
-	// #TEMP: Get all of this scene setup out of here.
-
 	const auto AddHelmet = [](const TransformComponent& transform)
 	{
 		const auto path = Config::shadersPath / "../Assets/Models/DamagedHelmet/HelmetTangents.glb";
@@ -177,15 +121,31 @@ void EngineLoop()
 		return entity;
 	};
 
+	const auto AddSphere = []()
+	{
+		TransformComponent transform{};
+
+		const auto path = Config::shadersPath / "../Assets/Models/sphere.glb";
+		const auto entity = registry.create();
+		registry.emplace<NameComponent>(entity, "Sphere");
+		registry.emplace<TransformComponent>(entity, transform);
+		registry.emplace<AssetComponent>(entity, path);
+		registry.emplace<MeshComponent>(entity, AssetManager::Get().LoadModel(path));
+
+		return entity;
+	};
+
 	//AddSanMiguel();
 
 	AddTerrain();
 
-	AddHelmet({
+	//AddSphere();
+
+	/*AddHelmet({
 		.scale = { 100.f, 100.f, 100.f },
 		.rotation = { -169.5f * 3.14159f / 180.f, 0.f, 121.5f * 3.14159f / 180.f },
 		.translation = { 78.f, 0.f, -5.f }
-	});
+	});*/
 
 	TransformComponent spectatorTransform{};
 	spectatorTransform.translation = { 0.f, 0.f, 238.f };
@@ -195,7 +155,6 @@ void EngineLoop()
 	registry.emplace<NameComponent>(spectator, "Spectator");
 	registry.emplace<TransformComponent>(spectator, std::move(spectatorTransform));
 	registry.emplace<CameraComponent>(spectator);
-	registry.emplace<ControlComponent>(spectator);  // #TEMP
 
 	/*const auto h = AssetManager::Get().LoadModel(Config::shadersPath / "../Assets/Models/DamagedHelmet/HelmetTangents.glb");
 	for (int i = 0; i < 6; i++)
@@ -282,26 +241,194 @@ void EngineLoop()
 		registry.emplace<LightComponent>(light, pointLight);
 		registry.emplace<TransformComponent>(light, transform);
 	}
+}
+
+bool EngineBoot()
+{
+	VGScopedCPUStat("Engine Boot");
+
+	auto fileSink = std::make_shared<spdlog::sinks::basic_file_sink_mt>("Log.txt", true);
+	auto msvcSink = std::make_shared<spdlog::sinks::msvc_sink_mt>();
+	auto tracySink = std::make_shared<TracySink_mt>();
+	auto editorSink = std::make_shared<EditorSink_mt>();
+
+	logCore = std::make_shared<spdlog::logger>("core", spdlog::sinks_init_list{ fileSink, msvcSink, tracySink, editorSink });
+	logAsset = logCore->clone("asset");
+	logEditor = logCore->clone("editor");
+	logRendering = logCore->clone("rendering");
+	logScene = logCore->clone("scene");
+	logThreading = logCore->clone("threading");
+	logUtility = logCore->clone("utility");
+	logWindow = logCore->clone("window");
+
+	spdlog::set_default_logger(logCore);
+	spdlog::set_pattern("[%H:%M:%S.%e][tid:%t][%n.%l] %v");
+	spdlog::flush_on(spdlog::level::err);
+	spdlog::flush_every(1s);
+
+	// Not useful to set an error handler, this isn't invoked unless exceptions are enabled.
+	// With exceptions disabled, spdlog just writes to stderr.
+	// #TODO: Consider changing the behavior of error handling with exceptions disabled.
+	//spdlog::set_error_handler([](const std::string& msg)
+	//{
+	//	VGLogError(logCore, "Logger: {}", msg);
+	//});
+
+	Config::Initialize();
+
+	if (!GCommandLineOptions.valid)
+	{
+		VGLogError(logCore, "Invalid command line arguments. Expected: [--headless] [--output <file.png>] [--delay <frames>] [--scene <file>]");
+		return false;
+	}
+
+	Input::EnableDPIAwareness();
+
+	constexpr uint32_t defaultWindowSizeX = 1920;
+	constexpr uint32_t defaultWindowSizeY = 1080;
+
+	const bool windowVisible = !GCommandLineOptions.headless;
+	auto window = std::make_unique<WindowFrame>(VGText("Vanguard"), defaultWindowSizeX, defaultWindowSizeY, windowVisible);
+	window->onFocusChanged = &OnFocusChanged;
+	window->onSizeChanged = &OnSizeChanged;
+
+	auto enableDebugging = false;
+#if BUILD_DEBUG || BUILD_DEVELOPMENT
+	// No need for debugging in headless
+	if (!GCommandLineOptions.headless)
+	{
+		enableDebugging = true;
+	}
+#endif
+
+	auto device = std::make_unique<RenderDevice>(static_cast<HWND>(window->GetHandle()), false, enableDebugging);
+	Renderer::Get().Initialize(std::move(window), std::move(device), registry);
+
+	// The input requires the user interface to be created first.
+	Input::Initialize(Renderer::Get().window->GetHandle());
+
+	// Disable editor in headless mode.
+	if (GCommandLineOptions.headless)
+	{
+		Editor::Get().enabled = false;
+	}
+
+	AssetManager::Get().Initialize(Renderer::Get().device.get());
+
+	// Check if a specific scene has been requested, otherwise go to the default.
+	if (GCommandLineOptions.scene.has_value())
+	{
+		std::filesystem::path scenePath = *GCommandLineOptions.scene;
+		if (scenePath.is_relative())
+		{
+			scenePath = Config::scenesPath / scenePath;
+		}
+
+		if (!Scene::Load(registry, scenePath))
+		{
+			return false;
+		}
+	}
+
+	else
+	{
+		SetupDefaultScene();
+	}
+
+	// #TODO: this isn't a great solution. The goal here is to ensure that at least one camera in the scene
+	// has control, otherwise the global camera matrices never populate and rendering produces NaN's. Instead,
+	// consider some way to run the camera system once for the first camera in the scene, if no camera has control,
+	// instead of attaching a control component.
+	if (registry.view<const CameraComponent, const ControlComponent>().size_hint() == 0)
+	{
+		auto cameras = registry.view<const CameraComponent>();
+		if (cameras.begin() != cameras.end())
+		{
+			registry.emplace<ControlComponent>(*cameras.begin());
+		}
+
+		else
+		{
+			VGLogWarning(logScene, "No camera found in the scene.");
+		}
+	}
+
+	return true;
+}
+
+// #TODO: refactor.
+bool HandleMessages()
+{
+	VGScopedCPUStat("Window Message Processing");
+
+	MSG message{};
+	while (::PeekMessage(&message, nullptr, 0, 0, PM_REMOVE))
+	{
+		::TranslateMessage(&message);
+		::DispatchMessage(&message);
+
+		if (message.message == WM_QUIT)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool EngineLoop()
+{
+	// Headless mode runs a slightly different loop.
+	if (GCommandLineOptions.headless)
+	{
+		const auto& output = *GCommandLineOptions.output;
+		const uint32_t captureFrame = GCommandLineOptions.delayFrames;
+		constexpr float fixedDelta = 1.f / 60.f;  // Make temporal effects consistent.
+
+		for (uint32_t frame = 0; ; ++frame)
+		{
+			bool quit = HandleMessages();
+			if (quit)
+			{
+				// Failed to capture.
+				return false;
+			}
+
+			// #TODO: Core systems needs to be refactored out, this is the same in headless and interactive.
+
+			AssetManager::Get().Update();
+
+			// Note: skip ControlSystem, this isn't interactive.
+			CameraSystem::Update(registry, fixedDelta);
+			TimeOfDaySystem::Update(registry, fixedDelta);
+
+			// Request at the beginning of rendering.
+			if (frame == captureFrame)
+			{
+				Renderer::Get().RequestCapture(output);
+			}
+
+			Renderer::Get().Render(registry);
+			Renderer::Get().device->AdvanceCPU();
+
+			if (frame == captureFrame)
+			{
+				break;
+			}
+		}
+
+		return Renderer::Get().CaptureSucceeded();
+	}
 
 	auto frameBegin = std::chrono::high_resolution_clock::now();
 	float lastDeltaTime = 0.f;
 
 	while (true)
 	{
+		bool quit = HandleMessages();
+		if (quit)
 		{
-			VGScopedCPUStat("Window Message Processing");
-
-			MSG message{};
-			if (::PeekMessage(&message, nullptr, 0, 0, PM_REMOVE))
-			{
-				::TranslateMessage(&message);
-				::DispatchMessage(&message);
-			}
-
-			if (message.message == WM_QUIT)
-			{
-				return;
-			}
+			break;
 		}
 
 		AssetManager::Get().Update();
@@ -335,8 +462,13 @@ int32_t EngineMain()
 {
 	RegisterCrashHandlers();
 
-	EngineBoot();
-	EngineLoop();
+	auto healthy = true;
+	healthy = EngineBoot();
+	if (!healthy)
+		return 1;
+	healthy = EngineLoop();
+	if (!healthy)
+		return 1;
 	EngineShutdown();
 
 	return 0;

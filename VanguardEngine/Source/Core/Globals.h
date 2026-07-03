@@ -2,9 +2,11 @@
 
 #pragma once
 
+#include <Core/CommandLine.h>
+
 #include <vector>
 #include <string>
 #include <thread>
 
-inline std::vector<std::wstring> GCommandLineArgs;
+inline CommandLineOptions GCommandLineOptions;
 inline std::vector<std::thread::id> GProcessThreads;

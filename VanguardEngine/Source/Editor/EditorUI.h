@@ -3,6 +3,7 @@
 #pragma once
 
 #include <Rendering/ResourceHandle.h>
+#include <Rendering/TextureCapture.h>
 #include <Scene/SceneManager.h>
 
 #include <entt/entt.hpp>
@@ -90,10 +91,7 @@ private:
 	// probably handle this seamlessly. For instance, a pass could request a texture resource
 	// as CPU readback and all the sync + state management is handled by the graph.
 	std::optional<std::filesystem::path> pendingSavePath;
-	BufferHandle pendingSaveReadback;
-	uint32_t pendingSaveWidth = 0;
-	uint32_t pendingSaveHeight = 0;
-	uint32_t pendingSaveRowPitch = 0;
+	TextureCapture::PendingReadback pendingSaveReadback;
 	bool pendingSaveCaptureEnqueued = false;
 
 	// Scene context menu state.

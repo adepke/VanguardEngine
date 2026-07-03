@@ -39,7 +39,7 @@ public:
 	std::function<void(uint32_t, uint32_t)> onSizeChanged;
 
 public:
-	WindowFrame(const std::wstring& title, uint32_t inWidth, uint32_t inHeight);
+	WindowFrame(const std::wstring& title, uint32_t inWidth, uint32_t inHeight, bool visible = true);
 	~WindowFrame();
 
 	void SetTitle(const std::wstring& title);

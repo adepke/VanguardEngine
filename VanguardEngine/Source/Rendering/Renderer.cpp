@@ -12,6 +12,7 @@
 #include <Core/Config.h>
 #include <Rendering/RenderUtils.h>
 #include <Rendering/DebugDraw.h>
+#include <Rendering/TextureCapture.h>
 #include <Editor/Editor.h>
 #include <Utility/Math.h>
 
@@ -746,6 +747,19 @@ void Renderer::Render(entt::registry& registry)
 	// #TODO: Don't have this here.
 	Editor::Get().Render(graph, *device, *this, *graph.resourceManager, registry, cameraBufferTag, depthStencilTag, outputLDRTag, backBufferTag, clusterResources, cloudResources.weather);
 
+	// #TODO: bundle this into the present pass?
+	if (capturePending)
+	{
+		auto& capturePass = graph.AddPass("Frame Capture", ExecutionQueue::Graphics);
+		capturePass.Read(outputLDRTag, ResourceBind::Common);
+		// Similar to the present pass, use the back buffer to ensure this pass runs at the end of the graph.
+		capturePass.Read(backBufferTag, ResourceBind::Common);
+		capturePass.Bind([&](CommandList& list, RenderPassResources& resources)
+		{
+			pendingCapture = TextureCapture::Enqueue(*device, list, resources.GetTexture(outputLDRTag));
+		});
+	}
+
 	auto& presentPass = graph.AddPass("Present", ExecutionQueue::Graphics);
 	presentPass.Read(backBufferTag, ResourceBind::Common);
 	presentPass.Bind([](CommandList& list, RenderPassResources& resources)
@@ -760,6 +774,22 @@ void Renderer::Render(entt::registry& registry)
 
 	device->Present();
 	device->AdvanceGPU();
+
+	if (capturePending)
+	{
+		// Lists executed, now safe the resolve.
+		const auto pngBytes = TextureCapture::Resolve(*device, pendingCapture);
+		lastCaptureSucceeded = TextureCapture::WritePngFile(capturePath, pngBytes);
+		if (lastCaptureSucceeded)
+		{
+			VGLog(logRendering, "Captured frame to '{}'.", capturePath.generic_wstring());
+		}
+		else
+		{
+			VGLogError(logRendering, "Failed to capture frame to '{}'.", capturePath.generic_wstring());
+		}
+		capturePending = false;
+	}
 
 	Editor::Get().Update(*device, registry);
 
@@ -807,4 +837,11 @@ void Renderer::ReloadShaderPipelines()
 void Renderer::ResetAppTime()
 {
 	appTime = 0;
+}
+
+void Renderer::RequestCapture(const std::filesystem::path& path)
+{
+	capturePath = path;
+	capturePending = true;
+	lastCaptureSucceeded = false;
 }

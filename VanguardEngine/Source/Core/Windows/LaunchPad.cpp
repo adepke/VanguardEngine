@@ -2,6 +2,7 @@
 
 #include <Core/Engine.h>
 #include <Core/Globals.h>
+#include <Core/CommandLine.h>
 //#include <Core/Windows/WindowsMinimal.h>  // We actually can't include this since we need some API that's excluded from lean and mean.
 
 #define NOMINMAX
@@ -11,19 +12,22 @@
 
 #include <thread>
 
-void ParseCommandLine()
+std::vector<std::wstring> GetArguments()
 {
 	VGScopedCPUStat("Parse Command Line");
 
 	int count = 0;
 	auto** argV = ::CommandLineToArgvW(::GetCommandLine(), &count);
+	std::vector<std::wstring> args;
 
 	for (int i = 0; i < count; ++i)
 	{
-		GCommandLineArgs.push_back(argV[i]);
+		args.emplace_back(argV[i]);
 	}
 
 	::LocalFree(argV);
+
+	return std::move(args);
 }
 
 VGWarningPush
@@ -31,7 +35,8 @@ VGWarningDisable(4100, unused-parameter)
 int WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrevInstance, _In_ LPSTR lpCmdLine, _In_ int nShowCmd)
 VGWarningPop
 {
-	ParseCommandLine();
+	const auto args = GetArguments();
+	ParseCommandLineOptions(args);
 
 	GProcessThreads.emplace_back(std::this_thread::get_id());
 

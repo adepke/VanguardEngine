@@ -81,7 +81,7 @@ int64_t __stdcall WndProc(void* hWnd, uint32_t msg, uint64_t wParam, int64_t lPa
 	return Input::ProcessWindowMessage(hWnd, msg, wParam, lParam) ? 0 : ::DefWindowProc(static_cast<HWND>(hWnd), msg, wParam, lParam);
 }
 
-WindowFrame::WindowFrame(const std::wstring& title, uint32_t inWidth, uint32_t inHeight)
+WindowFrame::WindowFrame(const std::wstring& title, uint32_t inWidth, uint32_t inHeight, bool visible)
 {
 	VGScopedCPUStat("Create Window");
 
@@ -93,6 +93,9 @@ WindowFrame::WindowFrame(const std::wstring& title, uint32_t inWidth, uint32_t i
 	const auto moduleHandle = ::GetModuleHandle(nullptr);
 
 	auto windowRect{ CreateCenteredRect(width, height, fullscreen) };
+
+	// Headless rendering keeps the window (the swap chain needs the HWND) but never shows it.
+	const auto effectiveStyle = visible ? windowStyle : (windowStyle & ~WS_VISIBLE);
 
 	WNDCLASSEX windowDesc{};
 	windowDesc.cbSize = sizeof(windowDesc);
@@ -114,7 +117,7 @@ WindowFrame::WindowFrame(const std::wstring& title, uint32_t inWidth, uint32_t i
 		windowStyleEx,
 		windowDesc.lpszClassName,
 		title.c_str(),
-		windowStyle,
+		effectiveStyle,
 		windowRect.left,
 		windowRect.top,
 		windowRect.right - windowRect.left,

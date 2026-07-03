@@ -727,47 +727,8 @@ void EditorUI::CaptureThumbnail(RenderDevice& device, CommandList& list, Texture
 		return;
 	}
 
-	auto& ldrComponent = resourceManager.Get(ldr);
-
-	// Walk the D3D12 footprint to learn the row pitch that the GPU will use when copying
-	// into a buffer. This is typically aligned up to D3D12_TEXTURE_DATA_PITCH_ALIGNMENT
-	// (256 bytes), so the readback buffer is usually larger than width * height * bpp.
-	const auto resourceDesc = ldrComponent.Native()->GetDesc();
-	D3D12_PLACED_SUBRESOURCE_FOOTPRINT footprint{};
-	uint64_t requiredSize = 0;
-	device.Native()->GetCopyableFootprints(&resourceDesc, 0, 1, 0, &footprint, nullptr, nullptr, &requiredSize);
-
-	pendingSaveWidth = ldrComponent.description.width;
-	pendingSaveHeight = ldrComponent.description.height;
-	pendingSaveRowPitch = footprint.Footprint.RowPitch;
-
-	BufferDescription readbackDesc{};
-	readbackDesc.updateRate = ResourceFrequency::Readback;
-	readbackDesc.bindFlags = 0;
-	readbackDesc.accessFlags = AccessFlag::CPURead;
-	readbackDesc.size = static_cast<size_t>(requiredSize);
-	readbackDesc.stride = 1;
-	pendingSaveReadback = resourceManager.Create(readbackDesc, VGText("Editor Thumbnail"));
-
-	// Transition the texture to COPY_SOURCE, all other UI work must be completed before this.
-	list.TransitionBarrier(ldr, D3D12_RESOURCE_STATE_COPY_SOURCE);
-	list.FlushBarriers();
-
-	auto& readbackComponent = resourceManager.Get(pendingSaveReadback);
-
-	D3D12_TEXTURE_COPY_LOCATION sourceCopy{};
-	sourceCopy.pResource = ldrComponent.Native();
-	sourceCopy.Type = D3D12_TEXTURE_COPY_TYPE_SUBRESOURCE_INDEX;
-	sourceCopy.SubresourceIndex = 0;
-
-	D3D12_TEXTURE_COPY_LOCATION destCopy{};
-	destCopy.pResource = readbackComponent.Native();
-	destCopy.Type = D3D12_TEXTURE_COPY_TYPE_PLACED_FOOTPRINT;
-	destCopy.PlacedFootprint = footprint;
-
-	list.Native()->CopyTextureRegion(&destCopy, 0, 0, 0, &sourceCopy, nullptr);
-
-	pendingSaveCaptureEnqueued = true;
+	pendingSaveReadback = TextureCapture::Enqueue(device, list, ldr);
+	pendingSaveCaptureEnqueued = pendingSaveReadback.valid;
 }
 
 void EditorUI::FlushPendingSave(RenderDevice& device, entt::registry& registry)
@@ -778,61 +739,14 @@ void EditorUI::FlushPendingSave(RenderDevice& device, entt::registry& registry)
 		return;
 	}
 
-	// Full sync on the GPU to ensure the readback was populated. Pretty terrible but thumbnails
-	// don't get saved often so good enough for now.
-	device.Synchronize();
-
-	auto& resourceManager = device.GetResourceManager();
-
-	std::vector<uint8_t> rawBytes;
-	resourceManager.Read(pendingSaveReadback, rawBytes);
-
-	std::vector<uint8_t> packed;
-	if (!rawBytes.empty() && pendingSaveWidth > 0 && pendingSaveHeight > 0)
-	{
-		// Strip the GPU row pitch padding so what we hand to stb_image_write is a tightly
-		// packed RGBA8 buffer matching the texture's logical width.
-		const size_t tightRowBytes = static_cast<size_t>(pendingSaveWidth) * 4;
-		packed.resize(tightRowBytes * pendingSaveHeight);
-		for (uint32_t row = 0; row < pendingSaveHeight; ++row)
-		{
-			std::memcpy(
-				packed.data() + row * tightRowBytes,
-				rawBytes.data() + static_cast<size_t>(row) * pendingSaveRowPitch,
-				tightRowBytes);
-		}
-	}
-
-	std::vector<uint8_t> pngBytes;
-	if (!packed.empty())
-	{
-		const auto writeFunction = [](void* context, void* data, int size)
-		{
-			auto* output = static_cast<std::vector<uint8_t>*>(context);
-			const auto* bytes = static_cast<const uint8_t*>(data);
-			output->insert(output->end(), bytes, bytes + size);
-		};
-
-		stbi_write_png_to_func(
-			writeFunction, &pngBytes,
-			static_cast<int>(pendingSaveWidth),
-			static_cast<int>(pendingSaveHeight),
-			4,
-			packed.data(),
-			static_cast<int>(pendingSaveWidth * 4));
-	}
+	const std::vector<uint8_t> pngBytes = TextureCapture::Resolve(device, pendingSaveReadback);
 
 	Scene::Save(registry, *pendingSavePath, pngBytes);
 
-	// Tear down the readback buffer and reset the state machine. Also invalidate the
-	// cached scene list so the newly-saved scene (and its thumbnail) appear in the
-	// selector on the next frame.
-	resourceManager.Destroy(pendingSaveReadback);
+	// Reset the state machine. Also invalidate the cached scene list so the newly-saved scene
+	// (and its thumbnail) appear in the selector on the next frame.
 	pendingSavePath.reset();
 	pendingSaveCaptureEnqueued = false;
-	pendingSaveWidth = 0;
-	pendingSaveHeight = 0;
-	pendingSaveRowPitch = 0;
 
 	refreshScenes = true;
 }
