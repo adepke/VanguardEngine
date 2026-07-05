@@ -380,7 +380,7 @@ void Atmosphere::Initialize(RenderDevice* inDevice, entt::registry& registry)
 	luminanceTexture = device->GetResourceManager().Create(luminanceDesc, VGText("Atmosphere luminance"));
 
 	XMFLOAT3 rayleighScattering = { 0.005802f, 0.013558f, 0.0331f };
-	float mieScattering = 0.003996f * 1.2f;
+	float mieScattering = 0.003996f * 1.2f * 8.f;  // Multiply by 8 to match editor defaults.
 	float mieExtinction = 1.11f * mieScattering;
 	XMFLOAT3 ozoneAbsorption = { 0.0020556f, 0.0049788f, 0.0002136f };  // Frostbite's.
 	//XMFLOAT3 ozoneAbsorption = { 0.00065f, 0.001881f, 0.000085f };  // Bruneton's.
@@ -536,7 +536,7 @@ void Atmosphere::Render(RenderGraph& graph, Clouds& clouds, AtmosphereResources 
 }
 
 std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(RenderGraph& graph, AtmosphereResources resourceHandles, RenderResource cameraBuffer,
-	entt::registry& registry)
+	entt::registry& registry, float globalWeatherCoverage)
 {
 	const auto luminanceTag = graph.Import(luminanceTexture);
 
@@ -555,7 +555,7 @@ std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(Rende
 	luminancePass.Read(resourceHandles.scatteringHandle, ResourceBind::SRV);
 	luminancePass.Read(resourceHandles.irradianceHandle, ResourceBind::SRV);
 	luminancePass.Write(luminanceTag, luminanceView);
-	luminancePass.Bind([&, cameraBuffer, resourceHandles, luminanceTag, solarZenithAngle](CommandList& list, RenderPassResources& resources)
+	luminancePass.Bind([&, cameraBuffer, resourceHandles, luminanceTag, solarZenithAngle, globalWeatherCoverage](CommandList& list, RenderPassResources& resources)
 	{
 		struct BindData
 		{
@@ -567,6 +567,7 @@ std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(Rende
 			uint32_t luminanceTexture;
 			uint32_t cameraBuffer;
 			uint32_t cameraIndex;
+			float globalWeatherCoverage;
 		} bindData;
 
 		bindData.atmosphere = model;
@@ -577,16 +578,12 @@ std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(Rende
 		bindData.luminanceTexture = resources.Get(luminanceTag);
 		bindData.cameraBuffer = resources.Get(cameraBuffer);
 		bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
+		bindData.globalWeatherCoverage = globalWeatherCoverage;
 
 		list.BindPipeline(luminancePrecomputeLayout);
 		list.BindConstants("bindData", bindData);
 
 		list.Dispatch(luminanceTextureSize / 8, luminanceTextureSize / 8, 6);
-
-		list.UAVBarrier(luminanceTexture);
-		list.FlushBarriers();
-
-		device->GetResourceManager().GenerateMipmaps(list, luminanceTexture);
 	});
 
 	// Gather sky ambient lighting at multiple probes, captured in spherical harmonics.
@@ -628,4 +625,17 @@ std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(Rende
 	});
 
 	return std::make_pair(luminanceTag, skyAmbient);
+}
+
+void Atmosphere::GenerateLuminanceMips(RenderGraph& graph, RenderResource luminanceTag)
+{
+	auto& mipPass = graph.AddPass("Atmosphere Luminance Mip Pass", ExecutionQueue::Compute);
+	mipPass.Write(luminanceTag, TextureView{}.UAV("", 0));
+	mipPass.Bind([this](CommandList& list, RenderPassResources& resources)
+	{
+		list.UAVBarrier(luminanceTexture);
+		list.FlushBarriers();
+
+		device->GetResourceManager().GenerateMipmaps(list, luminanceTexture);
+	});
 }

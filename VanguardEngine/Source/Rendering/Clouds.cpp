@@ -64,6 +64,7 @@ Clouds::~Clouds()
 	device->GetResourceManager().Destroy(baseShapeNoise);
 	device->GetResourceManager().Destroy(detailShapeNoise);
 	device->GetResourceManager().Destroy(curlShapeNoise);
+	device->GetResourceManager().Destroy(environmentClouds);
 }
 
 void Clouds::Initialize(RenderDevice* inDevice)
@@ -73,6 +74,7 @@ void Clouds::Initialize(RenderDevice* inDevice)
 	CvarCreate("cloudRayMarchQuality", "Controls the ray march quality of the clouds. Increasing quality degrades performance. 0=lowDetail, 1=default, 2=groundTruth", 1);
 	CvarCreate("cloudRenderScale", "Controls the render scale of the volumetric clouds", 0.25f);
 	CvarCreate("cloudDebugVisualization", "Cloud debug visualisation: 0=off, 1=transmittance, 2=march count, 3=normal vector", 0);
+	CvarCreate("cloudReflectionsEnabled", "Bake clouds into the IBL luminance cube so they appear in reflections", 1);
 
 	weatherLayout = RenderPipelineLayout{}
 		.ComputeShader({ "Clouds/Weather", "Main" });
@@ -85,6 +87,16 @@ void Clouds::Initialize(RenderDevice* inDevice)
 
 	curlNoiseLayout = RenderPipelineLayout{}
 		.ComputeShader({ "Clouds/Shapes", "CurlNoiseMain" });
+
+	environmentBakeLayout = RenderPipelineLayout{}
+		.ComputeShader({ "Clouds/EnvironmentBake", "Main" })
+		.Macro({ "CLOUDS_LOW_DETAIL" })
+		.Macro({ "CLOUDS_MS_OCTAVES", 1 });
+
+	environmentCompositeLayout = RenderPipelineLayout{}
+		.ComputeShader({ "Clouds/EnvironmentBake", "CompositeMain" })
+		.Macro({ "CLOUDS_LOW_DETAIL" })  // Use same macros as environmentBakeLayout
+		.Macro({ "CLOUDS_MS_OCTAVES", 1 });
 
 	TextureDescription weatherDesc{
 		.bindFlags = BindFlag::ShaderResource | BindFlag::UnorderedAccess,
@@ -127,6 +139,17 @@ void Clouds::Initialize(RenderDevice* inDevice)
 	};
 	curlShapeNoise = device->GetResourceManager().Create(curlShapeNoiseDesc, VGText("Clouds curl shape noise"));
 
+	TextureDescription environmentCloudsDesc{
+		.bindFlags = BindFlag::ShaderResource | BindFlag::UnorderedAccess,
+		.accessFlags = AccessFlag::GPUWrite,
+		.width = environmentCloudsSize,
+		.height = environmentCloudsSize,
+		.depth = 6,  // Texture cube.
+		.format = DXGI_FORMAT_R16G16B16A16_FLOAT,
+		.array = true
+	};
+	environmentClouds = device->GetResourceManager().Create(environmentCloudsDesc, VGText("Clouds environment cube"));
+
 	cirrusClouds = AssetLoader::LoadTexture(*device, Config::utilitiesPath / "Cirrus4k.png", false);
 
 	lastFrameScatteringUpscaled.id = 0;
@@ -134,7 +157,7 @@ void Clouds::Initialize(RenderDevice* inDevice)
 	lastFrameVisibilityUpscaled.id = 0;
 }
 
-CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, const Atmosphere& atmosphere, const RenderResource cameraBuffer, const RenderResource depthStencil, const RenderResource atmosphereIrradiance)
+CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, const Atmosphere& atmosphere, const RenderResource cameraBuffer, const RenderResource depthStencil, const RenderResource atmosphereIrradiance, const RenderResource luminanceTag)
 {
 	const auto weatherTag = graph.Import(weather);
 	const auto baseShapeNoiseTag = graph.Import(baseShapeNoise);
@@ -167,6 +190,7 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 		});
 
 		dirty = false;
+		environmentBakeCounter = 0;  // Force a full bake.
 	}
 
 	auto& weatherPass = graph.AddPass("Weather Pass", ExecutionQueue::Compute);
@@ -174,6 +198,84 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 	weatherPass.Bind([this, weatherTag](CommandList& list, RenderPassResources& resources)
 	{
 		GenerateWeather(list, resources.Get(weatherTag));
+	});
+
+	// Bind data is shared in both the bake and composite passes.
+	struct EnvironmentBindData
+	{
+		uint32_t luminanceTexture;
+		uint32_t environmentCloudsTexture;
+		uint32_t weatherTexture;
+		uint32_t baseShapeNoiseTexture;
+		uint32_t atmosphereIrradianceBuffer;
+		uint32_t cameraBuffer;
+		uint32_t cameraIndex;
+		float solarZenithAngle;
+		XMFLOAT2 wind;
+		float time;
+		float densityMultiplier;
+		uint32_t baseFace;
+		uint32_t jitterFrame;
+		float blendFactor;
+	};
+
+	const bool bakeEnabled = *CvarGet("cloudReflectionsEnabled", int) > 0;
+	const uint32_t luminanceSize = atmosphere.GetLuminanceTextureSize();
+	const auto environmentCloudsTag = graph.Import(environmentClouds);
+
+	auto& environmentBakePass = graph.AddPass("Clouds Environment Bake Pass", ExecutionQueue::Compute, bakeEnabled);
+	environmentBakePass.Read(cameraBuffer, ResourceBind::SRV);
+	environmentBakePass.Read(weatherTag, ResourceBind::SRV);
+	environmentBakePass.Read(baseShapeNoiseTag, ResourceBind::SRV);  // Low detail marching.
+	environmentBakePass.Read(atmosphereIrradiance, ResourceBind::SRV);
+	environmentBakePass.Write(environmentCloudsTag, TextureView{}.UAV("", 0));
+	environmentBakePass.Bind([this, cameraBuffer, weatherTag, baseShapeNoiseTag, curlShapeNoiseTag, atmosphereIrradiance,
+		environmentCloudsTag, solarZenithAngle, counter=environmentBakeCounter](CommandList& list, RenderPassResources& resources)
+	{
+		list.BindPipeline(environmentBakeLayout);
+
+		// A full bake happens when we don't have history to reuse, so render all faces with no blending in one frame.
+		bool fullBake = counter == 0;
+
+		EnvironmentBindData bindData{};
+		bindData.environmentCloudsTexture = resources.Get(environmentCloudsTag);
+		bindData.weatherTexture = resources.Get(weatherTag);
+		bindData.baseShapeNoiseTexture = resources.Get(baseShapeNoiseTag);
+		bindData.atmosphereIrradianceBuffer = resources.Get(atmosphereIrradiance);
+		bindData.cameraBuffer = resources.Get(cameraBuffer);
+		bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
+		bindData.solarZenithAngle = solarZenithAngle;
+		bindData.time = Renderer::Get().GetAppTime();
+		bindData.wind = { windDirection.x * windStrength, windDirection.y * windStrength };
+		bindData.densityMultiplier = densityMultiplier;
+		bindData.baseFace = counter % 6;
+		bindData.jitterFrame = counter;
+		bindData.blendFactor = fullBake ? 1.f : environmentBlendFactor;
+
+		list.BindConstants("bindData", bindData);
+
+		list.Dispatch(environmentCloudsSize / 8, environmentCloudsSize / 8, fullBake ? 6 : 1);
+	});
+
+	environmentBakeCounter++;
+
+	// Composite the cloud environment cube on top of the sky luminance cube. The two cubes are separated to allow proper
+	// temporal accumulation of the cloud cube, previous implementation using one-shot per face needed too many raymarches to
+	// get decent quality. Note this pass must run before IBL convolution.
+	auto& environmentCompositePass = graph.AddPass("Clouds Environment Composite Pass", ExecutionQueue::Compute, bakeEnabled);
+	environmentCompositePass.Read(environmentCloudsTag, ResourceBind::SRV);
+	environmentCompositePass.Write(luminanceTag, TextureView{}.UAV("", 0));
+	environmentCompositePass.Bind([this, environmentCloudsTag, luminanceTag, luminanceSize](CommandList& list, RenderPassResources& resources)
+	{
+		list.BindPipeline(environmentCompositeLayout);
+
+		EnvironmentBindData bindData{};
+		bindData.luminanceTexture = resources.Get(luminanceTag);
+		bindData.environmentCloudsTexture = resources.Get(environmentCloudsTag);
+
+		list.BindConstants("bindData", bindData);
+
+		list.Dispatch(luminanceSize / 8, luminanceSize / 8, 6);
 	});
 
 	const float cloudRenderScale = *CvarGet("cloudRenderScale", float);
@@ -290,14 +392,13 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 	}, VGText("Clouds visibility map"));
 	visibilityPass.Read(cameraBuffer, ResourceBind::SRV);
 	visibilityPass.Read(weatherTag, ResourceBind::SRV);
-	visibilityPass.Read(baseShapeNoiseTag, ResourceBind::SRV);
-	visibilityPass.Read(curlShapeNoiseTag, ResourceBind::SRV);
+	visibilityPass.Read(baseShapeNoiseTag, ResourceBind::SRV);  // Low detail marching.
 	visibilityPass.Read(depthStencil, ResourceBind::SRV);
 	visibilityPass.Read(blueNoiseTag, ResourceBind::SRV);
 	visibilityPass.Read(atmosphereIrradiance, ResourceBind::SRV);
 	visibilityPass.Write(cloudVisibility, TextureView{}
 		.UAV("", 0));
-	visibilityPass.Bind([this, cameraBuffer, weatherTag, baseShapeNoiseTag, curlShapeNoiseTag, depthStencil, blueNoiseTag, atmosphereIrradiance,
+	visibilityPass.Bind([this, cameraBuffer, weatherTag, baseShapeNoiseTag, depthStencil, blueNoiseTag, atmosphereIrradiance,
 		cloudVisibility, solarZenithAngle](CommandList& list, RenderPassResources& resources)
 	{
 		auto visibilityLayout = RenderPipelineLayout{}
@@ -319,7 +420,6 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 			uint32_t outputTexture;
 			uint32_t weatherTexture;
 			uint32_t baseShapeNoiseTexture;
-			uint32_t curlShapeNoiseTexture;
 			uint32_t cameraBuffer;
 			uint32_t cameraIndex;
 			float solarZenithAngle;
@@ -327,15 +427,14 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 			uint32_t geometryDepthTexture;
 			uint32_t blueNoiseTexture;
 			uint32_t atmosphereIrradianceBuffer;
-			float time;
 			XMFLOAT2 wind;
+			float time;
 			uint32_t upscaledResolution[2];
 		} bindData;
 
 		bindData.outputTexture = resources.Get(cloudVisibility);
 		bindData.weatherTexture = resources.Get(weatherTag);
 		bindData.baseShapeNoiseTexture = resources.Get(baseShapeNoiseTag);
-		bindData.curlShapeNoiseTexture = resources.Get(curlShapeNoiseTag);
 		bindData.cameraBuffer = resources.Get(cameraBuffer);
 		bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
 		bindData.solarZenithAngle = solarZenithAngle;

@@ -12,7 +12,6 @@ struct BindData
 	uint outputTexture;
 	uint weatherTexture;
 	uint baseShapeNoiseTexture;
-	uint curlNoiseTexture;
 	uint cameraBuffer;
 	uint cameraIndex;
 	float solarZenithAngle;
@@ -20,8 +19,8 @@ struct BindData
 	uint geometryDepthTexture;
 	uint blueNoiseTexture;
 	uint atmosphereIrradianceBuffer;
-	float time;
 	float2 wind;
+	float time;
 	uint2 upscaledResolution;
 };
 
@@ -36,7 +35,7 @@ float2 RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uin
 
 	Texture3D<float> baseShapeNoiseTexture = ResourceDescriptorHeap[bindData.baseShapeNoiseTexture];
 	Texture3D<float> detailShapeNoiseTexture;  // Null texture (visibility always marches at low detail).
-	Texture3D<float4> curlNoiseTexture = ResourceDescriptorHeap[bindData.curlNoiseTexture];
+	Texture3D<float4> curlNoiseTexture;  // Null texture (visibility always marches at low detail).
 	StructuredBuffer<float3> atmosphereIrradiance = ResourceDescriptorHeap[bindData.atmosphereIrradianceBuffer];
 	Texture2D<float3> weatherTexture = ResourceDescriptorHeap[bindData.weatherTexture];
 	Texture2D<float> geometryDepthTexture = ResourceDescriptorHeap[bindData.geometryDepthTexture];

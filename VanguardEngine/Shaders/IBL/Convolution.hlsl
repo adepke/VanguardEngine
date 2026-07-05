@@ -64,8 +64,6 @@ void IrradianceMain(uint3 dispatchId : SV_DispatchThreadID)
 [numthreads(8, 8, 1)]
 void PrefilterMain(uint3 dispatchId : SV_DispatchThreadID)
 {
-	// #TODO: Render a low-resolution view of the clouds here to capture them for reflections.
-	
 	// Uses split sum approximation by Epic Games, see: https://blog.selfshadow.com/publications/s2013-shading-course/karis/s2013_pbs_epic_notes_v2.pdf
 	
 	RWTexture2DArray<float4> baseMip = ResourceDescriptorHeap[bindData.prefilterMips[0]];

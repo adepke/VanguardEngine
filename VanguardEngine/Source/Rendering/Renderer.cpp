@@ -559,16 +559,20 @@ void Renderer::Render(entt::registry& registry)
 	
 	// #TODO: Don't have this here.
 	const auto atmosphereResources = atmosphere.ImportResources(graph);
-	const auto [luminanceTexture, atmosphereIrradiance] = atmosphere.RenderEnvironmentMap(graph, atmosphereResources, cameraBufferTag, registry);
-
-	// #TODO: Don't have this here.
-	const auto iblResources = ibl.UpdateLuts(graph, luminanceTexture, cameraBufferTag);
+	const auto [luminanceTexture, atmosphereIrradiance] = atmosphere.RenderEnvironmentMap(graph, atmosphereResources, cameraBufferTag, registry, clouds.coverage);
 
 	// #TODO: Don't have this here.
 	occlusionCulling.Render(graph, cameraFrozen, depthStencilTag);
 
 	// #TODO: Don't have this here.
-	const auto cloudResources = clouds.Render(graph, registry, atmosphere, cameraBufferTag, depthStencilTag, atmosphereIrradiance);
+	// Note clouds must run before IBL since it contributes to the luminance cube.
+	const auto cloudResources = clouds.Render(graph, registry, atmosphere, cameraBufferTag, depthStencilTag, atmosphereIrradiance, luminanceTexture);
+
+	// After all environment map contributions are done, build the mip chain and prepare for IBL convolution.
+	atmosphere.GenerateLuminanceMips(graph, luminanceTexture);
+
+	// #TODO: Don't have this here.
+	const auto iblResources = ibl.UpdateLuts(graph, luminanceTexture, cameraBufferTag);
 
 	auto& forwardPass = graph.AddPass("Forward Pass", ExecutionQueue::Graphics);
 	const auto outputHDRTag = forwardPass.Create(TransientTextureDescription{

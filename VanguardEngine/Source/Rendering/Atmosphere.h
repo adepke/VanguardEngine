@@ -97,7 +97,8 @@ private:
 
 	RenderPipelineLayout skyAmbientPrecomputeLayout;
 
-	static constexpr uint32_t luminanceTextureSize = 1024;
+	// IBL Prefilter base mip is 128x128, so could probably cut this down to that size with no visible loss?
+	static constexpr uint32_t luminanceTextureSize = 256;
 	static_assert(luminanceTextureSize % 8 == 0, "luminanceTextureSize must be evenly divisible by 8.");
 
 	TextureHandle luminanceTexture;
@@ -111,6 +112,9 @@ public:
 	void Render(RenderGraph& graph, Clouds& clouds, AtmosphereResources resourceHandles, CloudResources cloudResources, RenderResource cameraBuffer,
 		RenderResource depthStencil, RenderResource outputHDRs, entt::registry& registry);
 	std::pair<RenderResource, RenderResource> RenderEnvironmentMap(RenderGraph& graph, AtmosphereResources resourceHandles, RenderResource cameraBuffer,
-		entt::registry& registry);
+		entt::registry& registry, float globalWeatherCoverage);
+	// Separated from RenderEnvironmentMap so other systems can contribute to the cube before mipmapping.
+	void GenerateLuminanceMips(RenderGraph& graph, RenderResource luminanceTag);
+	uint32_t GetLuminanceTextureSize() const { return luminanceTextureSize; }
 	void MarkModelDirty() { dirty = true; }
 };

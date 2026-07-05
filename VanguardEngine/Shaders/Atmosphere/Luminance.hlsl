@@ -17,6 +17,7 @@ struct BindData
 	uint luminanceTexture;
 	uint cameraBuffer;
 	uint cameraIndex;
+	float globalWeatherCoverage;
 };
 
 ConstantBuffer<BindData> bindData : register(b0);
@@ -42,6 +43,6 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	StructuredBuffer<Camera> cameraBuffer = ResourceDescriptorHeap[bindData.cameraBuffer];
 	Camera camera = cameraBuffer[bindData.cameraIndex];
 	
-	float3 sample = SampleAtmosphere(bindData.atmosphere, camera, direction, sunDirection, false, transmittanceLut, scatteringLut, irradianceLut, bilinearClamp);
+	float3 sample = SampleAtmosphere(bindData.atmosphere, camera, direction, sunDirection, false, bindData.globalWeatherCoverage, transmittanceLut, scatteringLut, irradianceLut, bilinearClamp);
 	luminanceMap[dispatchId] = float4(sample, 0.f);
 }

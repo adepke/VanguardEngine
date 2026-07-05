@@ -827,8 +827,8 @@ float3 GetSolarRadiance(AtmosphereData atmosphere)
 }
 
 float4 GetPlanetSurfaceRadiance(AtmosphereData atmosphere, float3 planetCenter, float3 cameraPosition, float3 rayDirection,
-	float shadowStart, float shadowLength,
-	float3 sunDirection, Texture2D transmittanceLut, Texture3D scatteringLut, Texture2D irradianceLut, SamplerState lutSampler)
+	float shadowStart, float shadowLength, float3 sunDirection, float globalWeatherCoverage, Texture2D transmittanceLut,
+	Texture3D scatteringLut, Texture2D irradianceLut, SamplerState lutSampler)
 {
 	float3 p = cameraPosition - planetCenter;
 	float pDotRay = dot(p, rayDirection);
@@ -843,10 +843,10 @@ float4 GetPlanetSurfaceRadiance(AtmosphereData atmosphere, float3 planetCenter, 
 		float3 skyIrradiance;
 		GetSunAndSkyIrradiance(atmosphere, transmittanceLut, irradianceLut, lutSampler, surfacePoint - planetCenter, surfaceNormal, sunDirection, sunIrradiance, skyIrradiance);
 
-		// #TODO: Compute approximate visibilities.
-		// Sun visibility greatly reduces the brightness of the planet surface, sky visibility has little impact.
+		// #TODO: use CalculateSunVisibility?
 		float sunVisibility = 1.f;
-		float skyVisibility = 1.f;
+		// #TODO: refactor call CalculateSkyVisibility instead
+		float skyVisibility = saturate(1.f - globalWeatherCoverage);
 
 		float3 radiance = atmosphere.surfaceColor * (1.f / pi) * ((sunIrradiance * sunVisibility) + (skyIrradiance * skyVisibility));
 
@@ -873,7 +873,7 @@ float3 ComputeAtmospherePlanetCenter(AtmosphereData atmosphere)
 	//return float3(0.f, 0.f, -atmosphere.radiusBottom);  // World origin is planet surface.
 }
 
-float3 SampleAtmosphere(AtmosphereData atmosphere, Camera camera, float3 direction, float3 sunDirection, bool directSolarRadiance, Texture2D transmittanceLut, Texture3D scatteringLut, Texture2D irradianceLut, SamplerState lutSampler)
+float3 SampleAtmosphere(AtmosphereData atmosphere, Camera camera, float3 direction, float3 sunDirection, bool directSolarRadiance, float globalWeatherCoverage, Texture2D transmittanceLut, Texture3D scatteringLut, Texture2D irradianceLut, SamplerState lutSampler)
 {
 	float3 cameraPosition = ComputeAtmosphereCameraPosition(camera);
 	float3 planetCenter = ComputeAtmospherePlanetCenter(atmosphere);
@@ -894,7 +894,7 @@ float3 SampleAtmosphere(AtmosphereData atmosphere, Camera camera, float3 directi
 		radiance += transmittance * GetSolarRadiance(atmosphere);
 	}
 
-	float4 planetRadiance = GetPlanetSurfaceRadiance(atmosphere, planetCenter, cameraPosition, direction, shadowStart, shadowLength, sunDirection, transmittanceLut, scatteringLut, irradianceLut, lutSampler);
+	float4 planetRadiance = GetPlanetSurfaceRadiance(atmosphere, planetCenter, cameraPosition, direction, shadowStart, shadowLength, sunDirection, globalWeatherCoverage, transmittanceLut, scatteringLut, irradianceLut, lutSampler);
 	radiance = lerp(radiance, planetRadiance.xyz, planetRadiance.w);
 
 	// Native units, apply exposure in post.
