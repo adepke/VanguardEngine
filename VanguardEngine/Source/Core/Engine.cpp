@@ -3,6 +3,7 @@
 #include <Core/Engine.h>
 #include <Core/Base.h>
 #include <Core/Config.h>
+#include <Core/ConsoleVariable.h>
 #include <Rendering/Device.h>
 #include <Rendering/Renderer.h>
 #include <Window/WindowFrame.h>
@@ -278,7 +279,7 @@ bool EngineBoot()
 
 	if (!GCommandLineOptions.valid)
 	{
-		VGLogError(logCore, "Invalid command line arguments. Expected: [--headless] [--output <file.png>] [--delay <frames>] [--scene <file>]");
+		VGLogError(logCore, "Invalid command line arguments. Expected: [--headless] [--output <file.png>] [--delay <frames>] [--scene <file>] [--cvar <name=value>]");
 		return false;
 	}
 
@@ -314,6 +315,13 @@ bool EngineBoot()
 	}
 
 	AssetManager::Get().Initialize(Renderer::Get().device.get());
+
+	// Early out if any registered cvars are invalid. This isn't bulletproof, but it can help catch bad cvars early.
+	if (CvarManager::Get().HasFailedOverride())
+	{
+		VGLogError(logCore, "One or more command line console variable overrides were invalid.");
+		return false;
+	}
 
 	// Check if a specific scene has been requested, otherwise go to the default.
 	if (GCommandLineOptions.scene.has_value())

@@ -8,6 +8,12 @@
 #include <vector>
 #include <string>
 
+struct CommandLineCvarOverride
+{
+	std::wstring name;
+	std::wstring value;
+};
+
 struct CommandLineOptions
 {
 	// Tracks if the options are valid or not.
@@ -26,6 +32,9 @@ struct CommandLineOptions
 
 	// --scene <file>: scene file to load. Relative or absolute.
 	std::optional<std::filesystem::path> scene;
+
+	// --cvar <name=value>: overrides a console variable.
+	std::vector<CommandLineCvarOverride> cvarOverrides;
 };
 
 // Parses GCommandLineArgs into GCommandLineOptions. Safe to call before logging is

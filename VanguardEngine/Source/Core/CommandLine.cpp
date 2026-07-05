@@ -3,6 +3,8 @@
 #include <Core/CommandLine.h>
 #include <Core/Globals.h>
 #include <Core/Misc.h>
+#include <Core/ConsoleVariable.h>
+#include <Utility/StringTools.h>
 
 #include <string>
 #include <algorithm>
@@ -13,6 +15,8 @@ void ParseCommandLineOptions(const std::vector<std::wstring>& args)
 {
 	auto& options = GCommandLineOptions;
 	options = CommandLineOptions{};
+
+	options.valid = true;
 
 	// Skip the executable.
 	for (size_t i = 1; i < args.size(); ++i)
@@ -68,6 +72,26 @@ void ParseCommandLineOptions(const std::vector<std::wstring>& args)
 				options.scene = std::filesystem::path{ value };
 			}
 		}
+		else if (arg == VGText("--cvar"))
+		{
+			// Format: name=value
+			std::wstring value;
+			if (NextValue(value))
+			{
+				const auto equals = value.find(L'=');
+				if (equals == std::wstring::npos || equals == 0 || equals + 1 >= value.size())
+				{
+					options.valid = false;
+				}
+				else
+				{
+					options.cvarOverrides.push_back(CommandLineCvarOverride{
+						.name = value.substr(0, equals),
+						.value = value.substr(equals + 1)
+					});
+				}
+			}
+		}
 	}
 
 	// Check output is a PNG.
@@ -85,6 +109,9 @@ void ParseCommandLineOptions(const std::vector<std::wstring>& args)
 		options.valid = false;
 	}
 
-	options.valid = true;
+	// Register all of the cvar overrides.
+	for (const auto & override : options.cvarOverrides)
+	{
+		CvarManager::Get().AddOverride(WideStr2Str(override.name), WideStr2Str(override.value));
+	}
 }
-

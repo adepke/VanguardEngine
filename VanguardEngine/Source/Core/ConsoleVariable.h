@@ -12,6 +12,8 @@
 #include <unordered_map>
 #include <variant>
 #include <type_traits>
+#include <charconv>
+#include <system_error>
 
 #define CvarCreate(name, description, defaultValue) CvarManager::Get().CreateVariable(name, description, defaultValue)
 #define CvarGet(name, type) CvarManager::Get().GetVariable<type>(name ## _hs)
@@ -54,6 +56,17 @@ class CvarManager : public Singleton<CvarManager>
 private:
 	std::unordered_map<uint32_t, Cvar> cvars;
 	std::array<CvarStorage, 3> storage;
+	// Overrides are consumed during cvar creation.
+	std::unordered_map<uint32_t, std::string> overrides;
+
+	bool failedOverride = false;
+
+	// Attempt to convert a string value to a cvar type.
+	template <typename T>
+	static bool TryParseValue(const std::string& str, T& out);
+
+	template <typename T>
+	void ApplyOverride(uint32_t nameHash, const std::string& name, void* data);
 
 	// Overloads only used by the editor.
 	template <typename T>
@@ -65,6 +78,10 @@ private:
 public:
 	template <typename T>
 	Cvar& CreateVariable(const std::string& name, const std::string& description, const T& defaultValue);
+
+	// Must be called before the underlying variable is created.
+	void AddOverride(const std::string& name, const std::string& value);
+	bool HasFailedOverride() const { return failedOverride; }
 
 	template <typename T>
 	const T* GetVariable(entt::hashed_string name);
@@ -146,7 +163,49 @@ Cvar& CvarManager::CreateVariable(const std::string& name, const std::string& de
 
 	*(T*)data = defaultValue;
 
+	ApplyOverride<T>(hash, name, data);
+
 	return it->second;
+}
+
+template <typename T>
+bool CvarManager::TryParseValue(const std::string& str, T& out)
+{
+	const char* const begin = str.data();
+	const char* const end = str.data() + str.size();
+	const auto [ptr, ec] = std::from_chars(begin, end, out);
+	// Require the entire token to be consumed.
+	return ec == std::errc{} && ptr == end;
+}
+
+template <typename T>
+void CvarManager::ApplyOverride(uint32_t nameHash, const std::string& name, void* data)
+{
+	const auto overrideIt = overrides.find(nameHash);
+	if (overrideIt == overrides.end())
+	{
+		return;
+	}
+
+	if constexpr (std::is_same_v<T, CvarCallableType>)
+	{
+		VGLogError(logCore, "Cvar override for '{}' ignored: function cvars cannot be assigned a value", Str2WideStr(name));
+		failedOverride = true;
+	}
+	else
+	{
+		T parsed{};
+		if (TryParseValue(overrideIt->second, parsed))
+		{
+			*(T*)data = parsed;
+			VGLog(logCore, "Cvar '{}' overridden to value: {}", Str2WideStr(name), parsed);
+		}
+		else
+		{
+			VGLogError(logCore, "Cvar override for '{}' failed: value '{}' is not valid for its type", Str2WideStr(name), Str2WideStr(overrideIt->second));
+			failedOverride = true;
+		}
+	}
 }
 
 template <typename T>
@@ -240,4 +299,10 @@ inline bool CvarManager::ExecuteVariable(uint32_t nameHash)
 	}
 
 	return false;
+}
+
+inline void CvarManager::AddOverride(const std::string& name, const std::string& value)
+{
+	const auto hash = entt::hashed_string::value(name.data(), name.size());
+	overrides[hash] = value;
 }
