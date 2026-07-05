@@ -1,6 +1,9 @@
 // Copyright (c) 2019-2022 Andrew Depke
 
-// This shader draws a ray traced sphere visualizing an evaluated spherical harmonic.
+// This shader draws a ray traced sphere visualizing an environment cubemap (e.g. the IBL
+// luminance or prefilter cube).
+// Set mipLevel to inspect a specific mip / prefilter roughness bin.
+//
 // Example render layout:
 //
 // BlendMode alphaBlend{
@@ -11,17 +14,15 @@
 // 	  .destBlendAlpha = D3D12_BLEND_INV_SRC_ALPHA,
 // 	  .blendOpAlpha = D3D12_BLEND_OP_ADD,
 // };
-// auto shLayout = RenderPipelineLayout{}
-// 	  .VertexShader({ "Utils/SHVisualization", "VSMain" })
-// 	  .PixelShader({ "Utils/SHVisualization", "PSMain" })
+// auto envLayout = RenderPipelineLayout{}
+// 	  .VertexShader({ "Utils/EnvMapVisualization", "VSMain" })
+// 	  .PixelShader({ "Utils/EnvMapVisualization", "PSMain" })
 // 	  .BlendMode(true, alphaBlend)
 // 	  .DepthEnabled(false);
 
 #include "RootSignature.hlsli"
 #include "Camera.hlsli"
 #include "Geometry.hlsli"
-#include "Atmosphere/SkyAmbient.hlsli"
-#include "Utils/SH.hlsli"
 
 struct BindData
 {
@@ -29,8 +30,8 @@ struct BindData
 	float radius;
 	uint cameraBuffer;
 	uint cameraIndex;
-	uint octave;
-	uint shBuffer;
+	uint cubeTexture;
+	float mipLevel;
 };
 
 ConstantBuffer<BindData> bindData : register(b0);
@@ -61,22 +62,22 @@ float4 PSMain(PSInput input) : SV_Target
 {
 	StructuredBuffer<Camera> cameraBuffer = ResourceDescriptorHeap[bindData.cameraBuffer];
 	Camera camera = cameraBuffer[bindData.cameraIndex];
-	StructuredBuffer<float3> shBuffer = ResourceDescriptorHeap[bindData.shBuffer];
-	
+	TextureCube<float4> cubeMap = ResourceDescriptorHeap[bindData.cubeTexture];
+
 	float3 dir = ComputeRayDirection(camera, input.uv);
-	
+
 	float2 solutions;
 	if (RaySphereIntersection(camera.position.xyz, dir, bindData.position, bindData.radius, solutions))
 	{
 		float3 surfacePoint = camera.position.xyz + dir * solutions.x;
 		float3 normal = normalize(surfacePoint - bindData.position);
-		
-		SH::L2_RGB sh = LoadSkySHCloud(shBuffer);
-		float3 radiance = max(SH::Evaluate(sh, normal), 0.xxx);
-		
+
+		// Sample the cube along the surface normal. Swap to reflect(dir, normal) for a chrome-ball look.
+		float3 radiance = cubeMap.SampleLevel(bilinearClamp, normal, bindData.mipLevel).rgb;
+
 		float exposure = 1.f;  // May not need exposure if this is happening before the post process.
 		return float4(radiance * exposure, 1.f);
 	}
-	
+
 	return 0.xxxx;
 }
