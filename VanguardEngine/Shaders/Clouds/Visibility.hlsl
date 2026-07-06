@@ -141,18 +141,22 @@ float2 RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uin
 			}
 		}
 		
+		// Ignore any gap, only affects far horizon clouds so we don't care here.
+		float gapStart = 0.f;
+		float gapEnd = 0.f;
+		
 		// March towards the sun.
 		float3 scatteredLuminance;
 		float transmittance;
 		float depth;  // Kilometers.
 #ifdef CLOUDS_DEBUG_MARCHCOUNT
 		int stepCount = RayMarchInternal(baseShapeNoiseTexture, detailShapeNoiseTexture, curlNoiseTexture, atmosphereIrradiance, weatherTexture,
-			position, sunDirection, 0.f, localMarchStart, localMarchEnd, sunDirection, bindData.wind, bindData.time,
+			position, sunDirection, 0.f, localMarchStart, localMarchEnd, gapStart, gapEnd, sunDirection, bindData.wind, bindData.time,
 			densityMultiplier, scatteredLuminance, transmittance, depth);
 		totalSteps += stepCount;
 #else
 		RayMarchInternal(baseShapeNoiseTexture, detailShapeNoiseTexture, curlNoiseTexture, atmosphereIrradiance, weatherTexture,
-			position, sunDirection, 0.f, localMarchStart, localMarchEnd, sunDirection, bindData.wind, bindData.time,
+			position, sunDirection, 0.f, localMarchStart, localMarchEnd, gapStart, gapEnd, sunDirection, bindData.wind, bindData.time,
 			densityMultiplier, scatteredLuminance, transmittance, depth);
 #endif
 		

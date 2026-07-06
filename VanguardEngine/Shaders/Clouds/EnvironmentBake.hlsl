@@ -43,27 +43,30 @@ void RayMarch(Camera camera, float3 direction, float3 sunDirection, float2 wind,
 	
 	float3 origin = ComputeAtmosphereCameraPosition(camera);
 
+	// #TODO: The march bounds setup is common to a few places, refactor into clouds core and re-use.
 	float marchStart;
 	float marchEnd;
+	float gapStart = 0.f;
+	float gapEnd = 0.f;
 
 	float2 topBoundaryIntersect;
 	if (RaySphereIntersection(origin, direction, planetCenter, planetRadius + cloudLayerTop, topBoundaryIntersect))
 	{
+		marchStart = max(topBoundaryIntersect.x, 0);
+		marchEnd = topBoundaryIntersect.y;
+
 		float2 bottomBoundaryIntersect;
 		if (RaySphereIntersection(origin, direction, planetCenter, planetRadius + cloudLayerBottom, bottomBoundaryIntersect))
 		{
-			float top = all(topBoundaryIntersect > 0) ? min(topBoundaryIntersect.x, topBoundaryIntersect.y) : max(topBoundaryIntersect.x, topBoundaryIntersect.y);
-			float bottom = all(bottomBoundaryIntersect > 0) ? min(bottomBoundaryIntersect.x, bottomBoundaryIntersect.y) : max(bottomBoundaryIntersect.x, bottomBoundaryIntersect.y);
 			if (all(bottomBoundaryIntersect > 0))
-				top = max(0, min(topBoundaryIntersect.x, topBoundaryIntersect.y));
-			marchStart = min(bottom, top);
-			marchEnd = max(bottom, top);
-		}
-		else
-		{
-			// Inside the cloud layer.
-			marchStart = max(topBoundaryIntersect.x, 0);
-			marchEnd = topBoundaryIntersect.y;
+			{
+				gapStart = bottomBoundaryIntersect.x;
+				gapEnd = bottomBoundaryIntersect.y;
+			}
+			else if (bottomBoundaryIntersect.y > 0)
+			{
+				marchStart = max(marchStart, bottomBoundaryIntersect.y);
+			}
 		}
 	}
 	else
@@ -90,7 +93,7 @@ void RayMarch(Camera camera, float3 direction, float3 sunDirection, float2 wind,
 
 	float depth;  // Unused.
 	RayMarchInternal(baseShapeNoiseTexture, detailShapeNoiseTexture, curlNoiseTexture, atmosphereIrradiance, weatherTexture,
-		origin, direction, jitter, marchStart, marchEnd, sunDirection, wind, time, density,
+		origin, direction, jitter, marchStart, marchEnd, gapStart, gapEnd, sunDirection, wind, time, density,
 		scatteredLuminance, transmittance, depth);
 }
 
