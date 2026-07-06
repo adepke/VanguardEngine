@@ -99,7 +99,7 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	// Run through a series of history rejection tests to discard bad history.
 	bool reject = false;
 	
-	if (any(oldUv.x > 1.f) || any(oldUv < 0.f))
+	if (any(oldUv > 1.f) || any(oldUv < 0.f))
 	{
 		reject = true;
 	}
@@ -107,7 +107,7 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	// Occlusion detection against geometry.
 	float geometryDepth = geometryDepthTexture.Sample(bilinearClamp, newUv);
 	geometryDepth = LinearizeDepth(camera, geometryDepth) * camera.farPlane;
-	if (geometryDepth < camera.farPlane)
+	if (geometryDepth < camera.farPlane && newDepth < 100000.f)
 	{
 		// Kilometers to meters.
 		if (geometryDepth < newDepth * 1000.f)

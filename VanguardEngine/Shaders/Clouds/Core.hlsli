@@ -343,11 +343,12 @@ CloudLightWeight ComputeLightEnergy(CloudLightInput lighting, float extinctionAt
 #endif
 
 // ComputeNoiseKernel must have been called prior to this function to setup the cone sampling.
-// Jitter is in the domain of [-1, 1].
+// Jitter is in the domain of [-1, 1]. gapStart/gapEnd optionally describe a chunk to skip through,
+// like if the camera is within the cloud layer and the ray crosses out, then back in towards the horizon.
 MARCH_RESULT RayMarchInternal(Texture3D<float> baseShapeNoiseTexture, Texture3D<float> detailShapeNoiseTexture, Texture3D<float4> curlNoiseTexture,
 	StructuredBuffer<float3> atmosphereIrradiance, Texture2D<float3> weatherTexture, float3 origin, float3 direction, float jitter,
-	float marchStart, float marchEnd, float3 sunDirection, float2 wind, float time, float density, out float3 scatteredLuminance,
-	out float transmittance, out float depth)
+	float marchStart, float marchEnd, float gapStart, float gapEnd, float3 sunDirection, float2 wind, float time, float density,
+	out float3 scatteredLuminance, out float transmittance, out float depth)
 {
 	// Clear again in case the outer caller didn't.
 	scatteredLuminance = 0.xxx;
@@ -396,11 +397,20 @@ MARCH_RESULT RayMarchInternal(Texture3D<float> baseShapeNoiseTexture, Texture3D<
 #endif
 
 	const int steps = (baseStepCount - (baseStepCount * 0.4 * zDot));  // Slightly more than half at zenith, baseStepCount at horizon.
-	const float marchWidth = marchEnd - marchStart;
-	float largeStepSize = lerp(0.2f, 0.12f, zDot) + 0.5f * (marchWidth / (float)steps);
+	const float marchWidth = marchEnd - marchStart;  // Includes the gap.
+	// Clamp the gap to the march range.
+	gapStart = min(gapStart, marchEnd);
+	gapEnd = min(gapEnd, marchEnd);
+	// Don't factor the gap (if any) into the step size.
+	const float gapWidth = max(gapEnd - gapStart, 0.f);
+	float largeStepSize = lerp(0.2f, 0.12f, zDot) + 0.5f * (max(marchWidth - gapWidth, 0.f) / (float)steps);
 	float smallStepSize = largeStepSize * smallStepMultiplier;
 	const int stepTransitionMargin = 6;
-	
+
+	// Make the gap relative to the march origin, matching the domain of dist below.
+	gapStart -= marchStart;
+	gapEnd -= marchStart;
+
 	// Apply jitter, such as from blue noise.
 	marchStart += largeStepSize * jitter;
 
@@ -446,8 +456,14 @@ MARCH_RESULT RayMarchInternal(Texture3D<float> baseShapeNoiseTexture, Texture3D<
 		loopCount = i + 1;
 #endif
 		
-		if (dist > marchEnd)
+		if (dist > marchWidth)
 			break;  // Left the cloud layer.
+
+		// Skip over the gap.
+		if (gapWidth > 0.f && dist >= gapStart && dist < gapEnd)
+		{
+			dist = gapEnd;
+		}
 
 		float3 position = origin + direction * dist;
 
@@ -602,25 +618,32 @@ MARCH_RESULT RayMarchClouds(Texture3D<float> baseShapeNoiseTexture, Texture3D<fl
 
 	const float planetRadius = 6360.0;  // #TODO: Get from atmosphere data.
 
+	// A view ray can intersect the cloud layer in two disjoint segments, if it is inside the layer and the ray
+	// leaves, then re-enters towards the horizon. In this case, there's a significant gap of air to jump past.
+	// If we didn't handle this, these horizon clouds would disappear when inside the cloud layer.
+	float gapStart = 0.f;
+	float gapEnd = 0.f;
+
 	float2 topBoundaryIntersect;
 	if (RaySphereIntersection(origin, direction, planetCenter, planetRadius + cloudLayerTop, topBoundaryIntersect))
 	{
+		// Start a shell entry point, or at 0 if camera is inside layer.
+		marchStart = max(topBoundaryIntersect.x, 0);
+		marchEnd = topBoundaryIntersect.y;
+
 		float2 bottomBoundaryIntersect;
 		if (RaySphereIntersection(origin, direction, planetCenter, planetRadius + cloudLayerBottom, bottomBoundaryIntersect))
 		{
-			float top = all(topBoundaryIntersect > 0) ? min(topBoundaryIntersect.x, topBoundaryIntersect.y) : max(topBoundaryIntersect.x, topBoundaryIntersect.y);
-			float bottom = all(bottomBoundaryIntersect > 0) ? min(bottomBoundaryIntersect.x, bottomBoundaryIntersect.y) : max(bottomBoundaryIntersect.x, bottomBoundaryIntersect.y);
 			if (all(bottomBoundaryIntersect > 0))
-				top = max(0, min(topBoundaryIntersect.x, topBoundaryIntersect.y));
-			marchStart = min(bottom, top);
-			marchEnd = max(bottom, top);
-		}
-
-		else
-		{
-			// Inside the cloud layer, only advance the ray start if we're outside of the atmosphere.
-			marchStart = max(topBoundaryIntersect.x, 0);
-			marchEnd = topBoundaryIntersect.y;
+			{
+				// Special case: ray leaves the bottom layer and re-enters later, causing a gap.
+				gapStart = bottomBoundaryIntersect.x;
+				gapEnd = bottomBoundaryIntersect.y;
+			}
+			else if (bottomBoundaryIntersect.y > 0)
+			{
+				marchStart = max(marchStart, bottomBoundaryIntersect.y);
+			}
 		}
 	}
 
@@ -641,10 +664,14 @@ MARCH_RESULT RayMarchClouds(Texture3D<float> baseShapeNoiseTexture, Texture3D<fl
 	marchEnd = max(0, marchEnd);
 
 	// Early out of the march if we hit opaque geometry.
-	// Note the use of the minimum filter, which provides a more conservative rendering against the geometry mask, to prevent a thin
-	// border of unrendered clouds appearing around geometry.
-	float geometryDepth = geometryDepthTexture.Sample(linearMipPointClampMinimum, jitteredUv);
-	geometryDepth = LinearizeDepth(camera, geometryDepth) * camera.farPlane;
+	// Sample at the unjittered UV in 4 taps to get a conservative mask. Without this, there's a single pixel
+	// seam around the edges of geometry where clouds are behind them. Compose pass does exact per pixel occlusion.
+	const float2 footprintOffset = 0.5f / float2(outputResolution);
+	float rawGeometryDepth = geometryDepthTexture.Sample(linearMipPointClampMinimum, baseUv + float2(-footprintOffset.x, -footprintOffset.y));
+	rawGeometryDepth = min(rawGeometryDepth, geometryDepthTexture.Sample(linearMipPointClampMinimum, baseUv + float2(footprintOffset.x, -footprintOffset.y)));
+	rawGeometryDepth = min(rawGeometryDepth, geometryDepthTexture.Sample(linearMipPointClampMinimum, baseUv + float2(-footprintOffset.x, footprintOffset.y)));
+	rawGeometryDepth = min(rawGeometryDepth, geometryDepthTexture.Sample(linearMipPointClampMinimum, baseUv + float2(footprintOffset.x, footprintOffset.y)));
+	float geometryDepth = LinearizeDepth(camera, rawGeometryDepth) * camera.farPlane;
 	if (geometryDepth < camera.farPlane)
 	{
 		geometryDepth *= 0.001;  // Meters to kilometers.
@@ -676,10 +703,10 @@ MARCH_RESULT RayMarchClouds(Texture3D<float> baseShapeNoiseTexture, Texture3D<fl
 
 #if defined(CLOUDS_DEBUG_MARCHCOUNT) || defined(CLOUDS_DEBUG_NORMALVECTOR)
 	return RayMarchInternal(baseShapeNoiseTexture, detailShapeNoiseTexture, curlNoiseTexture, atmosphereIrradiance, weatherTexture, origin, direction,
-		jitter, marchStart, marchEnd, sunDirection, wind, time, density, scatteredLuminance, transmittance, depth);
+		jitter, marchStart, marchEnd, gapStart, gapEnd, sunDirection, wind, time, density, scatteredLuminance, transmittance, depth);
 #else
 	RayMarchInternal(baseShapeNoiseTexture, detailShapeNoiseTexture, curlNoiseTexture, atmosphereIrradiance, weatherTexture, origin, direction, jitter,
-		marchStart, marchEnd, sunDirection, wind, time, density, scatteredLuminance, transmittance, depth);
+		marchStart, marchEnd, gapStart, gapEnd, sunDirection, wind, time, density, scatteredLuminance, transmittance, depth);
 #endif
 }
 
