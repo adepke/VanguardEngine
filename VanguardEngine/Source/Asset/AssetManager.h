@@ -13,6 +13,8 @@
 #include <list>
 #include <queue>
 #include <utility>
+#include <unordered_map>
+#include <string>
 
 class RenderDevice;
 
@@ -23,6 +25,8 @@ class AssetManager : public Singleton<AssetManager>
 private:
 	RenderDevice* device;
 	std::list<MaterialQueue> modelMaterialQueues;
+	// Cache of already loaded meshes, by asset path.
+	std::unordered_map<std::wstring, MeshComponent> loadedMeshes;
 
 public:
 	// #TODO: Poor solution, should rework this.

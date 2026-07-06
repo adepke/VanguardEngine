@@ -98,6 +98,11 @@ public:
 	// Fully sync the GPU, flushes all commands.
 	void Synchronize();
 
+	// This is a bit of a hack: when uploading large asset data, the relatively small frame upload heap
+	// can get exhausted. To address this, when the buffer is full, flush all work and sync, then continue
+	// the upload. The correct solution here is to use an async copy queue.
+	void FlushUploadWork();
+
 	void Present();
 
 	void AdvanceCPU();  // Steps the CPU frame counter, blocking sync with GPU.

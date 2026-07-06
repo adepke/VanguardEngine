@@ -333,6 +333,32 @@ void ResourceManager::Initialize(RenderDevice* inDevice, size_t bufferedFrames)
 	mipmapper.Initialize(*device);
 }
 
+bool ResourceManager::ReserveUploadSpace(size_t bytes)
+{
+	const auto frameIndex = device->GetFrameIndex();
+	const auto capacity = uploadResources[frameIndex]->GetResource()->GetDesc().Width;
+
+	if (bytes > capacity)
+	{
+		VGLogCritical(logRendering, "Upload of {} bytes exceeds the entire upload arena capacity of {} bytes. "
+			"Increase the arena size or route this resource through a dedicated staging buffer.", bytes, capacity);
+
+		return false;
+	}
+
+	// Check if we have frame in the budget, or if we need to flush.
+	if (uploadOffsets[frameIndex] + bytes > capacity)
+	{
+		VGLog(logRendering, "Upload arena full ({} / {} bytes used), flushing to reclaim space.",
+			uploadOffsets[frameIndex], capacity);
+
+		device->FlushUploadWork();
+		uploadOffsets[frameIndex] = 0;
+	}
+
+	return true;
+}
+
 const BufferHandle ResourceManager::Create(const BufferDescription& description, const std::wstring_view name)
 {
 	VGScopedCPUStat("Create Buffer");
@@ -642,7 +668,11 @@ void ResourceManager::Write(BufferHandle target, const std::vector<uint8_t>& sou
 
 		const auto frameIndex = device->GetFrameIndex();
 
-		VGAssert(uploadOffsets[frameIndex] + source.size() <= uploadResources[frameIndex]->GetResource()->GetDesc().Width, "Failed to write to static buffer, exhausted frame upload heap.");
+		if (!ReserveUploadSpace(source.size()))
+		{
+			VGLogError(logRendering, "Failed to write to static buffer, could not reserve space.");
+			return;
+		}
 
 		std::memcpy(static_cast<uint8_t*>(uploadPtrs[frameIndex]) + uploadOffsets[frameIndex], source.data(), source.size());
 
@@ -700,6 +730,22 @@ void ResourceManager::Write(TextureHandle target, const std::vector<uint8_t>& so
 
 	const auto frameIndex = device->GetFrameIndex();
 
+	D3D12_RESOURCE_DESC probeDesc = component.Native()->GetDesc();
+	D3D12_PLACED_SUBRESOURCE_FOOTPRINT probeFootprint;
+	uint64_t subresourceCopySize = 0;
+	device->Native()->GetCopyableFootprints(&probeDesc, 0, 1, 0, &probeFootprint, nullptr, nullptr, &subresourceCopySize);
+
+	const bool isArray = component.description.depth > 1 && component.description.array;
+	const size_t slices = isArray ? component.description.depth : 1;
+	// Worst case: each slice is placement-aligned then consumes a full subresource copy, plus initial alignment slack.
+	const size_t reserveBytes = D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT + slices * AlignedSize(subresourceCopySize, D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
+
+	if (!ReserveUploadSpace(reserveBytes))
+	{
+		VGLogError(logRendering, "Failed to write to texture, could not reserve space.");
+		return;
+	}
+
 	// Texture placed footprint source copies need to be aligned to D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT. Buffers don't
 	// need this alignment, so only align here.
 	uploadOffsets[frameIndex] = AlignedSize(uploadOffsets[frameIndex], D3D12_TEXTURE_DATA_PLACEMENT_ALIGNMENT);
@@ -750,8 +796,7 @@ void ResourceManager::Write(TextureHandle target, const std::vector<uint8_t>& so
 		sourcePtr = &alignedSource;
 	}
 
-	VGAssert(uploadOffsets[frameIndex] + sourcePtr->size() <= uploadResources[frameIndex]->GetResource()->GetDesc().Width, "Failed to write to texture, exhausted frame upload heap.");
-
+	// Arena space was already reserved above, so this copy is guaranteed to fit.
 	std::memcpy(static_cast<uint8_t*>(uploadPtrs[frameIndex]) + uploadOffsets[frameIndex], sourcePtr->data(), sourcePtr->size());
 
 	// Ensure we're in the proper state.

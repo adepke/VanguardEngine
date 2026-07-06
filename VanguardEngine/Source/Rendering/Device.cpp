@@ -542,6 +542,34 @@ void RenderDevice::Synchronize()
 	WaitForSingleObject(syncEvent, INFINITE);
 }
 
+void RenderDevice::FlushUploadWork()
+{
+	VGScopedCPUStat("Flush Upload Work");
+
+	auto& list = GetDirectList();
+
+	// Submit everything recorded on the direct list so far.
+	list.FlushBarriers();
+	auto result = list.Close();
+	if (FAILED(result))
+	{
+		VGLogCritical(logRendering, "Failed to close direct list during upload flush: {}", result);
+		return;
+	}
+
+	ID3D12CommandList* lists[] = { list.Native() };
+	directCommandQueue->ExecuteCommandLists(1, lists);
+
+	Synchronize();
+
+	// Reopen the list so the rest of the frame can continue.
+	result = list.Reset();
+	if (FAILED(result))
+	{
+		VGLogCritical(logRendering, "Failed to reset direct list during upload flush: {}", result);
+	}
+}
+
 void RenderDevice::Present()
 {
 	VGScopedCPUStat("Present");

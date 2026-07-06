@@ -45,6 +45,9 @@ private:
 
 	size_t ComputeBufferWidth(const BufferDescription& description) const;
 
+	// Verify the number of bytes can be staged for upload this frame. If not, tries to flush to reclaim space.
+	bool ReserveUploadSpace(size_t bytes);
+
 	void CreateResourceViews(BufferComponent& target);
 	void CreateResourceViews(TextureComponent& target);
 	void SetResourceName(ResourcePtr<D3D12MA::Allocation>& target, const std::wstring_view name);

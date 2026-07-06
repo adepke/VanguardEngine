@@ -9,7 +9,21 @@
 
 MeshComponent AssetManager::LoadModel(const std::filesystem::path& path)
 {
-	return AssetLoader::LoadMesh(*device, *Renderer::Get().meshFactory, path);
+	// Find the canonical representation of the path.
+	std::error_code ec;
+	const auto canonical = std::filesystem::weakly_canonical(path, ec);
+	const auto key = (ec ? path : canonical).generic_wstring();
+
+	// Check cache for a pre-existing version, otherwise fall back to loading it from disk.
+	if (const auto it = loadedMeshes.find(key); it != loadedMeshes.end())
+	{
+		return it->second;
+	}
+
+	MeshComponent component = AssetLoader::LoadMesh(*device, *Renderer::Get().meshFactory, path);
+	loadedMeshes.emplace(key, component);
+
+	return component;
 }
 
 void AssetManager::ResolveMeshes(entt::registry& registry)
