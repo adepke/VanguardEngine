@@ -788,6 +788,28 @@ std::filesystem::path EditorUI::PickNextNewScenePath() const
 	return baseDir / "new.scene";
 }
 
+entt::entity EditorUI::DuplicateEntity(entt::registry& registry, entt::entity source)
+{
+	if (!registry.valid(source))
+		return entt::null;
+
+	const auto copy = registry.create();
+
+	for (auto [id, storage] : registry.storage())
+	{
+		if (storage.contains(source))
+		{
+			storage.push(copy, storage.value(source));
+		}
+	}
+
+	// Give the copy a distinct name so it's easy to tell apart in the hierarchy.
+	if (registry.all_of<NameComponent>(copy))
+		registry.get<NameComponent>(copy).name += " Copy";
+
+	return copy;
+}
+
 void EditorUI::DrawLayout()
 {
 	auto* viewport = ImGui::GetMainViewport();
@@ -1454,12 +1476,17 @@ void EditorUI::DrawEntityHierarchy(entt::registry& registry)
 	{
 		entt::entity selectedEntity = entt::null;
 
+		// Structural changes are deferred until after iteration, since creating or destroying
+		// entities inside registry.each() would invalidate the iteration.
+		entt::entity entityToDuplicate = entt::null;
+		entt::entity entityToDelete = entt::null;
+
 		if (ImGui::Begin("Entity Hierarchy", &entityHierarchyOpen))
 		{
-			ImGui::Text("%i Entities", registry.size());
+			ImGui::Text("%i Entities", registry.view<entt::entity>().size());
 			ImGui::Separator();
 
-			registry.each([this, &registry, &selectedEntity](auto entity)
+			registry.view<entt::entity>().each([this, &registry, &selectedEntity, &entityToDuplicate, &entityToDelete](auto entity)
 			{
 				ImGuiTreeNodeFlags nodeFlags = ImGuiTreeNodeFlags_None;
 
@@ -1478,12 +1505,27 @@ void EditorUI::DrawEntityHierarchy(entt::registry& registry)
 				else
 				{
 					// Strip the version info from the entity, we only care about the actual ID.
-					nodeOpen = ImGui::TreeNodeEx("EntityTreeNode", nodeFlags, "Entity_%i", registry.entity(entity));
+					nodeOpen = ImGui::TreeNodeEx("EntityTreeNode", nodeFlags, "Entity_%i", entt::to_entity(entity));
 				}
 
+				// Only triggers on left click, not right click.
 				if (ImGui::IsItemClicked())
 				{
 					selectedEntity = entity;
+				}
+
+				// Right-click context menu for the tree node.
+				if (ImGui::BeginPopupContextItem())
+				{
+					selectedEntity = entity;  // Consider this a selection.
+
+					if (ImGui::MenuItem("Duplicate"))
+						entityToDuplicate = entity;
+
+					if (ImGui::MenuItem("Delete"))
+						entityToDelete = entity;
+
+					ImGui::EndPopup();
 				}
 
 				if (nodeOpen)
@@ -1506,10 +1548,26 @@ void EditorUI::DrawEntityHierarchy(entt::registry& registry)
 
 		ImGui::End();
 
+		// Apply deferred actions.
+
 		// Check if it's valid first, otherwise deselecting will remove the property viewer.
 		if (registry.valid(selectedEntity))
 		{
 			hierarchySelectedEntity = selectedEntity;
+		}
+
+		if (registry.valid(entityToDuplicate))
+		{
+			hierarchySelectedEntity = DuplicateEntity(registry, entityToDuplicate);
+		}
+
+		if (registry.valid(entityToDelete))
+		{
+			registry.destroy(entityToDelete);
+
+			// Clear the selection if we just deleted the selected entity.
+			if (hierarchySelectedEntity == entityToDelete)
+				hierarchySelectedEntity = entt::null;
 		}
 	}
 }
@@ -1532,9 +1590,7 @@ void EditorUI::DrawEntityPropertyViewer(entt::registry& registry)
 
 				for (auto& [metaID, renderFunction] : EntityReflection::componentList)
 				{
-					entt::id_type metaList[] = { metaID };
-
-					if (registry.runtime_view(std::cbegin(metaList), std::cend(metaList)).contains(hierarchySelectedEntity))
+					if (registry.storage(metaID)->contains(hierarchySelectedEntity))
 					{
 						++componentCount;
 

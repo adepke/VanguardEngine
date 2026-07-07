@@ -123,6 +123,8 @@ private:
 	void RefreshScenes(RenderDevice& device);
 	std::filesystem::path PickNextNewScenePath() const;
 
+	entt::entity DuplicateEntity(entt::registry& registry, entt::entity source);
+
 public:
 	void Update(RenderDevice& device, entt::registry& registry);
 	void DrawLayout();

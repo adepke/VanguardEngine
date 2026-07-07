@@ -23,9 +23,12 @@
 // All components must be specified here. When adding new components, do not forget to update
 // this list, or they won't get serialized.
 #define ALL_COMPONENTS(archive) \
-	.component<NameComponent, TransformComponent>(archive) \
-	.component<CameraComponent, LightComponent, TimeOfDayComponent>(archive) \
-	.component<AssetComponent>(archive)
+	.get<NameComponent>(archive) \
+	.get<TransformComponent>(archive) \
+	.get<CameraComponent>(archive) \
+	.get<LightComponent>(archive) \
+	.get<TimeOfDayComponent>(archive) \
+	.get<AssetComponent>(archive)
 
 constexpr auto sqlCreate = R"(
 	CREATE TABLE scene(
@@ -197,6 +200,11 @@ namespace Scene
 		const auto entitiesSize = sqlite3_column_bytes(statement, 0);
 
 		ArchiveOutput archive{ (char*)entities, static_cast<size_t>(entitiesSize) };
+		if (!archive.Valid())
+		{
+			VGLogError(logScene, "Failed to load scene '{}': Unrecognized archive format", path.generic_wstring());
+			return false;
+		}
 
 		// #TODO: Instead of nuking the registry and loading fresh, consider using an EnTT continuous loader.
 		// Some fancy logic along the lines of only re-loading entities that are in the data, otherwise ignoring existing
@@ -204,7 +212,7 @@ namespace Scene
 		registry.clear();
 		auto snapshot = entt::snapshot_loader{ registry };
 		snapshot
-			.entities(archive)
+			.get<entt::entity>(archive)
 			ALL_COMPONENTS(archive);
 
 		// Rebuild GPU-side asset data.
@@ -228,7 +236,7 @@ namespace Scene
 
 		auto snapshot = entt::snapshot{ registry };
 		snapshot
-			.entities(archive)
+			.get<entt::entity>(archive)
 			ALL_COMPONENTS(archive);
 
 		const auto bytes = archive.ToBytes();

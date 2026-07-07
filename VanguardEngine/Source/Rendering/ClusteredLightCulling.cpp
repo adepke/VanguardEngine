@@ -17,7 +17,7 @@
 ClusterGridInfo ClusteredLightCulling::ComputeGridInfo(const entt::registry& registry) const
 {
 	// Make sure there's at least one camera.
-	if (!registry.size<CameraComponent>())
+	if (registry.storage<CameraComponent>()->size() == 0)
 	{
 		return { 0, 0, 0, 0.f };
 	}
