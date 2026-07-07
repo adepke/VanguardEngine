@@ -33,6 +33,9 @@ struct CommandLineOptions
 	// --scene <file>: scene file to load. Relative or absolute.
 	std::optional<std::filesystem::path> scene;
 
+	// --pix: enables PIX DLL loading for capture.
+	bool pix = false;
+
 	// --cvar <name=value>: overrides a console variable.
 	std::vector<CommandLineCvarOverride> cvarOverrides;
 };

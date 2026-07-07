@@ -52,6 +52,44 @@ void OnSizeChanged(uint32_t width, uint32_t height)
 	Renderer::Get().SetResolution(width, height, false);
 }
 
+// #TODO: consider moving to windows core?
+bool LoadPIXLibrary()
+{
+	// Sample taken from: https://devblogs.microsoft.com/pix/taking-a-capture/
+
+	// Early out if already loaded.
+	if (GetModuleHandle(L"WinPixGpuCapturer.dll") != 0)
+	{
+		return true;
+	}
+
+	LPWSTR programFilesPath = nullptr;
+	SHGetKnownFolderPath(FOLDERID_ProgramFiles, KF_FLAG_DEFAULT, NULL, &programFilesPath);
+
+	std::filesystem::path pixInstallationPath = programFilesPath;
+	pixInstallationPath /= "Microsoft PIX";
+
+	std::wstring newestVersionFound;
+
+	for (auto const& directory_entry : std::filesystem::directory_iterator(pixInstallationPath))
+	{
+		if (directory_entry.is_directory())
+		{
+			if (newestVersionFound.empty() || newestVersionFound < directory_entry.path().filename().c_str())
+			{
+				newestVersionFound = directory_entry.path().filename().c_str();
+			}
+		}
+	}
+
+	if (newestVersionFound.empty())
+	{
+		return false;
+	}
+
+	return LoadLibrary((pixInstallationPath / newestVersionFound / VGText("WinPixGpuCapturer.dll")).c_str()) != nullptr;
+}
+
 // This function doesn't belong here, refactor.
 void SetupDefaultScene()
 {
@@ -279,7 +317,13 @@ bool EngineBoot()
 
 	if (!GCommandLineOptions.valid)
 	{
-		VGLogError(logCore, "Invalid command line arguments. Expected: [--headless] [--output <file.png>] [--delay <frames>] [--scene <file>] [--cvar <name=value>]");
+		VGLogError(logCore, "Invalid command line arguments. Expected: [--headless] [--output <file.png>] [--delay <frames>] [--scene <file>] [--pix] [--cvar <name=value>]");
+		return false;
+	}
+
+	if (GCommandLineOptions.pix && !LoadPIXLibrary())
+	{
+		VGLogError(logCore, "Failed to load PIX library");
 		return false;
 	}
 

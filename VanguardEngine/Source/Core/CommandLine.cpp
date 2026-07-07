@@ -72,6 +72,10 @@ void ParseCommandLineOptions(const std::vector<std::wstring>& args)
 				options.scene = std::filesystem::path{ value };
 			}
 		}
+		else if (arg == VGText("--pix"))
+		{
+			options.pix = true;
+		}
 		else if (arg == VGText("--cvar"))
 		{
 			// Format: name=value
