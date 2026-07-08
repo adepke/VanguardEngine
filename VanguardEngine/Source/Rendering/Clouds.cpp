@@ -75,6 +75,7 @@ void Clouds::Initialize(RenderDevice* inDevice)
 	CvarCreate("cloudRenderScale", "Controls the render scale of the volumetric clouds", 0.25f);
 	CvarCreate("cloudDebugVisualization", "Cloud debug visualisation: 0=off, 1=transmittance, 2=march count, 3=normal vector", 0);
 	CvarCreate("cloudReflectionsEnabled", "Bake clouds into the IBL luminance cube so they appear in reflections", 1);
+	CvarCreate("cloudReconstructionMode", "Cloud reconstruction: 0=legacy interleaved reprojection, 1=stochastic accumulation", 1);
 
 	weatherLayout = RenderPipelineLayout{}
 		.ComputeShader({ "Clouds/Weather", "Main" });
@@ -155,6 +156,9 @@ void Clouds::Initialize(RenderDevice* inDevice)
 	lastFrameScatteringUpscaled.id = 0;
 	lastFrameDepthUpscaled.id = 0;
 	lastFrameVisibilityUpscaled.id = 0;
+	lastFrameAccumulatedScattering.id = 0;
+	lastFrameAccumulatedDepth.id = 0;
+	lastFrameAccumulatedVisibility.id = 0;
 }
 
 CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, const Atmosphere& atmosphere, const RenderResource cameraBuffer, const RenderResource depthStencil, const RenderResource atmosphereIrradiance, const RenderResource luminanceTag)
@@ -279,6 +283,57 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 	});
 
 	const float cloudRenderScale = *CvarGet("cloudRenderScale", float);
+	const bool stochasticReconstruction = *CvarGet("cloudReconstructionMode", int) > 0;
+
+	// Reset temporal history when the reconstruction mode changes, the history resources are
+	// incompatible between modes (full res vs cloud render res).
+	if ((stochasticReconstruction ? 1 : 0) != lastReconstructionMode)
+	{
+		lastFrameScatteringUpscaled.id = 0;
+		lastFrameDepthUpscaled.id = 0;
+		lastFrameVisibilityUpscaled.id = 0;
+		lastFrameAccumulatedScattering.id = 0;
+		lastFrameAccumulatedDepth.id = 0;
+		lastFrameAccumulatedVisibility.id = 0;
+		lastReconstructionMode = stochasticReconstruction ? 1 : 0;
+	}
+
+	// Downsample the geometry depth to the cloud render resolution, storing per-texel (min, max) raw
+	// reversed-Z bounds. Min (the farthest depth) drives the conservative raymarch early-out and the
+	// history occlusion tests; the full interval drives the bilateral upsample's similarity weights.
+	auto& depthDownsamplePass = graph.AddPass("Clouds Geometry Depth Downsample Pass", ExecutionQueue::Compute);
+	const auto geometryDepthMinMax = depthDownsamplePass.Create(TransientTextureDescription{
+		.width = 0,
+		.height = 0,
+		.depth = 1,
+		.resolutionScale = cloudRenderScale,
+		.format = DXGI_FORMAT_R32G32_FLOAT
+	}, VGText("Clouds geometry depth min max"));
+	depthDownsamplePass.Read(depthStencil, ResourceBind::SRV);
+	depthDownsamplePass.Write(geometryDepthMinMax, TextureView{}.UAV("", 0));
+	depthDownsamplePass.Bind([this, depthStencil, geometryDepthMinMax](CommandList& list, RenderPassResources& resources)
+	{
+		auto downsampleLayout = RenderPipelineLayout{}
+			.ComputeShader({ "Clouds/DepthDownsample", "Main" });
+
+		list.BindPipeline(downsampleLayout);
+
+		struct {
+			uint32_t depthTexture;
+			uint32_t outputTexture;
+		} bindData;
+
+		bindData.depthTexture = resources.Get(depthStencil);
+		bindData.outputTexture = resources.Get(geometryDepthMinMax);
+
+		list.BindConstants("bindData", bindData);
+
+		const auto& outputComponent = device->GetResourceManager().Get(resources.GetTexture(geometryDepthMinMax));
+		const auto dispatchX = std::ceilf(outputComponent.description.width / 8.f);
+		const auto dispatchY = std::ceilf(outputComponent.description.height / 8.f);
+
+		list.Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, 1);
+	});
 
 	auto& cloudsPass = graph.AddPass("Clouds Pass", ExecutionQueue::Graphics);
 	const auto cloudOutput = cloudsPass.Create(TransientTextureDescription{
@@ -300,13 +355,13 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 	cloudsPass.Read(baseShapeNoiseTag, ResourceBind::SRV);
 	cloudsPass.Read(detailShapeNoiseTag, ResourceBind::SRV);
 	cloudsPass.Read(curlShapeNoiseTag, ResourceBind::SRV);
-	cloudsPass.Read(depthStencil, ResourceBind::SRV);
+	cloudsPass.Read(geometryDepthMinMax, ResourceBind::SRV);
 	cloudsPass.Read(blueNoiseTag, ResourceBind::SRV);
 	cloudsPass.Read(atmosphereIrradiance, ResourceBind::SRV);
 	cloudsPass.Output(cloudOutput, OutputBind::RTV, LoadType::Preserve);
 	cloudsPass.Write(cloudDepth, TextureView{}.UAV("", 0));
 	cloudsPass.Bind([this, weatherTag, baseShapeNoiseTag, detailShapeNoiseTag, curlShapeNoiseTag, solarZenithAngle,
-		cameraBuffer, depthStencil, cloudOutput, blueNoiseTag, cloudDepth, atmosphereIrradiance]
+		cameraBuffer, geometryDepthMinMax, cloudOutput, blueNoiseTag, cloudDepth, atmosphereIrradiance]
 		(CommandList& list, RenderPassResources& resources)
 	{
 		auto cloudsLayout = RenderPipelineLayout{}
@@ -319,8 +374,11 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 			cloudsLayout.Macro({ "CLOUDS_LOW_DETAIL" });
 		else if (*CvarGet("cloudRayMarchQuality", int) > 1)
 			cloudsLayout.Macro({ "CLOUDS_MARCH_GROUND_TRUTH_DETAIL" });
-		
+
 		cloudsLayout.Macro({ "CLOUDS_MS_OCTAVES", msOctaves });
+
+		if (*CvarGet("cloudReconstructionMode", int) > 0)
+			cloudsLayout.Macro({ "CLOUDS_STOCHASTIC" });
 
 		const int cloudDebugMode = *CvarGet("cloudDebugVisualization", int);
 		if (cloudDebugMode == 1)
@@ -340,9 +398,9 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 			uint32_t cameraBuffer;
 			uint32_t cameraIndex;
 			float solarZenithAngle;
-			uint32_t timeSlice;
+			uint32_t frameIndex;
 			uint32_t depthTexture;
-			uint32_t geometryDepthTexture;
+			uint32_t geometryDepthTexture;  // Downsampled (min, max) reversed-Z bounds.
 			uint32_t blueNoiseTexture;
 			uint32_t atmosphereIrradianceBuffer;
 			uint32_t outputResolution[2];
@@ -360,9 +418,9 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 		bindData.cameraBuffer = resources.Get(cameraBuffer);
 		bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
 		bindData.solarZenithAngle = solarZenithAngle;
-		bindData.timeSlice = Renderer::Get().GetAppFrame() % 16;
+		bindData.frameIndex = (uint32_t)Renderer::Get().GetAppFrame();  // Both jitter paths wrap internally.
 		bindData.depthTexture = resources.Get(cloudDepth);
-		bindData.geometryDepthTexture = resources.Get(depthStencil);
+		bindData.geometryDepthTexture = resources.Get(geometryDepthMinMax);
 		bindData.blueNoiseTexture = resources.Get(blueNoiseTag);
 		bindData.atmosphereIrradianceBuffer = resources.Get(atmosphereIrradiance);
 		bindData.time = Renderer::Get().GetAppTime();
@@ -393,18 +451,21 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 	visibilityPass.Read(cameraBuffer, ResourceBind::SRV);
 	visibilityPass.Read(weatherTag, ResourceBind::SRV);
 	visibilityPass.Read(baseShapeNoiseTag, ResourceBind::SRV);  // Low detail marching.
-	visibilityPass.Read(depthStencil, ResourceBind::SRV);
+	visibilityPass.Read(geometryDepthMinMax, ResourceBind::SRV);
 	visibilityPass.Read(blueNoiseTag, ResourceBind::SRV);
 	visibilityPass.Read(atmosphereIrradiance, ResourceBind::SRV);
 	visibilityPass.Write(cloudVisibility, TextureView{}
 		.UAV("", 0));
-	visibilityPass.Bind([this, cameraBuffer, weatherTag, baseShapeNoiseTag, depthStencil, blueNoiseTag, atmosphereIrradiance,
+	visibilityPass.Bind([this, cameraBuffer, weatherTag, baseShapeNoiseTag, geometryDepthMinMax, blueNoiseTag, atmosphereIrradiance,
 		cloudVisibility, solarZenithAngle](CommandList& list, RenderPassResources& resources)
 	{
 		auto visibilityLayout = RenderPipelineLayout{}
 			.ComputeShader({ "Clouds/Visibility", "Main" })
 			.Macro({ "CLOUDS_LOW_DETAIL" })  // Always low detail, no matter the quality setting
 			.Macro({ "CLOUDS_MS_OCTAVES", 1 });  // No multi-scattering.
+
+		if (*CvarGet("cloudReconstructionMode", int) > 0)
+			visibilityLayout.Macro({ "CLOUDS_STOCHASTIC" });
 			// Interestingly, applying the ONLY_DEPTH macro does not appear to help performance. The issue there is likely the transmittance
 			// approximation being too conservative and allowing too many steps into the cloud. However, if this is done then small clouds
 			// will yield too much shadow and does not look visibily correct.
@@ -423,8 +484,8 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 			uint32_t cameraBuffer;
 			uint32_t cameraIndex;
 			float solarZenithAngle;
-			uint32_t timeSlice;
-			uint32_t geometryDepthTexture;
+			uint32_t frameIndex;
+			uint32_t geometryDepthTexture;  // Downsampled (min, max) reversed-Z bounds.
 			uint32_t blueNoiseTexture;
 			uint32_t atmosphereIrradianceBuffer;
 			XMFLOAT2 wind;
@@ -438,8 +499,8 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 		bindData.cameraBuffer = resources.Get(cameraBuffer);
 		bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
 		bindData.solarZenithAngle = solarZenithAngle;
-		bindData.timeSlice = Renderer::Get().GetAppFrame() % 16;
-		bindData.geometryDepthTexture = resources.Get(depthStencil);
+		bindData.frameIndex = (uint32_t)Renderer::Get().GetAppFrame();  // Both jitter paths wrap internally.
+		bindData.geometryDepthTexture = resources.Get(geometryDepthMinMax);
 		bindData.blueNoiseTexture = resources.Get(blueNoiseTag);
 		bindData.atmosphereIrradianceBuffer = resources.Get(atmosphereIrradiance);
 		bindData.time = Renderer::Get().GetAppTime();
@@ -456,97 +517,275 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 		list.Dispatch(dispatchX, dispatchY, 1);
 	});
 
-	auto& upscalePass = graph.AddPass("Clouds Upscale Pass", ExecutionQueue::Compute);
-	const auto cloudOutputUpscaled = upscalePass.Create(TransientTextureDescription{
-		.width = 0,
-		.height = 0,
-		.depth = 1,
-		.resolutionScale = 1.f,
-		.format = DXGI_FORMAT_R16G16B16A16_FLOAT
-	}, VGText("Clouds upscaled scattering transmittance"));
-	const auto cloudDepthUpscaled = upscalePass.Create(TransientTextureDescription{
-		.width = 0,
-		.height = 0,
-		.depth = 1,
-		.resolutionScale = 1.f,
-		.format = DXGI_FORMAT_R32_FLOAT
-	}, VGText("Clouds upscaled depth"));
-	const auto cloudVisibilityUpscaled = upscalePass.Create(TransientTextureDescription{
-		.width = 0,
-		.height = 0,
-		.depth = 1,
-		.resolutionScale = 1.f,
-		.format = DXGI_FORMAT_R16G16_FLOAT
-	}, VGText("Clouds upscaled sky visibility"));
-	upscalePass.Read(cameraBuffer, ResourceBind::SRV);
-	upscalePass.Read(depthStencil, ResourceBind::SRV);
-	upscalePass.Read(cloudOutput, ResourceBind::SRV);
-	upscalePass.Read(cloudDepth, ResourceBind::SRV);
-	upscalePass.Read(cloudVisibility, ResourceBind::SRV);
-	upscalePass.Read(lastFrameScatteringUpscaled, ResourceBind::SRV);
-	upscalePass.Read(lastFrameDepthUpscaled, ResourceBind::SRV);
-	upscalePass.Read(lastFrameVisibilityUpscaled, ResourceBind::SRV);
-	upscalePass.Write(cloudOutputUpscaled, TextureView{}.UAV("", 0));
-	upscalePass.Write(cloudDepthUpscaled, TextureView{}.UAV("", 0));
-	upscalePass.Write(cloudVisibilityUpscaled, TextureView{}.UAV("", 0));
-	upscalePass.Bind([this, cameraBuffer, depthStencil, cloudOutput, cloudDepth, cloudVisibility, oldUpscaled=lastFrameScatteringUpscaled,
-		oldDepthUpscaled=lastFrameDepthUpscaled, oldVisibilityUpscaled=lastFrameVisibilityUpscaled, cloudOutputUpscaled,
-		cloudDepthUpscaled, cloudVisibilityUpscaled](CommandList& list, RenderPassResources& resources)
+	RenderResource cloudOutputUpscaled;
+	RenderResource cloudDepthUpscaled;
+	RenderResource cloudVisibilityUpscaled;
+
+	if (stochasticReconstruction)
 	{
-		auto upscaleLayout = RenderPipelineLayout{}
-			.ComputeShader({ "Clouds/Upscale", "Main" });
+		// Temporal accumulation at the cloud render resolution. Every low res pixel receives a fresh
+		// stochastic sample every frame, so an exponential blend converges smoothly everywhere, unlike
+		// the legacy interleaved reconstruction where each full res pixel refreshed once per 16 frames.
+		auto& accumulatePass = graph.AddPass("Clouds Accumulation Pass", ExecutionQueue::Compute);
+		const auto accumulatedScattering = accumulatePass.Create(TransientTextureDescription{
+			.width = 0,
+			.height = 0,
+			.depth = 1,
+			.resolutionScale = cloudRenderScale,
+			.format = DXGI_FORMAT_R16G16B16A16_FLOAT
+		}, VGText("Clouds accumulated scattering transmittance"));
+		const auto accumulatedDepth = accumulatePass.Create(TransientTextureDescription{
+			.width = 0,
+			.height = 0,
+			.depth = 1,
+			.resolutionScale = cloudRenderScale,
+			.format = DXGI_FORMAT_R32_FLOAT
+		}, VGText("Clouds accumulated depth"));  // Inverse kilometers.
+		const auto accumulatedVisibility = accumulatePass.Create(TransientTextureDescription{
+			.width = 0,
+			.height = 0,
+			.depth = 1,
+			.resolutionScale = cloudRenderScale,
+			.format = DXGI_FORMAT_R16G16_FLOAT
+		}, VGText("Clouds accumulated sky visibility"));
+		accumulatePass.Read(cameraBuffer, ResourceBind::SRV);
+		accumulatePass.Read(geometryDepthMinMax, ResourceBind::SRV);
+		accumulatePass.Read(cloudOutput, ResourceBind::SRV);
+		accumulatePass.Read(cloudDepth, ResourceBind::SRV);
+		accumulatePass.Read(cloudVisibility, ResourceBind::SRV);
+		accumulatePass.Read(lastFrameAccumulatedScattering, ResourceBind::SRV);
+		accumulatePass.Read(lastFrameAccumulatedDepth, ResourceBind::SRV);
+		accumulatePass.Read(lastFrameAccumulatedVisibility, ResourceBind::SRV);
+		accumulatePass.Write(accumulatedScattering, TextureView{}.UAV("", 0));
+		accumulatePass.Write(accumulatedDepth, TextureView{}.UAV("", 0));
+		accumulatePass.Write(accumulatedVisibility, TextureView{}.UAV("", 0));
+		accumulatePass.Bind([this, cameraBuffer, geometryDepthMinMax, cloudOutput, cloudDepth, cloudVisibility,
+			historyScattering=lastFrameAccumulatedScattering, historyDepth=lastFrameAccumulatedDepth,
+			historyVisibility=lastFrameAccumulatedVisibility, accumulatedScattering, accumulatedDepth,
+			accumulatedVisibility](CommandList& list, RenderPassResources& resources)
+		{
+			auto accumulateLayout = RenderPipelineLayout{}
+				.ComputeShader({ "Clouds/Accumulate", "Main" });
 
-		list.BindPipeline(upscaleLayout);
+			list.BindPipeline(accumulateLayout);
 
-		struct {
-			uint32_t cameraBuffer;
-			uint32_t cameraIndex;
-			uint32_t timeSlice;
-			uint32_t geometryDepthTexture;
-			uint32_t newScatteringTransmittanceTexture;
-			uint32_t newDepthTexture;
-			uint32_t newVisibilityTexture;
-			uint32_t oldScatteringTransmittanceTexture;
-			uint32_t oldDepthTexture;
-			uint32_t oldVisibilityTexture;
-			uint32_t outputScatteringTransmittanceTexture;
-			uint32_t outputDepthTexture;
-			uint32_t outputVisibilityTexture;
-		} bindData;
+			struct {
+				uint32_t cameraBuffer;
+				uint32_t cameraIndex;
+				uint32_t geometryDepthMinMaxTexture;
+				uint32_t newScatteringTransmittanceTexture;
+				uint32_t newDepthTexture;
+				uint32_t newVisibilityTexture;
+				uint32_t historyScatteringTransmittanceTexture;
+				uint32_t historyDepthTexture;
+				uint32_t historyVisibilityTexture;
+				uint32_t outputScatteringTransmittanceTexture;
+				uint32_t outputDepthTexture;
+				uint32_t outputVisibilityTexture;
+			} bindData;
 
-		bindData.cameraBuffer = resources.Get(cameraBuffer);
-		bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
-		bindData.timeSlice = Renderer::Get().GetAppFrame() % 16;
-		bindData.geometryDepthTexture = resources.Get(depthStencil);
-		bindData.newScatteringTransmittanceTexture = resources.Get(cloudOutput);
-		bindData.newDepthTexture = resources.Get(cloudDepth);
-		bindData.newVisibilityTexture = resources.Get(cloudVisibility);
-		bindData.oldScatteringTransmittanceTexture = 0;
-		if (oldUpscaled.id != 0)
-			bindData.oldScatteringTransmittanceTexture = resources.Get(oldUpscaled);
-		bindData.oldDepthTexture = 0;
-		if (oldDepthUpscaled.id != 0)
-			bindData.oldDepthTexture = resources.Get(oldDepthUpscaled);
-		bindData.oldVisibilityTexture = 0;
-		if (oldVisibilityUpscaled.id != 0)
-			bindData.oldVisibilityTexture = resources.Get(oldVisibilityUpscaled);
+			bindData.cameraBuffer = resources.Get(cameraBuffer);
+			bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
+			bindData.geometryDepthMinMaxTexture = resources.Get(geometryDepthMinMax);
+			bindData.newScatteringTransmittanceTexture = resources.Get(cloudOutput);
+			bindData.newDepthTexture = resources.Get(cloudDepth);
+			bindData.newVisibilityTexture = resources.Get(cloudVisibility);
+			bindData.historyScatteringTransmittanceTexture = 0;
+			if (historyScattering.id != 0)
+				bindData.historyScatteringTransmittanceTexture = resources.Get(historyScattering);
+			bindData.historyDepthTexture = 0;
+			if (historyDepth.id != 0)
+				bindData.historyDepthTexture = resources.Get(historyDepth);
+			bindData.historyVisibilityTexture = 0;
+			if (historyVisibility.id != 0)
+				bindData.historyVisibilityTexture = resources.Get(historyVisibility);
+			bindData.outputScatteringTransmittanceTexture = resources.Get(accumulatedScattering);
+			bindData.outputDepthTexture = resources.Get(accumulatedDepth);
+			bindData.outputVisibilityTexture = resources.Get(accumulatedVisibility);
 
-		bindData.outputScatteringTransmittanceTexture = resources.Get(cloudOutputUpscaled);
-		bindData.outputDepthTexture = resources.Get(cloudDepthUpscaled);
-		bindData.outputVisibilityTexture = resources.Get(cloudVisibilityUpscaled);
+			list.BindConstants("bindData", bindData);
 
-		list.BindConstants("bindData", bindData);
-		
-		const auto& outputComponent = device->GetResourceManager().Get(resources.GetTexture(cloudOutputUpscaled));
-		const auto dispatchX = std::ceilf(outputComponent.description.width / 8.f);
-		const auto dispatchY = std::ceilf(outputComponent.description.height / 8.f);
+			const auto& outputComponent = device->GetResourceManager().Get(resources.GetTexture(accumulatedScattering));
+			const auto dispatchX = std::ceilf(outputComponent.description.width / 8.f);
+			const auto dispatchY = std::ceilf(outputComponent.description.height / 8.f);
 
-		list.Dispatch(dispatchX, dispatchY, 1);
-	});
+			list.Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, 1);
+		});
 
-	lastFrameScatteringUpscaled = cloudOutputUpscaled;
-	lastFrameDepthUpscaled = cloudDepthUpscaled;
-	lastFrameVisibilityUpscaled = cloudVisibilityUpscaled;
+		lastFrameAccumulatedScattering = accumulatedScattering;
+		lastFrameAccumulatedDepth = accumulatedDepth;
+		lastFrameAccumulatedVisibility = accumulatedVisibility;
+
+		// Purely spatial bilateral upsample to full resolution, no full res history needed.
+		auto& upsamplePass = graph.AddPass("Clouds Upsample Pass", ExecutionQueue::Compute);
+		cloudOutputUpscaled = upsamplePass.Create(TransientTextureDescription{
+			.width = 0,
+			.height = 0,
+			.depth = 1,
+			.resolutionScale = 1.f,
+			.format = DXGI_FORMAT_R16G16B16A16_FLOAT
+		}, VGText("Clouds upscaled scattering transmittance"));
+		cloudDepthUpscaled = upsamplePass.Create(TransientTextureDescription{
+			.width = 0,
+			.height = 0,
+			.depth = 1,
+			.resolutionScale = 1.f,
+			.format = DXGI_FORMAT_R32_FLOAT
+		}, VGText("Clouds upscaled depth"));
+		cloudVisibilityUpscaled = upsamplePass.Create(TransientTextureDescription{
+			.width = 0,
+			.height = 0,
+			.depth = 1,
+			.resolutionScale = 1.f,
+			.format = DXGI_FORMAT_R16G16_FLOAT
+		}, VGText("Clouds upscaled sky visibility"));
+		upsamplePass.Read(cameraBuffer, ResourceBind::SRV);
+		upsamplePass.Read(depthStencil, ResourceBind::SRV);
+		upsamplePass.Read(geometryDepthMinMax, ResourceBind::SRV);
+		upsamplePass.Read(accumulatedScattering, ResourceBind::SRV);
+		upsamplePass.Read(accumulatedDepth, ResourceBind::SRV);
+		upsamplePass.Read(accumulatedVisibility, ResourceBind::SRV);
+		upsamplePass.Write(cloudOutputUpscaled, TextureView{}.UAV("", 0));
+		upsamplePass.Write(cloudDepthUpscaled, TextureView{}.UAV("", 0));
+		upsamplePass.Write(cloudVisibilityUpscaled, TextureView{}.UAV("", 0));
+		upsamplePass.Bind([this, cameraBuffer, depthStencil, geometryDepthMinMax, accumulatedScattering, accumulatedDepth,
+			accumulatedVisibility, cloudOutputUpscaled, cloudDepthUpscaled, cloudVisibilityUpscaled]
+			(CommandList& list, RenderPassResources& resources)
+		{
+			auto upsampleLayout = RenderPipelineLayout{}
+				.ComputeShader({ "Clouds/Upsample", "Main" });
+
+			list.BindPipeline(upsampleLayout);
+
+			struct {
+				uint32_t cameraBuffer;
+				uint32_t cameraIndex;
+				uint32_t geometryDepthTexture;
+				uint32_t geometryDepthMinMaxTexture;
+				uint32_t accumulatedScatteringTransmittanceTexture;
+				uint32_t accumulatedDepthTexture;
+				uint32_t accumulatedVisibilityTexture;
+				uint32_t outputScatteringTransmittanceTexture;
+				uint32_t outputDepthTexture;
+				uint32_t outputVisibilityTexture;
+			} bindData;
+
+			bindData.cameraBuffer = resources.Get(cameraBuffer);
+			bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
+			bindData.geometryDepthTexture = resources.Get(depthStencil);
+			bindData.geometryDepthMinMaxTexture = resources.Get(geometryDepthMinMax);
+			bindData.accumulatedScatteringTransmittanceTexture = resources.Get(accumulatedScattering);
+			bindData.accumulatedDepthTexture = resources.Get(accumulatedDepth);
+			bindData.accumulatedVisibilityTexture = resources.Get(accumulatedVisibility);
+			bindData.outputScatteringTransmittanceTexture = resources.Get(cloudOutputUpscaled);
+			bindData.outputDepthTexture = resources.Get(cloudDepthUpscaled);
+			bindData.outputVisibilityTexture = resources.Get(cloudVisibilityUpscaled);
+
+			list.BindConstants("bindData", bindData);
+
+			const auto& outputComponent = device->GetResourceManager().Get(resources.GetTexture(cloudOutputUpscaled));
+			const auto dispatchX = std::ceilf(outputComponent.description.width / 8.f);
+			const auto dispatchY = std::ceilf(outputComponent.description.height / 8.f);
+
+			list.Dispatch((uint32_t)dispatchX, (uint32_t)dispatchY, 1);
+		});
+	}
+
+	else
+	{
+		// Legacy interleaved reconstruction: full res history, jitter-aligned refresh.
+		auto& upscalePass = graph.AddPass("Clouds Upscale Pass", ExecutionQueue::Compute);
+		cloudOutputUpscaled = upscalePass.Create(TransientTextureDescription{
+			.width = 0,
+			.height = 0,
+			.depth = 1,
+			.resolutionScale = 1.f,
+			.format = DXGI_FORMAT_R16G16B16A16_FLOAT
+		}, VGText("Clouds upscaled scattering transmittance"));
+		cloudDepthUpscaled = upscalePass.Create(TransientTextureDescription{
+			.width = 0,
+			.height = 0,
+			.depth = 1,
+			.resolutionScale = 1.f,
+			.format = DXGI_FORMAT_R32_FLOAT
+		}, VGText("Clouds upscaled depth"));
+		cloudVisibilityUpscaled = upscalePass.Create(TransientTextureDescription{
+			.width = 0,
+			.height = 0,
+			.depth = 1,
+			.resolutionScale = 1.f,
+			.format = DXGI_FORMAT_R16G16_FLOAT
+		}, VGText("Clouds upscaled sky visibility"));
+		upscalePass.Read(cameraBuffer, ResourceBind::SRV);
+		upscalePass.Read(depthStencil, ResourceBind::SRV);
+		upscalePass.Read(cloudOutput, ResourceBind::SRV);
+		upscalePass.Read(cloudDepth, ResourceBind::SRV);
+		upscalePass.Read(cloudVisibility, ResourceBind::SRV);
+		upscalePass.Read(lastFrameScatteringUpscaled, ResourceBind::SRV);
+		upscalePass.Read(lastFrameDepthUpscaled, ResourceBind::SRV);
+		upscalePass.Read(lastFrameVisibilityUpscaled, ResourceBind::SRV);
+		upscalePass.Write(cloudOutputUpscaled, TextureView{}.UAV("", 0));
+		upscalePass.Write(cloudDepthUpscaled, TextureView{}.UAV("", 0));
+		upscalePass.Write(cloudVisibilityUpscaled, TextureView{}.UAV("", 0));
+		upscalePass.Bind([this, cameraBuffer, depthStencil, cloudOutput, cloudDepth, cloudVisibility, oldUpscaled=lastFrameScatteringUpscaled,
+			oldDepthUpscaled=lastFrameDepthUpscaled, oldVisibilityUpscaled=lastFrameVisibilityUpscaled, cloudOutputUpscaled,
+			cloudDepthUpscaled, cloudVisibilityUpscaled](CommandList& list, RenderPassResources& resources)
+		{
+			auto upscaleLayout = RenderPipelineLayout{}
+				.ComputeShader({ "Clouds/Upscale", "Main" });
+
+			list.BindPipeline(upscaleLayout);
+
+			struct {
+				uint32_t cameraBuffer;
+				uint32_t cameraIndex;
+				uint32_t timeSlice;
+				uint32_t geometryDepthTexture;
+				uint32_t newScatteringTransmittanceTexture;
+				uint32_t newDepthTexture;
+				uint32_t newVisibilityTexture;
+				uint32_t oldScatteringTransmittanceTexture;
+				uint32_t oldDepthTexture;
+				uint32_t oldVisibilityTexture;
+				uint32_t outputScatteringTransmittanceTexture;
+				uint32_t outputDepthTexture;
+				uint32_t outputVisibilityTexture;
+			} bindData;
+
+			bindData.cameraBuffer = resources.Get(cameraBuffer);
+			bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
+			bindData.timeSlice = Renderer::Get().GetAppFrame() % 16;
+			bindData.geometryDepthTexture = resources.Get(depthStencil);
+			bindData.newScatteringTransmittanceTexture = resources.Get(cloudOutput);
+			bindData.newDepthTexture = resources.Get(cloudDepth);
+			bindData.newVisibilityTexture = resources.Get(cloudVisibility);
+			bindData.oldScatteringTransmittanceTexture = 0;
+			if (oldUpscaled.id != 0)
+				bindData.oldScatteringTransmittanceTexture = resources.Get(oldUpscaled);
+			bindData.oldDepthTexture = 0;
+			if (oldDepthUpscaled.id != 0)
+				bindData.oldDepthTexture = resources.Get(oldDepthUpscaled);
+			bindData.oldVisibilityTexture = 0;
+			if (oldVisibilityUpscaled.id != 0)
+				bindData.oldVisibilityTexture = resources.Get(oldVisibilityUpscaled);
+
+			bindData.outputScatteringTransmittanceTexture = resources.Get(cloudOutputUpscaled);
+			bindData.outputDepthTexture = resources.Get(cloudDepthUpscaled);
+			bindData.outputVisibilityTexture = resources.Get(cloudVisibilityUpscaled);
+
+			list.BindConstants("bindData", bindData);
+
+			const auto& outputComponent = device->GetResourceManager().Get(resources.GetTexture(cloudOutputUpscaled));
+			const auto dispatchX = std::ceilf(outputComponent.description.width / 8.f);
+			const auto dispatchY = std::ceilf(outputComponent.description.height / 8.f);
+
+			list.Dispatch(dispatchX, dispatchY, 1);
+		});
+
+		lastFrameScatteringUpscaled = cloudOutputUpscaled;
+		lastFrameDepthUpscaled = cloudDepthUpscaled;
+		lastFrameVisibilityUpscaled = cloudVisibilityUpscaled;
+	}
 
 	return { cloudOutputUpscaled, cloudDepthUpscaled, cloudVisibilityUpscaled, cirrusTag, weatherTag };
 }

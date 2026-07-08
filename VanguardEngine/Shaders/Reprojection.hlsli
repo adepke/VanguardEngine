@@ -48,6 +48,10 @@ float2 ReprojectUv(Camera camera, float2 inputUv, float depth)
 	// Project that world position into the previous frame's clip space.
 	matrix lastFrameViewProjection = mul(camera.lastFrameView, camera.lastFrameProjection);
 	float4 reprojected = mul(float4(worldSpace, 1.f), lastFrameViewProjection);
+	// Degenerate projection would divide by ~zero and emit NaN/Inf UVs, which then pass naive range
+	// checks (NaN comparisons are always false) and poison temporal history. Force rejection instead.
+	if (abs(reprojected.w) < 0.000001f)
+		return float2(-1.f, -1.f);
 	reprojected /= reprojected.w;
 
 	return ClipSpaceToUv(reprojected);

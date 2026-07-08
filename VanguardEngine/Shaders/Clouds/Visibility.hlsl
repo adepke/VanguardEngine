@@ -15,8 +15,8 @@ struct BindData
 	uint cameraBuffer;
 	uint cameraIndex;
 	float solarZenithAngle;
-	uint timeSlice;
-	uint geometryDepthTexture;
+	uint frameIndex;
+	uint geometryDepthTexture;  // Downsampled (min, max) reversed-Z bounds at output resolution.
 	uint blueNoiseTexture;
 	uint atmosphereIrradianceBuffer;
 	float2 wind;
@@ -38,7 +38,7 @@ float2 RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uin
 	Texture3D<float4> curlNoiseTexture;  // Null texture (visibility always marches at low detail).
 	StructuredBuffer<float3> atmosphereIrradiance = ResourceDescriptorHeap[bindData.atmosphereIrradianceBuffer];
 	Texture2D<float3> weatherTexture = ResourceDescriptorHeap[bindData.weatherTexture];
-	Texture2D<float> geometryDepthTexture = ResourceDescriptorHeap[bindData.geometryDepthTexture];
+	Texture2D<float2> geometryDepthMinMaxTexture = ResourceDescriptorHeap[bindData.geometryDepthTexture];
 	Texture2D<float> blueNoiseTexture = ResourceDescriptorHeap[bindData.blueNoiseTexture];
 
 	const float planetRadius = 6360.0;  // #TODO: Get from atmosphere data.
@@ -74,9 +74,11 @@ float2 RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uin
 	marchEnd = clamp(marchEnd, 0, 50);
 
 	// Early out of the march if we hit opaque geometry.
-	// Using the base UV instead of jittered provides slightly better edges around geometry.
-	float geometryDepth = geometryDepthTexture.Sample(bilinearClamp, baseUv);
-	geometryDepth = LinearizeDepth(camera, geometryDepth) * camera.farPlane;
+	// The min channel of the downsampled texture holds the farthest geometry depth over this pixel's
+	// full resolution footprint (conservative against edges), and the stable per-pixel load keeps the
+	// clamp consistent across the temporal jitter sequence.
+	const uint2 lowResPixel = uint2(baseUv * float2(width, height));
+	float geometryDepth = LinearizeDepth(camera, geometryDepthMinMaxTexture[lowResPixel].x) * camera.farPlane;
 	if (geometryDepth < camera.farPlane)
 	{
 		geometryDepth *= 0.001;  // Meters to kilometers.
@@ -92,12 +94,18 @@ float2 RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uin
 	
 	uint blueNoiseWidth, blueNoiseHeight;
 	blueNoiseTexture.GetDimensions(blueNoiseWidth, blueNoiseHeight);
+#ifdef CLOUDS_STOCHASTIC
+	// Animated per-frame offset, integrating the outer march's banding into noise over time.
+	const float rayOffset = blueNoiseTexture[lowResPixel % uint2(blueNoiseWidth, blueNoiseHeight)];
+	float jitter = frac(rayOffset + (bindData.frameIndex % 64) * 0.61803398875f);
+#else
 	const float upscaleResolutionMultiplier = 4.f;
 	// Sample blue noise at one pixel per upscaled sample, so scale the coordinates by the resolution scale.
 	float2 blueNoiseSamplePos = jitteredUv * uint2(width, height) * upscaleResolutionMultiplier;
 	blueNoiseSamplePos = blueNoiseSamplePos / float2(blueNoiseWidth, blueNoiseHeight);
 	float rayOffset = blueNoiseTexture.Sample(pointWrap, blueNoiseSamplePos);
 	float jitter = saturate(rayOffset);  // [0, 1]
+#endif
 
 	float stepSize = (marchEnd - marchStart) / 20;
 	dist += jitter * stepSize;
@@ -210,12 +218,22 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	Camera camera = cameraBuffer[bindData.cameraIndex];
 
 	float2 uv = (dispatchId.xy + 0.5.xx) / float2(width, height);
+#ifdef CLOUDS_STOCHASTIC
+	// No subpixel jitter, rays go through pixel centers - see Clouds/Main.hlsl for the reasoning. The
+	// stochastic element is the animated ray start offset only.
+	float2 jitteredUv = uv;
+#else
 	// Get the UV coordinates that are top-left aligned.
 	float2 alignedUv = floor(uv * uint2(width, height)) / float2(width, height);
 	// Jitter the UV coordinates for temporal accumulation.
-	float2 jitteredUv = JitterUv(alignedUv, bindData.upscaledResolution, bindData.timeSlice);
+	float2 jitteredUv = JitterUv(alignedUv, bindData.upscaledResolution, bindData.frameIndex);
+#endif
 
 	float2 shadowSegment = RayMarch(camera, uv, jitteredUv, width, height);
+
+	// NaN firewall, see Clouds/Main.hlsl.
+	if (any(isnan(shadowSegment)))
+		shadowSegment = float2(0.f, 0.f);
 
 	outputTexture[dispatchId.xy] = shadowSegment;
 }

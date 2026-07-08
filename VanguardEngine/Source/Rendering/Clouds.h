@@ -66,9 +66,18 @@ private:
 	// Tracks accumulation frames, set to 0 for a full re-bake of the cube.
 	uint32_t environmentBakeCounter = 0;
 
+	// Legacy interleaved reconstruction history (full resolution).
 	RenderResource lastFrameScatteringUpscaled;
 	RenderResource lastFrameDepthUpscaled;
 	RenderResource lastFrameVisibilityUpscaled;
+
+	// Stochastic reconstruction history (cloud render resolution). Depth is stored in inverse kilometers.
+	RenderResource lastFrameAccumulatedScattering;
+	RenderResource lastFrameAccumulatedDepth;
+	RenderResource lastFrameAccumulatedVisibility;
+
+	// Tracks cloudReconstructionMode to reset temporal history when it changes.
+	int lastReconstructionMode = -1;
 
 	void GenerateWeather(CommandList& list, uint32_t weatherTexture);
 	void GenerateNoise(CommandList& list, uint32_t baseShapeTexture, uint32_t detailShapeTexture, uint32_t curlShapeTexture);
