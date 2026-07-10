@@ -38,6 +38,11 @@ VGMakeMemberCheck(materialIndex);
 template <typename T>
 void MeshSystem::Render(Renderer& renderer, const entt::registry& registry, CommandList& list, T& bindData, BufferHandle indirectRenderArgs)
 {
+	if (Renderer::Get().renderableCount == 0)
+	{
+		return;  // Nothing to draw, early out.
+	}
+
 	auto& indexBuffer = renderer.device->GetResourceManager().Get(renderer.meshFactory->indexBuffer);
 	D3D12_INDEX_BUFFER_VIEW indexView{
 		.BufferLocation = indexBuffer.Native()->GetGPUVirtualAddress(),

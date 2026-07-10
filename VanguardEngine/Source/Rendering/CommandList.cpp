@@ -330,6 +330,12 @@ void CommandList::Dispatch(uint32_t x, uint32_t y, uint32_t z)
 		return;
 	}
 
+	// Ignore empty dispatches. These trigger a D3D warning.
+	if (x == 0 || y == 0 || z == 0)
+	{
+		return;
+	}
+
 	list->Dispatch(x, y, z);
 }
 

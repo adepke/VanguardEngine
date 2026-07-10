@@ -349,12 +349,16 @@ RenderDevice::~RenderDevice()
 
 	Synchronize();
 
-	::CloseHandle(syncEvent);
-
 #if !BUILD_RELEASE
+	if (deviceRemovedHandle)
+	{
+		::UnregisterWaitEx(deviceRemovedHandle, INVALID_HANDLE_VALUE);
+		deviceRemovedHandle = nullptr;
+	}
 	::CloseHandle(deviceRemovedEvent);
-	//::CloseHandle(deviceRemovedHandle);  // This handle should not be closed? An invalid handle error is thrown when attempting to close it.
 #endif
+
+	::CloseHandle(syncEvent);
 
 #if !BUILD_RELEASE
 	if (debugging)

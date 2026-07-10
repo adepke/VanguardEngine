@@ -351,6 +351,11 @@ void UserInterfaceManager::Render(CommandList& list, BufferHandle cameraBuffer)
 			else
 			{
 				const D3D12_RECT r = { (LONG)(pcmd->ClipRect.x - clip_off.x), (LONG)(pcmd->ClipRect.y - clip_off.y), (LONG)(pcmd->ClipRect.z - clip_off.x), (LONG)(pcmd->ClipRect.w - clip_off.y) };
+
+				// Skip fully clipped draws.
+				if (r.right <= r.left || r.bottom <= r.top)
+					continue;
+
 				list.Native()->RSSetScissorRects(1, &r);
 
 				struct Data
