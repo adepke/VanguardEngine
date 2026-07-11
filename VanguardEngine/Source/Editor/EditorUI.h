@@ -35,6 +35,7 @@ private:
 	bool enabled = true;
 
 	entt::entity hierarchySelectedEntity = entt::null;
+	bool scrollToSelectedEntity = false;  // Scroll the hierarchy window on next draw, to focus.
 	bool linearizeDepth = true;
 
 	bool fullscreen = false;

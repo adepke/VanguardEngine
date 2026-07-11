@@ -1237,7 +1237,13 @@ void EditorUI::DrawScene(RenderDevice* device, entt::registry& registry, Texture
 			XMVECTOR rayOrigin, rayDirection;
 			Picking::ProjectUIToWorld(mouseLocal.x, mouseLocal.y, viewportPixels.x, viewportPixels.y, sceneWidthUV, sceneHeightUV,
 				globalViewMatrix, globalProjectionMatrix, rayOrigin, rayDirection);
-			hierarchySelectedEntity = Picking::Pick(registry, rayOrigin, rayDirection);
+			const entt::entity picked = Picking::Pick(registry, rayOrigin, rayDirection);
+
+			// Scroll the hierarchy to the entity we just picked.
+			if (registry.valid(picked) && picked != hierarchySelectedEntity)
+				scrollToSelectedEntity = true;
+
+			hierarchySelectedEntity = picked;
 		}
 
 		// Use a dummy object to get proper drag drop bounds.
@@ -1516,6 +1522,13 @@ void EditorUI::DrawEntityHierarchy(entt::registry& registry)
 					nodeOpen = ImGui::TreeNodeEx("EntityTreeNode", nodeFlags, "Entity_%i", entt::to_entity(entity));
 				}
 
+				// Check if we need to scroll to this entity.
+				if (entity == hierarchySelectedEntity && scrollToSelectedEntity)
+				{
+					ImGui::SetScrollHereY(0.5f);
+					scrollToSelectedEntity = false;
+				}
+
 				// Only triggers on left click, not right click.
 				if (ImGui::IsItemClicked())
 				{
@@ -1567,6 +1580,7 @@ void EditorUI::DrawEntityHierarchy(entt::registry& registry)
 		if (registry.valid(entityToDuplicate))
 		{
 			hierarchySelectedEntity = DuplicateEntity(registry, entityToDuplicate);
+			scrollToSelectedEntity = true;
 		}
 
 		if (registry.valid(entityToDelete))
