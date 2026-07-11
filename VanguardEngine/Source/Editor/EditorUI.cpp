@@ -224,7 +224,7 @@ void EditorUI::DrawRenderOverlayTools(RenderDevice* device, const ImVec2& min, c
 			const auto sliderSize = ImVec2{ toolWindowSize.x - (style.FramePadding.x + sliderPad) * 2.f, toolWindowSize.y - viewTextSize.y - style.FramePadding.y * 2.f - style.ItemSpacing.y - 4.f };
 
 			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + sliderPad);
-			ImGui::VSliderInt("", sliderSize, &hiZOverlayMip, 0, maxMip - 1);
+			ImGui::VSliderInt("##HiZMipLevel", sliderSize, &hiZOverlayMip, 0, maxMip - 1);
 
 			break;
 		}
@@ -1856,13 +1856,13 @@ void EditorUI::DrawRenderVisualizer(RenderDevice* device, ClusteredLightCulling&
 				{
 					ImGui::Text("Drag the overlay onto the scene to view.");
 
-					ImGui::ImageButton(device, overlay, { 0.25f, 0.25f });
+					ImGui::ImageButton("##OverlayDragButton", device, overlay, { 0.25f, 0.25f });
 
 					if (ImGui::BeginDragDropSource(ImGuiDragDropFlags_None))
 					{
 						ImGui::SetDragDropPayload("RenderOverlay", nullptr, 0);
 
-						ImGui::ImageButton(device, overlay, { 0.1f, 0.1f }, { 0.f, 0.f }, { 1.f, 1.f }, { 1.f, 1.f, 1.f, 0.5f });
+						ImGui::ImageButton("##OverlayDragPreview", device, overlay, { 0.1f, 0.1f }, { 0.f, 0.f }, { 1.f, 1.f }, { 1.f, 1.f, 1.f, 0.5f });
 
 						ImGui::EndDragDropSource();
 					}
