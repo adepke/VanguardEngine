@@ -797,6 +797,12 @@ entt::entity EditorUI::DuplicateEntity(entt::registry& registry, entt::entity so
 
 	for (auto [id, storage] : registry.storage())
 	{
+		// Skip certain components/tags that are not allowed to be copied. Maybe there's some way to do this with traits instead?
+		if (id == entt::type_hash<GpuSlotComponent>::value() || id == entt::type_hash<TransformDirtyComponent>::value())
+		{
+			continue;
+		}
+
 		if (storage.contains(source))
 		{
 			storage.push(copy, storage.value(source));
@@ -905,7 +911,7 @@ void EditorUI::DrawSelectionGizmo(entt::registry& registry)
 			gizmoMode = (gizmoMode == ImGuizmo::WORLD) ? ImGuizmo::LOCAL : ImGuizmo::WORLD;
 	}
 
-	auto& transform = registry.get<TransformComponent>(hierarchySelectedEntity);
+	const auto& transform = registry.get<const TransformComponent>(hierarchySelectedEntity);
 	const auto translation = XMVectorSet(transform.translation.x, transform.translation.y, transform.translation.z, 0.f);
 
 	// Draw a debug bounding sphere around the selected entity whenever it has mesh geometry.
@@ -982,17 +988,19 @@ void EditorUI::DrawSelectionGizmo(entt::registry& registry)
 
 	if (ImGuizmo::Manipulate(&view.m[0][0], &projection.m[0][0], op, mode, &model.m[0][0]))
 	{
-		// Write the updated components back to the entity.
 		float t[3], r[3], s[3];
 		ImGuizmo::DecomposeMatrixToComponents(&model.m[0][0], t, r, s);
 
-		transform.translation = { t[0], t[1], t[2] };
-		transform.rotation = {
-			-XMConvertToRadians(r[0]),
-			-XMConvertToRadians(r[1]),
-			-XMConvertToRadians(r[2]),
-		};
-		transform.scale = { s[0], s[1], s[2] };
+		registry.patch<TransformComponent>(hierarchySelectedEntity, [&](TransformComponent& updated)
+		{
+			updated.translation = { t[0], t[1], t[2] };
+			updated.rotation = {
+				-XMConvertToRadians(r[0]),
+				-XMConvertToRadians(r[1]),
+				-XMConvertToRadians(r[2]),
+			};
+			updated.scale = { s[0], s[1], s[2] };
+		});
 	}
 }
 

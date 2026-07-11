@@ -21,7 +21,7 @@ void ComponentProperties::RenderNameComponent(entt::registry& registry, entt::en
 
 void ComponentProperties::RenderTransformComponent(entt::registry& registry, entt::entity entity)
 {
-	auto& component = registry.get<TransformComponent>(entity);
+	const auto& component = registry.get<const TransformComponent>(entity);
 
 	float translation[] = { component.translation.x, component.translation.y, component.translation.z };
 	float rotation[] = { component.rotation.x, component.rotation.y, component.rotation.z };
@@ -35,9 +35,9 @@ void ComponentProperties::RenderTransformComponent(entt::registry& registry, ent
 
 	ImGui::Text("Transform");
 
-	ImGui::DragFloat3("Translation", translation, 1.f, -100000.0, 100000.0, "%.4f");
-	ImGui::DragFloat3("Rotation", rotation, 0.5f, -360.0, 360.0, "%.4f");
-	ImGui::DragFloat3("Scale", scale, 0.025f, -10000.0, 10000.0, "%.4f");
+	bool changed = ImGui::DragFloat3("Translation", translation, 1.f, -100000.0, 100000.0, "%.4f");
+	changed |= ImGui::DragFloat3("Rotation", rotation, 0.5f, -360.0, 360.0, "%.4f");
+	changed |= ImGui::DragFloat3("Scale", scale, 0.025f, -10000.0, 10000.0, "%.4f");
 
 	// Convert degrees to radians.
 	for (auto& dimension : rotation)
@@ -45,9 +45,15 @@ void ComponentProperties::RenderTransformComponent(entt::registry& registry, ent
 		dimension *= 3.14159265359f / 180.f;
 	}
 
-	component.translation = XMFLOAT3{ translation };
-	component.rotation = XMFLOAT3{ rotation };
-	component.scale = XMFLOAT3{ scale };
+	if (changed)
+	{
+		registry.patch<TransformComponent>(entity, [&](TransformComponent& transform)
+		{
+			transform.translation = XMFLOAT3{ translation };
+			transform.rotation = XMFLOAT3{ rotation };
+			transform.scale = XMFLOAT3{ scale };
+		});
+	}
 }
 
 void ComponentProperties::RenderControlComponent(entt::registry& registry, entt::entity entity)

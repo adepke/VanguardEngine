@@ -45,68 +45,177 @@ void Renderer::CreateRootSignature()
 	}
 }
 
-std::vector<MeshRenderable> Renderer::UpdateObjects(const entt::registry& registry)
+void Renderer::OnMeshConstruct(entt::registry& registry, entt::entity entity)
 {
-	VGScopedCPUStat("Update Instance Buffer");
+	// Can't be certain that the transform component is ready to go yet, so defer until next frame.
+	pendingMeshes.emplace_back(entity);
+}
 
-	const auto instanceView = registry.view<const TransformComponent, const MeshComponent>();
+void Renderer::OnMeshDestroy(entt::registry& registry, entt::entity entity)
+{
+	registry.remove<GpuSlotComponent>(entity);
+}
 
-	std::vector<MeshRenderable> renderables;
-	renderables.reserve(instanceView.size_hint());
-	std::vector<ObjectData> objectData;
-	objectData.reserve(instanceView.size_hint());
+void Renderer::OnSlotDestroy(entt::registry& registry, entt::entity entity)
+{
+	const auto& slot = registry.get<GpuSlotComponent>(entity);
+	instanceBufferAllocator.Free(slot.baseSlot, slot.count);
+	drawArgsDirty = true;
+}
 
-	size_t index = 0;
-	std::for_each(std::execution::seq, instanceView.begin(), instanceView.end(), [this, &registry, &index, &renderables, &objectData](auto entity)
+void Renderer::OnTransformDirty(entt::registry& registry, entt::entity entity)
+{
+	// When a transform component is modified, attach a dirty tag so we can bulk update these entities.
+	registry.emplace_or_replace<TransformDirtyComponent>(entity);
+}
+
+ObjectData Renderer::BuildObjectData(const TransformComponent& transform, const MeshComponent& mesh, size_t subsetIndex) const
+{
+	const auto& subset = mesh.subsets[subsetIndex];
+
+	const auto positionOffset = (uint32_t)(mesh.globalOffset.position + subset.localOffset.position);
+	const auto extraOffset = (uint32_t)(mesh.globalOffset.extra + subset.localOffset.extra);
+	const auto maxScale = std::max(std::max(transform.scale.x, transform.scale.y), transform.scale.z);
+
+	const auto scaling = XMVectorSet(transform.scale.x, transform.scale.y, transform.scale.z, 0.f);
+	const auto translation = XMVectorSet(transform.translation.x, transform.translation.y, transform.translation.z, 0.f);
+
+	const auto scalingMat = XMMatrixScalingFromVector(scaling);
+	const auto rotationMat = XMMatrixRotationX(-transform.rotation.x) * XMMatrixRotationY(-transform.rotation.y) * XMMatrixRotationZ(-transform.rotation.z);
+	const auto translationMat = XMMatrixTranslationFromVector(translation);
+
+	ObjectData instance;
+	instance.worldMatrix = scalingMat * rotationMat * translationMat;
+	instance.vertexMetadata = mesh.metadata;
+	instance.materialIndex = (uint32_t)subset.materialIndex;
+	instance.boundingSphereRadius = subset.boundingSphereRadius * maxScale;
+
+	// Apply offsets
+	const auto old = instance.vertexMetadata.channelOffsets[0][0];
+	for (int i = 0; i < vertexChannels / 4 + 1; ++i)
 	{
-		const auto& transform = registry.get<TransformComponent>(entity);
-		const auto& mesh = registry.get<MeshComponent>(entity);
+		instance.vertexMetadata.channelOffsets[i].AddAll(extraOffset);
+	}
+	instance.vertexMetadata.channelOffsets[0][0] = old + positionOffset;
 
-		for (const auto& subset : mesh.subsets)
+	return instance;
+}
+
+void Renderer::UpdateGpuScene(entt::registry& registry)
+{
+	VGScopedCPUStat("Update GPU Scene");
+
+	// New meshes need slot allocation.
+	for (const auto entity : pendingMeshes)
+	{
+		// Sanity check since state could've changed before we got to it.
+		if (!registry.valid(entity) || !registry.all_of<MeshComponent>(entity) || registry.all_of<GpuSlotComponent>(entity))
 		{
-			const auto maxScale = std::max(std::max(transform.scale.x, transform.scale.y), transform.scale.z);
-
-			MeshRenderable renderable{
-				.positionOffset = (uint32_t)(mesh.globalOffset.position + subset.localOffset.position),
-				.extraOffset = (uint32_t)(mesh.globalOffset.extra + subset.localOffset.extra),
-				.indexOffset = (uint32_t)(mesh.globalOffset.index + subset.localOffset.index) / sizeof(uint32_t),
-				.indexCount = (uint32_t)subset.indices,
-				.materialIndex = (uint32_t)subset.materialIndex,
-				.batchId = (uint32_t)index,  // every object in separate batch for now...
-				.boundingSphereRadius = subset.boundingSphereRadius * maxScale
-			};
-			renderables.emplace_back(renderable);
-
-			const auto scaling = XMVectorSet(transform.scale.x, transform.scale.y, transform.scale.z, 0.f);
-			const auto translation = XMVectorSet(transform.translation.x, transform.translation.y, transform.translation.z, 0.f);
-
-			const auto scalingMat = XMMatrixScalingFromVector(scaling);
-			const auto rotationMat = XMMatrixRotationX(-transform.rotation.x) * XMMatrixRotationY(-transform.rotation.y) * XMMatrixRotationZ(-transform.rotation.z);
-			const auto translationMat = XMMatrixTranslationFromVector(translation);
-
-			ObjectData instance;
-			instance.worldMatrix = scalingMat * rotationMat * translationMat;
-			instance.vertexMetadata = mesh.metadata;
-			instance.materialIndex = renderable.materialIndex;
-			instance.boundingSphereRadius = renderable.boundingSphereRadius;
-
-			// Apply offsets
-			const auto old = instance.vertexMetadata.channelOffsets[0][0];
-			for (int i = 0; i < vertexChannels / 4 + 1; ++i)
-			{
-				instance.vertexMetadata.channelOffsets[i].AddAll(renderable.extraOffset);
-			}
-			instance.vertexMetadata.channelOffsets[0][0] = old + renderable.positionOffset;
-
-			objectData.emplace_back(instance);
-
-			++index;
+			continue;
 		}
-	});
 
-	device->GetResourceManager().Write(instanceBuffer, objectData);
+		const auto& mesh = registry.get<MeshComponent>(entity);
+		const auto subsetCount = (uint32_t)mesh.subsets.size();
+		if (subsetCount == 0)
+		{
+			continue;
+		}
 
-	return renderables;
+		const auto baseSlot = instanceBufferAllocator.Allocate(subsetCount);
+		if (baseSlot == SlotAllocator::invalidSlot)
+		{
+			VGLogError(logRendering, "Out of instance buffer space, mesh will not be rendered.");
+			continue;
+		}
+
+		registry.emplace<GpuSlotComponent>(entity, baseSlot, subsetCount);
+		registry.emplace_or_replace<TransformDirtyComponent>(entity);  // Needs initial upload.
+		drawArgsDirty = true;
+	}
+
+	pendingMeshes.clear();
+
+	// If a mesh was added or removed, need to rebuild the indirect draw args.
+	if (drawArgsDirty)
+	{
+		std::vector<MeshIndirectArgument> drawArguments;
+
+		const auto slotView = registry.view<const MeshComponent, const GpuSlotComponent>();
+		slotView.each([&drawArguments](const auto& mesh, const auto& slot)
+		{
+			for (size_t i = 0; i < mesh.subsets.size(); ++i)
+			{
+				const auto& subset = mesh.subsets[i];
+
+				drawArguments.emplace_back(MeshIndirectArgument{
+					.batchId = slot.baseSlot + (uint32_t)i,
+					.draw = {
+						.IndexCountPerInstance = (uint32_t)subset.indices,
+						.InstanceCount = 1,
+						.StartIndexLocation = (uint32_t)(mesh.globalOffset.index + subset.localOffset.index) / sizeof(uint32_t),
+						.BaseVertexLocation = 0,
+						.StartInstanceLocation = 0
+					}
+				});
+			}
+		});
+
+		renderableCount = drawArguments.size();
+
+		if (!drawArguments.empty())
+		{
+			device->GetResourceManager().Write(meshIndirectRenderArgs, drawArguments);
+		}
+
+		drawArgsDirty = false;
+	}
+
+	// Upload instance data for dirty objects only.
+	{
+		VGScopedCPUStat("Update Instance Buffer");
+
+		const auto dirtyView = registry.view<const TransformDirtyComponent, const GpuSlotComponent, const TransformComponent, const MeshComponent>();
+
+		// Walk all dirty objects and compute the new object data for the GPU scene.
+		std::vector<std::pair<uint32_t, ObjectData>> updates;
+		dirtyView.each([this, &updates](const auto& slot, const auto& transform, const auto& mesh)
+		{
+			for (size_t i = 0; i < mesh.subsets.size(); ++i)
+			{
+				updates.emplace_back(slot.baseSlot + (uint32_t)i, BuildObjectData(transform, mesh, i));
+			}
+		});
+
+		if (!updates.empty())
+		{
+			// Sort and then collapse adjacent ranges to perform bulk writes instead of individual per-object writes.
+			std::sort(updates.begin(), updates.end(), [](const auto& left, const auto& right) { return left.first < right.first; });
+
+			size_t rangeBegin = 0;
+			while (rangeBegin < updates.size())
+			{
+				size_t rangeEnd = rangeBegin + 1;
+				while (rangeEnd < updates.size() && updates[rangeEnd].first == updates[rangeEnd - 1].first + 1)
+				{
+					++rangeEnd;
+				}
+
+				std::vector<ObjectData> objectData;
+				objectData.reserve(rangeEnd - rangeBegin);
+				for (size_t i = rangeBegin; i < rangeEnd; ++i)
+				{
+					objectData.emplace_back(updates[i].second);
+				}
+
+				device->GetResourceManager().Write(instanceBuffer, objectData, updates[rangeBegin].first * sizeof(ObjectData));
+
+				rangeBegin = rangeEnd;
+			}
+		}
+
+		// All meshes uploaded, nothing is dirty.
+		registry.clear<TransformDirtyComponent>();
+	}
 }
 
 void Renderer::UpdateCameraBuffer(const entt::registry& registry)
@@ -315,6 +424,7 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 	CvarCreate("referenceGridEnabled", "Controls if the reference grid is visible", 0);
 	
 	constexpr size_t maxVertices = 32 * 1024 * 1024;
+	constexpr size_t maxObjectSlots = 1024 * 1024;
 
 	window = std::move(inWindow);
 	device = std::move(inDevice);
@@ -324,14 +434,23 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 
 	device->CheckFeatureSupport();
 
+	// Hook up all entity component change notifications to keep the GPU scene in sync.
+	// #TODO: refactor into dedicated system, renderer is already massive.
+	registry.on_construct<MeshComponent>().connect<&Renderer::OnMeshConstruct>(this);
+	registry.on_destroy<MeshComponent>().connect<&Renderer::OnMeshDestroy>(this);
+	registry.on_destroy<GpuSlotComponent>().connect<&Renderer::OnSlotDestroy>(this);
+	registry.on_update<TransformComponent>().connect<&Renderer::OnTransformDirty>(this);
+	registry.on_construct<TransformComponent>().connect<&Renderer::OnTransformDirty>(this);
+
 	BufferDescription instanceBufferDesc{};
-	instanceBufferDesc.updateRate = ResourceFrequency::Dynamic;
+	instanceBufferDesc.updateRate = ResourceFrequency::Static;
 	instanceBufferDesc.bindFlags = BindFlag::ShaderResource;
 	instanceBufferDesc.accessFlags = AccessFlag::CPUWrite;
-	instanceBufferDesc.size = 1024 * 1024 * 8;
+	instanceBufferDesc.size = maxObjectSlots;
 	instanceBufferDesc.stride = sizeof(ObjectData);
 
 	instanceBuffer = device->GetResourceManager().Create(instanceBufferDesc, VGText("Instance buffer"));
+	instanceBufferAllocator.Initialize(maxObjectSlots);  // instanceBuffer is the backing storage.
 
 	BufferDescription cameraBufferDesc{};
 	cameraBufferDesc.updateRate = ResourceFrequency::Static;
@@ -405,34 +524,7 @@ void Renderer::Render(entt::registry& registry)
 		shouldReloadShaders = false;
 	}
 
-	// Only run once for now since this becomes the bottleneck running every frame with 100k+ objects.
-	static bool objectsUpdated = false;
-	if (!objectsUpdated)
-	{
-		objectsUpdated = true;
-		const auto renderables = UpdateObjects(registry);
-		renderableCount = renderables.size();
-
-		std::vector<MeshIndirectArgument> drawArguments;
-		drawArguments.reserve(renderables.size());
-
-		for (const auto& renderable : renderables)
-		{
-			drawArguments.emplace_back(MeshIndirectArgument{
-				.batchId = renderable.batchId,
-				.draw = {
-					.IndexCountPerInstance = renderable.indexCount,
-					.InstanceCount = 1,
-					.StartIndexLocation = renderable.indexOffset,
-					.BaseVertexLocation = 0,
-					.StartInstanceLocation = 0
-				}
-			});
-		}
-
-		device->GetResourceManager().Write(meshIndirectRenderArgs, drawArguments);
-	}
-	
+	UpdateGpuScene(registry);
 	UpdateCameraBuffer(registry);
 
 	RenderGraph graph{ &renderGraphResources };

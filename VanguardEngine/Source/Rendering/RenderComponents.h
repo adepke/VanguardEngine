@@ -48,6 +48,18 @@ struct MeshComponent
 	VertexMetadata metadata;
 };
 
+// Tracks a GPU scene allocation.
+// Do not serialize this component, it is managed at runtime by the renderer.
+// Do not copy this component, it must be unique per instance.
+struct GpuSlotComponent
+{
+	uint32_t baseSlot = 0;
+	uint32_t count = 0;
+};
+
+// Tag for entities that have a dirty transform in the GPU scene and must be re-uploaded.
+struct TransformDirtyComponent {};
+
 struct CameraComponent
 {
 	NLOHMANN_DEFINE_TYPE_INTRUSIVE(CameraComponent, nearPlane, farPlane, fieldOfView);

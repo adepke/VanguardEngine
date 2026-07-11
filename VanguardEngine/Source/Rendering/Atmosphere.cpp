@@ -452,8 +452,10 @@ void Atmosphere::Render(RenderGraph& graph, Clouds& clouds, AtmosphereResources 
 	{
 		solarZenithAngle = registry.get<TimeOfDayComponent>(sunLight).solarZenithAngle;
 		// Update the sun light entity.
-		auto& lightTransform = registry.get<TransformComponent>(sunLight);
-		lightTransform.rotation = { 0.f, solarZenithAngle + 3.14159f / 2.f, 0.f };
+		registry.patch<TransformComponent>(sunLight, [solarZenithAngle](TransformComponent& lightTransform)
+		{
+			lightTransform.rotation = { 0.f, solarZenithAngle + 3.14159f / 2.f, 0.f };
+		});
 	}
 
 	auto& composePass = graph.AddPass("Sky Atmosphere Compose Pass", ExecutionQueue::Compute);

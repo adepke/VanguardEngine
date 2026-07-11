@@ -92,6 +92,8 @@ void CameraSystem::Update(entt::registry& registry, float deltaTime)
 	{
 		auto viewMatrix = SpectatorCameraView(transform, camera, deltaTime, pitchDelta, yawDelta, moveForward, moveBackward, moveLeft, moveRight, moveUp, moveDown, moveSprint);
 
+		registry.patch<TransformComponent>(entity);
+
 		const auto aspectRatio = static_cast<float>(Renderer::Get().device->renderWidth) / static_cast<float>(Renderer::Get().device->renderHeight);
 		const auto projectionMatrix = XMMatrixPerspectiveFovRH(camera.fieldOfView / 2.f, aspectRatio, camera.farPlane, camera.nearPlane);  // Inverse Z.
 

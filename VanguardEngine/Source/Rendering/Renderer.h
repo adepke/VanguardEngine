@@ -20,21 +20,16 @@
 #include <Rendering/OcclusionCulling.h>
 #include <Rendering/Clouds.h>
 #include <Rendering/TextureCapture.h>
+#include <Utility/SlotAllocator.h>
 
 #include <entt/entt.hpp>
 
 #include <filesystem>
+#include <vector>
 
-struct MeshRenderable
-{
-	uint32_t positionOffset;
-	uint32_t extraOffset;
-	uint32_t indexOffset;
-	uint32_t indexCount;
-	uint32_t materialIndex;
-	uint32_t batchId;
-	float boundingSphereRadius;
-};
+struct TransformComponent;
+struct MeshComponent;
+struct ObjectData;
 
 class CommandList;
 
@@ -57,7 +52,7 @@ public:
 	OcclusionCulling occlusionCulling;
 	Clouds clouds;
 
-	size_t renderableCount;
+	size_t renderableCount = 0;
 
 	ResourcePtr<ID3D12RootSignature> rootSignature;
 	ResourcePtr<ID3D12CommandSignature> meshIndirectCommandSignature;
@@ -81,6 +76,10 @@ private:
 
 	bool shouldReloadShaders = false;
 
+	SlotAllocator instanceBufferAllocator;
+	std::vector<entt::entity> pendingMeshes;  // Meshes awaiting GPU scene allocation.
+	bool drawArgsDirty = false;
+
 	// State for capture requests.
 	bool capturePending = false;
 	std::filesystem::path capturePath;
@@ -89,7 +88,18 @@ private:
 
 private:
 	void CreateRootSignature();
-	std::vector<MeshRenderable> UpdateObjects(const entt::registry& registry);
+
+	// ECS hooks, used to manage GPU scene
+	void OnMeshConstruct(entt::registry& registry, entt::entity entity);
+	void OnMeshDestroy(entt::registry& registry, entt::entity entity);
+	void OnSlotDestroy(entt::registry& registry, entt::entity entity);
+	void OnTransformDirty(entt::registry& registry, entt::entity entity);
+
+	ObjectData BuildObjectData(const TransformComponent& transform, const MeshComponent& mesh, size_t subsetIndex) const;
+	// Allocates slots for new meshes, rebuilds indirect draw args on structural changes, and
+	// uploads instance data for dirty objects only.
+	void UpdateGpuScene(entt::registry& registry);
+
 	void UpdateCameraBuffer(const entt::registry& registry);
 	void CreatePipelines();
 	BufferHandle CreateLightBuffer(const entt::registry& registry);
