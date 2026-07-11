@@ -50,6 +50,8 @@ private:
 	bool bloomControlsOpen = true;
 	bool renderVisualizerOpen = true;
 	bool consoleOpen = false;
+	bool sceneSelectorOpen = true;
+	bool modelBrowserOpen = true;
 
 	// Focus states.
 	bool entityPropertyViewerFocus = false;
@@ -100,6 +102,18 @@ private:
 	std::optional<std::filesystem::path> renamingScenePath;
 	char renameBuffer[256] = { 0 };
 
+	// Model browser state.
+	struct ModelEntry
+	{
+		std::string name;
+		std::filesystem::path path;
+	};
+
+	bool refreshModels = true;
+	std::vector<ModelEntry> models;
+	float modelTileSize = 64.f;
+	float modelTilePadding = 8.f;
+
 public:
 	// Debug/visualization overlay state.
 	RenderOverlay activeOverlay = RenderOverlay::None;
@@ -118,6 +132,11 @@ private:
 	void DrawSelectionGizmo(entt::registry& registry);
 	void DrawSceneToolbar(const ImVec2& viewportMin, const ImVec2& viewportMax);
 	void DrawSceneIcon(RenderDevice* device, entt::registry& registry, const SceneMetadata& scene);
+
+	// Model browser.
+	void ScanModels();
+	void DrawModelTile(const ModelEntry& model);
+	entt::entity CreateModelEntity(entt::registry& registry, const std::filesystem::path& modelPath);
 
 	// Scene handling
 	void FlushPendingSave(RenderDevice& device, entt::registry& registry);
@@ -140,6 +159,7 @@ public:
 	void DrawAtmosphereControls(RenderDevice* device, entt::registry& registry, Atmosphere& atmosphere, Clouds& clouds, TextureHandle weather);
 	void DrawBloomControls(Bloom& bloom);
 	void DrawRenderVisualizer(RenderDevice* device, ClusteredLightCulling& clusteredCulling, TextureHandle overlay);
+	void DrawModelBrowser();
 
 	void AddConsoleMessage(const std::string& message);
 

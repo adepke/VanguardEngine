@@ -6,6 +6,8 @@
 #include <Rendering/RenderGraphResourceManager.h>
 #include <Core/CoreComponents.h>
 #include <Rendering/RenderComponents.h>
+#include <Asset/AssetComponents.h>
+#include <Asset/AssetManager.h>
 #include <Editor/EntityReflection.h>
 #include <Editor/ImGuiExtensions.h>
 #include <Editor/CvarHelpers.h>
@@ -49,6 +51,8 @@ void EditorUI::DrawMenu()
 			ImGui::MenuItem("Atmosphere Controls", nullptr, &atmosphereControlsOpen);
 			ImGui::MenuItem("Bloom Controls", nullptr, &bloomControlsOpen);
 			ImGui::MenuItem("Render Visualizer", nullptr, &renderVisualizerOpen);
+			ImGui::MenuItem("Scene Selector", nullptr, &sceneSelectorOpen);
+			ImGui::MenuItem("Models", nullptr, &modelBrowserOpen);
 
 			ImGui::EndMenu();
 		}
@@ -852,11 +856,13 @@ void EditorUI::DrawLayout()
 		ImGuiID controlsDockId = 0;
 		ImGuiID entitiesDockId = 0;
 		ImGuiID propertiesDockId = 0;
+		ImGuiID assetsDockId = 0;
 		ImGuiID metricsDockId = 0;
 		
 		sceneDockId = ImGui::DockBuilderSplitNode(dockSpaceId, ImGuiDir_Left, 0.75f, nullptr, &controlsDockId);
-		entitiesDockId = ImGui::DockBuilderSplitNode(controlsDockId, ImGuiDir_Up, 0.4f, nullptr, &propertiesDockId);
+		entitiesDockId = ImGui::DockBuilderSplitNode(controlsDockId, ImGuiDir_Up, 0.25f, nullptr, &propertiesDockId);
 		controlsDockId = ImGui::DockBuilderSplitNode(entitiesDockId, ImGuiDir_Up, 0.19f, nullptr, &entitiesDockId);
+		assetsDockId = ImGui::DockBuilderSplitNode(propertiesDockId, ImGuiDir_Up, 0.5f, nullptr, &propertiesDockId);
 		propertiesDockId = ImGui::DockBuilderSplitNode(propertiesDockId, ImGuiDir_Up, 0.8f, nullptr, &metricsDockId);
 
 		ImGui::DockBuilderDockWindow("Scene", sceneDockId);
@@ -868,6 +874,8 @@ void EditorUI::DrawLayout()
 		ImGui::DockBuilderDockWindow("Sky Atmosphere", entitiesDockId);
 		ImGui::DockBuilderDockWindow("Bloom", entitiesDockId);
 		ImGui::DockBuilderDockWindow("Render Visualizer", propertiesDockId);
+		ImGui::DockBuilderDockWindow("Scene Selector", assetsDockId);
+		ImGui::DockBuilderDockWindow("Models", assetsDockId);
 		ImGui::DockBuilderDockWindow("Dear ImGui Demo", sceneDockId);
 		
 		ImGui::DockBuilderFinish(dockSpaceId);
@@ -1258,6 +1266,13 @@ void EditorUI::DrawScene(RenderDevice* device, entt::registry& registry, Texture
 				renderOverlayOnScene = true;
 			}
 
+			if (const auto* payload = ImGui::AcceptDragDropPayload("ModelBrowserItem", ImGuiDragDropFlags_None))
+			{
+				const std::filesystem::path modelPath{ static_cast<const char*>(payload->Data) };
+				hierarchySelectedEntity = CreateModelEntity(registry, modelPath);
+				scrollToSelectedEntity = true;
+			}
+
 			ImGui::EndDragDropTarget();
 		}
 
@@ -1305,6 +1320,11 @@ void EditorUI::DrawScene(RenderDevice* device, entt::registry& registry, Texture
 
 void EditorUI::DrawSceneSelector(RenderDevice* device, entt::registry& registry)
 {
+	if (!sceneSelectorOpen)
+	{
+		return;
+	}
+
 	// Handle scene refresh inside the render pass since thumbnail uploading might happen.
 	if (refreshScenes)
 	{
@@ -1312,7 +1332,7 @@ void EditorUI::DrawSceneSelector(RenderDevice* device, entt::registry& registry)
 		loadedScenes = Scene::List(*device);
 	}
 
-	if (ImGui::Begin("Scene Selector"))
+	if (ImGui::Begin("Scene Selector", &sceneSelectorOpen))
 	{
 		if (ImGui::Button("Clear scene"))
 		{
@@ -1454,6 +1474,171 @@ void EditorUI::DrawSceneSelector(RenderDevice* device, entt::registry& registry)
 
 		ImGui::EndPopup();
 	}
+}
+
+void EditorUI::ScanModels()
+{
+	models.clear();
+
+	// AssetLoader only supports glTF, so that's all we discover here.
+	const auto modelsRoot = Config::shadersPath / "../Assets/Models";
+	if (!std::filesystem::exists(modelsRoot))
+	{
+		return;
+	}
+
+	for (const auto& entry : std::filesystem::recursive_directory_iterator(modelsRoot))
+	{
+		if (!entry.is_regular_file())
+		{
+			continue;
+		}
+
+		auto extension = entry.path().extension().string();
+		std::transform(extension.begin(), extension.end(), extension.begin(), [](unsigned char c) { return std::tolower(c); });
+
+		if (extension == ".gltf" || extension == ".glb")
+		{
+			models.push_back({ entry.path().stem().string(), entry.path() });
+		}
+	}
+
+	std::sort(models.begin(), models.end(), [](const auto& lhs, const auto& rhs) { return lhs.name < rhs.name; });
+}
+
+void EditorUI::DrawModelTile(const ModelEntry& model)
+{
+	const float tileYScale = 0.15f;
+	const float textHeight = ImGui::GetTextLineHeight();
+	const ImVec2 cardSize{ modelTileSize + modelTilePadding * 2.f, modelTileSize * tileYScale + textHeight + modelTilePadding * 3.f };
+
+	ImGui::PushID(model.path.generic_string().c_str());
+
+	const ImVec2 cardMin = ImGui::GetCursorScreenPos();
+	ImGui::InvisibleButton("##model_card", cardSize);
+	const bool hovered = ImGui::IsItemHovered();
+	const bool held = ImGui::IsItemActive();
+	const ImVec2 cardMax = cardMin + cardSize;
+
+	// The drag source must be tied to the invisible button item above.
+	if (ImGui::BeginDragDropSource())
+	{
+		const std::string pathStr = model.path.generic_string();
+		ImGui::SetDragDropPayload("ModelBrowserItem", pathStr.c_str(), pathStr.size() + 1);
+		ImGui::Text((char*)ICON_FA_CUBE " %s", model.name.c_str());
+		ImGui::EndDragDropSource();
+	}
+
+	auto* drawList = ImGui::GetWindowDrawList();
+	const auto& style = ImGui::GetStyle();
+	const float rounding = style.FrameRounding;
+
+	const ImU32 backgroundColor = ImGui::GetColorU32(
+		held ? ImGuiCol_ButtonActive : (hovered ? ImGuiCol_ButtonHovered : ImGuiCol_Button));
+	drawList->AddRectFilled(cardMin, cardMax, backgroundColor, rounding);
+	drawList->AddRect(cardMin, cardMax, ImGui::GetColorU32(ImGuiCol_Border), rounding, 0, 1.f);
+
+	const ImVec2 iconMin = cardMin + ImVec2{ modelTilePadding, modelTilePadding };
+	const ImVec2 iconSize = ImGui::CalcTextSize((char*)ICON_FA_CUBE);
+	const ImVec2 iconPos{
+		iconMin.x + (modelTileSize - iconSize.x) * 0.5f,
+		iconMin.y + (modelTileSize * tileYScale - iconSize.y) * 0.5f
+	};
+	drawList->AddText(iconPos, ImGui::GetColorU32(ImGuiCol_Text), (char*)ICON_FA_CUBE);
+
+	// Clip the text and center under the tile icon.
+	const ImVec2 nameSize = ImGui::CalcTextSize(model.name.c_str());
+	const ImVec2 nameClipMin{ iconMin.x, iconMin.y + modelTileSize * tileYScale + modelTilePadding };
+	const ImVec2 nameClipMax{ iconMin.x + modelTileSize, nameClipMin.y + textHeight };
+	const ImVec2 namePos{
+		iconMin.x + std::max(0.f, (modelTileSize - nameSize.x) * 0.5f),
+		nameClipMin.y
+	};
+	drawList->PushClipRect(nameClipMin, nameClipMax, true);
+	drawList->AddText(namePos, ImGui::GetColorU32(ImGuiCol_Text), model.name.c_str());
+	drawList->PopClipRect();
+
+	if (hovered)
+	{
+		ImGui::SetTooltip("%s", std::filesystem::weakly_canonical(model.path).generic_string().c_str());
+	}
+
+	ImGui::PopID();
+}
+
+entt::entity EditorUI::CreateModelEntity(entt::registry& registry, const std::filesystem::path& modelPath)
+{
+	// Spawn 10 meters in front of the current camera.
+	const auto inverseView = XMMatrixInverse(nullptr, globalViewMatrix);
+	const auto cameraPosition = XMVector3TransformCoord(XMVectorZero(), inverseView);
+	const auto cameraForward = XMVector3Normalize(XMVector3TransformNormal(XMVectorSet(0.f, 0.f, -1.f, 0.f), inverseView));
+	const auto spawnPosition = cameraPosition + cameraForward * 10.f;
+
+	TransformComponent transform{};
+	XMStoreFloat3(&transform.translation, spawnPosition);
+
+	// Create with basic components.
+	const auto entity = registry.create();
+	registry.emplace<NameComponent>(entity, modelPath.stem().string());
+	registry.emplace<TransformComponent>(entity, transform);
+	registry.emplace<AssetComponent>(entity, modelPath);
+	registry.emplace<MeshComponent>(entity, AssetManager::Get().LoadModel(modelPath));
+
+	return entity;
+}
+
+void EditorUI::DrawModelBrowser()
+{
+	if (!modelBrowserOpen)
+	{
+		return;
+	}
+
+	if (refreshModels)
+	{
+		ScanModels();
+		refreshModels = false;
+	}
+
+	if (ImGui::Begin("Models", &modelBrowserOpen))
+	{
+		if (ImGui::Button((char*)ICON_FA_SYNC " Refresh"))
+		{
+			refreshModels = true;
+		}
+
+		ImGui::Separator();
+
+		if (models.empty())
+		{
+			ImGui::TextDisabled("No models found in Assets/Models.");
+		}
+		else
+		{
+			const float cardWidth = modelTileSize + modelTilePadding * 2.f;
+			const float available = ImGui::GetContentRegionAvail().x;
+			const float spacing = ImGui::GetStyle().ItemSpacing.x;
+			const int columns = std::max(1, static_cast<int>((available + spacing) / (cardWidth + spacing)));
+
+			int column = 0;
+			for (const auto& model : models)
+			{
+				if (column != 0)
+				{
+					ImGui::SameLine();
+				}
+
+				DrawModelTile(model);
+
+				if (++column >= columns)
+				{
+					column = 0;
+				}
+			}
+		}
+	}
+
+	ImGui::End();
 }
 
 void EditorUI::DrawControls(RenderDevice* device)

@@ -423,7 +423,7 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 	CvarCreate("toneMapper", "Selects the tone mapping operator (0=disabled, 1=ACES Hill, 2=ACES Narkowicz, 3=AgX, 4=Khronos PBR Neutral, 5=Reinhard)", 4);
 	CvarCreate("referenceGridEnabled", "Controls if the reference grid is visible", 0);
 	
-	constexpr size_t maxVertices = 32 * 1024 * 1024;
+	constexpr size_t maxVertices = 64 * 1024 * 1024;
 	constexpr size_t maxObjectSlots = 1024 * 1024;
 
 	window = std::move(inWindow);

@@ -119,7 +119,7 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 			}
 
 			ui->DrawLayout();
-			ui->DrawDemoWindow();
+			//ui->DrawDemoWindow();
 			ui->DrawScene(&device, registry, resources.GetTexture(outputLDR));
 			ui->DrawSceneSelector(&device, registry);
 			ui->DrawControls(&device);
@@ -130,6 +130,7 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 			ui->DrawAtmosphereControls(&device, registry, renderer.atmosphere, renderer.clouds, resources.GetTexture(weather));
 			ui->DrawBloomControls(renderer.bloom);
 			ui->DrawRenderVisualizer(&device, renderer.clusteredCulling, overlayHandle);
+			ui->DrawModelBrowser();
 
 			renderer.userInterface->Render(list, resources.GetBuffer(cameraBuffer));
 
