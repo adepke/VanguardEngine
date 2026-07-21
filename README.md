@@ -6,6 +6,7 @@ A Direct3D 12 real-time rendering sandbox for exploring evolving render tech.
 - Render graph handling all resources, barriers, and scheduling
 - [State of the art volumetric cloud rendering](https://youtu.be/vxx94Vzp9QE)
 - [Indirect GPU-driven rendering, hi-z occlusion and frustum mesh culling performed in compute shaders](https://youtu.be/WQRD-Eds0CU)
+- Ray traced shadows, with spatiotemporal denoising
 - Fully bindless resources (shader model 6.6+)
 - [Precomputed atmospheric scattering model](https://youtu.be/rnKr92Yjrcc)
 - [Clustered forward light rendering](https://youtu.be/Jj8EGCZFbLI)
