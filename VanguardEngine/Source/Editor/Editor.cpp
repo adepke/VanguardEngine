@@ -52,14 +52,16 @@ void Editor::Update(RenderDevice& device, entt::registry& registry)
 	});
 
 	// Process keybinds.
+	const bool textInputActive = ImGui::GetIO().WantTextInput;
 	for (auto& [key, state, bind] : keybinds)
 	{
 		const auto pressed = ImGui::IsKeyDown(key);
-		if (pressed && !state)
+		if (pressed && !state && !textInputActive)
 		{
 			bind();
 		}
 
+		// Track key state regardless of ImGui state.
 		state = pressed;
 	}
 
