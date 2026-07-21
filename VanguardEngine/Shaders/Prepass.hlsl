@@ -4,6 +4,7 @@
 #include "VertexAssembly.hlsli"
 #include "Object.hlsli"
 #include "Camera.hlsli"
+#include "Utils/OctahedralNormals.hlsli"
 
 struct BindData
 {
@@ -12,6 +13,7 @@ struct BindData
 	uint cameraBuffer;
 	uint cameraIndex;
 	uint vertexPositionBuffer;
+	uint vertexExtraBuffer;
 };
 
 ConstantBuffer<BindData> bindData : register(b0);
@@ -25,6 +27,7 @@ struct Input
 struct Output
 {
 	float4 positionCS : SV_POSITION;  // Clip space.
+	float3 normal : NORMAL;  // World space.
 };
 
 [RootSignature(RS)]
@@ -37,14 +40,23 @@ Output VSMain(Input input)
 
 	VertexAssemblyData assemblyData;
 	assemblyData.positionBuffer = bindData.vertexPositionBuffer;
-	assemblyData.extraBuffer = 0;  // Unused.
+	assemblyData.extraBuffer = bindData.vertexExtraBuffer;
 	assemblyData.metadata = object.vertexMetadata;
+
+	float4 normal = float4(LoadVertexNormal(assemblyData, input.vertexId), 0.f);
 
 	Output output;
 	output.positionCS = LoadVertexPosition(assemblyData, input.vertexId);
 	output.positionCS = mul(output.positionCS, object.worldMatrix);
 	output.positionCS = mul(output.positionCS, camera.view);
 	output.positionCS = mul(output.positionCS, camera.projection);
+	output.normal = normalize(mul(normal, object.worldMatrix)).xyz;
 
 	return output;
+}
+
+[RootSignature(RS)]
+float2 PSMain(Output input) : SV_Target
+{
+	return EncodeNormalOctahedral(normalize(input.normal));
 }

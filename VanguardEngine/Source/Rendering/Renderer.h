@@ -19,6 +19,8 @@
 #include <Rendering/Bloom.h>
 #include <Rendering/OcclusionCulling.h>
 #include <Rendering/Clouds.h>
+#include <Rendering/AccelerationStructures.h>
+#include <Rendering/Shadows.h>
 #include <Rendering/TextureCapture.h>
 #include <Utility/SlotAllocator.h>
 
@@ -51,6 +53,8 @@ public:
 	Bloom bloom;
 	OcclusionCulling occlusionCulling;
 	Clouds clouds;
+	AccelerationStructures accelerationStructures;
+	RayTracedShadows rayTracedShadows;
 
 	size_t renderableCount = 0;
 
@@ -95,7 +99,6 @@ private:
 	void OnSlotDestroy(entt::registry& registry, entt::entity entity);
 	void OnTransformDirty(entt::registry& registry, entt::entity entity);
 
-	ObjectData BuildObjectData(const TransformComponent& transform, const MeshComponent& mesh, size_t subsetIndex) const;
 	// Allocates slots for new meshes, rebuilds indirect draw args on structural changes, and
 	// uploads instance data for dirty objects only.
 	void UpdateGpuScene(entt::registry& registry);

@@ -66,7 +66,6 @@ struct AtmosphereData
 	float padding6;
 };
 
-static const float sunAngularRadius = 0.004675f;
 static const float minMuS = -0.5f;
 static const float mieAnisotropy = 0.8f;
 

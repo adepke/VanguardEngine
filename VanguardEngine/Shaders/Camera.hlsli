@@ -58,8 +58,18 @@ float3 ComputeRayDirection(Camera camera, float2 uv)
 	float4 positionClipSpace = UvToClipSpace(uv);
 	float4 positionViewSpace = float4(mul(positionClipSpace, camera.inverseProjection).xyz, 0.f);  // No perspective division.
 	float4 positionWorldSpace = mul(positionViewSpace, camera.inverseView);
-	
+
 	return normalize(positionWorldSpace.xyz);
+}
+
+float3 ReconstructWorldPosition(Camera camera, float2 uv, float depth)
+{
+	float4 positionClipSpace = UvToClipSpace(uv);
+	positionClipSpace.z = depth;
+	float4 positionViewSpace = ClipToViewSpace(camera, positionClipSpace);
+	float4 positionWorldSpace = mul(positionViewSpace, camera.inverseView);
+
+	return positionWorldSpace.xyz;
 }
 
 #endif  // __CAMERA_HLSLI__

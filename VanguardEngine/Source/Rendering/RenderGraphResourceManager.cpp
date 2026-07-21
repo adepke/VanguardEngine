@@ -145,6 +145,13 @@ uint32_t RenderGraphResourceManager::GetDefaultDescriptor(const RenderResource r
 {
 	switch (bind)
 	{
+	case ResourceBind::AS:
+		// Bind as SRV.
+		if (auto buffer = GetOptionalBuffer(resource); buffer)
+		{
+			return device->GetResourceManager().Get(*buffer).SRV->bindlessIndex;
+		}
+		break;
 	case ResourceBind::SRV:
 		if (auto buffer = GetOptionalBuffer(resource); buffer)
 		{

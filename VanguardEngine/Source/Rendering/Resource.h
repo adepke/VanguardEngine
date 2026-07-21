@@ -28,6 +28,7 @@ enum BindFlag
 	DepthStencil = 1 << 3,
 	ShaderResource = 1 << 4,
 	UnorderedAccess = 1 << 5,
+	AccelerationStructure = 1 << 6,
 };
 
 enum AccessFlag

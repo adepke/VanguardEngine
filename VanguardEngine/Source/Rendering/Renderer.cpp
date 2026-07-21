@@ -9,6 +9,7 @@
 #include <Rendering/RenderGraph.h>
 #include <Rendering/RenderPass.h>
 #include <Rendering/ShaderStructs.h>
+#include <Rendering/Object.h>
 #include <Core/Config.h>
 #include <Rendering/RenderUtils.h>
 #include <Rendering/DebugDraw.h>
@@ -21,6 +22,7 @@
 #include <cstring>
 #include <cmath>
 #include <algorithm>
+#include <optional>
 #include <execution>
 
 void Renderer::CreateRootSignature()
@@ -67,38 +69,6 @@ void Renderer::OnTransformDirty(entt::registry& registry, entt::entity entity)
 {
 	// When a transform component is modified, attach a dirty tag so we can bulk update these entities.
 	registry.emplace_or_replace<TransformDirtyComponent>(entity);
-}
-
-ObjectData Renderer::BuildObjectData(const TransformComponent& transform, const MeshComponent& mesh, size_t subsetIndex) const
-{
-	const auto& subset = mesh.subsets[subsetIndex];
-
-	const auto positionOffset = (uint32_t)(mesh.globalOffset.position + subset.localOffset.position);
-	const auto extraOffset = (uint32_t)(mesh.globalOffset.extra + subset.localOffset.extra);
-	const auto maxScale = std::max(std::max(transform.scale.x, transform.scale.y), transform.scale.z);
-
-	const auto scaling = XMVectorSet(transform.scale.x, transform.scale.y, transform.scale.z, 0.f);
-	const auto translation = XMVectorSet(transform.translation.x, transform.translation.y, transform.translation.z, 0.f);
-
-	const auto scalingMat = XMMatrixScalingFromVector(scaling);
-	const auto rotationMat = XMMatrixRotationX(-transform.rotation.x) * XMMatrixRotationY(-transform.rotation.y) * XMMatrixRotationZ(-transform.rotation.z);
-	const auto translationMat = XMMatrixTranslationFromVector(translation);
-
-	ObjectData instance;
-	instance.worldMatrix = scalingMat * rotationMat * translationMat;
-	instance.vertexMetadata = mesh.metadata;
-	instance.materialIndex = (uint32_t)subset.materialIndex;
-	instance.boundingSphereRadius = subset.boundingSphereRadius * maxScale;
-
-	// Apply offsets
-	const auto old = instance.vertexMetadata.channelOffsets[0][0];
-	for (int i = 0; i < vertexChannels / 4 + 1; ++i)
-	{
-		instance.vertexMetadata.channelOffsets[i].AddAll(extraOffset);
-	}
-	instance.vertexMetadata.channelOffsets[0][0] = old + positionOffset;
-
-	return instance;
 }
 
 void Renderer::UpdateGpuScene(entt::registry& registry)
@@ -328,6 +298,7 @@ void Renderer::CreatePipelines()
 
 	prepassLayout = RenderPipelineLayout{}
 		.VertexShader({ "Prepass", "VSMain" })
+		.PixelShader({ "Prepass", "PSMain" })  // PS for normals.
 		.DepthEnabled(true, true);
 
 	forwardOpaqueLayout = RenderPipelineLayout{}
@@ -474,6 +445,8 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 	bloom.Initialize(device.get());
 	occlusionCulling.Initialize(device.get());
 	clouds.Initialize(device.get());
+	accelerationStructures.Initialize(device.get());
+	rayTracedShadows.Initialize(device.get());
 	DebugDraw::Get().Initialize(device.get());
 
 	std::vector<D3D12_INDIRECT_ARGUMENT_DESC> meshIndirectArgDescs;
@@ -622,11 +595,16 @@ void Renderer::Render(entt::registry& registry)
 	auto depthStencilTag = prePass.Create(TransientTextureDescription{
 		.format = DXGI_FORMAT_R32_TYPELESS  // Note: can switch to R24G8 if I ever want the stencil, 24 bits is plenty.
 	}, VGText("Depth stencil"));
+	auto geometricNormalsTag = prePass.Create(TransientTextureDescription{
+		.format = DXGI_FORMAT_R16G16_FLOAT  // Octahedral-encoded, world space.
+	}, VGText("Geometric normals"));
 	prePass.Read(instanceBufferTag, ResourceBind::SRV);
 	prePass.Read(cameraBufferTag, ResourceBind::SRV);
 	prePass.Read(meshResources.positionTag, ResourceBind::SRV);
+	prePass.Read(meshResources.extraTag, ResourceBind::SRV);
 	prePass.Read(meshIndirectCulledRenderArgsTag, ResourceBind::Indirect);
 	prePass.Output(depthStencilTag, OutputBind::DSV, LoadType::Clear);
+	prePass.Output(geometricNormalsTag, OutputBind::RTV, LoadType::Clear);
 	prePass.Bind([&](CommandList& list, RenderPassResources& resources)
 	{
 		struct {
@@ -635,11 +613,13 @@ void Renderer::Render(entt::registry& registry)
 			uint32_t cameraBuffer;
 			uint32_t cameraIndex;
 			uint32_t vertexPositionBuffer;
+			uint32_t vertexExtraBuffer;
 		} bindData;
 
 		bindData.objectBuffer = resources.Get(instanceBufferTag);
 		bindData.cameraBuffer = resources.Get(cameraBufferTag);
 		bindData.vertexPositionBuffer = resources.Get(meshResources.positionTag);
+		bindData.vertexExtraBuffer = resources.Get(meshResources.extraTag);
 
 		list.BindPipeline(prepassLayout);
 
@@ -648,6 +628,29 @@ void Renderer::Render(entt::registry& registry)
 
 	// #TODO: Don't have this here.
 	const auto clusterResources = clusteredCulling.Render(graph, registry, cameraBufferTag, depthStencilTag, lightBufferTag, instanceBufferTag, meshResources, meshIndirectCulledRenderArgsTag);
+
+	const auto asResources = accelerationStructures.Render(graph, registry, *meshFactory, meshResources.positionTag);
+	std::optional<RenderResource> sunShadowTag;
+	if (*CvarGet("rayTracingEnabled", int) != 0 && *CvarGet("rtShadowsEnabled", int) != 0)
+	{
+		// #TODO: lots of different and inconsistent ways of dealing with the sun, and if there's no sun. Fix this.
+		XMFLOAT3 sunDirection;
+		bool foundSun = false;
+		registry.view<const TransformComponent, const LightComponent>().each([&](auto entity, const auto& transform, const auto& light)
+		{
+			if (!foundSun && light.type == LightType::Directional)
+			{
+				const auto direction = XMVector3Rotate(XMVectorSet(1.f, 0.f, 0.f, 0.f), XMQuaternionRotationRollPitchYaw(transform.rotation.x, transform.rotation.y, -transform.rotation.z));
+				XMStoreFloat3(&sunDirection, XMVectorNegate(direction));  // Direction towards the sun.
+				foundSun = true;
+			}
+		});
+
+		if (foundSun)
+		{
+			sunShadowTag = rayTracedShadows.Render(graph, asResources.tlasTag, depthStencilTag, geometricNormalsTag, cameraBufferTag, sunDirection, appFrame);
+		}
+	}
 	
 	// #TODO: Don't have this here.
 	const auto atmosphereResources = atmosphere.ImportResources(graph);
@@ -685,6 +688,10 @@ void Renderer::Render(entt::registry& registry)
 	forwardPass.Read(atmosphereIrradiance, ResourceBind::SRV);
 	forwardPass.Read(cloudResources.weather, ResourceBind::SRV);
 	forwardPass.Read(meshIndirectCulledRenderArgsTag, ResourceBind::Indirect);
+	if (sunShadowTag)
+	{
+		forwardPass.Read(*sunShadowTag, ResourceBind::SRV);
+	}
 	forwardPass.Output(outputHDRTag, OutputBind::RTV, LoadType::Clear);
 	forwardPass.Bind([&](CommandList& list, RenderPassResources& resources)
 	{
@@ -716,7 +723,7 @@ void Renderer::Render(entt::registry& registry)
 			uint32_t atmosphereIrradianceBuffer;
 			float globalWeatherCoverage;
 			uint32_t weatherTexture;
-			float padding;
+			uint32_t sunShadowTexture;
 			ClusterData clusterData;
 			IblData iblData;
 			uint32_t outputResolution[2];
@@ -731,6 +738,7 @@ void Renderer::Render(entt::registry& registry)
 		bindData.atmosphereIrradianceBuffer = resources.Get(atmosphereIrradiance);
 		bindData.globalWeatherCoverage = clouds.coverage;  // #TODO: Scale by precipitation?
 		bindData.weatherTexture = resources.Get(cloudResources.weather);
+		bindData.sunShadowTexture = sunShadowTag ? resources.Get(*sunShadowTag) : 0;
 		bindData.clusterData = clusterData;
 		bindData.iblData = iblData;
 
@@ -752,6 +760,12 @@ void Renderer::Render(entt::registry& registry)
 
 	// #TODO: Don't have this here.
 	bloom.Render(graph, outputHDRTag);
+
+	// #TODO: unify with other debug overlays, have the editor control this not a cvar.
+	if (*CvarGet("rtDebugView", int) > 0)
+	{
+		rayTracedShadows.RenderDebug(graph, asResources.tlasTag, cameraBufferTag, outputHDRTag, *CvarGet("rtDebugView", int));
+	}
 
 	auto& postProcessPass = graph.AddPass("Post Process Pass", ExecutionQueue::Graphics);
 	const auto outputLDRTag = postProcessPass.Create(TransientTextureDescription{

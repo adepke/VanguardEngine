@@ -43,7 +43,7 @@ struct BindData
 	uint atmosphereIrradianceBuffer;
 	float globalWeatherCoverage;
 	uint weatherTexture;
-	float padding;
+	uint sunShadowTexture;
 	ClusterData clusterData;
 	IblData iblData;
 	uint2 outputResolution;
@@ -142,6 +142,7 @@ float4 PSMain(PixelIn input) : SV_Target
 	if (material.normal > 0)
 	{
 		// Construct the TBN matrix.
+		// #TODO: consider using ComputeOrthonormalBasis instead to reduce input channels?
 		float3x3 TBN = float3x3(input.tangent, input.bitangent, input.normal);
 
 		Texture2D<float4> normalMap = ResourceDescriptorHeap[material.normal];
@@ -203,10 +204,17 @@ float4 PSMain(PixelIn input) : SV_Target
 
 			const float sunVisibility = CalculateSunVisibility(hitPositionAtmoSpace, light.direction, weatherTexture);
 			const float skyVisibility = CalculateSkyVisibility(cameraPositionAtmoSpace, bindData.globalWeatherCoverage);
-			
+
 			// Sun contribution is directional, so feed it into the BRDF path.
 			const float3 sunIrradiance = LoadSunIrradianceCamera(atmosphereIrradiance);
 			light.color *= sunIrradiance * sunVisibility;
+			
+			// Screen space shadow mask from the sun.
+			if (bindData.sunShadowTexture > 0)
+			{
+				Texture2D<float2> sunShadowTexture = ResourceDescriptorHeap[bindData.sunShadowTexture];
+				light.color *= sunShadowTexture.Load(int3(input.positionCS.xy, 0)).x;
+			}
 			
 			// Sky contribution comes from a SH probe at the camera. Note the clamp is to prevent negatives
 			// on sharp peaks.

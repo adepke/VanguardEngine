@@ -381,22 +381,22 @@ RenderDevice::~RenderDevice()
 
 void RenderDevice::CheckFeatureSupport()
 {
-	D3D12_FEATURE_DATA_D3D12_OPTIONS options{};
-	auto result = device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options, sizeof(options));
+	D3D12_FEATURE_DATA_D3D12_OPTIONS options1{};
+	auto result = device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &options1, sizeof(options1));
 	if (FAILED(result))
 	{
-		VGLogError(logRendering, "Failed to check feature support for category 'options': {}", result);
+		VGLogError(logRendering, "Failed to check feature support for category 'options1': {}", result);
 	}
 
 	else
 	{
-		switch (options.ResourceBindingTier)
+		switch (options1.ResourceBindingTier)
 		{
 		case D3D12_RESOURCE_BINDING_TIER_1: VGLog(logRendering, "Device supports resource binding tier 1."); break;
 		case D3D12_RESOURCE_BINDING_TIER_2: VGLog(logRendering, "Device supports resource binding tier 2."); break;
 		case D3D12_RESOURCE_BINDING_TIER_3: VGLog(logRendering, "Device supports resource binding tier 3."); break;
 		default:
-			if (options.ResourceBindingTier > D3D12_RESOURCE_BINDING_TIER_3)
+			if (options1.ResourceBindingTier > D3D12_RESOURCE_BINDING_TIER_3)
 			{
 				VGLog(logRendering, "Device supports resource binding tier newer than 3.");
 			}
@@ -407,6 +407,22 @@ void RenderDevice::CheckFeatureSupport()
 			}
 		}
 	}
+
+	D3D12_FEATURE_DATA_D3D12_OPTIONS5 options5{};
+	result = device->CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &options5, sizeof(options5));
+	if (FAILED(result))
+	{
+		// If it doesn't support options5, it probably just doesn't support ray tracing.
+		VGLogWarning(logRendering, "Failed to check feature support for category 'options5': {}", result);
+	}
+
+	else
+	{
+		// Need 1.1 for inline ray tracing.
+		supportsRayTracing = options5.RaytracingTier >= D3D12_RAYTRACING_TIER_1_1;
+	}
+
+	VGLog(logRendering, "Hardware ray tracing (tier 1.1) {}.", supportsRayTracing ? VGText("supported") : VGText("unsupported"));
 
 	D3D12_FEATURE_DATA_FEATURE_LEVELS featureLevels{ 1, &targetFeatureLevel };
 	result = device->CheckFeatureSupport(D3D12_FEATURE_FEATURE_LEVELS, &featureLevels, sizeof(featureLevels));

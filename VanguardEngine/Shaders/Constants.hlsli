@@ -6,6 +6,9 @@
 static const float pi = 3.1415926535897932384626433832795;
 static const float alphaTestThreshold = 0.5;
 
+// Sun
+static const float sunAngularRadius = 0.004675f;
+
 // Planet
 // Technically this is the negative bottom radius, but passing the entire atmosphere data struct around
 // just for this value is not very practical.

@@ -14,6 +14,11 @@ void ValidateTransition(const BufferDescription& description, D3D12_RESOURCE_STA
 		// Dynamic resources must always be in generic read state.
 		VGAssert(newState == D3D12_RESOURCE_STATE_GENERIC_READ, "Dynamic buffers must always be in generic read state.");
 	}
+	else if (description.bindFlags & BindFlag::AccelerationStructure)
+	{
+		// Use UAV barriers for sync instead.
+		VGAssert(newState == D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, "Acceleration structure buffers must always be in the acceleration structure state.");
+	}
 	else
 	{
 		VGAssert(newState != D3D12_RESOURCE_STATE_DEPTH_READ &&
@@ -405,6 +410,11 @@ void CommandList::Copy(TextureHandle destination, TextureHandle source)
 	auto& sourceComponent = device->GetResourceManager().Get(source);
 
 	list->CopyResource(destinationComponent.Native(), sourceComponent.Native());
+}
+
+void CommandList::BuildAccelerationStructure(const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC& description)
+{
+	list->BuildRaytracingAccelerationStructure(&description, 0, nullptr);
 }
 
 HRESULT CommandList::Close()

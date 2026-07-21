@@ -8,6 +8,7 @@ enum class ResourceBind
 	SRV,
 	UAV,
 	DSV,
+	AS,
 	Indirect,
 	Common
 };

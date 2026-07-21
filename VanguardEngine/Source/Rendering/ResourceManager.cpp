@@ -33,6 +33,19 @@ void ResourceManager::CreateResourceViews(BufferComponent& target)
 		device->Native()->CreateConstantBufferView(&viewDesc, *target.CBV);
 	}
 
+	if (target.description.bindFlags & BindFlag::AccelerationStructure)
+	{
+		target.SRV = device->AllocateDescriptor(DescriptorType::Default);
+
+		D3D12_SHADER_RESOURCE_VIEW_DESC viewDesc{};
+		viewDesc.Format = DXGI_FORMAT_UNKNOWN;
+		viewDesc.ViewDimension = D3D12_SRV_DIMENSION_RAYTRACING_ACCELERATION_STRUCTURE;
+		viewDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+		viewDesc.RaytracingAccelerationStructure.Location = target.Native()->GetGPUVirtualAddress();
+
+		device->Native()->CreateShaderResourceView(nullptr, &viewDesc, *target.SRV);
+	}
+
 	if (target.description.bindFlags & BindFlag::ShaderResource)
 	{
 		target.SRV = device->AllocateDescriptor(DescriptorType::Default);
@@ -373,6 +386,11 @@ const BufferHandle ResourceManager::Create(const BufferDescription& description,
 	{
 		VGAssert(description.bindFlags & BindFlag::UnorderedAccess, "Buffer cannot have a UAV counter without also having the unordered access bind flag.");
 	}
+	if (description.bindFlags & BindFlag::AccelerationStructure)
+	{
+		VGAssert(description.updateRate == ResourceFrequency::Static, "Acceleration structures must be static.");
+		VGAssert(!(description.bindFlags & ~BindFlag::AccelerationStructure), "Acceleration structures cannot have any other bind flags.");
+	}
 
 	D3D12_RESOURCE_DESC resourceDesc{};
 	resourceDesc.Alignment = 0;  // Let the device determine the alignment, see: https://docs.microsoft.com/en-us/windows/win32/api/d3d12/ns-d3d12-d3d12_resource_desc#alignment
@@ -394,6 +412,12 @@ const BufferHandle ResourceManager::Create(const BufferDescription& description,
 	}
 
 	if (description.bindFlags & BindFlag::UnorderedAccess)
+	{
+		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+	}
+
+	// See: https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html#acceleration-structure-memory-restrictions
+	else if (description.bindFlags & BindFlag::AccelerationStructure)
 	{
 		resourceDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 	}
@@ -423,6 +447,12 @@ const BufferHandle ResourceManager::Create(const BufferDescription& description,
 	{
 		// Readback heap resources must be created in COPY_DEST and stay there.
 		resourceState = D3D12_RESOURCE_STATE_COPY_DEST;
+	}
+
+	if (description.bindFlags & BindFlag::AccelerationStructure)
+	{
+		// ASBs must always be in RAYTRACING_ACCELERATION_STRUCTURE.
+		resourceState = D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE;
 	}
 
 	ID3D12Resource* rawResource = nullptr;

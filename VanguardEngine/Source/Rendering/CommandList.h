@@ -72,6 +72,8 @@ public:
 	void Copy(BufferHandle destination, BufferHandle source);
 	void Copy(TextureHandle destination, TextureHandle source);
 
+	void BuildAccelerationStructure(const D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC& description);
+
 	HRESULT Close();
 	HRESULT Reset();
 };

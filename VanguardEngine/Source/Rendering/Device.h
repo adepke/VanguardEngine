@@ -28,6 +28,7 @@ public:
 	bool vSync = false;
 	uint32_t renderWidth = 10;
 	uint32_t renderHeight = 10;
+	bool supportsRayTracing = false;
 
 	static constexpr uint32_t frameCount = 3;  // #TODO: Determine at runtime.
 

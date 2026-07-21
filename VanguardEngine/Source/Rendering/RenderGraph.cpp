@@ -127,11 +127,14 @@ void RenderGraph::InjectBarriers(RenderDevice* device, size_t passId)
 	const auto UAVBarrier = [&](auto handle)
 	{
 		const auto& component = device->GetResourceManager().Get(handle);
-		if (component.state == D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+		if (component.state == D3D12_RESOURCE_STATE_UNORDERED_ACCESS ||
+			component.state == D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE)
 		{
 			// We don't know if the previous pass wrote to this resource or not, so just be safe and emit a UAV barrier.
 			// We could figure out whether or not a write actually happened by looking at the correct pass, but that's
 			// unnecessary for now.
+			// Note that acceleration structures never transition out of their state, so UAV barriers are their only
+			// synchronization mechanism (eg. between builds and traces).
 
 			list->UAVBarrier(handle);
 		}
@@ -174,6 +177,7 @@ void RenderGraph::InjectBarriers(RenderDevice* device, size_t passId)
 		case ResourceBind::SRV: Transition(D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE); break;
 		case ResourceBind::UAV: Transition(D3D12_RESOURCE_STATE_UNORDERED_ACCESS); break;
 		case ResourceBind::DSV: Transition(D3D12_RESOURCE_STATE_DEPTH_READ); break;
+		case ResourceBind::AS: break;  // No transition, only UAV barrier.
 		case ResourceBind::Indirect: Transition(D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT); break;
 		case ResourceBind::Common: Transition(D3D12_RESOURCE_STATE_COMMON); break;
 		}
@@ -224,6 +228,7 @@ void RenderGraph::InjectBarriers(RenderDevice* device, size_t passId)
 			switch (pass->bindInfo[resource])
 			{
 			case ResourceBind::UAV: Transition(D3D12_RESOURCE_STATE_UNORDERED_ACCESS); break;
+			case ResourceBind::AS: break;  // No transition, only UAV barrier.
 			}
 		}
 	}

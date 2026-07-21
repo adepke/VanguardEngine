@@ -48,6 +48,7 @@ private:
 	bool renderGraphOpen = true;
 	bool atmosphereControlsOpen = true;
 	bool bloomControlsOpen = true;
+	bool shadowControlsOpen = true;
 	bool renderVisualizerOpen = true;
 	bool consoleOpen = false;
 	bool sceneSelectorOpen = true;
@@ -158,6 +159,7 @@ public:
 	void DrawRenderGraph(RenderDevice* device, RenderGraphResourceManager& resourceManager, TextureHandle depthStencil, TextureHandle scene);
 	void DrawAtmosphereControls(RenderDevice* device, entt::registry& registry, Atmosphere& atmosphere, Clouds& clouds, TextureHandle weather);
 	void DrawBloomControls(Bloom& bloom);
+	void DrawShadowControls();
 	void DrawRenderVisualizer(RenderDevice* device, ClusteredLightCulling& clusteredCulling, TextureHandle overlay);
 	void DrawModelBrowser();
 

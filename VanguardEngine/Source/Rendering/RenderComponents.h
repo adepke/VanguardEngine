@@ -36,6 +36,7 @@ struct MeshComponent
 	struct Subset
 	{
 		PrimitiveOffset localOffset;
+		size_t vertices;
 		size_t indices;
 		size_t materialIndex;
 		float boundingSphereRadius;

@@ -129,6 +129,7 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 			ui->DrawRenderGraph(&device, resourceManager, resources.GetTexture(depthStencil), resources.GetTexture(outputLDR));
 			ui->DrawAtmosphereControls(&device, registry, renderer.atmosphere, renderer.clouds, resources.GetTexture(weather));
 			ui->DrawBloomControls(renderer.bloom);
+			ui->DrawShadowControls();
 			ui->DrawRenderVisualizer(&device, renderer.clusteredCulling, overlayHandle);
 			ui->DrawModelBrowser();
 

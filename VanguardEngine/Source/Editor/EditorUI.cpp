@@ -50,6 +50,7 @@ void EditorUI::DrawMenu()
 			ImGui::MenuItem("Render Graph", nullptr, &renderGraphOpen);
 			ImGui::MenuItem("Atmosphere Controls", nullptr, &atmosphereControlsOpen);
 			ImGui::MenuItem("Bloom Controls", nullptr, &bloomControlsOpen);
+			ImGui::MenuItem("Shadow Controls", nullptr, &shadowControlsOpen);
 			ImGui::MenuItem("Render Visualizer", nullptr, &renderVisualizerOpen);
 			ImGui::MenuItem("Scene Selector", nullptr, &sceneSelectorOpen);
 			ImGui::MenuItem("Models", nullptr, &modelBrowserOpen);
@@ -873,6 +874,7 @@ void EditorUI::DrawLayout()
 		ImGui::DockBuilderDockWindow("Render Graph", propertiesDockId);
 		ImGui::DockBuilderDockWindow("Sky Atmosphere", entitiesDockId);
 		ImGui::DockBuilderDockWindow("Bloom", entitiesDockId);
+		ImGui::DockBuilderDockWindow("Shadows", entitiesDockId);
 		ImGui::DockBuilderDockWindow("Render Visualizer", propertiesDockId);
 		ImGui::DockBuilderDockWindow("Scene Selector", assetsDockId);
 		ImGui::DockBuilderDockWindow("Models", assetsDockId);
@@ -2016,6 +2018,27 @@ void EditorUI::DrawBloomControls(Bloom& bloom)
 		{
 			ImGui::DragFloat("Intensity", &bloom.intensity, 0.01f, 0.f, 1.f, "%.2f");
 			ImGui::DragFloat("Internal blend", &bloom.internalBlend, 0.01f, 0.f, 1.f, "%.2f");
+		}
+
+		ImGui::End();
+	}
+}
+
+void EditorUI::DrawShadowControls()
+{
+	if (shadowControlsOpen)
+	{
+		if (ImGui::Begin("Shadows", &shadowControlsOpen))
+		{
+			CvarHelpers::Checkbox("rayTracingEnabled", "Ray tracing");
+
+			ImGui::BeginDisabled(*CvarGet("rayTracingEnabled", int) == 0);
+			CvarHelpers::Checkbox("rtShadowsEnabled", "RT shadows");
+			CvarHelpers::Checkbox("rtShadowDenoiserEnabled", "RT denoising");
+			CvarHelpers::Slider("rtShadowSpatialRadius", "RT denoise spatial radius", 0, 12);
+			ImGui::Separator();
+			CvarHelpers::Checkbox("rtDebugView", "Debugging");
+			ImGui::EndDisabled();
 		}
 
 		ImGui::End();

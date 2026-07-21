@@ -138,9 +138,9 @@ inline MeshComponent MeshFactory::CreateMeshComponent(const std::vector<Primitiv
 		std::memcpy(indexData.data() + localOffset.index, assembly.indexStream.data(), indexData.size() - localOffset.index);
 
 		if (materials.size() > 0)
-			component.subsets.emplace_back(localOffset, assembly.indexStream.size(), materials[materialIndices[index]], boundingSpheres[index]);
+			component.subsets.emplace_back(localOffset, vertexCount, assembly.indexStream.size(), materials[materialIndices[index]], boundingSpheres[index]);
 		else
-			component.subsets.emplace_back(localOffset, assembly.indexStream.size(), 0, boundingSpheres[index]);
+			component.subsets.emplace_back(localOffset, vertexCount, assembly.indexStream.size(), 0, boundingSpheres[index]);
 
 		++index;
 	}
