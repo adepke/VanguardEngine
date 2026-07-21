@@ -57,7 +57,8 @@ float3 SampleCirrusClouds(Texture2D<float4> cirrusTexture, float3 planetCenter, 
 	// instead of straight up.
 	const float radius = length(hitGlobalSpace);
 	const float theta = atan(hitGlobalSpace.y / hitGlobalSpace.z);
-	const float phi = acos(hitGlobalSpace.x / radius);
+	// Clamp the acos input: float error can push |x / radius| slightly past 1, and acos(>1) is NaN.
+	const float phi = acos(clamp(hitGlobalSpace.x / radius, -1.f, 1.f));
 	
 	const float uvScale = 120.f;
 	float2 uv = float2(-phi * uvScale, -theta * uvScale);
@@ -248,7 +249,12 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 		
 		// Don't let the depth be 0, as this will cause a NaN in the aerial perspective equation.
 		float depth = max(cloudsDepth, 0.01) * 0.001;  // Meters to kilometers.
-		float3 backPosition = cameraPosition + rayDirection * lastDepth;
+		// The background must lie behind the cloud. The sun disk branch above resets lastDepth to -1,
+		// which put the background behind the camera and fed a reversed segment to the aerial
+		// perspective - NaN at the brightest pixels on screen, which the bloom chain then smeared into
+		// large single-frame black squares.
+		float backDepth = max(lastDepth, depth + 0.001);
+		float3 backPosition = cameraPosition + rayDirection * backDepth;
 		float3 cloudPosition = cameraPosition + rayDirection * depth;
 		lastDepth = depth;
 
@@ -263,6 +269,19 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 		// because the cloud itself is the dominant occluder there.
 		float3 perspectiveTransmittance;
 		float3 perspectiveScattering = GetSkyRadianceToPoint(atmosphere, transmittanceLut, scatteringLut, bilinearWrap, cloudPosition - planetCenter, backPosition - planetCenter, lastDepthIsGround, 0.f, 0.f, sunDirection, perspectiveTransmittance);
+
+		// Fade the split aerial perspective out with cloud opacity. In exact math, splitting the
+		// camera-to-background segment at the cloud is an identity for a fully transparent cloud, but
+		// the point-to-point scattering is evaluated as a difference of large LUT samples and the
+		// residual error is not attenuated by opacity - it rendered as a purple glow around thin cloud
+		// edges, most visibly against the bright cirrus layer. Fading restores the exact no-cloud
+		// composition in the transparent limit, so edge pixels match their cloudless neighbors.
+		const float cloudOpacity = 1.f - cloudsCombined.w;
+		const float perspectiveFade = saturate(cloudOpacity * 10.f);
+		perspectiveScattering *= perspectiveFade;
+		perspectiveTransmittance = lerp(1.0.xxx, perspectiveTransmittance, perspectiveFade);
+		// The final perspective segment must end at the original background in the transparent limit.
+		lastDepth = lerp(backDepth, depth, perspectiveFade);
 
 		// Composite.
 		finalColor = finalColor * perspectiveTransmittance + perspectiveScattering;

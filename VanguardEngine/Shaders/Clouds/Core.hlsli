@@ -104,6 +104,13 @@ float SampleCloudDensity(Texture2D<float3> weatherTexture, Texture3D<float> base
 	const float tallCoverage = pow(coverage, 1.0 - 0.8 * abs(heightFraction - 0.6));
 	coverage = lerp(shortCoverage, tallCoverage, type + 0.1);
 
+	// Zero coverage means no cloud, and breaks the remap below: RemapRange divides by
+	// (inMax - inMin) = coverage, so coverage of zero produces Inf, and Inf * coverage = NaN. A rare
+	// but real NaN source - single-frame black blocks once the bloom chain smears the pixel. Hit more
+	// often with stochastic reconstruction since the march samples new positions every frame.
+	if (coverage <= 0.0)
+		return 0.0;
+
 	const float heightGradient = GetDensityHeightGradientForPoint(position, type);
 
 	// Apply wind distortion for sampling density noise.
@@ -586,8 +593,8 @@ MARCH_RESULT RayMarchInternal(Texture3D<float> baseShapeNoiseTexture, Texture3D<
 }
 
 MARCH_RESULT RayMarchClouds(Texture3D<float> baseShapeNoiseTexture, Texture3D<float> detailShapeNoiseTexture, Texture3D<float4> curlNoiseTexture, StructuredBuffer<float3> atmosphereIrradiance,
-	Texture2D<float3> weatherTexture, Texture2D<float> geometryDepthTexture, Texture2D<float> blueNoiseTexture, Camera camera, float2 baseUv, float2 jitteredUv,
-	uint2 outputResolution, float3 direction, float3 sunDirection, float2 wind, float time, float density, out float3 scatteredLuminance, out float transmittance,
+	Texture2D<float3> weatherTexture, Texture2D<float2> geometryDepthMinMaxTexture, Texture2D<float> blueNoiseTexture, Camera camera, float2 baseUv, float2 jitteredUv,
+	uint2 outputResolution, uint frameIndex, float3 direction, float3 sunDirection, float2 wind, float time, float density, out float3 scatteredLuminance, out float transmittance,
 	out float depth)
 {
 	// Necessary in case this outer call early-outs.
@@ -664,13 +671,13 @@ MARCH_RESULT RayMarchClouds(Texture3D<float> baseShapeNoiseTexture, Texture3D<fl
 	marchEnd = max(0, marchEnd);
 
 	// Early out of the march if we hit opaque geometry.
-	// Sample at the unjittered UV in 4 taps to get a conservative mask. Without this, there's a single pixel
-	// seam around the edges of geometry where clouds are behind them. Compose pass does exact per pixel occlusion.
-	const float2 footprintOffset = 0.5f / float2(outputResolution);
-	float rawGeometryDepth = geometryDepthTexture.Sample(linearMipPointClampMinimum, baseUv + float2(-footprintOffset.x, -footprintOffset.y));
-	rawGeometryDepth = min(rawGeometryDepth, geometryDepthTexture.Sample(linearMipPointClampMinimum, baseUv + float2(footprintOffset.x, -footprintOffset.y)));
-	rawGeometryDepth = min(rawGeometryDepth, geometryDepthTexture.Sample(linearMipPointClampMinimum, baseUv + float2(-footprintOffset.x, footprintOffset.y)));
-	rawGeometryDepth = min(rawGeometryDepth, geometryDepthTexture.Sample(linearMipPointClampMinimum, baseUv + float2(footprintOffset.x, footprintOffset.y)));
+	// The min channel of the downsampled texture holds the farthest (reversed-Z minimum) geometry depth
+	// across this low res pixel's full resolution footprint, giving a conservative mask: clouds march at
+	// least as far as the farthest geometry under the pixel, avoiding the single pixel seam around the
+	// edges of geometry. Compose pass does exact per pixel occlusion. The stable per-pixel load also
+	// keeps the clamp consistent across the temporal jitter sequence.
+	const uint2 lowResPixel = uint2(baseUv * outputResolution);
+	const float rawGeometryDepth = geometryDepthMinMaxTexture[lowResPixel].x;
 	float geometryDepth = LinearizeDepth(camera, rawGeometryDepth) * camera.farPlane;
 	if (geometryDepth < camera.farPlane)
 	{
@@ -686,12 +693,20 @@ MARCH_RESULT RayMarchClouds(Texture3D<float> baseShapeNoiseTexture, Texture3D<fl
 	// Offset the origin with blue noise to prevent banding artifacts. See: https://www.diva-portal.org/smash/get/diva2:1223894/FULLTEXT01.pdf
 	uint blueNoiseWidth, blueNoiseHeight;
 	blueNoiseTexture.GetDimensions(blueNoiseWidth, blueNoiseHeight);
+#ifdef CLOUDS_STOCHASTIC
+	// Animate the per-pixel offset each frame with the golden ratio: every pixel integrates a different
+	// march offset every frame (banding becomes noise for the accumulation pass to integrate away), while
+	// the spatial distribution within a frame stays blue.
+	const float rayOffset = blueNoiseTexture[lowResPixel % uint2(blueNoiseWidth, blueNoiseHeight)];
+	float jitter = frac(rayOffset + (frameIndex % 64) * 0.61803398875f);
+#else
 	const float upscaleResolutionMultiplier = 4.f;
 	// Sample blue noise at one pixel per upscaled sample, so scale the coordinates by the resolution scale.
 	float2 blueNoiseSamplePos = jitteredUv * outputResolution * upscaleResolutionMultiplier;
 	blueNoiseSamplePos = blueNoiseSamplePos / float2(blueNoiseWidth, blueNoiseHeight);
 	float rayOffset = blueNoiseTexture.Sample(pointWrap, blueNoiseSamplePos);
 	float jitter = rayOffset;  // Note: don't rescale to [-1, 1], as this could render participating media behind the camera.
+#endif
 	
 #ifdef CLOUDS_LOW_DETAIL
 	// Low detail clouds cannot afford a well-jittered sample.
