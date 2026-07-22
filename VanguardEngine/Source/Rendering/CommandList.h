@@ -23,9 +23,10 @@ class CommandList
 protected:
 	ResourcePtr<ID3D12CommandAllocator> allocator;  // #TODO: Potentially share allocators? Something to look into in the future.
 	ResourcePtr<ID3D12GraphicsCommandList5> list;
-	RenderDevice* device;
-	RenderGraph* graph;
+	RenderDevice* device = nullptr;
+	RenderGraph* graph = nullptr;
 	size_t passIndex;
+	D3D12_COMMAND_LIST_TYPE commandType;
 
 	// Stateful tracking of the bound pipeline.
 	const PipelineState* boundPipeline = nullptr;
@@ -38,8 +39,11 @@ private:
 
 public:
 	auto* Native() const noexcept { return list.Get(); }
+	auto Type() const noexcept { return commandType; }
 
-	void Create(RenderDevice* inDevice, RenderGraph* inGraph, D3D12_COMMAND_LIST_TYPE type, size_t pass);
+	void Create(RenderDevice* inDevice, D3D12_COMMAND_LIST_TYPE type);
+	// Prepare only needs to happen for lists used in render passes.
+	void Prepare(RenderGraph* inGraph, size_t pass);
 	void SetName(std::wstring_view name);
 
 	// #TODO: Support split barriers.

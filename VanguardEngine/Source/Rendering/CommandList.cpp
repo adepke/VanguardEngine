@@ -139,13 +139,12 @@ void CommandList::BindResourceInternal(const std::string& bindName, BufferHandle
 	}
 }
 
-void CommandList::Create(RenderDevice* inDevice, RenderGraph* inGraph, D3D12_COMMAND_LIST_TYPE type, size_t pass)
+void CommandList::Create(RenderDevice* inDevice, D3D12_COMMAND_LIST_TYPE type)
 {
 	VGScopedCPUStat("Command List Create");
 
 	device = inDevice;
-	graph = inGraph;
-	passIndex = pass;
+	commandType = type;
 
 	auto result = device->Native()->CreateCommandAllocator(type, IID_PPV_ARGS(allocator.Indirect()));
 	if (FAILED(result))
@@ -158,6 +157,12 @@ void CommandList::Create(RenderDevice* inDevice, RenderGraph* inGraph, D3D12_COM
 	{
 		VGLogCritical(logRendering, "Failed to create command list: {}", result);
 	}
+}
+
+void CommandList::Prepare(RenderGraph* inGraph, size_t pass)
+{
+	graph = inGraph;
+	passIndex = pass;
 }
 
 void CommandList::SetName(std::wstring_view name)
@@ -250,6 +255,8 @@ void CommandList::BindPipelineState(const PipelineState& state)
 
 void CommandList::BindPipeline(const RenderPipelineLayout& layout)
 {
+	VGAssert(graph != nullptr, "Command list must be prepared before use.");
+
 	const auto& pipeline = graph->RequestPipelineState(device, layout, passIndex);
 	BindPipelineState(pipeline);
 }
@@ -424,6 +431,10 @@ HRESULT CommandList::Close()
 
 HRESULT CommandList::Reset()
 {
+	// Clear transient CPU-side state so a recycled list doesn't carry anything over from last frame.
+	boundPipeline = nullptr;
+	pendingBarriers.clear();
+
 	auto result = allocator->Reset();
 	if (FAILED(result))
 	{

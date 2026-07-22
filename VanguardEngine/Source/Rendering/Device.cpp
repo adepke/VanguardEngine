@@ -82,15 +82,17 @@ void RenderDevice::ResetFrame(size_t frameID)
 		VGLogError(logRendering, "Failed to reset direct command list for frame {}: {}", frameIndex, result);
 	}
 
-	descriptorManager.FrameStep(frameIndex);
-
-	for (auto& list : frameCommandLists[frameIndex])
+	// Reset the completed list pool now that its work has completed.
+	auto& pool = frameCommandLists[frameIndex];
+	const auto usedLastCycle = frameCommandListOffsets[frameIndex];
+	for (size_t i = 0; i < usedLastCycle; ++i)
 	{
-		list->Reset();
+		pool[i]->Reset();
 	}
 
-	// #TODO: Don't discard the lists, they can be reused.
-	frameCommandLists[frameIndex].clear();
+	frameCommandListOffsets[frameIndex] = 0;
+
+	descriptorManager.FrameStep(frameIndex);
 }
 
 RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
@@ -238,7 +240,7 @@ RenderDevice::RenderDevice(void* window, bool software, bool enableDebugging)
 
 	for (int i = 0; i < frameCount; ++i)
 	{
-		directCommandList[i].Create(this, nullptr, D3D12_COMMAND_LIST_TYPE_DIRECT, -1);
+		directCommandList[i].Create(this, D3D12_COMMAND_LIST_TYPE_DIRECT);
 
 		// Close all lists except the current frame's list.
 		if (i > 0)
@@ -522,16 +524,35 @@ std::pair<BufferHandle, size_t> RenderDevice::FrameAllocate(size_t size)
 	return { frameBuffers[frameIndex], frameBufferOffsets[frameIndex] - size };
 }
 
-std::shared_ptr<CommandList> RenderDevice::AllocateFrameCommandList(RenderGraph* graph, D3D12_COMMAND_LIST_TYPE type, size_t passIndex)
+std::shared_ptr<CommandList> RenderDevice::AllocateFrameCommandList(D3D12_COMMAND_LIST_TYPE type)
 {
 	const auto frameIndex = GetFrameIndex();
-	const auto size = frameCommandLists[frameIndex].size();
+	auto& pool = frameCommandLists[frameIndex];
+	const auto offset = frameCommandListOffsets[frameIndex]++;
 
-	frameCommandLists[frameIndex].emplace_back(std::make_shared<CommandList>());
-	frameCommandLists[frameIndex][size]->Create(this, graph, type, passIndex);
-	frameCommandLists[frameIndex][size]->SetName(VGText("Frame command list"));
+	if (offset < pool.size())
+	{
+		auto& recycled = pool[offset];
 
-	return frameCommandLists[frameIndex][size];
+		if (recycled->Type() == type)
+		{
+			return recycled;
+		}
+
+		// #TODO: This is wrong, the pool should be partitioned by list type. Fix this.
+		recycled->Create(this, type);
+		recycled->SetName(VGText("Frame command list"));
+
+		return recycled;
+	}
+
+	// Pool exhausted, grow it with a new list.
+	auto commandList = std::make_shared<CommandList>();
+	commandList->Create(this, type);
+	commandList->SetName(VGText("Frame command list"));
+	pool.emplace_back(commandList);
+
+	return commandList;
 }
 
 DescriptorHandle RenderDevice::AllocateDescriptor(DescriptorType type)

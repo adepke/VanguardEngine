@@ -351,7 +351,7 @@ void RenderGraph::Execute(RenderDevice* device)
 
 	for (int i = 0; i < passes.size(); ++i)
 	{
-		passLists.emplace_back(std::move(device->AllocateFrameCommandList(this, D3D12_COMMAND_LIST_TYPE_DIRECT, i)));
+		passLists.emplace_back(std::move(device->AllocateFrameCommandList(D3D12_COMMAND_LIST_TYPE_DIRECT)));
 	}
 
 	for (const auto i : sorted)
@@ -363,6 +363,8 @@ void RenderGraph::Execute(RenderDevice* device)
 		{
 			continue;  // Skip disabled passes.
 		}
+
+		list->Prepare(this, i);
 
 		VGScopedCPUTransientStat(pass->stableName.data());
 		VGScopedGPUTransientStat(pass->stableName.data(), device->GetDirectContext(), list->Native());

@@ -65,11 +65,13 @@ private:
 	HANDLE deviceRemovedEvent;
 	HANDLE deviceRemovedHandle;
 
-	std::array<BufferHandle, frameCount> frameBuffers;  // Per-frame shared dynamic heap.
+	// Per-frame shared dynamic heap.
+	std::array<BufferHandle, frameCount> frameBuffers;
 	std::array<size_t, frameCount> frameBufferOffsets = {};
 
-	// #TODO: Don't use shared_ptr's here.
-	std::array<std::vector<std::shared_ptr<CommandList>>, frameCount> frameCommandLists;  // Per-frame dynamic command lists.
+	// Per-frame command list pool.
+	std::array<std::vector<std::shared_ptr<CommandList>>, frameCount> frameCommandLists;
+	std::array<size_t, frameCount> frameCommandListOffsets = {};
 
 	// Name the D3D objects.
 	void SetNames();
@@ -92,7 +94,7 @@ public:
 	std::pair<BufferHandle, size_t> FrameAllocate(size_t size);
 
 	// Allocate a per-frame command list, disposed of automatically.
-	std::shared_ptr<CommandList> AllocateFrameCommandList(RenderGraph* graph, D3D12_COMMAND_LIST_TYPE type, size_t passIndex);
+	std::shared_ptr<CommandList> AllocateFrameCommandList(D3D12_COMMAND_LIST_TYPE type);
 
 	DescriptorHandle AllocateDescriptor(DescriptorType type);
 
