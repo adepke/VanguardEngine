@@ -117,4 +117,7 @@ public:
 	void GenerateLuminanceMips(RenderGraph& graph, RenderResource luminanceTag);
 	uint32_t GetLuminanceTextureSize() const { return luminanceTextureSize; }
 	void MarkModelDirty() { dirty = true; }
+
+	RenderResource RenderVisibilityDebugOverlay(RenderGraph& graph, const RenderResource cloudsVisibilityTag, const RenderResource cameraBufferTag,
+		int mode, float shadowRange);
 };

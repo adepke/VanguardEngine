@@ -158,6 +158,10 @@ void EditorUI::DrawRenderOverlayTools(RenderDevice* device, const ImVec2& min, c
 		toolWindowSize = { 70, 300 };
 		position = ToolPosition::Right;
 		break;
+	case RenderOverlay::Visibility:
+		toolWindowSize = { 420, 88 };
+		position = ToolPosition::Bottom;
+		break;
 	}
 
 	const auto padding = 15.f;
@@ -230,6 +234,56 @@ void EditorUI::DrawRenderOverlayTools(RenderDevice* device, const ImVec2& min, c
 
 			ImGui::SetCursorPosX(ImGui::GetCursorPosX() + sliderPad);
 			ImGui::VSliderInt("##HiZMipLevel", sliderSize, &hiZOverlayMip, 0, maxMip - 1);
+
+			break;
+		}
+
+		case RenderOverlay::Visibility:
+		{
+			// If light shafts aren't being rendered, warn the user that overlay is stale.
+			if (*CvarGet("renderLightShafts", int) == 0)
+			{
+				ImGui::TextColored({ 1.f, 0.6f, 0.2f, 1.f }, "Light shafts disabled, the visibility map is stale!");
+			}
+
+			const auto itemWidth = toolWindowSize.x - style.FramePadding.x * 2.f - 110.f;
+
+			ImGui::SetNextItemWidth(itemWidth);
+			ImGui::Combo("Mode", &visibilityOverlayMode, [](void*, int index, const char** output)
+			{
+				switch ((VisibilityOverlayMode)index)
+				{
+				case VisibilityOverlayMode::ShadowStart: *output = "Shadow segment start"; break;
+				case VisibilityOverlayMode::ShadowLength: *output = "Shadow segment length"; break;
+				case VisibilityOverlayMode::Combined: *output = "Combined"; break;
+				default: return false;
+				}
+
+				return true;
+			}, nullptr, 3);
+
+			ImGui::SetNextItemWidth(itemWidth);
+			ImGui::SliderFloat("Range", &visibilityOverlayRange, 0.1f, 50.f, "%.1f km");
+
+			const char* leftText = "0";
+			char rightText[16];
+			ImFormatString(rightText, std::size(rightText), "%.1f km", visibilityOverlayRange);
+
+			const auto leftSize = ImGui::CalcTextSize(leftText);
+			const auto rightSize = ImGui::CalcTextSize(rightText);
+
+			const auto colorScaleSize = ImVec2{ toolWindowSize.x - std::max(leftSize.x, rightSize.x) * 2.f - style.FramePadding.x * 2.f - 4.f, 14.f };
+			auto colorScalePosMin = ImGui::GetWindowPos();
+			colorScalePosMin += { (toolWindowSize.x - colorScaleSize.x) * 0.5f, ImGui::GetCursorPosY() };
+			auto* drawList = ImGui::GetWindowDrawList();
+			drawList->AddRectFilledMultiColor(colorScalePosMin, colorScalePosMin + colorScaleSize, IM_COL32(0, 255, 0, 255), IM_COL32(255, 0, 0, 255), IM_COL32(255, 0, 0, 255), IM_COL32(0, 255, 0, 255));
+
+			ImGui::SetCursorPosY(ImGui::GetCursorPosY() + colorScaleSize.y + 2.f);
+			ImGui::Text(leftText);
+
+			ImGui::SameLine();
+			ImGui::SetCursorPosX(toolWindowSize.x - rightSize.x - style.FramePadding.x);
+			ImGui::Text(rightText);
 
 			break;
 		}
@@ -2063,12 +2117,13 @@ void EditorUI::DrawRenderVisualizer(RenderDevice* device, ClusteredLightCulling&
 				{
 				case RenderOverlay::None: *output = "None"; break;
 				case RenderOverlay::Clusters: *output = "Clusters"; break;
-				case RenderOverlay::HiZ: *output = "Hierarchical Depth Pyramid"; break;
+				case RenderOverlay::HiZ: *output = "Hierarchical depth pyramid"; break;
+				case RenderOverlay::Visibility: *output = "Volumetric atmosphere visibility"; break;
 				default: return false;
 				}
 
 				return true;
-			}, nullptr, 3);  // Note: Make sure to update the hardcoded count when new overlays are added.
+			}, nullptr, 4);  // Note: Make sure to update the hardcoded count when new overlays are added.
 
 			ImGui::Separator();
 

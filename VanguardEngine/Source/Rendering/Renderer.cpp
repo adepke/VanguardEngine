@@ -855,7 +855,7 @@ void Renderer::Render(entt::registry& registry)
 	DebugDraw::Get().Render(graph, cameraBufferTag, depthStencilTag, outputLDRTag);
 
 	// #TODO: Don't have this here.
-	Editor::Get().Render(graph, *device, *this, *graph.resourceManager, registry, cameraBufferTag, depthStencilTag, outputLDRTag, backBufferTag, clusterResources, cloudResources.weather);
+	Editor::Get().Render(graph, *device, *this, *graph.resourceManager, registry, cameraBufferTag, depthStencilTag, outputLDRTag, backBufferTag, clusterResources, cloudResources);
 
 	// #TODO: bundle this into the present pass?
 	if (capturePending)

@@ -9,6 +9,7 @@
 #include <Rendering/Device.h>
 #include <Rendering/Renderer.h>
 #include <Rendering/ClusteredLightCulling.h>
+#include <Rendering/Clouds.h>
 
 #include <imgui.h>
 #include <ImGuizmo.h>
@@ -72,11 +73,13 @@ void Editor::Update(RenderDevice& device, entt::registry& registry)
 
 void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer, RenderGraphResourceManager& resourceManager, entt::registry& registry,
 	RenderResource cameraBuffer, RenderResource depthStencil, RenderResource outputLDR, RenderResource backBuffer, const ClusterResources& clusterResources,
-	RenderResource weather)
+	const CloudResources& cloudResources)
 {
 #if ENABLE_EDITOR
 	if (enabled)
 	{
+		const auto weather = cloudResources.weather;
+
 		// Render the active overlay if there is one.
 		RenderResource activeOverlayTag{};
 		switch (ui->activeOverlay)
@@ -90,6 +93,12 @@ void Editor::Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer
 		case RenderOverlay::HiZ:
 		{
 			activeOverlayTag = renderer.occlusionCulling.RenderDebugOverlay(graph, ui->hiZOverlayMip, cameraBuffer);
+			break;
+		}
+		case RenderOverlay::Visibility:
+		{
+			activeOverlayTag = renderer.atmosphere.RenderVisibilityDebugOverlay(graph, cloudResources.cloudsVisibilityMap, cameraBuffer,
+				ui->visibilityOverlayMode, ui->visibilityOverlayRange);
 			break;
 		}
 		default:

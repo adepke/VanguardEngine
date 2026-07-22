@@ -18,7 +18,15 @@ enum class RenderOverlay
 {
 	None,
 	Clusters,
-	HiZ
+	HiZ,
+	Visibility
+};
+
+enum class VisibilityOverlayMode
+{
+	ShadowStart,
+	ShadowLength,
+	Combined
 };
 
 class RenderDevice;
@@ -120,6 +128,8 @@ public:
 	RenderOverlay activeOverlay = RenderOverlay::None;
 	TextureHandle overlayTexture;
 	int hiZOverlayMip = 0;
+	int visibilityOverlayMode = (int)VisibilityOverlayMode::Combined;
+	float visibilityOverlayRange = 20.f;
 
 	bool showFps = false;
 

@@ -14,6 +14,7 @@ class RenderDevice;
 class Renderer;
 class RenderGraphResourceManager;
 struct ClusterResources;
+struct CloudResources;
 
 class Editor : public Singleton<Editor>
 {
@@ -35,7 +36,7 @@ public:
 	void Update(RenderDevice& device, entt::registry& registry);
 	void Render(RenderGraph& graph, RenderDevice& device, Renderer& renderer, RenderGraphResourceManager& resourceManager, entt::registry& registry,
 		RenderResource cameraBuffer, RenderResource depthStencil, RenderResource outputLDR, RenderResource backBuffer, const ClusterResources& clusterResources,
-		RenderResource weather);
+		const CloudResources& cloudResources);
 
 	void BindKey(ImGuiKey key, std::function<void()> function);
 

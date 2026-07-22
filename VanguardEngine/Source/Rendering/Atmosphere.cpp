@@ -641,3 +641,48 @@ void Atmosphere::GenerateLuminanceMips(RenderGraph& graph, RenderResource lumina
 		device->GetResourceManager().GenerateMipmaps(list, luminanceTexture);
 	});
 }
+
+RenderResource Atmosphere::RenderVisibilityDebugOverlay(RenderGraph& graph, const RenderResource cloudsVisibilityTag, const RenderResource cameraBufferTag,
+	int mode, float shadowRange)
+{
+#if ENABLE_EDITOR
+	auto& overlayPass = graph.AddPass("Atmosphere Visibility Debug Overlay", ExecutionQueue::Graphics);
+	const auto debugOverlayTag = overlayPass.Create(TransientTextureDescription{
+		.format = DXGI_FORMAT_R16G16B16A16_FLOAT
+	}, VGText("Atmosphere visibility debug overlay"));
+	overlayPass.Read(cloudsVisibilityTag, ResourceBind::SRV);
+	overlayPass.Read(cameraBufferTag, ResourceBind::SRV);
+	overlayPass.Output(debugOverlayTag, OutputBind::RTV, LoadType::Preserve);
+	overlayPass.Bind([this, cloudsVisibilityTag, cameraBufferTag, mode, shadowRange](CommandList& list, RenderPassResources& resources)
+	{
+		const auto layout = RenderPipelineLayout{}
+			.VertexShader({ "Atmosphere/VisibilityDebugOverlay", "VSMain" })
+			.PixelShader({ "Atmosphere/VisibilityDebugOverlay", "PSMain" });
+
+		list.BindPipeline(layout);
+
+		struct
+		{
+			uint32_t visibilityTexture;
+			uint32_t cameraBuffer;
+			uint32_t cameraIndex;
+			uint32_t mode;
+			float shadowRange;
+		} bindData;
+
+		bindData.visibilityTexture = resources.Get(cloudsVisibilityTag);
+		bindData.cameraBuffer = resources.Get(cameraBufferTag);
+		bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
+		bindData.mode = (uint32_t)mode;
+		bindData.shadowRange = shadowRange;
+
+		list.BindConstants("bindData", bindData);
+
+		list.DrawFullscreenQuad();
+	});
+
+	return debugOverlayTag;
+#else
+	return {};
+#endif
+}
