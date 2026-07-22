@@ -289,7 +289,7 @@ void Atmosphere::Initialize(RenderDevice* inDevice, entt::registry& registry)
 {
 	device = inDevice;
 
-	CvarCreate("renderLightShafts", "Controls rendering of volumetric light shafts, currently only cast by clouds. 0=off, 1=on", 1);
+	CvarCreate("atmosphereVisibility", "Controls rendering of volumetric light shafts in the atmosphere. 0=off, 1=on", 1);
 
 	transmissionPrecomputeLayout = RenderPipelineLayout{}
 		.ComputeShader({ "Atmosphere/AtmospherePrecompute", "TransmittanceLutMain" });
@@ -473,7 +473,7 @@ void Atmosphere::Render(RenderGraph& graph, Clouds& clouds, AtmosphereResources 
 	composePass.Write(outputHDR, TextureView{}.UAV("", 0));
 	composePass.Bind([&, cameraBuffer, resourceHandles, cloudResources, depthStencil, outputHDR, solarZenithAngle](CommandList& list, RenderPassResources& resources)
 	{
-		const auto renderLightShafts = *CvarGet("renderLightShafts", int);
+		const auto renderLightShafts = *CvarGet("atmosphereVisibility", int);
 
 		auto composeLayout = RenderPipelineLayout{}
 			.ComputeShader({ "Atmosphere/Compose", "Main" })

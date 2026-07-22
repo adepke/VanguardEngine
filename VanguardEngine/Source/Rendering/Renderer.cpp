@@ -661,7 +661,7 @@ void Renderer::Render(entt::registry& registry)
 
 	// #TODO: Don't have this here.
 	// Note clouds must run before IBL since it contributes to the luminance cube.
-	const auto cloudResources = clouds.Render(graph, registry, atmosphere, cameraBufferTag, depthStencilTag, atmosphereIrradiance, luminanceTexture);
+	const auto cloudResources = clouds.Render(graph, registry, atmosphere, cameraBufferTag, depthStencilTag, atmosphereIrradiance, luminanceTexture, asResources);
 
 	// After all environment map contributions are done, build the mip chain and prepare for IBL convolution.
 	atmosphere.GenerateLuminanceMips(graph, luminanceTexture);

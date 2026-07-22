@@ -10,6 +10,7 @@ class RenderDevice;
 class RenderGraph;
 class CommandList;
 class Atmosphere;
+struct AccelerationStructureResources;
 
 struct CloudResources
 {
@@ -77,5 +78,6 @@ public:
 	~Clouds();
 
 	void Initialize(RenderDevice* inDevice);
-	CloudResources Render(RenderGraph& graph, entt::registry& registry, const Atmosphere& atmosphere, const RenderResource cameraBuffer, const RenderResource depthStencil, const RenderResource atmosphereIrradiance, const RenderResource luminanceTag);
+	// tlasTag enables ray traced geometry occlusion in the sky visibility march when available.
+	CloudResources Render(RenderGraph& graph, entt::registry& registry, const Atmosphere& atmosphere, const RenderResource cameraBuffer, const RenderResource depthStencil, const RenderResource atmosphereIrradiance, const RenderResource luminanceTag, const AccelerationStructureResources& asResources);
 };

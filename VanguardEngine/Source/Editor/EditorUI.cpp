@@ -241,7 +241,7 @@ void EditorUI::DrawRenderOverlayTools(RenderDevice* device, const ImVec2& min, c
 		case RenderOverlay::Visibility:
 		{
 			// If light shafts aren't being rendered, warn the user that overlay is stale.
-			if (*CvarGet("renderLightShafts", int) == 0)
+			if (*CvarGet("atmosphereVisibility", int) == 0)
 			{
 				ImGui::TextColored({ 1.f, 0.6f, 0.2f, 1.f }, "Light shafts disabled, the visibility map is stale!");
 			}
@@ -1964,6 +1964,12 @@ void EditorUI::DrawAtmosphereControls(RenderDevice* device, entt::registry& regi
 				ComponentProperties::RenderTimeOfDayComponent(registry, atmosphere.sunLight);
 			}
 
+			CvarHelpers::Checkbox("atmosphereVisibility", "Render light shafts");
+			ImGui::BeginDisabled(*CvarGet("atmosphereVisibility", int) == 0);
+			CvarHelpers::Checkbox("atmosphereVisibilityContributeGeometry", "Geometry light shafts");
+			CvarHelpers::Checkbox("atmosphereVisibilityContributeClouds", "Cloud light shafts");
+			ImGui::EndDisabled();
+
 			ImGui::Separator();
 
 			ImGui::Text("Weather");
@@ -1999,7 +2005,6 @@ void EditorUI::DrawAtmosphereControls(RenderDevice* device, entt::registry& regi
 				lastRayMarchQuality = rayMarchQuality;
 			}
 			
-			CvarHelpers::Checkbox("renderLightShafts", "Render light shafts");
 			CvarHelpers::Slider("cloudRenderScale", "Render scale", 0.1f, 1.f);
 
 			// Debug tools.

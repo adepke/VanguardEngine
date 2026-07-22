@@ -329,5 +329,8 @@ AccelerationStructureResources AccelerationStructures::Render(RenderGraph& graph
 		list.FlushBarriers();
 	});
 
-	return AccelerationStructureResources{ .tlasTag = tlasTag };
+	return AccelerationStructureResources{
+		.valid = true,
+		.tlasTag = tlasTag
+	};
 }

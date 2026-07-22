@@ -18,6 +18,7 @@ class MeshFactory;
 
 struct AccelerationStructureResources
 {
+	bool valid = false;
 	RenderResource tlasTag;
 };
 

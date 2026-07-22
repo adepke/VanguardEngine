@@ -6,6 +6,7 @@
 #include <Rendering/RenderGraph.h>
 #include <Rendering/RenderPass.h>
 #include <Rendering/Atmosphere.h>
+#include <Rendering/AccelerationStructures.h>
 #include <Rendering/RenderUtils.h>
 #include <Asset/TextureLoader.h>
 #include <Core/Config.h>
@@ -75,6 +76,8 @@ void Clouds::Initialize(RenderDevice* inDevice)
 	CvarCreate("cloudRenderScale", "Controls the render scale of the volumetric clouds", 0.25f);
 	CvarCreate("cloudDebugVisualization", "Cloud debug visualisation: 0=off, 1=transmittance, 2=march count, 3=normal vector", 0);
 	CvarCreate("cloudReflectionsEnabled", "Bake clouds into the IBL luminance cube so they appear in reflections", 1);
+	CvarCreate("atmosphereVisibilityContributeGeometry", "Geometry casts volumetric light shafts. 0=off, 1=on", 1);
+	CvarCreate("atmosphereVisibilityContributeClouds", "Clouds cast volumetric light shafts. 0=off, 1=on", 1);
 
 	weatherLayout = RenderPipelineLayout{}
 		.ComputeShader({ "Clouds/Weather", "Main" });
@@ -157,7 +160,9 @@ void Clouds::Initialize(RenderDevice* inDevice)
 	lastFrameVisibilityUpscaled.id = 0;
 }
 
-CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, const Atmosphere& atmosphere, const RenderResource cameraBuffer, const RenderResource depthStencil, const RenderResource atmosphereIrradiance, const RenderResource luminanceTag)
+CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, const Atmosphere& atmosphere,
+	const RenderResource cameraBuffer, const RenderResource depthStencil, const RenderResource atmosphereIrradiance,
+	const RenderResource luminanceTag, const AccelerationStructureResources& asResources)
 {
 	const auto weatherTag = graph.Import(weather);
 	const auto baseShapeNoiseTag = graph.Import(baseShapeNoise);
@@ -380,9 +385,11 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 		list.DrawFullscreenQuad();
 	});
 
-	auto visibilityEnabled = *CvarGet("renderLightShafts", int);
+	const bool geometryContribution = asResources.valid && *CvarGet("atmosphereVisibilityContributeGeometry", int) > 0;
+	const bool cloudsContribution = *CvarGet("atmosphereVisibilityContributeClouds", int) > 0;
 
-	auto& visibilityPass = graph.AddPass("Clouds Sky Visibility Pass", ExecutionQueue::Compute, visibilityEnabled > 0);
+	auto& visibilityPass = graph.AddPass("Clouds Sky Visibility Pass", ExecutionQueue::Compute, *CvarGet("atmosphereVisibility", int) > 0);
+	// #TODO: rename visibility and consider moving to atmosphere instead.
 	const auto cloudVisibility = visibilityPass.Create(TransientTextureDescription{
 		.width = 0,
 		.height = 0,
@@ -391,15 +398,23 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 		.format = DXGI_FORMAT_R16G16_FLOAT
 	}, VGText("Clouds visibility map"));
 	visibilityPass.Read(cameraBuffer, ResourceBind::SRV);
-	visibilityPass.Read(weatherTag, ResourceBind::SRV);
-	visibilityPass.Read(baseShapeNoiseTag, ResourceBind::SRV);  // Low detail marching.
 	visibilityPass.Read(depthStencil, ResourceBind::SRV);
 	visibilityPass.Read(blueNoiseTag, ResourceBind::SRV);
-	visibilityPass.Read(atmosphereIrradiance, ResourceBind::SRV);
+	if (cloudsContribution)
+	{
+		visibilityPass.Read(weatherTag, ResourceBind::SRV);
+		visibilityPass.Read(baseShapeNoiseTag, ResourceBind::SRV);  // Low detail marching.
+		visibilityPass.Read(atmosphereIrradiance, ResourceBind::SRV);
+	}
+	if (geometryContribution)
+	{
+		visibilityPass.Read(asResources.tlasTag, ResourceBind::AS);
+	}
 	visibilityPass.Write(cloudVisibility, TextureView{}
 		.UAV("", 0));
-	visibilityPass.Bind([this, cameraBuffer, weatherTag, baseShapeNoiseTag, depthStencil, blueNoiseTag, atmosphereIrradiance,
-		cloudVisibility, solarZenithAngle](CommandList& list, RenderPassResources& resources)
+	visibilityPass.Bind([this, geometryContribution, cloudsContribution, cameraBuffer, weatherTag, baseShapeNoiseTag,
+		depthStencil, blueNoiseTag, atmosphereIrradiance, cloudVisibility, solarZenithAngle, asResources]
+		(CommandList& list, RenderPassResources& resources)
 	{
 		auto visibilityLayout = RenderPipelineLayout{}
 			.ComputeShader({ "Clouds/Visibility", "Main" })
@@ -410,6 +425,11 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 			// will yield too much shadow and does not look visibily correct.
 			//.Macro({ "CLOUDS_ONLY_DEPTH" });
 		
+		if (geometryContribution)
+			visibilityLayout.Macro({ "VISIBILITY_ENABLE_GEOMETRY" });
+		if (cloudsContribution)
+			visibilityLayout.Macro({ "VISIBILITY_ENABLE_CLOUDS" });
+
 		// Only really useful with an inspector attached, no visual cue of the step count here.
 		if (*CvarGet("cloudDebugVisualization", int) == 2)
 			visibilityLayout.Macro({ "CLOUDS_DEBUG_MARCHCOUNT" });
@@ -430,22 +450,24 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 			XMFLOAT2 wind;
 			float time;
 			uint32_t upscaledResolution[2];
+			uint32_t accelerationStructure;
 		} bindData;
 
 		bindData.outputTexture = resources.Get(cloudVisibility);
-		bindData.weatherTexture = resources.Get(weatherTag);
-		bindData.baseShapeNoiseTexture = resources.Get(baseShapeNoiseTag);
+		bindData.weatherTexture = cloudsContribution ? resources.Get(weatherTag) : 0;
+		bindData.baseShapeNoiseTexture = cloudsContribution ? resources.Get(baseShapeNoiseTag) : 0;
 		bindData.cameraBuffer = resources.Get(cameraBuffer);
 		bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
 		bindData.solarZenithAngle = solarZenithAngle;
 		bindData.timeSlice = Renderer::Get().GetAppFrame() % 16;
 		bindData.geometryDepthTexture = resources.Get(depthStencil);
 		bindData.blueNoiseTexture = resources.Get(blueNoiseTag);
-		bindData.atmosphereIrradianceBuffer = resources.Get(atmosphereIrradiance);
+		bindData.atmosphereIrradianceBuffer = cloudsContribution ? resources.Get(atmosphereIrradiance) : 0;
 		bindData.time = Renderer::Get().GetAppTime();
 		bindData.wind = { windDirection.x * windStrength, windDirection.y * windStrength };
 		bindData.upscaledResolution[0] = device->renderWidth;
 		bindData.upscaledResolution[1] = device->renderHeight;
+		bindData.accelerationStructure = geometryContribution ? resources.Get(asResources.tlasTag) : 0;
 
 		list.BindConstants("bindData", bindData);
 

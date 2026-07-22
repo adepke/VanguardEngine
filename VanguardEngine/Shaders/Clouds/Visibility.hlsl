@@ -22,6 +22,7 @@ struct BindData
 	float2 wind;
 	float time;
 	uint2 upscaledResolution;
+	uint accelerationStructure;
 };
 
 ConstantBuffer<BindData> bindData : register(b0);
@@ -40,6 +41,7 @@ float2 RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uin
 	Texture2D<float3> weatherTexture = ResourceDescriptorHeap[bindData.weatherTexture];
 	Texture2D<float> geometryDepthTexture = ResourceDescriptorHeap[bindData.geometryDepthTexture];
 	Texture2D<float> blueNoiseTexture = ResourceDescriptorHeap[bindData.blueNoiseTexture];
+	RaytracingAccelerationStructure accelerationStructure = ResourceDescriptorHeap[bindData.accelerationStructure];
 
 	const float planetRadius = 6360.0;  // #TODO: Get from atmosphere data.
 	// How dense the cloud media is. Use a fairly high density so that ray marches early out quickly rather
@@ -120,6 +122,38 @@ float2 RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uin
 	{
 		float3 position = origin + rayDirection * dist;
 		
+#ifdef VISIBILITY_ENABLE_GEOMETRY
+
+		// During the clouds visibility march, also test geometry. This isn't an amazing solution, but it's
+		// what works with the Bruneton atmosphere model. Newer models decouple visibility from the precomputed
+		// stage, so froxels can be used. In this model, we have to approximate a shadow segment instead.
+		// Eventually this whole shader should likely not be a screen space march, and should instead inject
+		// into froxels.
+			
+		RayDesc shadowRay;
+		shadowRay.Origin = position * 1000.f; // Kilometers to meters.
+		shadowRay.Direction = sunDirection;
+		shadowRay.TMin = 0.1f;  // Small bias against acne from samples landing just above the depth surface.
+		shadowRay.TMax = 100000.f;
+
+		RayQuery<RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH | RAY_FLAG_CULL_NON_OPAQUE | RAY_FLAG_SKIP_PROCEDURAL_PRIMITIVES> query;
+		query.TraceRayInline(accelerationStructure, RAY_FLAG_NONE, 0xFF, shadowRay);
+		query.Proceed();
+
+		if (query.CommittedStatus() == COMMITTED_TRIANGLE_HIT)
+		{
+			// This step is fully shadowed, don't bother with cloud march.
+			totalShadow += stepSize;
+			totalShadowWeighted += stepSize * dist;
+
+			dist += stepSize;
+			continue;
+		}
+
+#endif  // VISIBILITY_ENABLE_GEOMETRY
+		
+#ifdef VISIBILITY_ENABLE_CLOUDS
+
 		float localMarchStart = 0.f;  // Start at the sample point
 		float localMarchEnd = 0.f;
 		
@@ -168,6 +202,8 @@ float2 RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uin
 			totalShadowWeighted += contribution * dist;  // First moment for centroid extraction.
 			accumulatedTransmittance *= transmittance;
 		}
+
+#endif  // VISIBILITY_ENABLE_CLOUDS
 
 		// Skip the remaining samples once the ray is essentially fully shadowed.
 		if (accumulatedTransmittance < 0.01f)
