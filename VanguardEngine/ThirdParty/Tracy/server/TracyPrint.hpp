@@ -5,6 +5,9 @@
 #  if __has_include(<charconv>) && __has_include(<type_traits>)
 #    include <charconv>
 #    include <type_traits>
+#    if !defined(__cpp_lib_to_chars)
+#       define NO_CHARCONV
+#    endif
 #  else
 #    define NO_CHARCONV
 #  endif
@@ -16,15 +19,14 @@
 #  define NO_CHARCONV
 #endif
 
-#ifdef __GNUC__
-#  define NO_CHARCONV
-#endif
-
 #ifdef NO_CHARCONV
 #  include <stdio.h>
 #endif
 
-#include "../common/TracyForceInline.hpp"
+#include <stdint.h>
+#include <string.h>
+
+#include "../public/common/TracyForceInline.hpp"
 
 namespace tracy
 {
@@ -127,6 +129,22 @@ const char* TimeToString( int64_t ns );
 const char* TimeToStringExact( int64_t ns );
 const char* MemSizeToString( int64_t val );
 const char* LocationToString( const char* fn, uint32_t line );
+
+static tracy_force_inline void PrintStringPercent( char* buf, const char* string, double percent )
+{
+    const auto ssz = strlen( string );
+    memcpy( buf, string, ssz );
+    memcpy( buf+ssz, " (", 2 );
+    auto end = PrintFloat( buf+ssz+2, buf+128, percent, 2 );
+    memcpy( end, "%)", 3 );
+}
+
+static tracy_force_inline void PrintStringPercent( char* buf, double percent )
+{
+    memcpy( buf, "(", 2 );
+    auto end = PrintFloat( buf+1, buf+64, percent, 2 );
+    memcpy( end, "%)", 3 );
+}
 
 }
 

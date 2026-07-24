@@ -10,7 +10,7 @@
 // TracyD3D12.hpp includes wrl/client.h, which is a big leak.
 // #TODO: Fix Windows.h leaking.
 #define NOMINMAX
-#include <TracyD3D12.hpp>
+#include <tracy/TracyD3D12.hpp>
 
 // Need to include this before windows minimal to prevent compiler errors.
 #if ENABLE_PROFILING
@@ -20,7 +20,7 @@
 #include <Core/Windows/WindowsMinimal.h>
 
 #include <spdlog/logger.h>
-#include <Tracy.hpp>
+#include <tracy/Tracy.hpp>
 
 #include <memory>
 

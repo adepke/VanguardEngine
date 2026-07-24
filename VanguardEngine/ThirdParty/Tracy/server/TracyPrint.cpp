@@ -117,7 +117,15 @@ static inline void PrintSmallIntFrac( char*& buf, uint64_t v )
     uint64_t fr = v % 1000;
     if( fr >= 995 )
     {
-        PrintSmallInt( buf, in+1 );
+        if( in < 999 )
+        {
+            PrintSmallInt( buf, in+1 );
+        }
+        else
+        {
+            memcpy( buf, "1000", 4 );
+            buf += 4;
+        }
     }
     else
     {
@@ -147,25 +155,36 @@ static inline void PrintSecondsFrac( char*& buf, uint64_t v )
     }
 }
 
+uint64_t _int64_abs( int64_t x )
+{
+    if( x < 0 )
+    {
+        // `-x` does not work if `x` is `std::numeric_limits<int64_t>::min()`,
+        // see https://github.com/wolfpld/tracy/pull/1040
+        // This works though:
+        // https://graphics.stanford.edu/~seander/bithacks.html#IntegerAbs
+        return -(uint64_t)x;
+    }
+    else
+    {
+        return x;
+    }
+}
+
 const char* TimeToString( int64_t _ns )
 {
-    enum { Pool = 8 };
+    constexpr size_t Pool = 8;
     static char bufpool[Pool][64];
     static int bufsel = 0;
     char* buf = bufpool[bufsel];
     char* bufstart = buf;
     bufsel = ( bufsel + 1 ) % Pool;
 
-    uint64_t ns;
+    uint64_t ns = _int64_abs(_ns);
     if( _ns < 0 )
     {
         *buf = '-';
         buf++;
-        ns = -_ns;
-    }
-    else
-    {
-        ns = _ns;
     }
 
     if( ns < 1000 )
@@ -230,23 +249,18 @@ const char* TimeToString( int64_t _ns )
 
 const char* TimeToStringExact( int64_t _ns )
 {
-    enum { Pool = 8 };
+    constexpr size_t Pool = 8;
     static char bufpool[Pool][64];
     static int bufsel = 0;
     char* buf = bufpool[bufsel];
     char* bufstart = buf;
     bufsel = ( bufsel + 1 ) % Pool;
 
-    uint64_t ns;
+    uint64_t ns = _int64_abs(_ns);
     if( _ns < 0 )
     {
         *buf = '-';
         buf++;
-        ns = -_ns;
-    }
-    else
-    {
-        ns = _ns;
     }
 
     const char* numStart = buf;
@@ -344,7 +358,7 @@ const char* TimeToStringExact( int64_t _ns )
 
 const char* MemSizeToString( int64_t val )
 {
-    enum { Pool = 8 };
+    constexpr size_t Pool = 8;
     static char bufpool[Pool][64];
     static int bufsel = 0;
     char* buf = bufpool[bufsel];
@@ -422,7 +436,7 @@ const char* LocationToString( const char* fn, uint32_t line )
 {
     if( line == 0 ) return fn;
 
-    enum { Pool = 8 };
+    constexpr size_t Pool = 8;
     static char bufpool[Pool][4096];
     static int bufsel = 0;
     char* buf = bufpool[bufsel];
@@ -437,7 +451,7 @@ namespace detail
 
 char* RealToStringGetBuffer()
 {
-    enum { Pool = 8 };
+    constexpr size_t Pool = 8;
     static char bufpool[Pool][64];
     static int bufsel = 0;
     char* buf = bufpool[bufsel];

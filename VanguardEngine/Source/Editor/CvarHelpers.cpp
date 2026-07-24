@@ -3,7 +3,7 @@
 #include <Editor/CvarHelpers.h>
 #include <Core/ConsoleVariable.h>
 
-#include <imgui/imgui.h>
+#include <imgui.h>
 
 void InvalidCvar(const entt::hashed_string cvar)
 {

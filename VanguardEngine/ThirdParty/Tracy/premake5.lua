@@ -1,10 +1,3 @@
-function InstallVcpkg()
-	prebuildcommands {
-		"cd ../../../../VanguardEngine/ThirdParty/Tracy/vcpkg",  -- Use the proper directory.
-		"install_vcpkg_dependencies.bat"  -- Install the required packages.
-	}
-end
-
 project "TracyClient"
 	language "C++"
 	kind "SharedLib"
@@ -16,8 +9,7 @@ project "TracyClient"
 
 	targetname "TracyClient"
 
-	includedirs { "profiler/libs/gl3w", "imgui", "vcpkg/vcpkg/installed/x64-windows-static/include" }
-	libdirs { "lib/glfw/bin/win32" }
+	includedirs "public"
 
 	staticruntime "Off"
 
@@ -34,101 +26,41 @@ project "TracyClient"
 		defines "TRACY_ENABLE"
 	end
 
-	files "TracyClient.cpp"
+	editandcontinue "Off"  -- Disable edit and continue, since Tracy needs __LINE__ to be a constant.
+
+	files "public/TracyClient.cpp"
 
 	buildoptions "/sdl"  -- Security development lifecycle checks
 
-	InstallVcpkg()
-
+-- Note: no longer self-contained as Tracy dropped support for vcpkg. Requires CMake >= 3.25 on PATH.
 project "TracyServer"
-	language "C++"
-	kind "WindowedApp"
+	kind "Makefile"
 
 	location "../../../Build/Tools/TracyServer/Generated"
-	buildlog "../../../Build/Logs/TracyServerBuildLog.log"
-	objdir "../../../Build/Tools/TracyServer/Intermediate/%{cfg.platform}_%{cfg.buildcfg}"
-	targetdir "../../../Build/Tools/TracyServer/Bin/%{cfg.platform}_%{cfg.buildcfg}"
-
+	targetdir "../../../Build/Tools/TracyServer/Bin"
 	targetname "TracyServer"
 
-	-- Only build the server in release.
-	configmap {
-		["Debug"] = "Release",
-		["Development"] = "Release"
+	local src = "../../../../VanguardEngine/ThirdParty/Tracy/profiler"
+	local build = "../CMakeBuild"
+	local bin = "../Bin"
+
+	buildcommands {
+		"cmake -B " .. build .. " -S " .. src .. " -DCMAKE_BUILD_TYPE=Release",
+		"cmake --build " .. build .. " --config Release --parallel",
+		"{MKDIR} " .. bin,
+		"{COPY} " .. build .. "/Release/tracy-profiler.exe " .. bin .. "/"
 	}
 
-	characterset "MBCS"
-	floatingpoint "Fast"
-	staticruntime "Off"
-	warnings "Extra"
-	vectorextensions "AVX2"
-
-	buildoptions {
-		"/diagnostics:caret",  -- Diagnostics format
-		"/permissive-"  -- Enable conformance mode
+	rebuildcommands {
+		"cmake -B " .. build .. " -S " .. src .. " -DCMAKE_BUILD_TYPE=Release",
+		"cmake --build " .. build .. " --config Release --parallel --clean-first",
+		"{MKDIR} " .. bin,
+		"{COPY} " .. build .. "/Release/tracy-profiler.exe " .. bin .. "/"
 	}
 
-	functionlevellinking "On"
-	buildoptions {
-		"/GL",  -- Enable whole program optimization
-		"/Oi"  -- Enable intrinsic functions
+	cleancommands {
+		"{RMDIR} " .. build,
+		"{RMDIR} " .. bin
 	}
 
-	includedirs { "profiler/libs/gl3w", "imgui", "vcpkg/vcpkg/installed/x64-windows-static/include", "vcpkg/vcpkg/installed/x64-windows-static/include/capstone" }
-	libdirs "vcpkg/vcpkg/installed/x64-windows-static/lib"
-
-	defines {
-		"_CRT_SECURE_NO_DEPRECATE",
-		"_CRT_NONSTDC_NO_DEPRECATE",
-		"WIN32_LEAN_AND_MEAN",
-		"NOMINMAX",
-		"_USE_MATH_DEFINES",
-		"TRACY_FILESELECTOR",
-		"TRACY_EXTENDED_FONT",
-		"TRACY_ROOT_WINDOW"
-	}
-
-	files {
-		"common/*.h",
-		"common/*.hpp",
-		"common/*.cpp",
-		"imgui/*.h",
-		"imgui/*.cpp",
-		"nfd/*.h",
-		"nfd/nfd_common.c",
-		"server/*.h",
-		"server/*.hpp",
-		"server/*.cpp",
-		"profiler/src/*.h",
-		"profiler/src/*.hpp",
-		"profiler/src/*.cpp",
-		"profiler/libs/gl3w/**.*",
-		"zstd/**.h",
-		"zstd/**.c"
-	}
-
-	filter { "system:windows" }
-		files "nfd/nfd_win.cpp"
-
-	filter { "system:not windows" }
-		files "nfd/nfd_gtk.c"
-		removefiles "profiler/src/winmain*.*"
-
-	filter {}
-
-	buildoptions "/sdl"  -- Security development lifecycle checks
-
-	links {
-		"brotlicommon",
-		"brotlidec",
-		"ws2_32",
-		"opengl32",
-		"glfw3",
-		"capstone",
-		"freetype",
-		"libpng16",
-		"zlib",
-		"bz2"
-	}
-
-	InstallVcpkg()
+	buildoutputs { bin .. "/tracy-profiler.exe" }

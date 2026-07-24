@@ -1,0 +1,42 @@
+name: release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  release-build-windows:
+    uses: ./.github/workflows/windows.yml
+
+  release-build-macos:
+    uses: ./.github/workflows/macos.yml
+
+  release-build-manual:
+    uses: ./.github/workflows/latex.yml
+
+  attach-to-release:
+    needs: [release-build-windows, release-build-macos, release-build-manual]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+    - uses: actions/download-artifact@v4
+    - name: Create versioned Windows zip
+      run: |
+        VERSION="${{ github.event.release.tag_name }}"
+        VERSION_NO_V="${VERSION#v}"
+        cd windows
+        zip -r ../windows-$VERSION_NO_V.zip .
+    - name: Create versioned macOS zip
+      run: |
+        VERSION="${{ github.event.release.tag_name }}"
+        VERSION_NO_V="${VERSION#v}"
+        cd macos
+        chmod +x tracy-* tracy-profiler.app/Contents/MacOS/*
+        zip -r ../macos-$VERSION_NO_V.zip .
+    - uses: softprops/action-gh-release@v2
+      with:
+        files: |
+          windows-*.zip
+          macos-*.zip
+          manual/tracy.pdf
