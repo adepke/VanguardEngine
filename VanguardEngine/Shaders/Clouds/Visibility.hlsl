@@ -6,6 +6,7 @@
 #include "Reprojection.hlsli"
 #include "Atmosphere/Atmosphere.hlsli"
 #include "Clouds/Core.hlsli"
+#include "Volumetrics/VisibilityMoments.hlsli"
 
 struct BindData
 {
@@ -27,8 +28,8 @@ struct BindData
 
 ConstantBuffer<BindData> bindData : register(b0);
 
-// Returns (shadowStart, shadowLength) describing a single contiguous shadow segment along the camera view ray, in
-// kilometers.
+// Returns the encoded shadow moments (integrated shadow, normalized distance-weighted shadow) along the camera
+// view ray. This is converted into a start + length segment after accumulation.
 float2 RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uint height)
 {
 	float3 sunDirection = float3(sin(bindData.solarZenithAngle), 0.f, cos(bindData.solarZenithAngle));
@@ -73,7 +74,7 @@ float2 RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uin
 	}
 
 	// Limit the march distance. Far away clouds won't meaningfully contribute shadow and are simply too expensive to march to.
-	marchEnd = clamp(marchEnd, 0, 50);
+	marchEnd = clamp(marchEnd, 0.f, visibilityMarchMax);
 
 	// Early out of the march if we hit opaque geometry.
 	// Using the base UV instead of jittered provides slightly better edges around geometry.
@@ -109,9 +110,9 @@ float2 RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uin
 	
 	float totalShadow = 0.f;
 	// First moment (distance-weighted shadow). totalShadowWeighted / totalShadow gives the centroid distance of the
-	// shadow distribution along the ray. With this, we can express the shadow as a single contiguous segment
-	// centered at the centroid, which lets the atmosphere model omit in-scattering at the correct location along
-	// the view ray rather than always at one end. See atmosphere shadow-segment formulation for the consumer side.
+	// shadow distribution along the ray. The consumer collapses the filtered moments into a single contiguous
+	// segment centered at the centroid, which lets the atmosphere omit in-scattering at the correct location
+	// along the view ray rather than always at one end.
 	float totalShadowWeighted = 0.f;
 	float accumulatedTransmittance = 1.f;  // Used for early out once the ray is fully shadowed
 #ifdef CLOUDS_DEBUG_MARCHCOUNT
@@ -215,18 +216,8 @@ float2 RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uin
 #ifdef CLOUDS_DEBUG_MARCHCOUNT
 	return float2(totalSteps, 0);
 #else
-	// Convert the moments to a contiguous shadow segment: centered at the centroid distance with length equal to
-	// the integrated shadow contribution. This collapses the real (potentially multi-modal) shadow distribution to
-	// a single block, but for typical cloud scenes the dominant cloud accounts for nearly all of the shadow and
-	// the centroid approximation is close enough.
-	const float shadowLength = totalShadow;
-	float shadowStart = 0.f;
-	if (totalShadow > 0.0001f)
-	{
-		const float shadowCentroid = totalShadowWeighted / totalShadow;
-		shadowStart = max(shadowCentroid - shadowLength * 0.5f, 0.f);
-	}
-	return float2(shadowStart, shadowLength);
+	// Output the moments instead of the segment, so we get better accumulation.
+	return EncodeVisibilityMoments(totalShadow, totalShadowWeighted);
 #endif
 }
 
@@ -251,7 +242,7 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	// Jitter the UV coordinates for temporal accumulation.
 	float2 jitteredUv = JitterUv(alignedUv, bindData.upscaledResolution, bindData.timeSlice);
 
-	float2 shadowSegment = RayMarch(camera, uv, jitteredUv, width, height);
+	float2 shadowMoments = RayMarch(camera, uv, jitteredUv, width, height);
 
-	outputTexture[dispatchId.xy] = shadowSegment;
+	outputTexture[dispatchId.xy] = shadowMoments;
 }

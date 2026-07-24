@@ -20,11 +20,11 @@ static const uint2 crossFilterOffsets[] = {
 };
 
 // Applies a jitter offset to the given UV coordinates in upscaled resolution space. Note that the jitter is exclusively positive,
-// and will not return UV coordinates < inputUv.
+// and will not return UV coordinates < inputUv. Input must be corner-aligned, output will be pixel-center.
 float2 JitterUv(float2 inputUv, uint2 resolution, int time)
 {
 	const uint2 offset = crossFilterOffsets[time % 16];
-	const float2 offsetScreenSpace = float2(offset) / float2(resolution);
+	const float2 offsetScreenSpace = (float2(offset) + 0.5f) / float2(resolution);
 
 	return inputUv + offsetScreenSpace;
 }

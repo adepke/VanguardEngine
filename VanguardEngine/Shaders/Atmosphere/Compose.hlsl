@@ -5,6 +5,7 @@
 #include "Geometry.hlsli"
 #include "Atmosphere/Atmosphere.hlsli"
 #include "Atmosphere/Visibility.hlsli"
+#include "Volumetrics/VisibilityMoments.hlsli"
 
 struct BindData
 {
@@ -112,13 +113,15 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	float3 planetCenter = ComputeAtmospherePlanetCenter(atmosphere);
 	
 	// Atomspheric in-scatter is omitted along the ray in the bounds of [shadowStart, shadowStart + shadowLength].
-	float shadowStart  = 0.f;
+	float shadowStart = 0.f;
 	float shadowLength = 0.f;
 
 #if defined(RENDER_LIGHT_SHAFTS) && (RENDER_LIGHT_SHAFTS > 0)
-	float2 visibilitySample = cloudsVisibilityTexture.Sample(bilinearClamp, uv);
-	shadowStart  = visibilitySample.x;
-	shadowLength = visibilitySample.y;
+	// The visibility texture stores shadow moments, convert to segments here.
+	float2 visibilityMoments = cloudsVisibilityTexture.Sample(bilinearClamp, uv);
+	float2 shadowSegment = VisibilityMomentsToSegment(visibilityMoments);
+	shadowStart = shadowSegment.x;
+	shadowLength = shadowSegment.y;
 
 	// Soften the shadows a bit, except when looking at the sun. Shadows cast by clouds when looking at the sun
 	// should be more dramatic to make the effect obvious.

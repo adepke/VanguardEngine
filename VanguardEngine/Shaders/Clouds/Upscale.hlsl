@@ -3,6 +3,7 @@
 #include "RootSignature.hlsli"
 #include "Camera.hlsli"
 #include "Reprojection.hlsli"
+#include "Volumetrics/VisibilityMoments.hlsli"
 
 struct BindData
 {
@@ -83,7 +84,7 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	
 	float4 newScatTrans = newScatTransTexture[lowResSampleCoords];
 	float newDepth = newDepthTexture[lowResSampleCoords];
-	float2 newVisibility;  // (shadowStart, shadowLength).
+	float2 newVisibility;
 	
 	// UV coordinates are centered on the middle of the pixel, not the aligned corner.
 	float2 newUv = (dispatchId.xy + 0.5.xx) / float2(width, height);
@@ -124,7 +125,12 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 	float2 finalVisibility = newVisibility;
 	
 	float blendWeight = JitterAlignedPixel(newUv, uint2(width, height), bindData.timeSlice);
-	
+
+	// No reprojection if the camera didn't move.
+	float2 uvDelta = newUv - oldUv;
+	const bool stationaryCamera = (uvDelta.x * uvDelta.x + uvDelta.y * uvDelta.y < 0.000001) &&
+		all(abs(camera.lastFramePosition.xyz - camera.position.xyz) < 0.01);
+
 	if (!reject)
 	{
 		// Apply neighborhood clipping.
@@ -143,8 +149,7 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 		// during no motion anyways.
 		float4 correctedScatTrans = clippedScatTrans;
 		float correctedDepth = clippedDepth;
-		float2 uvDelta = newUv - oldUv;
-		if (uvDelta.x * uvDelta.x + uvDelta.y * uvDelta.y < 0.000001 && all(abs(camera.lastFramePosition.xyz - camera.position.xyz) < 0.01))
+		if (stationaryCamera)
 		{
 			correctedScatTrans = oldScatTrans;
 			correctedDepth = oldDepth;
@@ -156,13 +161,50 @@ void Main(uint3 dispatchId : SV_DispatchThreadID)
 		finalDepth = lerp(newDepth, correctedDepth, blendWeight);
 	}
 	
-	// Handle visibility upscale last, as we don't have depth information (nor is it very relevant), so perform
-	// a simple temporal reproject of it. In addition, the history rejection rules for this are different.
-	// Both channels (shadowStart and shadowLength) are temporally accumulated together — they're physically
-	// correlated and reprojecting them independently would let them desync visually.
-	float2 oldUvDepthless = ReprojectUv(camera, newUv, 10000);
-	float2 oldVisibility = oldVisibilityTexture.Sample(pointClamp, oldUvDepthless);
-	finalVisibility = lerp(newVisibility, oldVisibility, blendWeight);
+	// Visibility upscale is a bit different, it works in shadow moment space.
+	// Experimenting with exponential moving average to help smooth noise, instead of jitter-aligned
+	// replacement + reprojection that the clouds use.
+
+	// Representative depth of the shadow signal, for reprojection. In kilometers.
+	float visibilityDepth = visibilityMarchMax;
+	const float newCentroid = VisibilityMomentsCentroid(newVisibility);
+	if (newCentroid > 0.f)
+	{
+		visibilityDepth = newCentroid;
+	}
+	else if (geometryDepth < camera.farPlane)
+	{
+		visibilityDepth = min(geometryDepth * 0.001f, visibilityMarchMax);  // Meters to kilometers.
+	}
+
+	float2 oldUvVisibility = ReprojectUv(camera, newUv, visibilityDepth);
+
+	if (all(oldUvVisibility >= 0.f) && all(oldUvVisibility <= 1.f))
+	{
+		// Still bilinear blur. This should be correct to do since the visibility sample isn't a discrete segment.
+		float2 oldVisibility = oldVisibilityTexture.Sample(bilinearClamp, oldUvVisibility);
+
+		// Reproject the centroid from old frame to new frame.
+		const float3 rayDirection = ComputeRayDirection(camera, newUv);
+		const float3 featurePosition = camera.position.xyz + rayDirection * (visibilityDepth * 1000.f);  // Meters.
+		const float oldDistance = length(featurePosition - camera.lastFramePosition.xyz) * 0.001f;  // Kilometers.
+		oldVisibility.y *= visibilityDepth / max(oldDistance, 0.001f);
+		// The centroid cannot lie past the march cap. With m1 normalized by the cap, that bound is just m0.
+		oldVisibility.y = min(oldVisibility.y, oldVisibility.x);
+
+		// Same clamp that the clouds use, same benefits and drawbacks.
+		if (!stationaryCamera)
+		{
+			oldVisibility = NeighborhoodClampFilter(oldVisibility, newVisibilityTexture, lowResSampleCoords);
+		}
+		
+		// EMA since the visibility march is a fairly low quality march with big steps. This works
+		// better for visibility than it does for clouds since the visiblity contributes low frequency
+		// signal that the eye won't really pick up on, as opposed to the very high fidelity clouds.
+		const bool jitterAligned = blendWeight < 0.5f;
+		const float historyWeight = jitterAligned ? 0.7f : 0.95f;
+		finalVisibility = lerp(newVisibility, oldVisibility, historyWeight);
+	}
 	
 	outputScatTransTexture[dispatchId.xy] = finalScatTrans;
 	outputDepthTexture[dispatchId.xy] = finalDepth;

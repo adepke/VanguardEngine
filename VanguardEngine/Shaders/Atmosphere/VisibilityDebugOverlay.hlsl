@@ -5,8 +5,9 @@
 #include "Color.hlsli"
 #include "Constants.hlsli"
 #include "Atmosphere/Atmosphere.hlsli"
+#include "Volumetrics/VisibilityMoments.hlsli"
 
-// Atmosphere visibility is captured by (shadowStart, shadowLength), in kilometers.
+// Atmosphere visibility is stored as shadow moments. Visualize as segments.
 
 #define DEBUG_MODE_SHADOW_START 0
 #define DEBUG_MODE_SHADOW_LENGTH 1
@@ -47,9 +48,10 @@ float4 PSMain(PixelIn input) : SV_Target
 	StructuredBuffer<Camera> cameraBuffer = ResourceDescriptorHeap[bindData.cameraBuffer];
 	Camera camera = cameraBuffer[bindData.cameraIndex];
 
-	float2 visibility = visibilityTexture.Sample(bilinearClamp, input.uv);
-	const float shadowStart = visibility.x;
-	const float shadowLength = visibility.y;
+	float2 visibilityMoments = visibilityTexture.Sample(bilinearClamp, input.uv);
+	float2 shadowSegment = VisibilityMomentsToSegment(visibilityMoments);
+	const float shadowStart = shadowSegment.x;
+	const float shadowLength = shadowSegment.y;
 	
 	if (shadowLength < 0.0001f)
 	{
