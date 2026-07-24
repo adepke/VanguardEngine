@@ -23,6 +23,7 @@
 #include <string>
 #include <memory>
 #include <chrono>
+#include <thread>
 
 // #TEMP
 #include <Rendering/RenderComponents.h>
@@ -317,7 +318,7 @@ bool EngineBoot()
 
 	if (!GCommandLineOptions.valid)
 	{
-		VGLogError(logCore, "Invalid command line arguments. Expected: [--headless] [--output <file.png>] [--delay <frames>] [--scene <file>] [--pix] [--cvar <name=value>]");
+		VGLogError(logCore, "Invalid command line arguments. Expected: [--headless] [--output <file.png>] [--delay <frames>] [--scene <file>] [--pix] [--profile] [--cvar <name=value>]");
 		return false;
 	}
 
@@ -510,6 +511,35 @@ void EngineShutdown()
 	VGLog(logCore, "Engine shutting down.");
 }
 
+
+// Wait for Tracy to connect, and ensure it drains all data before exit.
+void DrainProfiler()
+{
+#if ENABLE_PROFILING
+	// Wait for Tracy to connect, in case it hasn't started yet. All trace data is buffered in memory
+	// until the server drains it.
+	const auto deadline = std::chrono::steady_clock::now() + 10s;
+	while (!TracyIsConnected && std::chrono::steady_clock::now() < deadline)
+	{
+		std::this_thread::sleep_for(10ms);
+	}
+
+	if (!TracyIsConnected)
+	{
+		VGLogWarning(logCore, "--profile was requested, but server was not connected at shutdown time. Potential trace data loss.");
+		return;
+	}
+
+	tracy::GetProfiler().RequestShutdown();
+	while (!tracy::GetProfiler().HasShutdownFinished())
+	{
+		std::this_thread::sleep_for(10ms);
+	}
+#else
+	VGLogError(logCore, "--profile was requested, but engine was not compiled with profiling enabled.");
+#endif
+}
+
 int32_t EngineMain()
 {
 	RegisterCrashHandlers();
@@ -519,6 +549,12 @@ int32_t EngineMain()
 	if (!healthy)
 		return 1;
 	healthy = EngineLoop();
+
+	if (GCommandLineOptions.profile)
+	{
+		DrainProfiler();
+	}
+
 	if (!healthy)
 		return 1;
 	EngineShutdown();

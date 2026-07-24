@@ -76,6 +76,10 @@ void ParseCommandLineOptions(const std::vector<std::wstring>& args)
 		{
 			options.pix = true;
 		}
+		else if (arg == VGText("--profile"))
+		{
+			options.profile = true;
+		}
 		else if (arg == VGText("--cvar"))
 		{
 			// Format: name=value

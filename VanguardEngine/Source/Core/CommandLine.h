@@ -36,6 +36,9 @@ struct CommandLineOptions
 	// --pix: enables PIX DLL loading for capture.
 	bool pix = false;
 
+	// --profile: ensure the profiling server connects and fully drains all data before exit.
+	bool profile = false;
+
 	// --cvar <name=value>: overrides a console variable.
 	std::vector<CommandLineCvarOverride> cvarOverrides;
 };
