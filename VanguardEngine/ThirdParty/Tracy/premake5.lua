@@ -40,27 +40,53 @@ project "TracyServer"
 	targetdir "../../../Build/Tools/TracyServer/Bin"
 	targetname "TracyServer"
 
-	local src = "../../../../VanguardEngine/ThirdParty/Tracy/profiler"
-	local build = "../CMakeBuild"
+	-- CMake source dirs for each tool.
+	local srcProfiler  = "../../../../VanguardEngine/ThirdParty/Tracy/profiler"
+	local srcCapture   = "../../../../VanguardEngine/ThirdParty/Tracy/capture"
+	local srcCsvexport = "../../../../VanguardEngine/ThirdParty/Tracy/csvexport"
+
+	-- Separate out-of-source build trees so the three CMake projects don't clobber each other.
+	local buildProfiler  = "../CMakeBuild"
+	local buildCapture   = "../CMakeBuildCapture"
+	local buildCsvexport = "../CMakeBuildCsvexport"
 	local bin = "../Bin"
 
+	-- The GUI profiler, the headless capture tool, and the CSV exporter all live in Bin/ together.
 	buildcommands {
-		"cmake -B " .. build .. " -S " .. src .. " -DCMAKE_BUILD_TYPE=Release",
-		"cmake --build " .. build .. " --config Release --parallel",
+		"cmake -B " .. buildProfiler  .. " -S " .. srcProfiler  .. " -DCMAKE_BUILD_TYPE=Release",
+		"cmake --build " .. buildProfiler  .. " --config Release --parallel",
+		"cmake -B " .. buildCapture   .. " -S " .. srcCapture   .. " -DCMAKE_BUILD_TYPE=Release",
+		"cmake --build " .. buildCapture   .. " --config Release --parallel",
+		"cmake -B " .. buildCsvexport .. " -S " .. srcCsvexport .. " -DCMAKE_BUILD_TYPE=Release",
+		"cmake --build " .. buildCsvexport .. " --config Release --parallel",
 		"{MKDIR} " .. bin,
-		"{COPY} " .. build .. "/Release/tracy-profiler.exe " .. bin .. "/"
+		"{COPY} " .. buildProfiler  .. "/Release/tracy-profiler.exe "  .. bin .. "/",
+		"{COPY} " .. buildCapture   .. "/Release/tracy-capture.exe "   .. bin .. "/",
+		"{COPY} " .. buildCsvexport .. "/Release/tracy-csvexport.exe " .. bin .. "/"
 	}
 
 	rebuildcommands {
-		"cmake -B " .. build .. " -S " .. src .. " -DCMAKE_BUILD_TYPE=Release",
-		"cmake --build " .. build .. " --config Release --parallel --clean-first",
+		"cmake -B " .. buildProfiler  .. " -S " .. srcProfiler  .. " -DCMAKE_BUILD_TYPE=Release",
+		"cmake --build " .. buildProfiler  .. " --config Release --parallel --clean-first",
+		"cmake -B " .. buildCapture   .. " -S " .. srcCapture   .. " -DCMAKE_BUILD_TYPE=Release",
+		"cmake --build " .. buildCapture   .. " --config Release --parallel --clean-first",
+		"cmake -B " .. buildCsvexport .. " -S " .. srcCsvexport .. " -DCMAKE_BUILD_TYPE=Release",
+		"cmake --build " .. buildCsvexport .. " --config Release --parallel --clean-first",
 		"{MKDIR} " .. bin,
-		"{COPY} " .. build .. "/Release/tracy-profiler.exe " .. bin .. "/"
+		"{COPY} " .. buildProfiler  .. "/Release/tracy-profiler.exe "  .. bin .. "/",
+		"{COPY} " .. buildCapture   .. "/Release/tracy-capture.exe "   .. bin .. "/",
+		"{COPY} " .. buildCsvexport .. "/Release/tracy-csvexport.exe " .. bin .. "/"
 	}
 
 	cleancommands {
-		"{RMDIR} " .. build,
+		"{RMDIR} " .. buildProfiler,
+		"{RMDIR} " .. buildCapture,
+		"{RMDIR} " .. buildCsvexport,
 		"{RMDIR} " .. bin
 	}
 
-	buildoutputs { bin .. "/tracy-profiler.exe" }
+	buildoutputs {
+		bin .. "/tracy-profiler.exe",
+		bin .. "/tracy-capture.exe",
+		bin .. "/tracy-csvexport.exe"
+	}
