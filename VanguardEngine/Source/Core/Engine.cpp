@@ -388,22 +388,9 @@ bool EngineBoot()
 		SetupDefaultScene();
 	}
 
-	// #TODO: this isn't a great solution. The goal here is to ensure that at least one camera in the scene
-	// has control, otherwise the global camera matrices never populate and rendering produces NaN's. Instead,
-	// consider some way to run the camera system once for the first camera in the scene, if no camera has control,
-	// instead of attaching a control component.
-	if (registry.view<const CameraComponent, const ControlComponent>().size_hint() == 0)
+	if (registry.view<const CameraComponent>().size() == 0)
 	{
-		auto cameras = registry.view<const CameraComponent>();
-		if (cameras.begin() != cameras.end())
-		{
-			registry.emplace<ControlComponent>(*cameras.begin());
-		}
-
-		else
-		{
-			VGLogWarning(logScene, "No camera found in the scene.");
-		}
+		VGLogWarning(logScene, "No camera found in the scene.");
 	}
 
 	return true;

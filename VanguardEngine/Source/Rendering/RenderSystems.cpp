@@ -9,10 +9,76 @@
 #include <algorithm>
 #include <numbers>
 
-XMMATRIX SpectatorCameraView(TransformComponent& transform, const CameraComponent& camera, float deltaTime, float deltaPitch, float deltaYaw,
-	bool moveForward, bool moveBackward, bool moveLeft, bool moveRight, bool moveUp, bool moveDown, bool moveSprint)
+void CameraBasis(const TransformComponent& transform, XMVECTOR& forward, XMVECTOR& upward, XMVECTOR& across)
 {
-	VGScopedCPUStat("Spectator Camera View");
+	const auto rotationMatrix = XMMatrixRotationX(-transform.rotation.x) * XMMatrixRotationY(-transform.rotation.y) * XMMatrixRotationZ(-transform.rotation.z);
+
+	forward = XMVector4Transform(XMVectorSet(1.f, 0.f, 0.f, 0.f), rotationMatrix);
+	upward = XMVector4Transform(XMVectorSet(0.f, 0.f, 1.f, 0.f), rotationMatrix);
+	across = XMVector3Cross(upward, forward);
+}
+
+XMMATRIX CameraViewMatrix(const TransformComponent& transform)
+{
+	XMVECTOR forward, upward, across;
+	CameraBasis(transform, forward, upward, across);
+
+	const auto eyePosition = XMVectorSet(transform.translation.x, transform.translation.y, transform.translation.z, 0.f);
+
+	return XMMatrixLookAtRH(eyePosition, eyePosition + forward, upward);
+}
+
+// Finds a camera with Control, otherwise a camera.
+entt::entity FindActiveCamera(entt::registry& registry)
+{
+	// #TODO: Support multiple cameras.
+
+	auto controlled = registry.view<const TransformComponent, const CameraComponent, const ControlComponent>();
+	if (controlled.begin() != controlled.end())
+	{
+		return *controlled.begin();
+	}
+
+	auto fallback = registry.view<const TransformComponent, const CameraComponent>();
+	if (fallback.begin() != fallback.end())
+	{
+		return *fallback.begin();
+	}
+
+	return entt::null;
+}
+
+// Polls UI input and applies it to a transform component.
+void ApplyMovementInput(TransformComponent& transform, float deltaTime)
+{
+	bool moveForward = false;
+	bool moveBackward = false;
+	bool moveLeft = false;
+	bool moveRight = false;
+	bool moveUp = false;
+	bool moveDown = false;
+	bool moveSprint = false;
+
+	auto& io = ImGui::GetIO();
+	const auto deltaPitch = io.MouseDelta.y * 0.005f;
+	const auto deltaYaw = io.MouseDelta.x * 0.005f;
+
+	if (ImGui::IsKeyDown(ImGuiKey_W)) moveForward = true;
+	if (ImGui::IsKeyDown(ImGuiKey_S)) moveBackward = true;
+	if (ImGui::IsKeyDown(ImGuiKey_A)) moveLeft = true;
+	if (ImGui::IsKeyDown(ImGuiKey_D)) moveRight = true;
+	if (ImGui::IsKeyDown(ImGuiKey_Space)) moveUp = true;
+	if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl)) moveDown = true;
+	if (ImGui::IsKeyDown(ImGuiKey_LeftShift)) moveSprint = true;
+
+	if (auto cvar = CvarGet("cameraSpeed", float); cvar && io.MouseWheel != 0.f)
+	{
+		constexpr float scrollStepFactor = 1.15f;  // ~15% per scroll.
+		constexpr float minCameraSpeed = 0.05f;
+		constexpr float maxCameraSpeed = 200.f;
+		const float updated = std::clamp(*cvar * std::pow(scrollStepFactor, io.MouseWheel), minCameraSpeed, maxCameraSpeed);
+		CvarSet("cameraSpeed", updated);
+	}
 
 	auto movementSpeed = 25.f * (moveSprint ? 3.f : 1.f) * deltaTime;
 	constexpr auto rotationSpeed = 0.4f;
@@ -28,11 +94,8 @@ XMMATRIX SpectatorCameraView(TransformComponent& transform, const CameraComponen
 	constexpr auto maxPitch = 89.999999f * 3.14159265359f / 180.f;
 	transform.rotation.y = std::clamp(transform.rotation.y, maxPitch * -1.f, maxPitch);
 
-	const auto rotationMatrix = XMMatrixRotationX(-transform.rotation.x) * XMMatrixRotationY(-transform.rotation.y) * XMMatrixRotationZ(-transform.rotation.z);
-
-	const auto forward = XMVector4Transform(XMVectorSet(1.f, 0.f, 0.f, 0.f), rotationMatrix);
-	const auto upward = XMVector4Transform(XMVectorSet(0.f, 0.f, 1.f, 0.f), rotationMatrix);
-	const auto across = XMVector3Cross(upward, forward);
+	XMVECTOR forward, upward, across;
+	CameraBasis(transform, forward, upward, across);
 
 	const auto forwardMovement = (moveForward ? 1.f : 0.f) - (moveBackward ? 1.f : 0.f);
 	const auto upMovement = (moveUp ? 1.f : 0.f) - (moveDown ? 1.f : 0.f);
@@ -44,8 +107,6 @@ XMMATRIX SpectatorCameraView(TransformComponent& transform, const CameraComponen
 	eyePosition += across * leftMovement * movementSpeed;
 
 	XMStoreFloat3(&transform.translation, eyePosition);
-
-	return XMMatrixLookAtRH(eyePosition, eyePosition + forward, upward);
 }
 
 void CameraSystem::Update(entt::registry& registry, float deltaTime)
@@ -55,54 +116,33 @@ void CameraSystem::Update(entt::registry& registry, float deltaTime)
 	// #TODO: don't use a cvar for this.
 	CvarCreate("cameraSpeed", "How fast the camera should move", 1.f);
 
-	bool moveForward = false;
-	bool moveBackward = false;
-	bool moveLeft = false;
-	bool moveRight = false;
-	bool moveUp = false;
-	bool moveDown = false;
-	bool moveSprint = false;
-
-	auto& io = ImGui::GetIO();
-	const auto pitchDelta = io.MouseDelta.y * 0.005f;
-	const auto yawDelta = io.MouseDelta.x * 0.005f;
-
-	if (ImGui::IsKeyDown(ImGuiKey_W)) moveForward = true;
-	if (ImGui::IsKeyDown(ImGuiKey_S)) moveBackward = true;
-	if (ImGui::IsKeyDown(ImGuiKey_A)) moveLeft = true;
-	if (ImGui::IsKeyDown(ImGuiKey_D)) moveRight = true;
-	if (ImGui::IsKeyDown(ImGuiKey_Space)) moveUp = true;
-	if (ImGui::IsKeyDown(ImGuiKey_LeftCtrl)) moveDown = true;
-	if (ImGui::IsKeyDown(ImGuiKey_LeftShift)) moveSprint = true;
-
-	if (io.MouseWheel != 0.f && registry.view<const ControlComponent>().size() > 0)
+	const auto activeCamera = FindActiveCamera(registry);
+	if (activeCamera == entt::null)
 	{
-		if (auto cvar = CvarGet("cameraSpeed", float); cvar)
-		{
-			constexpr float scrollStepFactor = 1.15f;  // ~15% per scroll.
-			constexpr float minCameraSpeed = 0.05f;
-			constexpr float maxCameraSpeed = 200.f;
-			const float updated = std::clamp(*cvar * std::pow(scrollStepFactor, io.MouseWheel), minCameraSpeed, maxCameraSpeed);
-			CvarSet("cameraSpeed", updated);
-		}
+		return;
 	}
 
-	// Iterate all camera entities that have control.
-	registry.view<TransformComponent, const CameraComponent, const ControlComponent>().each([&](auto entity, auto& transform, const auto& camera)
+	auto& transform = registry.get<TransformComponent>(activeCamera);
+	const auto& camera = registry.get<CameraComponent>(activeCamera);
+
+	// If the camera has control, update with UI input.
+	if (registry.all_of<ControlComponent>(activeCamera))
 	{
-		auto viewMatrix = SpectatorCameraView(transform, camera, deltaTime, pitchDelta, yawDelta, moveForward, moveBackward, moveLeft, moveRight, moveUp, moveDown, moveSprint);
+		ApplyMovementInput(transform, deltaTime);
 
-		registry.patch<TransformComponent>(entity);
+		registry.patch<TransformComponent>(activeCamera);
+	}
 
-		const auto aspectRatio = static_cast<float>(Renderer::Get().device->renderWidth) / static_cast<float>(Renderer::Get().device->renderHeight);
-		const auto projectionMatrix = XMMatrixPerspectiveFovRH(camera.fieldOfView / 2.f, aspectRatio, camera.farPlane, camera.nearPlane);  // Inverse Z.
+	const auto viewMatrix = CameraViewMatrix(transform);
 
-		// #TODO: Support multiple cameras.
-		globalLastFrameViewMatrix = globalViewMatrix;
-		globalLastFrameProjectionMatrix = globalProjectionMatrix;
-		globalViewMatrix = viewMatrix;
-		globalProjectionMatrix = projectionMatrix;
-	});
+	const auto aspectRatio = static_cast<float>(Renderer::Get().device->renderWidth) / static_cast<float>(Renderer::Get().device->renderHeight);
+	const auto projectionMatrix = XMMatrixPerspectiveFovRH(camera.fieldOfView / 2.f, aspectRatio, camera.farPlane, camera.nearPlane);  // Inverse Z.
+
+	// #TODO: Support multiple cameras.
+	globalLastFrameViewMatrix = globalViewMatrix;
+	globalLastFrameProjectionMatrix = globalProjectionMatrix;
+	globalViewMatrix = viewMatrix;
+	globalProjectionMatrix = projectionMatrix;
 }
 
 void TimeOfDaySystem::Update(entt::registry& registry, float deltaTime)
