@@ -1,7 +1,7 @@
 {
 	"name": "meshoptimizer",
-	"version": "0.17.0",
-	"description": "Mesh optimizaiton library that makes meshes smaller and faster to render",
+	"version": "1.2.0",
+	"description": "Mesh optimization library that makes meshes smaller and faster to render",
 	"author": "Arseny Kapoulkine",
 	"license": "MIT",
 	"bugs": "https://github.com/zeux/meshoptimizer/issues",
@@ -15,13 +15,45 @@
 		"url": "https://github.com/zeux/meshoptimizer"
 	},
 	"files": [
-		"*.js", "*.ts"
+		"*.cjs",
+		"*.mjs",
+		"*.js",
+		"*.ts"
 	],
+	"type": "module",
 	"main": "index.js",
-	"module": "index.module.js",
-	"types": "index.module.d.ts",
+	"types": "index.d.ts",
+	"exports": {
+		".": {
+			"types": "./index.d.ts",
+			"default": "./index.js"
+		},
+		"./encoder": {
+			"types": "./meshopt_encoder.d.ts",
+			"default": "./meshopt_encoder.js"
+		},
+		"./decoder": {
+			"types": "./meshopt_decoder.d.ts",
+			"default": "./meshopt_decoder.mjs"
+		},
+		"./simplifier": {
+			"types": "./meshopt_simplifier.d.ts",
+			"default": "./meshopt_simplifier.js"
+		},
+		"./clusterizer": {
+			"types": "./meshopt_clusterizer.d.ts",
+			"default": "./meshopt_clusterizer.js"
+		},
+		"./tangents": {
+			"types": "./meshopt_tangents.d.ts",
+			"default": "./meshopt_tangents.js"
+		},
+		"./decoder.cjs": {
+			"require": "./meshopt_decoder.cjs"
+		}
+	},
 	"scripts": {
-		"test": "node meshopt_encoder.test.js && node meshopt_decoder.test.js",
+		"test": "node meshopt_encoder.test.js && node meshopt_decoder.test.js && node meshopt_simplifier.test.js && node meshopt_clusterizer.test.js && node meshopt_tangents.test.js",
 		"prepublishOnly": "npm test"
 	}
 }

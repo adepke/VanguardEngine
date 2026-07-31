@@ -1,6 +1,8 @@
 // This file is part of gltfpack; see gltfpack.h for version/license details
 #include "gltfpack.h"
 
+#include <float.h>
+#include <math.h>
 #include <stdio.h>
 
 void comma(std::string& s)
@@ -14,14 +16,18 @@ void comma(std::string& s)
 void append(std::string& s, size_t v)
 {
 	char buf[32];
-	sprintf(buf, "%zu", v);
+	snprintf(buf, sizeof(buf), "%zu", v);
 	s += buf;
 }
 
 void append(std::string& s, float v)
 {
-	char buf[512];
-	sprintf(buf, "%.9g", v);
+	// sanitize +-inf to +-FLT_MAX and NaN to FLT_MAX
+	// it would be more consistent to use null for NaN but that makes JSON invalid, and 0 makes it hard to distinguish from valid values
+	float sv = fabsf(v) < FLT_MAX ? v : (v < 0 ? -FLT_MAX : FLT_MAX);
+
+	char buf[64];
+	snprintf(buf, sizeof(buf), "%.9g", sv);
 	s += buf;
 }
 
@@ -35,7 +41,19 @@ void append(std::string& s, const std::string& v)
 	s += v;
 }
 
-void appendJson(std::string& s, const char* begin, const char* end)
+void append(std::string& s, const float* data, size_t count)
+{
+	s += '[';
+	for (size_t i = 0; i < count; ++i)
+	{
+		if (i != 0)
+			s += ',';
+		append(s, data[i]);
+	}
+	s += ']';
+}
+
+void appendJson(std::string& s, const char* data)
 {
 	enum State
 	{
@@ -44,7 +62,7 @@ void appendJson(std::string& s, const char* begin, const char* end)
 		Quoted
 	} state = None;
 
-	for (const char* it = begin; it != end; ++it)
+	for (const char* it = data; *it; ++it)
 	{
 		char ch = *it;
 
@@ -60,7 +78,7 @@ void appendJson(std::string& s, const char* begin, const char* end)
 			break;
 
 		case Quoted:
-			state = (ch == '"') ? None : (ch == '\\') ? Escape : Quoted;
+			state = (ch == '"') ? None : (ch == '\\' ? Escape : Quoted);
 			break;
 
 		case Escape:

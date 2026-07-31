@@ -7,6 +7,13 @@
 #include <math.h>
 #include <string.h>
 
+static float getScaleDelta(float l, float r)
+{
+	float d = fabsf(l - r);
+	float m = std::max(fabsf(l), fabsf(r));
+	return m == 0.f ? 0.f : d / m;
+}
+
 static float getDelta(const Attr& l, const Attr& r, cgltf_animation_path_type type)
 {
 	switch (type)
@@ -15,16 +22,16 @@ static float getDelta(const Attr& l, const Attr& r, cgltf_animation_path_type ty
 		return std::max(std::max(fabsf(l.f[0] - r.f[0]), fabsf(l.f[1] - r.f[1])), fabsf(l.f[2] - r.f[2]));
 
 	case cgltf_animation_path_type_rotation:
-		return acosf(std::min(1.f, fabsf(l.f[0] * r.f[0] + l.f[1] * r.f[1] + l.f[2] * r.f[2] + l.f[3] * r.f[3])));
+		return 2 * acosf(std::min(1.f, fabsf(l.f[0] * r.f[0] + l.f[1] * r.f[1] + l.f[2] * r.f[2] + l.f[3] * r.f[3])));
 
 	case cgltf_animation_path_type_scale:
-		return std::max(std::max(fabsf(l.f[0] / r.f[0] - 1), fabsf(l.f[1] / r.f[1] - 1)), fabsf(l.f[2] / r.f[2] - 1));
+		return std::max(std::max(getScaleDelta(l.f[0], r.f[0]), getScaleDelta(l.f[1], r.f[1])), getScaleDelta(l.f[2], r.f[2]));
 
 	case cgltf_animation_path_type_weights:
 		return fabsf(l.f[0] - r.f[0]);
 
 	default:
-		assert(!"Uknown animation path");
+		assert(!"Unknown animation path");
 		return 0;
 	}
 }
@@ -46,7 +53,7 @@ static float getDeltaTolerance(cgltf_animation_path_type type)
 		return 0.001f; // 0.1% linear
 
 	default:
-		assert(!"Uknown animation path");
+		assert(!"Unknown animation path");
 		return 0;
 	}
 }
@@ -207,17 +214,17 @@ static void resampleKeyframes(std::vector<Attr>& data, const std::vector<float>&
 	}
 }
 
-static float getMaxDelta(const std::vector<Attr>& data, cgltf_animation_path_type type, int frames, const Attr* value, size_t components)
+static float getMaxDelta(const std::vector<Attr>& data, cgltf_animation_path_type type, const Attr* value, size_t components)
 {
-	assert(data.size() == frames * components);
+	assert(data.size() % components == 0);
 
 	float result = 0;
 
-	for (int i = 0; i < frames; ++i)
+	for (size_t i = 0; i < data.size(); i += components)
 	{
 		for (size_t j = 0; j < components; ++j)
 		{
-			float delta = getDelta(value[j], data[i * components + j], type);
+			float delta = getDelta(value[j], data[i + j], type);
 
 			result = (result < delta) ? delta : result;
 		}
@@ -246,12 +253,14 @@ static void getBaseTransform(Attr* result, size_t components, cgltf_animation_pa
 		if (node->weights_count)
 		{
 			assert(node->weights_count == components);
-			memcpy(result->f, node->weights, components * sizeof(float));
+			for (size_t k = 0; k < components; ++k)
+				result[k].f[0] = node->weights[k];
 		}
 		else if (node->mesh && node->mesh->weights_count)
 		{
 			assert(node->mesh->weights_count == components);
-			memcpy(result->f, node->mesh->weights, components * sizeof(float));
+			for (size_t k = 0; k < components; ++k)
+				result[k].f[0] = node->mesh->weights[k];
 		}
 		break;
 
@@ -287,15 +296,17 @@ void processAnimation(Animation& animation, const Settings& settings)
 		maxt = std::max(maxt, track.time.back());
 	}
 
-	mint = std::min(mint, maxt);
+	animation.start = mint = std::min(mint, maxt);
 
-	// round the number of frames to nearest but favor the "up" direction
-	// this means that at 10 Hz resampling, we will try to preserve the last frame <10ms
-	// but if the last frame is <2ms we favor just removing this data
-	int frames = 1 + int((maxt - mint) * settings.anim_freq + 0.8f);
+	if (settings.anim_freq)
+	{
+		// round the number of frames to nearest but favor the "up" direction
+		// this means that at 100 Hz resampling, we will try to preserve the last frame <10ms
+		// but if the last frame is <2ms we favor just removing this data
+		int frames = 1 + int((maxt - mint) * settings.anim_freq + 0.8f);
 
-	animation.start = mint;
-	animation.frames = frames;
+		animation.frames = frames;
+	}
 
 	std::vector<Attr> base;
 
@@ -303,34 +314,43 @@ void processAnimation(Animation& animation, const Settings& settings)
 	{
 		Track& track = animation.tracks[i];
 
-		std::vector<Attr> result;
-		resampleKeyframes(result, track.time, track.data, track.path, track.interpolation, track.components, frames, mint, settings.anim_freq);
+		if (settings.anim_freq)
+		{
+			std::vector<Attr> result;
+			resampleKeyframes(result, track.time, track.data, track.path, track.interpolation, track.components, animation.frames, animation.start, settings.anim_freq);
 
-		track.time.clear();
-		track.data.swap(result);
+			track.time.clear();
+			track.data.swap(result);
+			track.interpolation = track.interpolation == cgltf_interpolation_type_cubic_spline ? cgltf_interpolation_type_linear : track.interpolation;
+		}
+
+		// getMaxDelta assumes linear/step interpolation for now
+		if (track.interpolation == cgltf_interpolation_type_cubic_spline)
+			continue;
 
 		float tolerance = getDeltaTolerance(track.path);
 
 		// translation tracks use world space tolerance; in the future, we should compute all errors as linear using hierarchy
-		if (track.node && track.path == cgltf_animation_path_type_translation)
+		if (track.node && track.node->parent && track.path == cgltf_animation_path_type_translation)
 		{
-			float scale = getWorldScale(track.node);
+			float scale = getWorldScale(track.node->parent);
 			tolerance /= scale == 0.f ? 1.f : scale;
 		}
 
-		float deviation = getMaxDelta(track.data, track.path, frames, &track.data[0], track.components);
+		float deviation = getMaxDelta(track.data, track.path, &track.data[0], track.components);
 
 		if (deviation <= tolerance)
 		{
 			// track is constant (equal to first keyframe), we only need the first keyframe
 			track.constant = true;
+			track.time.clear();
 			track.data.resize(track.components);
 
 			// track.dummy is true iff track redundantly sets up the value to be equal to default node transform
 			base.resize(track.components);
 			getBaseTransform(&base[0], track.components, track.path, track.node);
 
-			track.dummy = getMaxDelta(track.data, track.path, 1, &base[0], track.components) <= tolerance;
+			track.dummy = getMaxDelta(track.data, track.path, &base[0], track.components) <= tolerance;
 		}
 	}
 }

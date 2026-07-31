@@ -9,7 +9,7 @@
  */
 function init(wasm) {
 	if (ready) {
-		throw new Error("init must be called once");
+		throw new Error('init must be called once');
 	}
 
 	ready = Promise.resolve(wasm)
@@ -32,18 +32,14 @@ function init(wasm) {
  * iface should contain the following methods:
  * read(path): Given a path, return a Uint8Array with the contents of that path
  * write(path, data): Write the specified Uint8Array to the provided path
- *
- * When texture compression is requested using external compressor such as toktx, iface must provide two additional methods:
- * execute(command): Run the requested command and return the return code
- * unlink(path): Remove the requested file (will be called with paths to temp files after texture compression finishes)
  */
 function pack(args, iface) {
 	if (!ready) {
-		throw new Error("init must be called before pack");
+		throw new Error('init must be called before pack');
 	}
 
 	var argv = args.slice();
-	argv.unshift("gltfpack");
+	argv.unshift('gltfpack');
 
 	return ready.then(function () {
 		var buf = uploadArgv(argv);
@@ -51,9 +47,9 @@ function pack(args, iface) {
 		output.position = 0;
 		output.size = 0;
 
-		interface = iface;
+		fs_interface = iface;
 		var result = instance.exports.pack(argv.length, buf);
-		interface = undefined;
+		fs_interface = undefined;
 
 		instance.exports.free(buf);
 
@@ -75,16 +71,15 @@ var WASI_ENOSYS = 52;
 
 var ready;
 var instance;
-var interface;
+var fs_interface;
 
 var output = { data: new Uint8Array(), position: 0, size: 0 };
-var fds = { 1: output, 2: output, 3: { mount: "/", path: "/" }, 4: { mount: "/gltfpack-$pwd", path: "" } };
+var fds = { 1: output, 2: output, 3: { mount: '/', path: '/' }, 4: { mount: '/gltfpack-$pwd', path: '' } };
 
 var wasi = {
-	proc_exit: function(rval) {
-	},
+	proc_exit: function (rval) {},
 
-	fd_close: function(fd) {
+	fd_close: function (fd) {
 		if (!fds[fd]) {
 			return WASI_EBADF;
 		}
@@ -101,7 +96,7 @@ var wasi = {
 		}
 	},
 
-	fd_fdstat_get: function(fd, stat) {
+	fd_fdstat_get: function (fd, stat) {
 		if (!fds[fd]) {
 			return WASI_EBADF;
 		}
@@ -116,7 +111,7 @@ var wasi = {
 		return 0;
 	},
 
-	path_open32: function(parent_fd, dirflags, path, path_len, oflags, fs_rights_base, fs_rights_inheriting, fdflags, opened_fd) {
+	path_open32: function (parent_fd, dirflags, path, path_len, oflags, fs_rights_base, fs_rights_inheriting, fdflags, opened_fd) {
 		if (!fds[parent_fd] || fds[parent_fd].path === undefined) {
 			return WASI_EBADF;
 		}
@@ -131,11 +126,11 @@ var wasi = {
 			file.data = new Uint8Array(4096);
 			file.size = 0;
 			file.close = function () {
-				interface.write(file.name, new Uint8Array(file.data.buffer, 0, file.size));
+				fs_interface.write(file.name, new Uint8Array(file.data.buffer, 0, file.size));
 			};
 		} else {
 			try {
-				file.data = interface.read(file.name);
+				file.data = fs_interface.read(file.name);
 
 				if (!file.data) {
 					return WASI_EIO;
@@ -154,23 +149,7 @@ var wasi = {
 		return 0;
 	},
 
-	path_unlink_file: function(parent_fd, path, path_len) {
-		if (!fds[parent_fd] || fds[parent_fd].path === undefined) {
-			return WASI_EBADF;
-		}
-
-		var heap = getHeap();
-		var name = fds[parent_fd].path + getString(heap.buffer, path, path_len);
-
-		try {
-			interface.unlink(name);
-			return 0;
-		} catch (err) {
-			return WASI_EIO;
-		}
-	},
-
-	path_filestat_get: function(parent_fd, flags, path, path_len, buf) {
+	path_filestat_get: function (parent_fd, flags, path, path_len, buf) {
 		if (!fds[parent_fd] || fds[parent_fd].path === undefined) {
 			return WASI_EBADF;
 		}
@@ -178,15 +157,13 @@ var wasi = {
 		var heap = getHeap();
 		var name = getString(heap.buffer, path, path_len);
 
-		var heap = getHeap();
-		for (var i = 0; i < 64; ++i)
-			heap.setUint8(buf + i, 0);
+		for (var i = 0; i < 64; ++i) heap.setUint8(buf + i, 0);
 
-		heap.setUint8(buf + 16, name == "." ? 3 : 4);
+		heap.setUint8(buf + 16, name == '.' ? 3 : 4);
 		return 0;
 	},
 
-	fd_prestat_get: function(fd, buf) {
+	fd_prestat_get: function (fd, buf) {
 		if (!fds[fd] || fds[fd].path === undefined) {
 			return WASI_EBADF;
 		}
@@ -199,7 +176,7 @@ var wasi = {
 		return 0;
 	},
 
-	fd_prestat_dir_name: function(fd, path, path_len) {
+	fd_prestat_dir_name: function (fd, path, path_len) {
 		if (!fds[fd] || fds[fd].path === undefined) {
 			return WASI_EBADF;
 		}
@@ -215,15 +192,15 @@ var wasi = {
 		return 0;
 	},
 
-	path_remove_directory: function(parent_fd, path, path_len) {
+	path_remove_directory: function (parent_fd, path, path_len) {
 		return WASI_EINVAL;
 	},
 
-	fd_fdstat_set_flags: function(fd, flags) {
+	fd_fdstat_set_flags: function (fd, flags) {
 		return WASI_ENOSYS;
 	},
 
-	fd_seek32: function(fd, offset, whence, newoffset) {
+	fd_seek32: function (fd, offset, whence, newoffset) {
 		if (!fds[fd]) {
 			return WASI_EBADF;
 		}
@@ -231,23 +208,23 @@ var wasi = {
 		var newposition;
 
 		switch (whence) {
-		case 0:
-			newposition = offset;
-			break;
+			case 0:
+				newposition = offset;
+				break;
 
-		case 1:
-			newposition = fds[fd].position + offset;
-			break;
+			case 1:
+				newposition = fds[fd].position + offset;
+				break;
 
-		case 2:
-			newposition = fds[fd].size;
-			break;
+			case 2:
+				newposition = fds[fd].size + offset;
+				break;
 
-		default:
-			return WASI_EINVAL;
+			default:
+				return WASI_EINVAL;
 		}
 
-		if (newposition > fds[fd].size) {
+		if (newposition < 0 || newposition > fds[fd].size) {
 			return WASI_EINVAL;
 		}
 
@@ -258,7 +235,7 @@ var wasi = {
 		return 0;
 	},
 
-	fd_read: function(fd, iovs, iovs_len, nread) {
+	fd_read: function (fd, iovs, iovs_len, nread) {
 		if (!fds[fd]) {
 			return WASI_EBADF;
 		}
@@ -282,7 +259,7 @@ var wasi = {
 		return 0;
 	},
 
-	fd_write: function(fd, iovs, iovs_len, nwritten) {
+	fd_write: function (fd, iovs, iovs_len, nwritten) {
 		if (!fds[fd]) {
 			return WASI_EBADF;
 		}
@@ -307,21 +284,6 @@ var wasi = {
 
 		heap.setUint32(nwritten, written, true);
 		return 0;
-	},
-
-	path_readlink: function(fd, path, path_len, buf, buf_len, bufused) {
-		if (fd !== -1) {
-			return WASI_ENOSYS;
-		}
-
-		var heap = getHeap();
-		var command = getString(heap.buffer, path, path_len);
-
-		try {
-			return interface.execute(command);
-		} catch (err) {
-			return WASI_ENOSYS;
-		}
 	},
 };
 
@@ -382,28 +344,12 @@ function uploadArgv(argv) {
 }
 
 // Automatic initialization for node.js
-if (typeof window === 'undefined' && typeof process !== 'undefined' && process.release.name === 'node') {
-	var fs = require('fs');
-	var util = require('util');
-
-	// Node versions before v12 don't support TextEncoder/TextDecoder natively, but util. provides compatible replacements
-	if (typeof TextEncoder === 'undefined' && typeof TextDecoder === 'undefined') {
-		TextEncoder = util.TextEncoder;
-		TextDecoder = util.TextDecoder;
-	}
-
-	init(fs.readFileSync(__dirname + '/library.wasm'));
+if (typeof process !== 'undefined' && process.release && process.release.name === 'node') {
+	init(
+		import('node:fs').then(function (fs) {
+			return fs.readFileSync(new URL('./library.wasm', import.meta.url));
+		})
+	);
 }
 
-// UMD
-(function (root, factory) {
-    if (typeof define === 'function' && define.amd) {
-        define([], factory);
-    } else if (typeof module === 'object' && module.exports) {
-        module.exports = factory();
-    } else {
-        root.gltfpack = factory();
-  }
-}(typeof self !== 'undefined' ? self : this, function () {
-    return { init, pack };
-}));
+export { init, pack };

@@ -2,6 +2,7 @@
 #include "gltfpack.h"
 
 #include <algorithm>
+#include <unordered_map>
 
 #include <locale.h>
 #include <stdint.h>
@@ -18,11 +19,11 @@
 std::string getVersion()
 {
 	char result[32];
-	sprintf(result, "%d.%d", MESHOPTIMIZER_VERSION / 1000, (MESHOPTIMIZER_VERSION % 1000) / 10);
+	snprintf(result, sizeof(result), "%d.%d", MESHOPTIMIZER_VERSION / 1000, (MESHOPTIMIZER_VERSION % 1000) / 10);
 	return result;
 }
 
-static void finalizeBufferViews(std::string& json, std::vector<BufferView>& views, std::string& bin, std::string* fallback, size_t& fallback_size)
+static void finalizeBufferViews(std::string& json, std::vector<BufferView>& views, std::string& bin, std::string* fallback, size_t& fallback_size, const char* meshopt_ext, int attribute_level)
 {
 	for (size_t i = 0; i < views.size(); ++i)
 	{
@@ -42,7 +43,7 @@ static void finalizeBufferViews(std::string& json, std::vector<BufferView>& view
 			switch (view.compression)
 			{
 			case BufferView::Compression_Attribute:
-				compressVertexStream(bin, view.data, count, view.stride);
+				compressVertexStream(bin, view.data, count, view.stride, attribute_level);
 				break;
 			case BufferView::Compression_Index:
 				compressIndexStream(bin, view.data, count, view.stride);
@@ -62,7 +63,7 @@ static void finalizeBufferViews(std::string& json, std::vector<BufferView>& view
 		size_t raw_offset = (view.compression != BufferView::Compression_None) ? fallback_offset : bin_offset;
 
 		comma(json);
-		writeBufferView(json, view.kind, view.filter, count, view.stride, raw_offset, view.data.size(), view.compression, bin_offset, bin.size() - bin_offset);
+		writeBufferView(json, view.kind, view.filter, count, view.stride, raw_offset, view.data.size(), view.compression, bin_offset, bin.size() - bin_offset, meshopt_ext);
 
 		// record written bytes for statistics
 		view.bytes = bin.size() - bin_offset;
@@ -87,12 +88,14 @@ static void printMeshStats(const std::vector<Mesh>& meshes, const char* name)
 	{
 		const Mesh& mesh = meshes[i];
 
-		mesh_triangles += mesh.indices.size() / 3;
+		size_t triangles = mesh.type == cgltf_primitive_type_triangles ? mesh.indices.size() / 3 : 0;
+
+		mesh_triangles += triangles;
 		mesh_vertices += mesh.streams.empty() ? 0 : mesh.streams[0].data.size();
 
 		size_t instances = std::max(size_t(1), mesh.nodes.size() + mesh.instances.size());
 
-		total_triangles += mesh.indices.size() / 3 * instances;
+		total_triangles += triangles * instances;
 		total_instances += instances;
 		total_draws += std::max(size_t(1), mesh.nodes.size());
 	}
@@ -151,10 +154,14 @@ static void printAttributeStats(const std::vector<BufferView>& views, BufferView
 
 		size_t count = view.data.size() / view.stride;
 
-		printf("stats: %s %s: compressed %d bytes (%.1f bits), raw %d bytes (%d bits)\n",
-		    name, variant,
-		    int(view.bytes), double(view.bytes) / double(count) * 8,
-		    int(view.data.size()), int(view.stride * 8));
+		if (view.compression == BufferView::Compression_None)
+			printf("stats: %s %s: %d bytes (%.1f bits)\n",
+			    name, variant, int(view.bytes), double(view.bytes) / double(count) * 8);
+		else
+			printf("stats: %s %s: compressed %d bytes (%.1f bits), raw %d bytes (%d bits)\n",
+			    name, variant,
+			    int(view.bytes), double(view.bytes) / double(count) * 8,
+			    int(view.data.size()), int(view.stride * 8));
 	}
 }
 
@@ -181,7 +188,7 @@ static void printImageStats(const std::vector<BufferView>& views, TextureKind ki
 		printf("stats: image %s: %d bytes in %d images\n", name, int(bytes), int(count));
 }
 
-static bool printReport(const char* path, cgltf_data* data, const std::vector<BufferView>& views, const std::vector<Mesh>& meshes, size_t node_count, size_t mesh_count, size_t material_count, size_t animation_count, size_t json_size, size_t bin_size)
+static bool printReport(const char* path, const std::vector<BufferView>& views, const std::vector<Mesh>& meshes, size_t node_count, size_t mesh_count, size_t texture_count, size_t material_count, size_t animation_count, size_t json_size, size_t bin_size)
 {
 	size_t bytes[BufferView::Kind_Count] = {};
 
@@ -199,9 +206,10 @@ static bool printReport(const char* path, cgltf_data* data, const std::vector<Bu
 	{
 		const Mesh& mesh = meshes[i];
 
+		size_t triangles = mesh.type == cgltf_primitive_type_triangles ? mesh.indices.size() / 3 : 0;
 		size_t instances = std::max(size_t(1), mesh.nodes.size() + mesh.instances.size());
 
-		total_triangles += mesh.indices.size() / 3 * instances;
+		total_triangles += triangles * instances;
 		total_instances += instances;
 		total_draws += std::max(size_t(1), mesh.nodes.size());
 	}
@@ -216,7 +224,7 @@ static bool printReport(const char* path, cgltf_data* data, const std::vector<Bu
 	fprintf(out, "\t\t\"nodeCount\": %d,\n", int(node_count));
 	fprintf(out, "\t\t\"meshCount\": %d,\n", int(mesh_count));
 	fprintf(out, "\t\t\"materialCount\": %d,\n", int(material_count));
-	fprintf(out, "\t\t\"textureCount\": %d,\n", int(data->textures_count));
+	fprintf(out, "\t\t\"textureCount\": %d,\n", int(texture_count));
 	fprintf(out, "\t\t\"animationCount\": %d\n", int(animation_count));
 	fprintf(out, "\t},\n");
 	fprintf(out, "\t\"render\": {\n");
@@ -250,93 +258,148 @@ static bool canTransformMesh(const Mesh& mesh)
 	return true;
 }
 
-static void process(cgltf_data* data, const char* input_path, const char* output_path, const char* report_path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const std::string& extras, const Settings& settings, std::string& json, std::string& bin, std::string& fallback, size_t& fallback_size)
+static void detachMesh(Mesh& mesh, cgltf_data* data, const std::vector<NodeInfo>& nodes, const Settings& settings)
+{
+	// mesh is already instanced, skip
+	if (!mesh.instances.empty())
+		return;
+
+	// mesh is already world space, skip
+	if (mesh.nodes.empty())
+		return;
+
+	// note: when -kn is specified, we keep mesh-node attachment so that named nodes can be transformed
+	if (settings.keep_nodes)
+		return;
+
+	// we keep skinned meshes or meshes with morph targets as is
+	// in theory we could transform both, but in practice transforming morph target meshes is more involved,
+	// and reparenting skinned meshes leads to incorrect bounding box generated in three.js
+	if (mesh.skin || mesh.targets)
+		return;
+
+	bool any_animated = false;
+	for (size_t j = 0; j < mesh.nodes.size(); ++j)
+		any_animated |= nodes[mesh.nodes[j] - data->nodes].animated;
+
+	// animated meshes will be anchored to the same node that they used to be in to retain the animation
+	if (any_animated)
+		return;
+
+	int scene = nodes[mesh.nodes[0] - data->nodes].scene;
+	bool any_other_scene = false;
+	for (size_t j = 0; j < mesh.nodes.size(); ++j)
+		any_other_scene |= scene != nodes[mesh.nodes[j] - data->nodes].scene;
+
+	// we only merge instances when all nodes have a single consistent scene
+	if (scene < 0 || any_other_scene)
+		return;
+
+	// we only merge multiple instances together if requested
+	// this often makes the scenes faster to render by reducing the draw call count, but can result in larger files
+	if (mesh.nodes.size() > 1 && !settings.mesh_merge && !settings.mesh_instancing)
+		return;
+
+	// mesh has duplicate geometry; detaching it would increase the size due to unique world-space transforms
+	if (mesh.nodes.size() == 1 && mesh.geometry_duplicate && !settings.mesh_merge)
+		return;
+
+	// prefer instancing if possible, use merging otherwise
+	if (mesh.nodes.size() > 1 && settings.mesh_instancing)
+	{
+		mesh.instances.resize(mesh.nodes.size());
+
+		for (size_t j = 0; j < mesh.nodes.size(); ++j)
+		{
+			Instance& obj = mesh.instances[j];
+
+			cgltf_node_transform_world(mesh.nodes[j], obj.transform);
+			obj.color[0] = obj.color[1] = obj.color[2] = obj.color[3] = 1.0f;
+		}
+
+		mesh.nodes.clear();
+		mesh.scene = scene;
+	}
+	else if (canTransformMesh(mesh))
+	{
+		mergeMeshInstances(mesh);
+
+		assert(mesh.nodes.empty());
+		mesh.scene = scene;
+	}
+}
+
+static bool isExtensionSupported(const ExtensionInfo* extensions, size_t count, const char* name)
+{
+	for (size_t i = 0; i < count; ++i)
+		if (strcmp(extensions[i].name, name) == 0)
+			return true;
+
+	return false;
+}
+
+namespace std
+{
+template <>
+struct hash<std::pair<uint64_t, uint64_t> >
+{
+	size_t operator()(const std::pair<uint64_t, uint64_t>& x) const
+	{
+		return std::hash<uint64_t>()(x.first ^ x.second);
+	}
+};
+} // namespace std
+
+static size_t process(cgltf_data* data, const char* input_path, const char* output_path, const char* report_path, std::vector<Mesh>& meshes, std::vector<Animation>& animations, const Settings& settings, std::string& json, std::string& bin, std::string& fallback, size_t& fallback_size, const char* meshopt_ext)
 {
 	if (settings.verbose)
 	{
-		printf("input: %d nodes, %d meshes (%d primitives), %d materials, %d skins, %d animations\n",
-		    int(data->nodes_count), int(data->meshes_count), int(meshes.size()), int(data->materials_count), int(data->skins_count), int(animations.size()));
+		printf("input: %d nodes, %d meshes (%d primitives), %d materials, %d skins, %d animations, %d images\n",
+		    int(data->nodes_count), int(data->meshes_count), int(meshes.size()), int(data->materials_count), int(data->skins_count), int(animations.size()), int(data->images_count));
 		printMeshStats(meshes, "input");
 	}
 
 	for (size_t i = 0; i < animations.size(); ++i)
-	{
 		processAnimation(animations[i], settings);
-	}
 
 	std::vector<NodeInfo> nodes(data->nodes_count);
 
 	markScenes(data, nodes);
 	markAnimated(data, nodes, animations);
 
+	mergeMeshMaterials(data, meshes, settings);
+	if (settings.mesh_dedup)
+		dedupMeshes(meshes, settings);
+
 	for (size_t i = 0; i < meshes.size(); ++i)
-	{
-		Mesh& mesh = meshes[i];
-		assert(mesh.instances.empty());
-
-		// mesh is already world space, skip
-		if (mesh.nodes.empty())
-			continue;
-
-		// note: when -kn is specified, we keep mesh-node attachment so that named nodes can be transformed
-		if (settings.keep_nodes)
-			continue;
-
-		// we keep skinned meshes or meshes with morph targets as is
-		// in theory we could transform both, but in practice transforming morph target meshes is more involved,
-		// and reparenting skinned meshes leads to incorrect bounding box generated in three.js
-		if (mesh.skin || mesh.targets)
-			continue;
-
-		bool any_animated = false;
-		for (size_t j = 0; j < mesh.nodes.size(); ++j)
-			any_animated |= nodes[mesh.nodes[j] - data->nodes].animated;
-
-		// animated meshes will be anchored to the same node that they used to be in to retain the animation
-		if (any_animated)
-			continue;
-
-		int scene = nodes[mesh.nodes[0] - data->nodes].scene;
-		bool any_other_scene = false;
-		for (size_t j = 0; j < mesh.nodes.size(); ++j)
-			any_other_scene |= scene != nodes[mesh.nodes[j] - data->nodes].scene;
-
-		// we only merge instances when all nodes have a single consistent scene
-		if (scene < 0 || any_other_scene)
-			continue;
-
-		// we only merge multiple instances together if requested
-		// this often makes the scenes faster to render by reducing the draw call count, but can result in larger files
-		if (mesh.nodes.size() > 1 && !settings.mesh_merge && !settings.mesh_instancing)
-			continue;
-
-		// prefer instancing if possible, use merging otherwise
-		if (mesh.nodes.size() > 1 && settings.mesh_instancing)
-		{
-			mesh.instances.resize(mesh.nodes.size());
-
-			for (size_t j = 0; j < mesh.nodes.size(); ++j)
-				cgltf_node_transform_world(mesh.nodes[j], mesh.instances[j].data);
-
-			mesh.nodes.clear();
-			mesh.scene = scene;
-		}
-		else if (canTransformMesh(mesh))
-		{
-			mergeMeshInstances(mesh);
-
-			assert(mesh.nodes.empty());
-			mesh.scene = scene;
-		}
-	}
+		detachMesh(meshes[i], data, nodes, settings);
 
 	// material information is required for mesh and image processing
 	std::vector<MaterialInfo> materials(data->materials_count);
+	std::vector<TextureInfo> textures(data->textures_count);
 	std::vector<ImageInfo> images(data->images_count);
 
-	analyzeMaterials(data, materials, images);
+	// mark materials that need to keep blending due to mesh vertex colors
+	for (size_t i = 0; i < meshes.size(); ++i)
+	{
+		Mesh& mesh = meshes[i];
 
-	optimizeMaterials(data, input_path, images);
+		// skip hasAlpha check unless it's required
+		if ((((mesh.material && mesh.material->alpha_mode != cgltf_alpha_mode_opaque) || mesh.variants.size()) && hasVertexAlpha(mesh)) || hasInstanceAlpha(mesh.instances))
+		{
+			if (mesh.material)
+				materials[mesh.material - data->materials].mesh_alpha = true;
+
+			for (size_t j = 0; j < mesh.variants.size(); ++j)
+				materials[mesh.variants[j].material - data->materials].mesh_alpha = true;
+		}
+	}
+
+	analyzeMaterials(data, materials, textures, images);
+
+	mergeTextures(data, textures);
+
+	optimizeMaterials(data, materials, images, input_path);
 
 	// streams need to be filtered before mesh merging (or processing) to make sure we can merge meshes with redundant streams
 	for (size_t i = 0; i < meshes.size(); ++i)
@@ -349,55 +412,35 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		{
 			MaterialInfo vi = materials[mesh.variants[j].material - data->materials];
 
-			mi.needsTangents |= vi.needsTangents;
-			mi.textureSetMask |= vi.textureSetMask;
+			mi.needs_tangents |= vi.needs_tangents;
+			mi.texture_set_mask |= vi.texture_set_mask;
+			mi.unlit &= vi.unlit;
 		}
 
-		filterStreams(mesh, mi);
+		if (!settings.keep_attributes)
+			filterStreams(mesh, mi);
+
+		if (settings.mesh_tangents && (mi.needs_tangents || settings.keep_attributes))
+			generateTangents(mesh);
 	}
 
-	mergeMeshMaterials(data, meshes, settings);
 	mergeMeshes(meshes, settings);
 	filterEmptyMeshes(meshes);
 
 	markNeededNodes(data, nodes, meshes, animations, settings);
 	markNeededMaterials(data, materials, meshes, settings);
 
-#ifndef NDEBUG
-	std::vector<Mesh> debug_meshes;
+	if (settings.simplify_scaled && settings.simplify_ratio < 1)
+		computeMeshQuality(meshes);
 
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
-		const Mesh& mesh = meshes[i];
+		Mesh& mesh = meshes[i];
+		processMesh(mesh, settings);
 
-		if (settings.simplify_debug > 0)
-		{
-			Mesh kinds = {};
-			Mesh loops = {};
-			debugSimplify(mesh, kinds, loops, settings.simplify_debug);
-			debug_meshes.push_back(kinds);
-			debug_meshes.push_back(loops);
-		}
-
-		if (settings.meshlet_debug > 0)
-		{
-			Mesh meshlets = {};
-			Mesh bounds = {};
-			debugMeshlets(mesh, meshlets, bounds, settings.meshlet_debug, /* scan= */ false);
-			debug_meshes.push_back(meshlets);
-			debug_meshes.push_back(bounds);
-		}
+		if (mesh.geometry_duplicate)
+			hashMesh(mesh);
 	}
-#endif
-
-	for (size_t i = 0; i < meshes.size(); ++i)
-	{
-		processMesh(meshes[i], settings);
-	}
-
-#ifndef NDEBUG
-	meshes.insert(meshes.end(), debug_meshes.begin(), debug_meshes.end());
-#endif
 
 	filterEmptyMeshes(meshes); // some meshes may become empty after processing
 
@@ -433,13 +476,20 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	bool ext_sheen = false;
 	bool ext_volume = false;
 	bool ext_emissive_strength = false;
+	bool ext_iridescence = false;
+	bool ext_anisotropy = false;
+	bool ext_dispersion = false;
+	bool ext_diffuse_transmission = false;
 	bool ext_unlit = false;
 	bool ext_instancing = false;
 	bool ext_texture_transform = false;
+	bool ext_texture_basisu = false;
+	bool ext_texture_webp = false;
 
 	size_t accr_offset = 0;
 	size_t node_offset = 0;
 	size_t mesh_offset = 0;
+	size_t texture_offset = 0;
 	size_t material_offset = 0;
 
 	for (size_t i = 0; i < data->samplers_count; ++i)
@@ -452,57 +502,49 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		append(json_samplers, "}");
 	}
 
-	std::vector<std::string> encoded_images;
+	std::vector<std::string> encoded_images(data->images_count);
 
 #ifdef WITH_BASISU
 	if (data->images_count && settings.texture_ktx2)
-	{
-		encoded_images.resize(data->images_count);
+		encodeImagesBasis(encoded_images.data(), data, images, input_path, settings);
+#endif
 
-		encodeImages(encoded_images.data(), data, images, input_path, settings);
-	}
+#ifdef WITH_LIBWEBP
+	if (data->images_count && settings.texture_webp)
+		encodeImagesWebP(encoded_images.data(), data, images, input_path, settings);
 #endif
 
 	for (size_t i = 0; i < data->images_count; ++i)
 	{
 		const cgltf_image& image = data->images[i];
 
-#ifndef WITH_BASISU
-		if (settings.verbose == 1 && settings.texture_ktx2)
-		{
-			const char* uri = image.uri;
-			bool embedded = !uri || strncmp(uri, "data:", 5) == 0;
-
-			printf("image %d (%s) is being encoded with %s\n", int(i), embedded ? "embedded" : uri, settings.texture_toktx ? "toktx" : "basisu");
-		}
-#endif
+		std::string* encoded = !encoded_images[i].empty() ? &encoded_images[i] : NULL;
 
 		comma(json_images);
 		append(json_images, "{");
-		if (encoded_images.size())
-		{
-			if (encoded_images[i].empty())
-				fprintf(stderr, "Warning: unable to encode image %d (%s), skipping\n", int(i), image.uri ? image.uri : "?");
-			else
-				writeEncodedImage(json_images, views, image, encoded_images[i], images[i], output_path, settings);
-
-			encoded_images[i] = std::string(); // reclaim memory early
-		}
-		else
-		{
-			writeImage(json_images, views, image, images[i], i, input_path, output_path, settings);
-		}
+		writeImage(json_images, views, image, images[i], encoded, i, input_path, output_path, settings);
 		append(json_images, "}");
+
+		if (encoded)
+			*encoded = std::string(); // reclaim memory early
 	}
 
 	for (size_t i = 0; i < data->textures_count; ++i)
 	{
 		const cgltf_texture& texture = data->textures[i];
 
+		if (!textures[i].keep)
+			continue;
+
 		comma(json_textures);
 		append(json_textures, "{");
-		writeTexture(json_textures, texture, data, settings);
+		writeTexture(json_textures, texture, texture.image ? &images[texture.image - data->images] : NULL, data, settings);
 		append(json_textures, "}");
+
+		assert(textures[i].remap == int(texture_offset));
+		texture_offset++;
+		ext_texture_basisu = ext_texture_basisu || texture.has_basisu;
+		ext_texture_webp = ext_texture_webp || texture.has_webp;
 	}
 
 	for (size_t i = 0; i < data->materials_count; ++i)
@@ -516,9 +558,9 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 		comma(json_materials);
 		append(json_materials, "{");
-		writeMaterial(json_materials, data, material, settings.quantize ? &qp : NULL, settings.quantize ? &qt_materials[i] : NULL);
+		writeMaterial(json_materials, data, material, settings.quantize && !settings.pos_float ? &qp : NULL, settings.quantize && !settings.tex_float ? &qt_materials[i] : NULL, textures);
 		if (settings.keep_extras)
-			writeExtras(json_materials, extras, material.extras);
+			writeExtras(json_materials, material.extras);
 		append(json_materials, "}");
 
 		mi.remap = int(material_offset);
@@ -532,9 +574,15 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		ext_sheen = ext_sheen || material.has_sheen;
 		ext_volume = ext_volume || material.has_volume;
 		ext_emissive_strength = ext_emissive_strength || material.has_emissive_strength;
+		ext_iridescence = ext_iridescence || material.has_iridescence;
+		ext_diffuse_transmission = ext_diffuse_transmission || material.has_diffuse_transmission;
+		ext_anisotropy = ext_anisotropy || material.has_anisotropy;
+		ext_dispersion = ext_dispersion || material.has_dispersion;
 		ext_unlit = ext_unlit || material.unlit;
-		ext_texture_transform = ext_texture_transform || mi.usesTextureTransform;
+		ext_texture_transform = ext_texture_transform || mi.uses_texture_transform;
 	}
+
+	std::unordered_map<std::pair<uint64_t, uint64_t>, std::pair<size_t, size_t> > primitive_cache;
 
 	for (size_t i = 0; i < meshes.size(); ++i)
 	{
@@ -548,7 +596,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		{
 			const Mesh& prim = meshes[pi];
 
-			if (prim.skin != mesh.skin || prim.targets != mesh.targets)
+			if (prim.scene != mesh.scene || prim.skin != mesh.skin || prim.targets != mesh.targets)
 				break;
 
 			if (pi > i && (mesh.instances.size() || prim.instances.size()))
@@ -563,33 +611,26 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 			const QuantizationTexture& qt = qt_meshes[pi] == size_t(-1) ? qt_dummy : qt_materials[qt_meshes[pi]];
 
 			comma(json_meshes);
-			append(json_meshes, "{\"attributes\":{");
-			writeMeshAttributes(json_meshes, views, json_accessors, accr_offset, prim, 0, qp, qt, settings);
-			append(json_meshes, "}");
-			if (prim.type != cgltf_primitive_type_triangles)
+
+			if (prim.geometry_duplicate)
 			{
-				append(json_meshes, ",\"mode\":");
-				append(json_meshes, size_t(prim.type));
-			}
-			if (mesh.targets)
-			{
-				append(json_meshes, ",\"targets\":[");
-				for (size_t j = 0; j < mesh.targets; ++j)
+				std::pair<size_t, size_t>& primitive_json = primitive_cache[std::make_pair(prim.geometry_hash[0], prim.geometry_hash[1])];
+
+				if (primitive_json.second)
 				{
-					comma(json_meshes);
-					append(json_meshes, "{");
-					writeMeshAttributes(json_meshes, views, json_accessors, accr_offset, prim, int(1 + j), qp, qt, settings);
-					append(json_meshes, "}");
+					// reuse previously written accessors
+					json_meshes.append(json_meshes, primitive_json.first, primitive_json.second);
 				}
-				append(json_meshes, "]");
+				else
+				{
+					primitive_json.first = json_meshes.size();
+					writeMeshGeometry(json_meshes, views, json_accessors, accr_offset, prim, qp, qt, settings);
+					primitive_json.second = json_meshes.size() - primitive_json.first;
+				}
 			}
-
-			if (!prim.indices.empty())
+			else
 			{
-				size_t index_accr = writeMeshIndices(views, json_accessors, accr_offset, prim, settings);
-
-				append(json_meshes, ",\"indices\":");
-				append(json_meshes, index_accr);
+				writeMeshGeometry(json_meshes, views, json_accessors, accr_offset, prim, qp, qt, settings);
 			}
 
 			if (prim.material)
@@ -622,6 +663,9 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 				append(json_meshes, "]}}");
 			}
 
+			if (settings.keep_extras)
+				writeExtras(json_meshes, prim.extras);
+
 			append(json_meshes, "}");
 		}
 
@@ -629,13 +673,8 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 		if (mesh.target_weights.size())
 		{
-			append(json_meshes, ",\"weights\":[");
-			for (size_t j = 0; j < mesh.target_weights.size(); ++j)
-			{
-				comma(json_meshes);
-				append(json_meshes, mesh.target_weights[j]);
-			}
-			append(json_meshes, "]");
+			append(json_meshes, ",\"weights\":");
+			append(json_meshes, mesh.target_weights.data(), mesh.target_weights.size());
 		}
 
 		if (mesh.target_names.size())
@@ -653,48 +692,62 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 		append(json_meshes, "}");
 
-		assert(mesh.nodes.empty() || mesh.instances.empty());
-		ext_instancing = ext_instancing || !mesh.instances.empty();
-
 		if (mesh.nodes.size())
 		{
 			for (size_t j = 0; j < mesh.nodes.size(); ++j)
 			{
 				NodeInfo& ni = nodes[mesh.nodes[j] - data->nodes];
-
 				assert(ni.keep);
-				ni.meshes.push_back(node_offset);
 
-				writeMeshNode(json_nodes, mesh_offset, mesh.nodes[j], mesh.skin, data, settings.quantize ? &qp : NULL);
+				// if we don't use position quantization, prefer attaching the mesh to its node directly
+				if (!ni.has_mesh && (!settings.quantize || settings.pos_float || (qp.offset[0] == 0.f && qp.offset[1] == 0.f && qp.offset[2] == 0 && qp.node_scale == 1.f)))
+				{
+					ni.has_mesh = true;
+					ni.mesh_index = mesh_offset;
+					ni.mesh_skin = mesh.skin;
+				}
+				else
+				{
+					ni.mesh_nodes.push_back(node_offset);
 
-				node_offset++;
+					writeMeshNode(json_nodes, mesh_offset, mesh.nodes[j], mesh.skin, data, settings.quantize && !settings.pos_float ? &qp : NULL);
+
+					node_offset++;
+				}
 			}
 		}
-		else if (mesh.instances.size())
+
+		if (mesh.instances.size())
 		{
 			assert(mesh.scene >= 0);
 			comma(json_roots[mesh.scene]);
 			append(json_roots[mesh.scene], node_offset);
 
-			size_t instance_accr = writeInstances(views, json_accessors, accr_offset, mesh.instances, qp, settings);
+			bool has_color = false;
+			for (const Instance& instance : mesh.instances)
+				has_color |= (instance.color[0] != 1.f || instance.color[1] != 1.f || instance.color[2] != 1.f || instance.color[3] != 1.f);
+
+			size_t instance_accr = writeInstances(views, json_accessors, accr_offset, mesh.instances, qp, has_color, settings);
 
 			assert(!mesh.skin);
-			writeMeshNodeInstanced(json_nodes, mesh_offset, instance_accr);
+			writeMeshNodeInstanced(json_nodes, mesh_offset, instance_accr, has_color);
 
 			node_offset++;
 		}
-		else
+
+		if (mesh.nodes.empty() && mesh.instances.empty())
 		{
 			assert(mesh.scene >= 0);
 			comma(json_roots[mesh.scene]);
 			append(json_roots[mesh.scene], node_offset);
 
-			writeMeshNode(json_nodes, mesh_offset, NULL, mesh.skin, data, settings.quantize ? &qp : NULL);
+			writeMeshNode(json_nodes, mesh_offset, NULL, mesh.skin, data, settings.quantize && !settings.pos_float ? &qp : NULL);
 
 			node_offset++;
 		}
 
 		mesh_offset++;
+		ext_instancing = ext_instancing || !mesh.instances.empty();
 
 		// skip all meshes that we've written in this iteration
 		assert(pi > i);
@@ -716,7 +769,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		append(json_nodes, "{");
 		writeNode(json_nodes, node, nodes, data);
 		if (settings.keep_extras)
-			writeExtras(json_nodes, extras, node.extras);
+			writeExtras(json_nodes, node.extras);
 		append(json_nodes, "}");
 	}
 
@@ -794,13 +847,13 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	append(json, "\"version\":\"2.0\",\"generator\":\"gltfpack ");
 	append(json, getVersion());
 	append(json, "\"");
-	writeExtras(json, extras, data->asset.extras);
+	writeExtras(json, data->asset.extras);
 	append(json, "}");
 
 	const ExtensionInfo extensions[] = {
 	    {"KHR_mesh_quantization", settings.quantize, true},
-	    {"EXT_meshopt_compression", settings.compress, !settings.fallback},
-	    {"KHR_texture_transform", (settings.quantize && !json_textures.empty()) || ext_texture_transform, false},
+	    {meshopt_ext, settings.compress, !settings.fallback},
+	    {"KHR_texture_transform", (settings.quantize && !settings.tex_float && !json_textures.empty()) || ext_texture_transform, false},
 	    {"KHR_materials_pbrSpecularGlossiness", ext_pbr_specular_glossiness, false},
 	    {"KHR_materials_clearcoat", ext_clearcoat, false},
 	    {"KHR_materials_transmission", ext_transmission, false},
@@ -809,17 +862,33 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 	    {"KHR_materials_sheen", ext_sheen, false},
 	    {"KHR_materials_volume", ext_volume, false},
 	    {"KHR_materials_emissive_strength", ext_emissive_strength, false},
+	    {"KHR_materials_iridescence", ext_iridescence, false},
+	    {"KHR_materials_anisotropy", ext_anisotropy, false},
+	    {"KHR_materials_dispersion", ext_dispersion, false},
+	    {"KHR_materials_diffuse_transmission", ext_diffuse_transmission, false},
 	    {"KHR_materials_unlit", ext_unlit, false},
 	    {"KHR_materials_variants", data->variants_count > 0, false},
 	    {"KHR_lights_punctual", data->lights_count > 0, false},
-	    {"KHR_texture_basisu", !json_textures.empty() && settings.texture_ktx2, true},
+	    {"KHR_texture_basisu", (!json_textures.empty() && settings.texture_ktx2) || ext_texture_basisu, true},
+	    {"EXT_texture_webp", (!json_textures.empty() && settings.texture_webp) || ext_texture_webp, true},
 	    {"EXT_mesh_gpu_instancing", ext_instancing, true},
 	};
 
+	for (size_t i = 0; i < data->extensions_required_count; ++i)
+	{
+		const char* ext = data->extensions_required[i];
+
+		if (!isExtensionSupported(extensions, sizeof(extensions) / sizeof(extensions[0]), ext) && strstr(ext, "_meshopt_compression") == NULL)
+			fprintf(stderr, "Warning: required extension %s is not supported and will be skipped\n", ext);
+	}
+
 	writeExtensions(json, extensions, sizeof(extensions) / sizeof(extensions[0]));
 
+	// buffers[] array to be inserted by the caller
+	size_t bufferspec_pos = json.size();
+
 	std::string json_views;
-	finalizeBufferViews(json_views, views, bin, settings.fallback ? &fallback : NULL, fallback_size);
+	finalizeBufferViews(json_views, views, bin, settings.fallback ? &fallback : NULL, fallback_size, meshopt_ext, settings.compresskhr ? (settings.compressmore ? 3 : 2) : 0);
 
 	writeArray(json, "bufferViews", json_views);
 	writeArray(json, "accessors", json_accessors);
@@ -837,7 +906,7 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 		append(json, ",\"scenes\":[");
 
 		for (size_t i = 0; i < data->scenes_count; ++i)
-			writeScene(json, data->scenes[i], json_roots[i]);
+			writeScene(json, data->scenes[i], json_roots[i], settings);
 
 		append(json, "]");
 	}
@@ -878,11 +947,13 @@ static void process(cgltf_data* data, const char* input_path, const char* output
 
 	if (report_path)
 	{
-		if (!printReport(report_path, data, views, meshes, node_offset, mesh_offset, material_offset, animations.size(), json.size(), bin.size()))
+		if (!printReport(report_path, views, meshes, node_offset, mesh_offset, texture_offset, material_offset, animations.size(), json.size(), bin.size()))
 		{
 			fprintf(stderr, "Warning: cannot save report to %s\n", report_path);
 		}
 	}
+
+	return bufferspec_pos;
 }
 
 static void writeU32(FILE* out, uint32_t data)
@@ -901,7 +972,7 @@ static const char* getBaseName(const char* path)
 	return std::max(rs, bs);
 }
 
-static std::string getBufferSpec(const char* bin_path, size_t bin_size, const char* fallback_path, size_t fallback_size, bool fallback_ref)
+static std::string getBufferSpec(const char* bin_path, size_t bin_size, const char* fallback_path, size_t fallback_size, bool fallback_ref, const char* meshopt_ext)
 {
 	std::string json;
 	append(json, "\"buffers\":[");
@@ -930,7 +1001,9 @@ static std::string getBufferSpec(const char* bin_path, size_t bin_size, const ch
 		append(json, "\"byteLength\":");
 		append(json, fallback_size);
 		append(json, ",\"extensions\":{");
-		append(json, "\"EXT_meshopt_compression\":{");
+		append(json, "\"");
+		append(json, meshopt_ext);
+		append(json, "\":{");
 		append(json, "\"fallback\":true");
 		append(json, "}}");
 		append(json, "}");
@@ -942,18 +1015,26 @@ static std::string getBufferSpec(const char* bin_path, size_t bin_size, const ch
 
 int gltfpack(const char* input, const char* output, const char* report, Settings settings)
 {
-	cgltf_data* data = 0;
+	cgltf_data* data = NULL;
 	std::vector<Mesh> meshes;
 	std::vector<Animation> animations;
-	std::string extras;
 
 	std::string iext = getExtension(input);
 	std::string oext = output ? getExtension(output) : "";
 
+	if (output)
+	{
+		if (oext != ".gltf" && oext != ".glb")
+		{
+			fprintf(stderr, "Error: unsupported output extension '%s' (expected .gltf or .glb)\n", oext.c_str());
+			return 4;
+		}
+	}
+
 	if (iext == ".gltf" || iext == ".glb")
 	{
-		const char* error = 0;
-		data = parseGltf(input, meshes, animations, extras, &error);
+		const char* error = NULL;
+		data = parseGltf(input, meshes, animations, &error);
 
 		if (error)
 		{
@@ -963,7 +1044,7 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 	}
 	else if (iext == ".obj")
 	{
-		const char* error = 0;
+		const char* error = NULL;
 		data = parseObj(input, meshes, &error);
 
 		if (!data)
@@ -981,34 +1062,22 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 #ifndef WITH_BASISU
 	if (data->images_count && settings.texture_ktx2)
 	{
-		if (checkKtx(settings.verbose > 1))
-		{
-			settings.texture_toktx = true;
-		}
-		else if (!checkBasis(settings.verbose > 1))
-		{
-			fprintf(stderr, "Error: toktx is not present in PATH or TOKTX_PATH is not set\n");
-			fprintf(stderr, "Note: toktx must be installed manually from https://github.com/KhronosGroup/KTX-Software/releases\n");
-			return 3;
-		}
+		fprintf(stderr, "Error: gltfpack was built without BasisU support, texture compression is not available\n");
+#ifdef __wasi__
+		fprintf(stderr, "Note: node.js builds do not support BasisU due to lack of platform features; download a native build from https://github.com/zeux/meshoptimizer/releases\n");
+#endif
+		return 3;
+	}
+#endif
 
-		if (settings.texture_limit && !settings.texture_toktx)
-		{
-			fprintf(stderr, "Error: -tl option is only supported by toktx\n");
-			return 3;
-		}
-
-		if (settings.texture_scale < 1 && !settings.texture_toktx)
-		{
-			fprintf(stderr, "Error: -ts option is only supported by toktx\n");
-			return 3;
-		}
-
-		if (settings.texture_pow2 && !settings.texture_toktx)
-		{
-			fprintf(stderr, "Error: -tp option is only supported by toktx\n");
-			return 3;
-		}
+#ifndef WITH_LIBWEBP
+	if (data->images_count && settings.texture_webp)
+	{
+		fprintf(stderr, "Error: gltfpack was built without WebP support, texture compression is not available\n");
+#ifdef __wasi__
+		fprintf(stderr, "Note: node.js builds do not support WebP due to lack of platform features; download a native build from https://github.com/zeux/meshoptimizer/releases\n");
+#endif
+		return 3;
 	}
 #endif
 
@@ -1017,9 +1086,37 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 		settings.texture_embed = true;
 	}
 
+	if (data->images_count && !settings.texture_ref && !settings.texture_embed)
+	{
+		for (size_t i = 0; i < data->images_count; ++i)
+		{
+			const char* uri = data->images[i].uri;
+			if (!uri || strncmp(uri, "data:", 5) == 0)
+				continue;
+
+			for (size_t j = 0; j < i; ++j)
+			{
+				const char* urj = data->images[j].uri;
+				if (!urj || strncmp(urj, "data:", 5) == 0)
+					continue;
+
+				if (strcmp(uri, urj) != 0 && strcmp(getBaseName(uri), getBaseName(urj)) == 0)
+				{
+					fprintf(stderr, "Warning: images %s and %s share the same base name and will overwrite each other\n", uri, urj);
+					break;
+				}
+			}
+		}
+	}
+
+	const char* meshopt_ext = settings.compresskhr ? "KHR_meshopt_compression" : "EXT_meshopt_compression";
+
 	std::string json, bin, fallback;
 	size_t fallback_size = 0;
-	process(data, input, output, report, meshes, animations, extras, settings, json, bin, fallback, fallback_size);
+
+	json += '{';
+	size_t bufferspec_pos = process(data, input, output, report, meshes, animations, settings, json, bin, fallback, fallback_size, meshopt_ext);
+	json += '}';
 
 	cgltf_free(data);
 
@@ -1045,14 +1142,10 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 			return 4;
 		}
 
-		std::string bufferspec = getBufferSpec(getBaseName(binpath.c_str()), bin.size(), settings.fallback ? getBaseName(fbpath.c_str()) : NULL, fallback_size, settings.compress);
+		std::string bufferspec = getBufferSpec(getBaseName(binpath.c_str()), bin.size(), settings.fallback ? getBaseName(fbpath.c_str()) : NULL, fallback_size, settings.compress, meshopt_ext);
+		json.insert(bufferspec_pos, "," + bufferspec);
 
-		fprintf(outjson, "{");
-		fwrite(bufferspec.c_str(), bufferspec.size(), 1, outjson);
-		fprintf(outjson, ",");
 		fwrite(json.c_str(), json.size(), 1, outjson);
-		fprintf(outjson, "}");
-
 		fwrite(bin.c_str(), bin.size(), 1, outbin);
 
 		if (settings.fallback)
@@ -1075,6 +1168,24 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 		std::string fbpath = output;
 		fbpath.replace(fbpath.size() - 4, 4, ".fallback.bin");
 
+		std::string bufferspec = getBufferSpec(NULL, bin.size(), settings.fallback ? getBaseName(fbpath.c_str()) : NULL, fallback_size, settings.compress, meshopt_ext);
+		json.insert(bufferspec_pos, "," + bufferspec);
+
+		while (json.size() % 4)
+			json.push_back(' ');
+
+		while (bin.size() % 4)
+			bin.push_back('\0');
+
+		// GLB header and two chunks with a chunk header
+		size_t size = 12 + 8 + json.size() + 8 + bin.size();
+
+		if (size > UINT32_MAX)
+		{
+			fprintf(stderr, "Error: GLB output cannot exceed 4 GB in size\n");
+			return 4;
+		}
+
 		FILE* out = fopen(output, "wb");
 		FILE* outfb = settings.fallback ? fopen(fbpath.c_str(), "wb") : NULL;
 		if (!out || (!outfb && settings.fallback))
@@ -1083,20 +1194,9 @@ int gltfpack(const char* input, const char* output, const char* report, Settings
 			return 4;
 		}
 
-		std::string bufferspec = getBufferSpec(NULL, bin.size(), settings.fallback ? getBaseName(fbpath.c_str()) : NULL, fallback_size, settings.compress);
-
-		json.insert(0, "{" + bufferspec + ",");
-		json.push_back('}');
-
-		while (json.size() % 4)
-			json.push_back(' ');
-
-		while (bin.size() % 4)
-			bin.push_back('\0');
-
 		writeU32(out, 0x46546C67);
 		writeU32(out, 2);
-		writeU32(out, uint32_t(12 + 8 + json.size() + 8 + bin.size()));
+		writeU32(out, uint32_t(size));
 
 		writeU32(out, uint32_t(json.size()));
 		writeU32(out, 0x4E4F534A);
@@ -1141,10 +1241,18 @@ Settings defaults()
 	settings.rot_bits = 12;
 	settings.scl_bits = 16;
 	settings.anim_freq = 30;
-	settings.simplify_threshold = 1.f;
-	settings.texture_scale = 1.f;
+	settings.mesh_dedup = true;
+	settings.simplify_ratio = 1.f;
+	settings.simplify_error = 1e-2f;
+	settings.simplify_attributes = true;
+	settings.simplify_scaled = true;
+
 	for (int kind = 0; kind < TextureKind__Count; ++kind)
+	{
+		settings.texture_mode[kind] = TextureMode_Raw;
+		settings.texture_scale[kind] = 1.f;
 		settings.texture_quality[kind] = 8;
+	}
 
 	return settings;
 }
@@ -1152,7 +1260,7 @@ Settings defaults()
 template <typename T>
 T clamp(T v, T min, T max)
 {
-	return v < min ? min : v > max ? max : v;
+	return v < min ? min : (v > max ? max : v);
 }
 
 unsigned int textureMask(const char* arg)
@@ -1162,13 +1270,13 @@ unsigned int textureMask(const char* arg)
 	while (arg)
 	{
 		const char* comma = strchr(arg, ',');
-		size_t seg = comma ? comma - arg - 1 : strlen(arg);
+		size_t seg = comma ? comma - arg : strlen(arg);
 
-		if (strncmp(arg, "color", seg) == 0)
+		if (seg == 5 && strncmp(arg, "color", seg) == 0)
 			result |= 1 << TextureKind_Color;
-		else if (strncmp(arg, "normal", seg) == 0)
+		else if (seg == 6 && strncmp(arg, "normal", seg) == 0)
 			result |= 1 << TextureKind_Normal;
-		else if (strncmp(arg, "attrib", seg) == 0)
+		else if (seg == 6 && strncmp(arg, "attrib", seg) == 0)
 			result |= 1 << TextureKind_Attrib;
 		else
 			fprintf(stderr, "Warning: unrecognized texture class %.*s\n", int(seg), arg);
@@ -1179,21 +1287,32 @@ unsigned int textureMask(const char* arg)
 	return result;
 }
 
+template <typename T>
+void applySetting(T (&data)[TextureKind__Count], T value, unsigned int mask = ~0u)
+{
+	for (int kind = 0; kind < TextureKind__Count; ++kind)
+		if (mask & (1 << kind))
+			data[kind] = value;
+}
+
+#ifndef GLTFFUZZ
 int main(int argc, char** argv)
 {
 #ifndef __wasi__
 	setlocale(LC_ALL, "C"); // disable locale specific convention for number parsing/printing
 #endif
 
+	meshopt_encodeVertexVersion(0);
 	meshopt_encodeIndexVersion(1);
 
 	Settings settings = defaults();
 
-	const char* input = 0;
-	const char* output = 0;
-	const char* report = 0;
+	const char* input = NULL;
+	const char* output = NULL;
+	const char* report = NULL;
 	bool help = false;
 	bool test = false;
+	bool require_texc = false;
 
 	std::vector<const char*> testinputs;
 
@@ -1217,6 +1336,36 @@ int main(int argc, char** argv)
 		{
 			settings.col_bits = clamp(atoi(argv[++i]), 1, 16);
 		}
+		else if (strcmp(arg, "-vpi") == 0)
+		{
+			settings.pos_float = false;
+			settings.pos_normalized = false;
+		}
+		else if (strcmp(arg, "-vpn") == 0)
+		{
+			settings.pos_float = false;
+			settings.pos_normalized = true;
+		}
+		else if (strcmp(arg, "-vpf") == 0)
+		{
+			settings.pos_float = true;
+		}
+		else if (strcmp(arg, "-vtf") == 0)
+		{
+			settings.tex_float = true;
+		}
+		else if (strcmp(arg, "-vnf") == 0)
+		{
+			settings.nrm_float = true;
+		}
+		else if (strcmp(arg, "-vi") == 0)
+		{
+			settings.mesh_interleaved = true;
+		}
+		else if (strcmp(arg, "-gt") == 0)
+		{
+			settings.mesh_tangents = true;
+		}
 		else if (strcmp(arg, "-at") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
 			settings.trn_bits = clamp(atoi(argv[++i]), 1, 24);
@@ -1231,7 +1380,7 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-af") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.anim_freq = clamp(atoi(argv[++i]), 1, 100);
+			settings.anim_freq = clamp(atoi(argv[++i]), 0, 100);
 		}
 		else if (strcmp(arg, "-ac") == 0)
 		{
@@ -1249,6 +1398,15 @@ int main(int argc, char** argv)
 		{
 			settings.keep_extras = true;
 		}
+		else if (strcmp(arg, "-kv") == 0)
+		{
+			settings.keep_attributes = true;
+		}
+		else if (strcmp(arg, "-mdd") == 0)
+		{
+			fprintf(stderr, "Warning: option -mdd disables mesh deduplication and is temporary; avoid production usage\n");
+			settings.mesh_dedup = false;
+		}
 		else if (strcmp(arg, "-mm") == 0)
 		{
 			settings.mesh_merge = true;
@@ -1259,22 +1417,38 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-si") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.simplify_threshold = clamp(float(atof(argv[++i])), 0.f, 1.f);
+			settings.simplify_ratio = clamp(float(atof(argv[++i])), 0.f, 1.f);
+		}
+		else if (strcmp(arg, "-se") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
+		{
+			settings.simplify_error = clamp(float(atof(argv[++i])), 0.f, 1.f);
 		}
 		else if (strcmp(arg, "-sa") == 0)
 		{
 			settings.simplify_aggressive = true;
 		}
-#ifndef NDEBUG
-		else if (strcmp(arg, "-sd") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
+		else if (strcmp(arg, "-slb") == 0)
 		{
-			settings.simplify_debug = clamp(float(atof(argv[++i])), 0.f, 1.f);
+			settings.simplify_lock_borders = true;
 		}
-		else if (strcmp(arg, "-md") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
+		else if (strcmp(arg, "-sv") == 0)
 		{
-			settings.meshlet_debug = clamp(atoi(argv[++i]), 3, 255);
+			fprintf(stderr, "Warning: attribute aware simplification is enabled by default; option -sv is only provided for compatibility and may be removed in the future\n");
 		}
-#endif
+		else if (strcmp(arg, "-svd") == 0)
+		{
+			fprintf(stderr, "Warning: option -svd disables attribute aware simplification and is temporary; avoid production usage\n");
+			settings.simplify_attributes = false;
+		}
+		else if (strcmp(arg, "-ssd") == 0)
+		{
+			fprintf(stderr, "Warning: option -ssd disables scaled simplification error and is temporary; avoid production usage\n");
+			settings.simplify_scaled = false;
+		}
+		else if (strcmp(arg, "-sp") == 0)
+		{
+			settings.simplify_permissive = true;
+		}
 		else if (strcmp(arg, "-tu") == 0)
 		{
 			settings.texture_ktx2 = true;
@@ -1283,48 +1457,88 @@ int main(int argc, char** argv)
 			if (i + 1 < argc && isalpha(argv[i + 1][0]))
 				mask = textureMask(argv[++i]);
 
-			for (int kind = 0; kind < TextureKind__Count; ++kind)
-				if (mask & (1 << kind))
-					settings.texture_uastc[kind] = true;
+			applySetting(settings.texture_mode, TextureMode_UASTC, mask);
 		}
 		else if (strcmp(arg, "-tc") == 0)
 		{
 			settings.texture_ktx2 = true;
+
+			unsigned int mask = ~0u;
+			if (i + 1 < argc && isalpha(argv[i + 1][0]))
+				mask = textureMask(argv[++i]);
+
+			applySetting(settings.texture_mode, TextureMode_ETC1S, mask);
+		}
+		else if (strcmp(arg, "-tw") == 0)
+		{
+			settings.texture_webp = true;
+
+			unsigned int mask = ~0u;
+			if (i + 1 < argc && isalpha(argv[i + 1][0]))
+				mask = textureMask(argv[++i]);
+
+			applySetting(settings.texture_mode, TextureMode_WebP, mask);
 		}
 		else if (strcmp(arg, "-tq") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
+			require_texc = true;
+
 			int quality = clamp(atoi(argv[++i]), 1, 10);
-			for (int kind = 0; kind < TextureKind__Count; ++kind)
-				settings.texture_quality[kind] = quality;
+			applySetting(settings.texture_quality, quality);
 		}
 		else if (strcmp(arg, "-tq") == 0 && i + 2 < argc && isalpha(argv[i + 1][0]) && isdigit(argv[i + 2][0]))
 		{
+			require_texc = true;
+
 			unsigned int mask = textureMask(argv[++i]);
 			int quality = clamp(atoi(argv[++i]), 1, 10);
-
-			for (int kind = 0; kind < TextureKind__Count; ++kind)
-				if (mask & (1 << kind))
-					settings.texture_quality[kind] = quality;
+			applySetting(settings.texture_quality, quality, mask);
 		}
 		else if (strcmp(arg, "-ts") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.texture_scale = clamp(float(atof(argv[++i])), 0.f, 1.f);
+			require_texc = true;
+
+			float scale = clamp(float(atof(argv[++i])), 0.f, 1.f);
+			applySetting(settings.texture_scale, scale);
+		}
+		else if (strcmp(arg, "-ts") == 0 && i + 2 < argc && isalpha(argv[i + 1][0]) && isdigit(argv[i + 2][0]))
+		{
+			require_texc = true;
+
+			unsigned int mask = textureMask(argv[++i]);
+			float scale = clamp(float(atof(argv[++i])), 0.f, 1.f);
+			applySetting(settings.texture_scale, scale, mask);
 		}
 		else if (strcmp(arg, "-tl") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
-			settings.texture_limit = atoi(argv[++i]);
+			require_texc = true;
+
+			int limit = atoi(argv[++i]);
+			applySetting(settings.texture_limit, limit);
+		}
+		else if (strcmp(arg, "-tl") == 0 && i + 2 < argc && isalpha(argv[i + 1][0]) && isdigit(argv[i + 2][0]))
+		{
+			require_texc = true;
+
+			unsigned int mask = textureMask(argv[++i]);
+			int limit = atoi(argv[++i]);
+			applySetting(settings.texture_limit, limit, mask);
 		}
 		else if (strcmp(arg, "-tp") == 0)
 		{
+			require_texc = true;
+
 			settings.texture_pow2 = true;
 		}
 		else if (strcmp(arg, "-tfy") == 0)
 		{
+			require_texc = true;
+
 			settings.texture_flipy = true;
 		}
-		else if (strcmp(arg, "-te") == 0)
+		else if (strcmp(arg, "-tr") == 0)
 		{
-			fprintf(stderr, "Warning: -te is deprecated and will be removed in the future; gltfpack now automatically embeds textures into GLB files\n");
+			settings.texture_ref = true;
 		}
 		else if (strcmp(arg, "-tj") == 0 && i + 1 < argc && isdigit(argv[i + 1][0]))
 		{
@@ -1332,6 +1546,7 @@ int main(int argc, char** argv)
 		}
 		else if (strcmp(arg, "-noq") == 0)
 		{
+			// TODO: Warn if -noq is used and suggest -vpf instead; use -noqq to silence
 			settings.quantize = false;
 		}
 		else if (strcmp(arg, "-i") == 0 && i + 1 < argc && !input)
@@ -1359,6 +1574,17 @@ int main(int argc, char** argv)
 		{
 			settings.compress = true;
 			settings.fallback = true;
+		}
+		else if (strcmp(arg, "-cz") == 0)
+		{
+			settings.compress = true;
+			settings.compressmore = true;
+			settings.compresskhr = true;
+		}
+		else if (strcmp(arg, "-ce") == 0 && i + 1 < argc && (strcmp(argv[i + 1], "khr") == 0 || strcmp(argv[i + 1], "ext") == 0))
+		{
+			settings.compress = true;
+			settings.compresskhr = strcmp(argv[++i], "khr") == 0;
 		}
 		else if (strcmp(arg, "-v") == 0)
 		{
@@ -1399,11 +1625,6 @@ int main(int argc, char** argv)
 		return 0;
 	}
 
-#ifdef WITH_BASISU
-	if (settings.texture_ktx2)
-		encodeBasisInit(settings.texture_jobs);
-#endif
-
 	if (test)
 	{
 		for (size_t i = 0; i < testinputs.size(); ++i)
@@ -1427,33 +1648,52 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\nBasics:\n");
 			fprintf(stderr, "\t-i file: input file to process, .obj/.gltf/.glb\n");
 			fprintf(stderr, "\t-o file: output file path, .gltf/.glb\n");
-			fprintf(stderr, "\t-c: produce compressed gltf/glb files (-cc for higher compression ratio)\n");
+			fprintf(stderr, "\t-c: produce compressed gltf/glb files (-cc/-cz for higher compression ratio)\n");
 			fprintf(stderr, "\nTextures:\n");
 			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression\n");
 			fprintf(stderr, "\t-tu: use UASTC when encoding textures (much higher quality and much larger size)\n");
-			fprintf(stderr, "\t-tq N: set texture encoding quality (default: 8; N should be between 1 and 10\n");
+			fprintf(stderr, "\t-tw: convert all textures to WebP\n");
+			fprintf(stderr, "\t-tq N: set texture encoding quality (default: 8; N should be between 1 and 10)\n");
 			fprintf(stderr, "\t-ts R: scale texture dimensions by the ratio R (default: 1; R should be between 0 and 1)\n");
 			fprintf(stderr, "\t-tl N: limit texture dimensions to N pixels (default: 0 = no limit)\n");
 			fprintf(stderr, "\t-tp: resize textures to nearest power of 2 to conform to WebGL1 restrictions\n");
 			fprintf(stderr, "\t-tfy: flip textures along Y axis during BasisU supercompression\n");
 			fprintf(stderr, "\t-tj N: use N threads when compressing textures\n");
+			fprintf(stderr, "\t-tr: keep referring to original texture paths instead of copying/embedding images\n");
 			fprintf(stderr, "\tTexture classes:\n");
+			fprintf(stderr, "\t-tc C: use ETC1S when encoding textures of class C\n");
 			fprintf(stderr, "\t-tu C: use UASTC when encoding textures of class C\n");
+			fprintf(stderr, "\t-tw C: use WebP when encoding textures of class C\n");
 			fprintf(stderr, "\t-tq C N: set texture encoding quality for class C\n");
+			fprintf(stderr, "\t-ts C R: scale texture dimensions for class C\n");
+			fprintf(stderr, "\t-tl C N: limit texture dimensions for class C\n");
 			fprintf(stderr, "\t... where C is a comma-separated list (no spaces) with valid values color,normal,attrib\n");
 			fprintf(stderr, "\nSimplification:\n");
-			fprintf(stderr, "\t-si R: simplify meshes targeting triangle count ratio R (default: 1; R should be between 0 and 1)\n");
+			fprintf(stderr, "\t-si R: simplify meshes targeting triangle/point count ratio R (default: 1; R should be between 0 and 1)\n");
+			fprintf(stderr, "\t-se E: limit simplification error to E (default: 0.01 = 1%% deviation; E should be between 0 and 1)\n");
+			fprintf(stderr, "\t-sp: use permissive simplification mode to allow simplification across attribute discontinuities\n");
 			fprintf(stderr, "\t-sa: aggressively simplify to the target ratio disregarding quality\n");
-			fprintf(stderr, "\nVertices:\n");
+			fprintf(stderr, "\t-slb: lock border vertices during simplification to avoid gaps on connected meshes\n");
+			fprintf(stderr, "\nVertex precision:\n");
 			fprintf(stderr, "\t-vp N: use N-bit quantization for positions (default: 14; N should be between 1 and 16)\n");
 			fprintf(stderr, "\t-vt N: use N-bit quantization for texture coordinates (default: 12; N should be between 1 and 16)\n");
-			fprintf(stderr, "\t-vn N: use N-bit quantization for normals and tangents (default: 8; N should be between 1 and 16)\n");
+			fprintf(stderr, "\t-vn N: use N-bit quantization for normals (default: 8; N should be between 1 and 16) and tangents (up to 8-bit)\n");
 			fprintf(stderr, "\t-vc N: use N-bit quantization for colors (default: 8; N should be between 1 and 16)\n");
+			fprintf(stderr, "\nVertex positions:\n");
+			fprintf(stderr, "\t-vpi: use integer attributes for positions (default)\n");
+			fprintf(stderr, "\t-vpn: use normalized attributes for positions\n");
+			fprintf(stderr, "\t-vpf: use floating point attributes for positions\n");
+			fprintf(stderr, "\nVertex attributes:\n");
+			fprintf(stderr, "\t-vtf: use floating point attributes for texture coordinates\n");
+			fprintf(stderr, "\t-vnf: use floating point attributes for normals\n");
+			fprintf(stderr, "\t-vi: use interleaved vertex attributes (reduces compression efficiency)\n");
+			fprintf(stderr, "\t-gt: generate tangent frames when needed, replacing existing tangents\n");
+			fprintf(stderr, "\t-kv: keep source vertex attributes even if they aren't used\n");
 			fprintf(stderr, "\nAnimations:\n");
 			fprintf(stderr, "\t-at N: use N-bit quantization for translations (default: 16; N should be between 1 and 24)\n");
 			fprintf(stderr, "\t-ar N: use N-bit quantization for rotations (default: 12; N should be between 4 and 16)\n");
 			fprintf(stderr, "\t-as N: use N-bit quantization for scale (default: 16; N should be between 1 and 24)\n");
-			fprintf(stderr, "\t-af N: resample animations at N Hz (default: 30)\n");
+			fprintf(stderr, "\t-af N: resample animations at N Hz (default: 30; use 0 to disable)\n");
 			fprintf(stderr, "\t-ac: keep constant animation tracks even if they don't modify the node transform\n");
 			fprintf(stderr, "\nScene:\n");
 			fprintf(stderr, "\t-kn: keep named nodes and meshes attached to named nodes so that named nodes can be transformed externally\n");
@@ -1463,8 +1703,10 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\t-mi: use EXT_mesh_gpu_instancing when serializing multiple mesh instances\n");
 			fprintf(stderr, "\nMiscellaneous:\n");
 			fprintf(stderr, "\t-cf: produce compressed gltf/glb files with fallback for loaders that don't support compression\n");
+			fprintf(stderr, "\t-ce ext|khr: use EXT or KHR version of meshopt compression extension for compression\n");
 			fprintf(stderr, "\t-noq: disable quantization; produces much larger glTF files with no extensions\n");
-			fprintf(stderr, "\t-v: verbose output (print version when used without other options)\n");
+			fprintf(stderr, "\t-v: verbose output (when used with other options)\n");
+			fprintf(stderr, "\t-v: print version (when used without other options)\n");
 			fprintf(stderr, "\t-r file: output a JSON report to file\n");
 			fprintf(stderr, "\t-h: display this help and exit\n");
 		}
@@ -1473,47 +1715,54 @@ int main(int argc, char** argv)
 			fprintf(stderr, "\nBasics:\n");
 			fprintf(stderr, "\t-i file: input file to process, .obj/.gltf/.glb\n");
 			fprintf(stderr, "\t-o file: output file path, .gltf/.glb\n");
-			fprintf(stderr, "\t-c: produce compressed gltf/glb files (-cc for higher compression ratio)\n");
+			fprintf(stderr, "\t-c: produce compressed gltf/glb files (-cc/-cz for higher compression ratio)\n");
 			fprintf(stderr, "\t-tc: convert all textures to KTX2 with BasisU supercompression\n");
-			fprintf(stderr, "\t-si R: simplify meshes targeting triangle count ratio R (default: 1; R should be between 0 and 1)\n");
+			fprintf(stderr, "\t-tw: convert all textures to WebP\n");
+			fprintf(stderr, "\t-si R: simplify meshes targeting triangle/point count ratio R (between 0 and 1)\n");
 			fprintf(stderr, "\nRun gltfpack -h to display a full list of options\n");
 		}
 
 		return 1;
 	}
 
-	if (settings.texture_limit && !settings.texture_ktx2)
+	if (require_texc && !settings.texture_ktx2 && !settings.texture_webp)
 	{
-		fprintf(stderr, "Option -tl is only supported when -tc is set as well\n");
+		fprintf(stderr, "Texture processing is only supported when texture compression is enabled via -tc/-tu/-tw\n");
 		return 1;
 	}
 
-	if (settings.texture_pow2 && (settings.texture_limit & (settings.texture_limit - 1)) != 0)
+	if (settings.texture_ref && (settings.texture_ktx2 || settings.texture_webp))
 	{
-		fprintf(stderr, "Option -tp requires the limit specified via -tl to be a power of 2\n");
+		fprintf(stderr, "Option -tr currently can not be used together with texture compression\n");
 		return 1;
 	}
 
-	if (settings.texture_scale < 1 && !settings.texture_ktx2)
+	if (settings.fallback && settings.compressmore)
 	{
-		fprintf(stderr, "Option -ts is only supported when -tc is set as well\n");
+		fprintf(stderr, "Option -cf can not be used together with -cc\n");
 		return 1;
 	}
 
-	if (settings.texture_pow2 && !settings.texture_ktx2)
+	if (settings.fallback && (settings.pos_float || settings.tex_float || settings.nrm_float))
 	{
-		fprintf(stderr, "Option -tp is only supported when -tc is set as well\n");
+		fprintf(stderr, "Option -cf can not be used together with -vpf, -vtf or -vnf\n");
 		return 1;
 	}
 
-	if (settings.texture_flipy && !settings.texture_ktx2)
+#ifdef GLTFPACK_NO_EXPERIMENTAL
+	if (settings.mesh_tangents)
 	{
-		fprintf(stderr, "Option -tfy is only supported when -tc is set as well\n");
+		fprintf(stderr, "Option -gt is not available in this build\n");
 		return 1;
 	}
+#endif
+
+	if (settings.keep_nodes && (settings.mesh_merge || settings.mesh_instancing))
+		fprintf(stderr, "Warning: option -kn disables mesh merge (-mm) and mesh instancing (-mi) optimizations\n");
 
 	return gltfpack(input, output, report, settings);
 }
+#endif
 
 #ifdef __wasi__
 extern "C" int pack(int argc, char** argv)
@@ -1523,5 +1772,36 @@ extern "C" int pack(int argc, char** argv)
 	int result = main(argc, argv);
 	fflush(NULL);
 	return result;
+}
+#endif
+
+#ifdef GLTFFUZZ
+extern "C" int LLVMFuzzerTestOneInput(const uint8_t* buffer, size_t size)
+{
+	Settings settings = defaults();
+
+	settings.texture_embed = true;
+
+	std::vector<Mesh> meshes;
+	std::vector<Animation> animations;
+
+	const char* error = NULL;
+	cgltf_data* data = parseGlb(buffer, size, meshes, animations, &error);
+
+	// this is a difficult tradeoff
+	// returning 0 on files that fail to parse means that fuzzing is more incremental: files with errors are put into the corpus,
+	// and the subsequent mutations may lead to discovering more interesting inputs, including valid ones that are difficult to find otherwise.
+	// however, this leads to most of the corpus being invalid, and we very rarely get useful coverage for actual gltfpack processing.
+	// for now we just focus on valid files, as we expect cgltf parser itself to be bulletproof as it's fuzzed separately.
+	if (error)
+		return -1;
+
+	std::string json, bin, fallback;
+	size_t fallback_size = 0;
+	process(data, NULL, NULL, NULL, meshes, animations, settings, json, bin, fallback, fallback_size, NULL);
+
+	cgltf_free(data);
+
+	return 0;
 }
 #endif
