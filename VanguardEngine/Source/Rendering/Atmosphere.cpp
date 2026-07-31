@@ -427,7 +427,7 @@ AtmosphereResources Atmosphere::ImportResources(RenderGraph& graph)
 	return { modelTag, transmittanceTag, scatteringTag, irradianceTag };
 }
 
-void Atmosphere::Render(RenderGraph& graph, Clouds& clouds, AtmosphereResources resourceHandles, CloudResources cloudResources, RenderResource cameraBuffer,
+void Atmosphere::Render(RenderGraph& graph, AtmosphereResources resourceHandles, CloudResources cloudResources, RenderResource cameraBuffer,
 	RenderResource depthStencil, RenderResource outputHDR, entt::registry& registry)
 {
 	if (dirty)
@@ -458,6 +458,12 @@ void Atmosphere::Render(RenderGraph& graph, Clouds& clouds, AtmosphereResources 
 		});
 	}
 
+	WeatherComponent weatherComp{};
+	registry.view<const WeatherComponent>().each([&weatherComp](auto entity, const auto& weather)
+	{
+		weatherComp = weather;
+	});
+
 	auto& composePass = graph.AddPass("Sky Atmosphere Compose Pass", ExecutionQueue::Compute);
 	composePass.Read(cameraBuffer, ResourceBind::SRV);
 	composePass.Read(resourceHandles.modelHandle, ResourceBind::SRV);
@@ -471,7 +477,8 @@ void Atmosphere::Render(RenderGraph& graph, Clouds& clouds, AtmosphereResources 
 	composePass.Read(cloudResources.weather, ResourceBind::SRV);
 	composePass.Read(depthStencil, ResourceBind::SRV);
 	composePass.Write(outputHDR, TextureView{}.UAV("", 0));
-	composePass.Bind([&, cameraBuffer, resourceHandles, cloudResources, depthStencil, outputHDR, solarZenithAngle](CommandList& list, RenderPassResources& resources)
+	composePass.Bind([&, cameraBuffer, resourceHandles, cloudResources, depthStencil, outputHDR, solarZenithAngle, weatherComp]
+		(CommandList& list, RenderPassResources& resources)
 	{
 		const auto renderLightShafts = *CvarGet("atmosphereVisibility", int);
 
@@ -523,9 +530,9 @@ void Atmosphere::Render(RenderGraph& graph, Clouds& clouds, AtmosphereResources 
 		bindData.scatteringTexture = resources.Get(resourceHandles.scatteringHandle);
 		bindData.irradianceTexture = resources.Get(resourceHandles.irradianceHandle);
 		bindData.solarZenithAngle = solarZenithAngle;
-		bindData.globalWeatherCoverage = clouds.coverage;
+		bindData.globalWeatherCoverage = weatherComp.coverage;
 		bindData.time = Renderer::Get().GetAppTime();
-		bindData.wind = { clouds.windDirection.x * clouds.windStrength, clouds.windDirection.y * clouds.windStrength };
+		bindData.wind = { weatherComp.windDirection.x * weatherComp.windStrength, weatherComp.windDirection.y * weatherComp.windStrength };
 
 		list.BindConstants("bindData", bindData);
 
@@ -538,9 +545,15 @@ void Atmosphere::Render(RenderGraph& graph, Clouds& clouds, AtmosphereResources 
 }
 
 std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(RenderGraph& graph, AtmosphereResources resourceHandles, RenderResource cameraBuffer,
-	entt::registry& registry, float globalWeatherCoverage)
+	entt::registry& registry)
 {
 	const auto luminanceTag = graph.Import(luminanceTexture);
+
+	WeatherComponent weatherComp{};
+	registry.view<const WeatherComponent>().each([&weatherComp](auto entity, const auto& weather)
+	{
+		weatherComp = weather;
+	});
 
 	float solarZenithAngle = 0.f;
 	if (registry.valid(sunLight))
@@ -557,7 +570,8 @@ std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(Rende
 	luminancePass.Read(resourceHandles.scatteringHandle, ResourceBind::SRV);
 	luminancePass.Read(resourceHandles.irradianceHandle, ResourceBind::SRV);
 	luminancePass.Write(luminanceTag, luminanceView);
-	luminancePass.Bind([&, cameraBuffer, resourceHandles, luminanceTag, solarZenithAngle, globalWeatherCoverage](CommandList& list, RenderPassResources& resources)
+	luminancePass.Bind([&, cameraBuffer, resourceHandles, luminanceTag, solarZenithAngle, weatherComp]
+		(CommandList& list, RenderPassResources& resources)
 	{
 		struct BindData
 		{
@@ -580,7 +594,7 @@ std::pair<RenderResource, RenderResource> Atmosphere::RenderEnvironmentMap(Rende
 		bindData.luminanceTexture = resources.Get(luminanceTag);
 		bindData.cameraBuffer = resources.Get(cameraBuffer);
 		bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
-		bindData.globalWeatherCoverage = globalWeatherCoverage;
+		bindData.globalWeatherCoverage = weatherComp.coverage;
 
 		list.BindPipeline(luminancePrecomputeLayout);
 		list.BindConstants("bindData", bindData);

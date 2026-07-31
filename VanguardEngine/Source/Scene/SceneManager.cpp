@@ -21,14 +21,23 @@
 #include <system_error>
 
 // All components must be specified here. When adding new components, do not forget to update
-// this list, or they won't get serialized.
-#define ALL_COMPONENTS(archive) \
-	.get<NameComponent>(archive) \
-	.get<TransformComponent>(archive) \
-	.get<CameraComponent>(archive) \
-	.get<LightComponent>(archive) \
-	.get<TimeOfDayComponent>(archive) \
-	.get<AssetComponent>(archive)
+// this list, or they won't get serialized. Note this list is append-only, otherwise loading
+// old scenes will break!
+#define ALL_COMPONENTS(archive, func) \
+	func(archive, NameComponent) \
+	func(archive, TransformComponent) \
+	func(archive, CameraComponent) \
+	func(archive, LightComponent) \
+	func(archive, TimeOfDayComponent) \
+	func(archive, AssetComponent) \
+	func(archive, WeatherComponent)
+
+// Macro hackery to count the number of components.
+#define COMPONENT_COUNT(x, y) +1
+constexpr size_t numComponents = 0 ALL_COMPONENTS(_, COMPONENT_COUNT);
+#undef COMPONENT_COUNT
+
+#define COMPONENT_GETTER(archive, type) .get<type>(archive.NextComponent())
 
 constexpr auto sqlCreate = R"(
 	CREATE TABLE scene(
@@ -206,6 +215,12 @@ namespace Scene
 			return false;
 		}
 
+		// Loading a newer scene is fine, but those new components will be discarded.
+		if (archive.ComponentCount() > numComponents)
+		{
+			VGLogWarning(logScene, "Scene '{}' is a newer version than this build properly supports", path.generic_wstring());
+		}
+
 		// #TODO: Instead of nuking the registry and loading fresh, consider using an EnTT continuous loader.
 		// Some fancy logic along the lines of only re-loading entities that are in the data, otherwise ignoring existing
 		// entities.
@@ -213,7 +228,7 @@ namespace Scene
 		auto snapshot = entt::snapshot_loader{ registry };
 		snapshot
 			.get<entt::entity>(archive)
-			ALL_COMPONENTS(archive);
+			ALL_COMPONENTS(archive, COMPONENT_GETTER);
 
 		// Rebuild GPU-side asset data.
 		AssetManager::Get().ResolveMeshes(registry);
@@ -232,12 +247,12 @@ namespace Scene
 			return false;
 		}
 
-		ArchiveInput archive;
+		ArchiveInput archive{ numComponents };
 
 		auto snapshot = entt::snapshot{ registry };
 		snapshot
 			.get<entt::entity>(archive)
-			ALL_COMPONENTS(archive);
+			ALL_COMPONENTS(archive, COMPONENT_GETTER);
 
 		const auto bytes = archive.ToBytes();
 

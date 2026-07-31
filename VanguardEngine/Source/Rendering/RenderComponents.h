@@ -99,3 +99,15 @@ struct TimeOfDayComponent
 	float speed;
 	TimeOfDayAnimation animation;
 };
+
+// Considered using EnTT registry context for singleton-like behavior, but this context doesn't
+// serialize. So instead, using a component like other systems.
+struct WeatherComponent
+{
+	NLOHMANN_DEFINE_TYPE_INTRUSIVE(WeatherComponent, coverage, precipitation, windStrength, windDirection);
+
+	float coverage = 0.f;
+	float precipitation = 0.f;
+	float windStrength = 0.f;
+	XMFLOAT2 windDirection = { 0.f, 0.f };
+};

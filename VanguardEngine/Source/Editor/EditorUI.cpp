@@ -1972,11 +1972,11 @@ void EditorUI::DrawAtmosphereControls(RenderDevice* device, entt::registry& regi
 
 			ImGui::Separator();
 
-			ImGui::Text("Weather");
-			ImGui::DragFloat("Cloud coverage", &clouds.coverage, 0.005f, 0.f, 1.f);
-			ImGui::DragFloat("Precipitation", &clouds.precipitation, 0.005f, 0.f, 1.f);
-			ImGui::DragFloat("Wind strength", &clouds.windStrength, 0.01f, 0.f, 1.f);
-			ImGui::DragFloat2("Wind direction", (float*)&clouds.windDirection, 0.01f, -1.f, 1.f);
+			// Render the weather component, if any, here too for convenience.
+			registry.view<WeatherComponent>().each([&registry](auto entity, auto&)
+			{
+				ComponentProperties::RenderWeatherComponent(registry, entity);
+			});
 
 			ImGui::Image(device, weather, { 0.1f, 0.1f });
 

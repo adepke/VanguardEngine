@@ -10,6 +10,7 @@ class RenderDevice;
 class RenderGraph;
 class CommandList;
 class Atmosphere;
+struct WeatherComponent;
 struct AccelerationStructureResources;
 
 struct CloudResources
@@ -24,10 +25,6 @@ struct CloudResources
 class Clouds
 {
 public:
-	float coverage = 0.5f;
-	float precipitation = 0.3f;
-	float windStrength = 0.2f;
-	XMFLOAT2 windDirection = { 1, 0 };
 	float densityMultiplier = 1.3f;
 	int msOctaves = 5;  // Number of multiple-scattering octaves
 
@@ -71,7 +68,7 @@ private:
 	RenderResource lastFrameDepthUpscaled;
 	RenderResource lastFrameVisibilityUpscaled;
 
-	void GenerateWeather(CommandList& list, uint32_t weatherTexture);
+	void GenerateWeather(CommandList& list, uint32_t weatherTexture, const WeatherComponent& weather);
 	void GenerateNoise(CommandList& list, uint32_t baseShapeTexture, uint32_t detailShapeTexture, uint32_t curlShapeTexture);
 
 public:

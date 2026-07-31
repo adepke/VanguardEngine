@@ -5,6 +5,7 @@
 #include <Rendering/Renderer.h>
 #include <Rendering/RenderGraph.h>
 #include <Rendering/RenderPass.h>
+#include <Rendering/RenderComponents.h>
 #include <Rendering/Atmosphere.h>
 #include <Rendering/AccelerationStructures.h>
 #include <Rendering/RenderUtils.h>
@@ -12,7 +13,7 @@
 #include <Core/Config.h>
 #include <Utility/Math.h>
 
-void Clouds::GenerateWeather(CommandList& list, uint32_t weatherTexture)
+void Clouds::GenerateWeather(CommandList& list, uint32_t weatherTexture, const WeatherComponent& weather)
 {
 	list.BindPipeline(weatherLayout);
 
@@ -25,10 +26,10 @@ void Clouds::GenerateWeather(CommandList& list, uint32_t weatherTexture)
 	} bindData;
 
 	bindData.weatherTexture = weatherTexture;
-	bindData.globalCoverage = coverage;
-	bindData.precipitation = precipitation;
-	bindData.wind = { windDirection.x * windStrength, windDirection.y * windStrength };
+	bindData.globalCoverage = weather.coverage;
+	bindData.precipitation = weather.precipitation;
 	bindData.time = Renderer::Get().GetAppTime();
+	bindData.wind = { weather.windDirection.x * weather.windStrength, weather.windDirection.y * weather.windStrength };
 
 	list.BindConstants("bindData", bindData);
 
@@ -171,6 +172,13 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 	const auto cirrusTag = graph.Import(cirrusClouds);
 	const auto blueNoiseTag = graph.Import(RenderUtils::Get().blueNoise);
 
+	WeatherComponent weatherComp{};
+	registry.view<const WeatherComponent>().each([&weatherComp](auto entity, const auto& weather)
+	{
+		weatherComp = weather;
+	});
+	const XMFLOAT2 wind = { weatherComp.windDirection.x * weatherComp.windStrength, weatherComp.windDirection.y * weatherComp.windStrength };
+
 	auto solarZenithAngle = 0.f;
 	if (registry.valid(atmosphere.sunLight))
 	{
@@ -200,9 +208,9 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 
 	auto& weatherPass = graph.AddPass("Weather Pass", ExecutionQueue::Compute);
 	weatherPass.Write(weatherTag, TextureView{}.UAV("", 0));
-	weatherPass.Bind([this, weatherTag](CommandList& list, RenderPassResources& resources)
+	weatherPass.Bind([this, weatherTag, weatherComp](CommandList& list, RenderPassResources& resources)
 	{
-		GenerateWeather(list, resources.Get(weatherTag));
+		GenerateWeather(list, resources.Get(weatherTag), weatherComp);
 	});
 
 	// Bind data is shared in both the bake and composite passes.
@@ -235,7 +243,7 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 	environmentBakePass.Read(atmosphereIrradiance, ResourceBind::SRV);
 	environmentBakePass.Write(environmentCloudsTag, TextureView{}.UAV("", 0));
 	environmentBakePass.Bind([this, cameraBuffer, weatherTag, baseShapeNoiseTag, curlShapeNoiseTag, atmosphereIrradiance,
-		environmentCloudsTag, solarZenithAngle, counter=environmentBakeCounter](CommandList& list, RenderPassResources& resources)
+		environmentCloudsTag, solarZenithAngle, wind, counter=environmentBakeCounter](CommandList& list, RenderPassResources& resources)
 	{
 		list.BindPipeline(environmentBakeLayout);
 
@@ -251,7 +259,7 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 		bindData.cameraIndex = 0;  // #TODO: Support multiple cameras.
 		bindData.solarZenithAngle = solarZenithAngle;
 		bindData.time = Renderer::Get().GetAppTime();
-		bindData.wind = { windDirection.x * windStrength, windDirection.y * windStrength };
+		bindData.wind = wind;
 		bindData.densityMultiplier = densityMultiplier;
 		bindData.baseFace = counter % 6;
 		bindData.jitterFrame = counter;
@@ -310,7 +318,7 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 	cloudsPass.Read(atmosphereIrradiance, ResourceBind::SRV);
 	cloudsPass.Output(cloudOutput, OutputBind::RTV, LoadType::Preserve);
 	cloudsPass.Write(cloudDepth, TextureView{}.UAV("", 0));
-	cloudsPass.Bind([this, weatherTag, baseShapeNoiseTag, detailShapeNoiseTag, curlShapeNoiseTag, solarZenithAngle,
+	cloudsPass.Bind([this, weatherTag, baseShapeNoiseTag, detailShapeNoiseTag, curlShapeNoiseTag, solarZenithAngle, wind,
 		cameraBuffer, depthStencil, cloudOutput, blueNoiseTag, cloudDepth, atmosphereIrradiance]
 		(CommandList& list, RenderPassResources& resources)
 	{
@@ -371,7 +379,7 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 		bindData.blueNoiseTexture = resources.Get(blueNoiseTag);
 		bindData.atmosphereIrradianceBuffer = resources.Get(atmosphereIrradiance);
 		bindData.time = Renderer::Get().GetAppTime();
-		bindData.wind = { windDirection.x * windStrength, windDirection.y * windStrength };
+		bindData.wind = wind;
 		bindData.densityMultiplier = densityMultiplier;
 
 		const auto& cloudOutputComponent = device->GetResourceManager().Get(resources.GetTexture(cloudOutput));
@@ -413,7 +421,7 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 	visibilityPass.Write(cloudVisibility, TextureView{}
 		.UAV("", 0));
 	visibilityPass.Bind([this, geometryContribution, cloudsContribution, cameraBuffer, weatherTag, baseShapeNoiseTag,
-		depthStencil, blueNoiseTag, atmosphereIrradiance, cloudVisibility, solarZenithAngle, asResources]
+		depthStencil, blueNoiseTag, atmosphereIrradiance, cloudVisibility, solarZenithAngle, wind, asResources]
 		(CommandList& list, RenderPassResources& resources)
 	{
 		auto visibilityLayout = RenderPipelineLayout{}
@@ -464,7 +472,7 @@ CloudResources Clouds::Render(RenderGraph& graph, entt::registry& registry, cons
 		bindData.blueNoiseTexture = resources.Get(blueNoiseTag);
 		bindData.atmosphereIrradianceBuffer = cloudsContribution ? resources.Get(atmosphereIrradiance) : 0;
 		bindData.time = Renderer::Get().GetAppTime();
-		bindData.wind = { windDirection.x * windStrength, windDirection.y * windStrength };
+		bindData.wind = wind;
 		bindData.upscaledResolution[0] = device->renderWidth;
 		bindData.upscaledResolution[1] = device->renderHeight;
 		bindData.accelerationStructure = geometryContribution ? resources.Get(asResources.tlasTag) : 0;

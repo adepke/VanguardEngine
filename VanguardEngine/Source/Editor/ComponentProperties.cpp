@@ -122,3 +122,15 @@ void ComponentProperties::RenderTimeOfDayComponent(entt::registry& registry, ent
 	const char* animationTypes[] = { "Static", "Cycle", "Oscillate" };
 	ImGui::Combo("Animation", (int*)&component.animation, animationTypes, std::size(animationTypes));
 }
+
+void ComponentProperties::RenderWeatherComponent(entt::registry& registry, entt::entity entity)
+{
+	auto& component = registry.get<WeatherComponent>(entity);
+
+	ImGui::Text("Weather");
+
+	ImGui::DragFloat("Cloud coverage", &component.coverage, 0.005f, 0.f, 1.f);
+	ImGui::DragFloat("Precipitation", &component.precipitation, 0.005f, 0.f, 1.f);
+	ImGui::DragFloat("Wind strength", &component.windStrength, 0.01f, 0.f, 1.f);
+	ImGui::DragFloat2("Wind direction", (float*)&component.windDirection, 0.01f, -1.f, 1.f);
+}

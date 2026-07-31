@@ -18,14 +18,17 @@
 // Version history:
 // v1: EnTT v3.8.1
 // v2: EnTT v3.16.0
+// v3: Component count added to metadata
 
 class ArchiveInput
 {
 private:
 	nlohmann::json entities;  // Array.
+	size_t componentCount = 0;
 
 public:
-	ArchiveInput()
+	// componentCount is the number of component segments that follow the entity segment.
+	ArchiveInput(size_t comps) : componentCount(comps)
 	{
 		entities = nlohmann::json::array();
 	}
@@ -35,10 +38,14 @@ public:
 		// To convert to BSON, the outermost type must be an object.
 		// Key by the protocol version.
 		auto base = nlohmann::json::object();
-		base["v2"] = entities;
+		base["v3"] = entities;
+		base["components"] = componentCount;
 
 		return std::move(nlohmann::json::to_bson(base));
 	}
+
+	// No-op, only used during load.
+	ArchiveInput& NextComponent() { return *this; }
 
 	// EnTT-API functions
 	// Three functions are provided:
@@ -68,7 +75,9 @@ private:
 	nlohmann::json entities;  // Array.
 	int version = -1;  // Which version is being loaded.
 	size_t index = 0;  // Tracks the array position when deserializing.
-
+	size_t componentCount = 0;  // Component segments this archive holds.
+	size_t componentIndex = 0;  // Which component segment we're on, 1-based.
+	
 	void ConvertV1()
 	{
 		// Entities layout:
@@ -133,6 +142,14 @@ private:
 		entities.insert(entities.begin(), rebuilt.begin(), rebuilt.end());
 	}
 
+	void ConvertV2()
+	{
+		// Prior to v3, the component count was not stored, so loading component segments couldn't
+		// know about new components added later. Old archive formats expect exactly 6 components
+		// (pre-WeatherComponent).
+		componentCount = 6;
+	}
+
 public:
 	ArchiveOutput(const char* bytes, size_t size)
 	{
@@ -142,22 +159,53 @@ public:
 			version = 1;
 		else if (base.contains("v2"))
 			version = 2;
+		else if (base.contains("v3"))
+			version = 3;
 
 		if (version > 0)
 		{
 			entities = base[std::format("v{}", version)];
 		}
 
-		// Upgrade old versions so they can be loaded.
+		// Upgrade old versions so they can be loaded. Conversions chain, so fall through until we
+		// reach the current format.
 		switch (version)
 		{
 		case 1:
 			ConvertV1();
+			[[fallthrough]];
+		case 2:
+			ConvertV2();
 			break;
+		case 3:
+			if (base.contains("components"))
+				componentCount = base["components"].get<size_t>();
+			else
+				version = 0;  // Malformed archive.
+			break;
+		}
+
+		// Additional sanity checks.
+		if (version > 0)
+		{
+			if (!entities.is_array() || entities.size() < 2 || !entities[0].is_number_integer())
+			{
+				version = 0;
+			}
 		}
 	}
 
 	bool Valid() const { return version > 0; }
+
+	// Used to check if the runtime supports a different number of components than this archive contains.
+	size_t ComponentCount() const { return componentCount; }
+
+	// Advances to the next component segment. Used to match the component layout of the runtime.
+	ArchiveOutput& NextComponent()
+	{
+		++componentIndex;
+		return *this;
+	}
 
 	// EnTT-API functions
 	// Three functions are provided:
@@ -168,6 +216,13 @@ public:
 	// Deserialize
 	void operator()(std::underlying_type_t<entt::entity>& size)
 	{
+		if (componentIndex > componentCount)
+		{
+			// The runtime doesn't support this many components, drop them.
+			size = 0;
+			return;
+		}
+
 		size = entities[index].get<std::decay_t<decltype(size)>>();
 		++index;
 	}

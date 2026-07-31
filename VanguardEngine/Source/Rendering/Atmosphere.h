@@ -109,10 +109,10 @@ public:
 	void Initialize(RenderDevice* inDevice, entt::registry& registry);
 
 	AtmosphereResources ImportResources(RenderGraph& graph);
-	void Render(RenderGraph& graph, Clouds& clouds, AtmosphereResources resourceHandles, CloudResources cloudResources, RenderResource cameraBuffer,
+	void Render(RenderGraph& graph, AtmosphereResources resourceHandles, CloudResources cloudResources, RenderResource cameraBuffer,
 		RenderResource depthStencil, RenderResource outputHDRs, entt::registry& registry);
 	std::pair<RenderResource, RenderResource> RenderEnvironmentMap(RenderGraph& graph, AtmosphereResources resourceHandles, RenderResource cameraBuffer,
-		entt::registry& registry, float globalWeatherCoverage);
+		entt::registry& registry);
 	// Separated from RenderEnvironmentMap so other systems can contribute to the cube before mipmapping.
 	void GenerateLuminanceMips(RenderGraph& graph, RenderResource luminanceTag);
 	uint32_t GetLuminanceTextureSize() const { return luminanceTextureSize; }

@@ -94,6 +94,16 @@ bool LoadPIXLibrary()
 // This function doesn't belong here, refactor.
 void SetupDefaultScene()
 {
+	// Atmosphere and weather.
+	const auto atmosphere = registry.create();
+	registry.emplace<NameComponent>(atmosphere, "Atmosphere");
+	registry.emplace<WeatherComponent>(atmosphere, WeatherComponent{
+		.coverage = 0.5f,
+		.precipitation = 0.3f,
+		.windStrength = 0.2f,
+		.windDirection = {1.f, 0.f}
+	});
+
 	const auto AddHelmet = [](const TransformComponent& transform)
 	{
 		const auto path = Config::shadersPath / "../Assets/Models/DamagedHelmet/HelmetTangents.glb";

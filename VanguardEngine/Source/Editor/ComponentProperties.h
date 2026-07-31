@@ -21,4 +21,5 @@ namespace ComponentProperties
 	void RenderCameraComponent(entt::registry& registry, entt::entity entity);
 	void RenderLightComponent(entt::registry& registry, entt::entity entity);
 	void RenderTimeOfDayComponent(entt::registry& registry, entt::entity entity);
+	void RenderWeatherComponent(entt::registry& registry, entt::entity entity);
 }
