@@ -75,6 +75,31 @@ namespace ImGui
 		return clicked;
 	}
 
+	// A small borderless icon button tinted red, for destructive actions sitting inline with content.
+	// The frame is transparent until hovered so a row of these doesn't read as a wall of buttons.
+	inline bool DangerIconButton(const char* label, const char* tooltip)
+	{
+		const ImVec4 danger = { 0.90f, 0.25f, 0.25f, 1.f };
+
+		ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0.f);
+		ImGui::PushStyleColor(ImGuiCol_Text, danger);
+		ImGui::PushStyleColor(ImGuiCol_Button, { 0.f, 0.f, 0.f, 0.f });
+		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, { danger.x, danger.y, danger.z, 0.25f });
+		ImGui::PushStyleColor(ImGuiCol_ButtonActive, { danger.x, danger.y, danger.z, 0.45f });
+
+		const bool clicked = ImGui::SmallButton(label);
+
+		ImGui::PopStyleColor(4);
+		ImGui::PopStyleVar();
+
+		if (tooltip && ImGui::IsItemHovered())
+		{
+			ImGui::SetTooltip("%s", tooltip);
+		}
+
+		return clicked;
+	}
+
 	inline void StyleColorsVanguard(ImGuiStyle* dst = nullptr)
 	{
 		ImGuiStyle* style = dst ? dst : &ImGui::GetStyle();

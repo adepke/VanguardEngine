@@ -875,6 +875,134 @@ entt::entity EditorUI::DuplicateEntity(entt::registry& registry, entt::entity so
 	return copy;
 }
 
+entt::entity EditorUI::CreateEntity(entt::registry& registry)
+{
+	const auto entity = registry.create();
+
+	// Give it a starter transform component, since most entities will want this.
+	// #TODO: set transform to near camera?
+	registry.emplace<TransformComponent>(entity);
+
+	return entity;
+}
+
+void EditorUI::DrawAddComponentModal(entt::registry& registry)
+{
+	static constexpr const char* modalName = "Add Component";
+
+	if (openAddComponentModal)
+	{
+		openAddComponentModal = false;
+		newComponentStorage.reset();
+		ImGui::OpenPopup(modalName);
+	}
+
+	ImGui::SetNextWindowSize({ 520.f, 340.f }, ImGuiCond_Appearing);
+
+	if (!ImGui::BeginPopupModal(modalName, nullptr, ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings))
+		return;
+
+	// Can't add a component to no entity.
+	if (!registry.valid(hierarchySelectedEntity))
+	{
+		newComponentStorage.reset();
+		ImGui::CloseCurrentPopup();
+		ImGui::EndPopup();
+
+		return;
+	}
+
+	const entt::id_type newComponentType = newComponentStorage ? newComponentStorage.info().hash() : entt::id_type{ 0 };
+	const auto selected = EntityReflection::componentMeta.find(newComponentType);
+
+	// Header row: Cancel on the left, Add right aligned. Add stays disabled until a type is picked.
+	const float rowStartX = ImGui::GetCursorPosX();
+	const float rowWidth = ImGui::GetContentRegionAvail().x;
+
+	const bool cancelPressed = ImGui::Button("Cancel");
+
+	const char* addLabel = "Add";
+	const float addWidth = ImGui::CalcTextSize(addLabel).x + ImGui::GetStyle().FramePadding.x * 2.f;
+	ImGui::SameLine(rowStartX + rowWidth - addWidth);
+
+	ImGui::BeginDisabled(selected == EntityReflection::componentMeta.end());
+	const bool addPressed = ImGui::Button(addLabel);
+	ImGui::EndDisabled();
+
+	ImGui::Separator();
+
+	// Component type list on the left, properties of the selected component on the right.
+	const float listWidth = 180.f;
+	const float bodyHeight = ImGui::GetContentRegionAvail().y;
+
+	if (ImGui::BeginChild("ComponentTypeList", { listWidth, bodyHeight }, ImGuiChildFlags_Borders))
+	{
+		for (const auto& [id, component] : EntityReflection::componentMeta)
+		{
+			// Doesn't make sense to add internal components.
+			if (component.internal)
+				continue;
+
+			// An entity can only hold one instance of a component type.
+			const auto* storage = registry.storage(id);
+			const bool alreadyPresent = storage && storage->contains(hierarchySelectedEntity);
+
+			ImGui::BeginDisabled(alreadyPresent);
+
+			if (ImGui::Selectable(component.name, id == newComponentType))
+			{
+				newComponentStorage = component.makeDefault();
+			}
+
+			ImGui::EndDisabled();
+
+			if (alreadyPresent && ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenDisabled))
+			{
+				ImGui::SetTooltip("Already attached to this entity.");
+			}
+		}
+	}
+
+	ImGui::EndChild();
+
+	ImGui::SameLine();
+
+	if (ImGui::BeginChild("ComponentProperties", { 0.f, bodyHeight }, ImGuiChildFlags_Borders))
+	{
+		if (selected != EntityReflection::componentMeta.end())
+		{
+			ImGui::PushID(selected->first);
+
+			// Render without an owning entity, since this is just a preview.
+			selected->second.render(newComponentStorage.data(), registry, entt::null);
+
+			ImGui::PopID();
+		}
+
+		else
+		{
+			ImGui::TextDisabled("Select a component type.");
+		}
+	}
+
+	ImGui::EndChild();
+
+	if (addPressed && selected != EntityReflection::componentMeta.end())
+	{
+		selected->second.add(std::move(newComponentStorage), registry, hierarchySelectedEntity);
+		newComponentStorage.reset();
+		ImGui::CloseCurrentPopup();
+	}
+
+	else if (cancelPressed)
+	{
+		newComponentStorage.reset();
+		ImGui::CloseCurrentPopup();
+	}
+
+	ImGui::EndPopup();
+}
+
 void EditorUI::DrawLayout()
 {
 	auto* viewport = ImGui::GetMainViewport();
@@ -1735,11 +1863,21 @@ void EditorUI::DrawEntityHierarchy(entt::registry& registry)
 		// entities inside registry.each() would invalidate the iteration.
 		entt::entity entityToDuplicate = entt::null;
 		entt::entity entityToDelete = entt::null;
+		bool createEntity = false;
 
 		if (ImGui::Begin("Entity Hierarchy", &entityHierarchyOpen))
 		{
-			ImGui::Text("%i Entities", registry.view<entt::entity>().size());
+			ImGui::Text("%zu Entities", registry.view<entt::entity>().size());
 			ImGui::Separator();
+
+			// NoOpenOverItems to prevent override in the per entity context menu.
+			if (ImGui::BeginPopupContextWindow("HierarchyContextMenu", ImGuiPopupFlags_MouseButtonRight | ImGuiPopupFlags_NoOpenOverItems))
+			{
+				if (ImGui::MenuItem("Create entity"))
+					createEntity = true;
+
+				ImGui::EndPopup();
+			}
 
 			registry.view<entt::entity>().each([this, &registry, &selectedEntity, &entityToDuplicate, &entityToDelete](auto entity)
 			{
@@ -1818,6 +1956,12 @@ void EditorUI::DrawEntityHierarchy(entt::registry& registry)
 			hierarchySelectedEntity = selectedEntity;
 		}
 
+		if (createEntity)
+		{
+			hierarchySelectedEntity = CreateEntity(registry);
+			scrollToSelectedEntity = true;
+		}
+
 		if (registry.valid(entityToDuplicate))
 		{
 			hierarchySelectedEntity = DuplicateEntity(registry, entityToDuplicate);
@@ -1849,16 +1993,43 @@ void EditorUI::DrawEntityPropertyViewer(entt::registry& registry)
 		{
 			if (registry.valid(hierarchySelectedEntity))
 			{
+				if (ImGui::Button((char*)ICON_FA_PLUS " Add component"))
+				{
+					openAddComponentModal = true;
+				}
+
+				ImGui::Separator();
+
 				uint32_t componentCount = 0;
 
-				for (auto& [metaID, renderFunction] : EntityReflection::componentList)
+				// Deferred until after rendering is done.
+				entt::sparse_set* componentToRemove = nullptr;
+
+				for (const auto& [id, meta] : EntityReflection::componentMeta)
 				{
-					if (registry.storage(metaID)->contains(hierarchySelectedEntity))
+					auto* storage = registry.storage(id);
+
+					if (storage && storage->contains(hierarchySelectedEntity))
 					{
 						++componentCount;
 
-						ImGui::PushID(metaID);
-						renderFunction(registry, hierarchySelectedEntity);
+						ImGui::PushID(id);
+
+						// Internal components are engine-managed, don't allow removing them by hand.
+						if (!meta.internal)
+						{
+							if (ImGui::DangerIconButton((char*)ICON_FA_TIMES, "Remove component"))
+							{
+								componentToRemove = storage;
+							}
+
+							ImGui::SameLine();
+						}
+
+						ImGui::Text("%s", meta.name);
+
+						meta.render(storage->value(hierarchySelectedEntity), registry, hierarchySelectedEntity);
+
 						ImGui::PopID();
 
 						ImGui::Separator();
@@ -1868,6 +2039,11 @@ void EditorUI::DrawEntityPropertyViewer(entt::registry& registry)
 				if (componentCount == 0)
 				{
 					ImGui::Text("No components.");
+				}
+
+				if (componentToRemove)
+				{
+					componentToRemove->remove(hierarchySelectedEntity);
 				}
 			}
 
@@ -1881,6 +2057,9 @@ void EditorUI::DrawEntityPropertyViewer(entt::registry& registry)
 				ImGui::SetCursorPosY(ImGui::GetCursorPosY() + 10.f);
 				ImGui::TextDisabled(text);
 			}
+
+			// Drawn inside the window so the popup shares its ID stack with the button that opens it.
+			DrawAddComponentModal(registry);
 		}
 
 		ImGui::End();
@@ -1961,7 +2140,7 @@ void EditorUI::DrawAtmosphereControls(RenderDevice* device, entt::registry& regi
 			ImGui::Text("General");
 			if (registry.valid(atmosphere.sunLight))
 			{
-				ComponentProperties::RenderTimeOfDayComponent(registry, atmosphere.sunLight);
+				ComponentProperties::RenderTimeOfDayComponent(registry.get<TimeOfDayComponent>(atmosphere.sunLight), registry, atmosphere.sunLight);
 			}
 
 			CvarHelpers::Checkbox("atmosphereVisibility", "Render light shafts");
@@ -1973,9 +2152,9 @@ void EditorUI::DrawAtmosphereControls(RenderDevice* device, entt::registry& regi
 			ImGui::Separator();
 
 			// Render the weather component, if any, here too for convenience.
-			registry.view<WeatherComponent>().each([&registry](auto entity, auto&)
+			registry.view<WeatherComponent>().each([&registry](auto entity, auto& component)
 			{
-				ComponentProperties::RenderWeatherComponent(registry, entity);
+				ComponentProperties::RenderWeatherComponent(component, registry, entity);
 			});
 
 			ImGui::Image(device, weather, { 0.1f, 0.1f });

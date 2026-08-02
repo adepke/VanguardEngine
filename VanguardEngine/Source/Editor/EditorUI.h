@@ -123,6 +123,10 @@ private:
 	float modelTileSize = 64.f;
 	float modelTilePadding = 8.f;
 
+	// Add component window state.
+	bool openAddComponentModal = false;
+	entt::any newComponentStorage;
+
 public:
 	// Debug/visualization overlay state.
 	RenderOverlay activeOverlay = RenderOverlay::None;
@@ -155,6 +159,8 @@ private:
 	std::filesystem::path PickNextNewScenePath() const;
 
 	entt::entity DuplicateEntity(entt::registry& registry, entt::entity source);
+	entt::entity CreateEntity(entt::registry& registry);
+	void DrawAddComponentModal(entt::registry& registry);
 
 public:
 	void Update(RenderDevice& device, entt::registry& registry);

@@ -6,23 +6,19 @@
 
 #include <cstring>
 
-void ComponentProperties::RenderNameComponent(entt::registry& registry, entt::entity entity)
+bool ComponentProperties::RenderNameComponent(NameComponent& component, entt::registry& registry, entt::entity entity)
 {
-	auto& component = registry.get<NameComponent>(entity);
-
 	component.name.resize(256, 0);
 
-	ImGui::Text("Name");
-	ImGui::SameLine();
-	ImGui::InputText("", component.name.data(), component.name.size(), ImGuiInputTextFlags_AutoSelectAll);
+	const bool changed = ImGui::InputText("##Name", component.name.data(), component.name.size(), ImGuiInputTextFlags_AutoSelectAll);
 
 	component.name.resize(std::strlen(component.name.data()));
+
+	return changed;
 }
 
-void ComponentProperties::RenderTransformComponent(entt::registry& registry, entt::entity entity)
+bool ComponentProperties::RenderTransformComponent(TransformComponent& component, entt::registry& registry, entt::entity entity)
 {
-	const auto& component = registry.get<const TransformComponent>(entity);
-
 	float translation[] = { component.translation.x, component.translation.y, component.translation.z };
 	float rotation[] = { component.rotation.x, component.rotation.y, component.rotation.z };
 	float scale[] = { component.scale.x, component.scale.y, component.scale.z };
@@ -32,8 +28,6 @@ void ComponentProperties::RenderTransformComponent(entt::registry& registry, ent
 	{
 		dimension *= 180.f / 3.14159265359f;
 	}
-
-	ImGui::Text("Transform");
 
 	bool changed = ImGui::DragFloat3("Translation", translation, 1.f, -100000.0, 100000.0, "%.4f");
 	changed |= ImGui::DragFloat3("Rotation", rotation, 0.5f, -360.0, 360.0, "%.4f");
@@ -47,25 +41,23 @@ void ComponentProperties::RenderTransformComponent(entt::registry& registry, ent
 
 	if (changed)
 	{
-		registry.patch<TransformComponent>(entity, [&](TransformComponent& transform)
-		{
-			transform.translation = XMFLOAT3{ translation };
-			transform.rotation = XMFLOAT3{ rotation };
-			transform.scale = XMFLOAT3{ scale };
-		});
+		component.translation = XMFLOAT3{ translation };
+		component.rotation = XMFLOAT3{ rotation };
+		component.scale = XMFLOAT3{ scale };
 	}
+
+	return changed;
 }
 
-void ComponentProperties::RenderControlComponent(entt::registry& registry, entt::entity entity)
+bool ComponentProperties::RenderControlComponent(ControlComponent& component, entt::registry& registry, entt::entity entity)
 {
 	ImGui::Text("This entity has control.");
+
+	return false;
 }
 
-void ComponentProperties::RenderMeshComponent(entt::registry& registry, entt::entity entity)
+bool ComponentProperties::RenderMeshComponent(MeshComponent& component, entt::registry& registry, entt::entity entity)
 {
-	auto& component = registry.get<MeshComponent>(entity);
-
-	ImGui::Text("Mesh");
 	ImGui::Text("Subsets: %i", component.subsets.size());
 	ImGui::Text("Vertex metadata");
 
@@ -88,49 +80,53 @@ void ComponentProperties::RenderMeshComponent(entt::registry& registry, entt::en
 	ImGui::Checkbox("Bitangent", isChannelActive(4) ? &enabled : &disabled);
 	ImGui::Checkbox("Color", isChannelActive(5) ? &enabled : &disabled);
 	ImGui::Unindent();
+
+	return false;
 }
 
-void ComponentProperties::RenderCameraComponent(entt::registry& registry, entt::entity entity)
+bool ComponentProperties::RenderCameraComponent(CameraComponent& component, entt::registry& registry, entt::entity entity)
 {
-	auto& component = registry.get<CameraComponent>(entity);
+	bool changed = ImGui::DragFloat("Near plane", &component.nearPlane, 0.01f, 0.001f, component.farPlane, "%.3f");
+	changed |= ImGui::DragFloat("Far plane", &component.farPlane, 1.f, component.nearPlane, 100000.f, "%.1f");
 
-	ImGui::Text("Camera");
+	float fieldOfViewDegrees = component.fieldOfView * 180.f / 3.14159265359f;  // Radians to degrees.
+	if (ImGui::DragFloat("Field of view", &fieldOfViewDegrees, 0.5f, 1.f, 179.f, "%.1f"))
+	{
+		component.fieldOfView = fieldOfViewDegrees * 3.14159265359f / 180.f;
+		changed = true;
+	}
+
+	return changed;
 }
 
-void ComponentProperties::RenderLightComponent(entt::registry& registry, entt::entity entity)
+bool ComponentProperties::RenderLightComponent(LightComponent& component, entt::registry& registry, entt::entity entity)
 {
-	auto& component = registry.get<LightComponent>(entity);
-
-	ImGui::Text("Light");
-
 	const char* lightTypes[] = { "Point", "Directional" };
-	ImGui::Combo("Light type", (int*)&component.type, lightTypes, std::size(lightTypes));
+	bool changed = ImGui::Combo("Light type", (int*)&component.type, lightTypes, std::size(lightTypes));
 
-	ImGui::InputFloat3("Color", (float*)&component.color);
+	changed |= ImGui::InputFloat3("Color", (float*)&component.color);
+
+	return changed;
 }
 
-void ComponentProperties::RenderTimeOfDayComponent(entt::registry& registry, entt::entity entity)
+bool ComponentProperties::RenderTimeOfDayComponent(TimeOfDayComponent& component, entt::registry& registry, entt::entity entity)
 {
-	auto& component = registry.get<TimeOfDayComponent>(entity);
-
-	ImGui::Text("Time of Day");
-
 	constexpr float maxZenithAngle = 3.14159f;
-	ImGui::DragFloat("Solar zenith angle", &component.solarZenithAngle, 0.005f, -maxZenithAngle, maxZenithAngle);
-	ImGui::DragFloat("Speed", &component.speed, 0.01f, -10.f, 10.f);
+	bool changed = ImGui::DragFloat("Solar zenith angle", &component.solarZenithAngle, 0.005f, -maxZenithAngle, maxZenithAngle);
+	changed |= ImGui::DragFloat("Speed", &component.speed, 0.01f, -10.f, 10.f);
 
 	const char* animationTypes[] = { "Static", "Cycle", "Oscillate" };
-	ImGui::Combo("Animation", (int*)&component.animation, animationTypes, std::size(animationTypes));
+	changed |= ImGui::Combo("Animation", (int*)&component.animation, animationTypes, std::size(animationTypes));
+
+	return changed;
 }
 
-void ComponentProperties::RenderWeatherComponent(entt::registry& registry, entt::entity entity)
+bool ComponentProperties::RenderWeatherComponent(WeatherComponent& component, entt::registry& registry, entt::entity entity)
 {
-	auto& component = registry.get<WeatherComponent>(entity);
+	bool changed = ImGui::DragFloat("Cloud coverage", &component.coverage, 0.005f, 0.f, 1.f);
+	changed |= ImGui::DragFloat("Precipitation", &component.precipitation, 0.005f, 0.f, 1.f);
+	changed |= ImGui::DragFloat("Wind strength", &component.windStrength, 0.01f, 0.f, 1.f);
+	changed |= ImGui::DragFloat2("Wind direction", (float*)&component.windDirection, 0.01f, -1.f, 1.f);
 
-	ImGui::Text("Weather");
-
-	ImGui::DragFloat("Cloud coverage", &component.coverage, 0.005f, 0.f, 1.f);
-	ImGui::DragFloat("Precipitation", &component.precipitation, 0.005f, 0.f, 1.f);
-	ImGui::DragFloat("Wind strength", &component.windStrength, 0.01f, 0.f, 1.f);
-	ImGui::DragFloat2("Wind direction", (float*)&component.windDirection, 0.01f, -1.f, 1.f);
+	return changed;
 }

@@ -80,8 +80,8 @@ struct LightComponent
 {
 	NLOHMANN_DEFINE_TYPE_INTRUSIVE(LightComponent, type, color);
 
-	LightType type;
-	XMFLOAT3 color;
+	LightType type = LightType::Point;
+	XMFLOAT3 color = { 1.f, 1.f, 1.f };
 };
 
 enum class TimeOfDayAnimation
@@ -95,9 +95,9 @@ struct TimeOfDayComponent
 {
 	NLOHMANN_DEFINE_TYPE_INTRUSIVE(TimeOfDayComponent, solarZenithAngle, speed, animation);
 
-	float solarZenithAngle;
-	float speed;
-	TimeOfDayAnimation animation;
+	float solarZenithAngle = 0.f;
+	float speed = 0.f;
+	TimeOfDayAnimation animation = TimeOfDayAnimation::Static;
 };
 
 // Considered using EnTT registry context for singleton-like behavior, but this context doesn't

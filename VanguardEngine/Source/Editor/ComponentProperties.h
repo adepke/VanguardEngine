@@ -9,17 +9,20 @@
 
 namespace ComponentProperties
 {
+	// Entity may be null, if the component is not owned. Registry and entity provided for cross-component or
+	// cross-entity behavior in the render function. Returns true if the component was modified.
+
 	// Core components.
 
-	void RenderNameComponent(entt::registry& registry, entt::entity entity);
-	void RenderTransformComponent(entt::registry& registry, entt::entity entity);
-	void RenderControlComponent(entt::registry& registry, entt::entity entity);
+	bool RenderNameComponent(NameComponent& component, entt::registry& registry, entt::entity entity);
+	bool RenderTransformComponent(TransformComponent& component, entt::registry& registry, entt::entity entity);
+	bool RenderControlComponent(ControlComponent& component, entt::registry& registry, entt::entity entity);
 
 	// Rendering components.
 
-	void RenderMeshComponent(entt::registry& registry, entt::entity entity);
-	void RenderCameraComponent(entt::registry& registry, entt::entity entity);
-	void RenderLightComponent(entt::registry& registry, entt::entity entity);
-	void RenderTimeOfDayComponent(entt::registry& registry, entt::entity entity);
-	void RenderWeatherComponent(entt::registry& registry, entt::entity entity);
+	bool RenderMeshComponent(MeshComponent& component, entt::registry& registry, entt::entity entity);
+	bool RenderCameraComponent(CameraComponent& component, entt::registry& registry, entt::entity entity);
+	bool RenderLightComponent(LightComponent& component, entt::registry& registry, entt::entity entity);
+	bool RenderTimeOfDayComponent(TimeOfDayComponent& component, entt::registry& registry, entt::entity entity);
+	bool RenderWeatherComponent(WeatherComponent& component, entt::registry& registry, entt::entity entity);
 }
