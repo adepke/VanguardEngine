@@ -296,14 +296,20 @@ void Renderer::CreatePipelines()
 	meshCullLayout = RenderPipelineLayout{}
 		.ComputeShader({ "MeshCulling", "Main" });
 
+	// The prepass no longer takes hardware fast path, harming HiZ a decent amount. Need to get
+	// back to fast path without losing shadows and alpha testing.
+	// #TODO: for alpha testing, consider splitting indirect args by material culling, so back
+	// face culled geometry can properly have CullMode set.
 	prepassLayout = RenderPipelineLayout{}
 		.VertexShader({ "Prepass", "VSMain" })
-		.PixelShader({ "Prepass", "PSMain" })  // PS for normals.
+		.PixelShader({ "Prepass", "PSMain" })  // PS for normals and alpha testing.
+		.CullMode(D3D12_CULL_MODE_NONE)
 		.DepthEnabled(true, true);
 
 	forwardOpaqueLayout = RenderPipelineLayout{}
 		.VertexShader({ "Forward", "VSMain" })
 		.PixelShader({ "Forward", "PSMain" })
+		.CullMode(D3D12_CULL_MODE_NONE)  // Alpha testing.
 		.DepthEnabled(true, false, DepthTestFunction::Equal);  // Prepass provides depth.
 }
 
@@ -602,6 +608,7 @@ void Renderer::Render(entt::registry& registry)
 	prePass.Read(cameraBufferTag, ResourceBind::SRV);
 	prePass.Read(meshResources.positionTag, ResourceBind::SRV);
 	prePass.Read(meshResources.extraTag, ResourceBind::SRV);
+	prePass.Read(materialBufferTag, ResourceBind::SRV);
 	prePass.Read(meshIndirectCulledRenderArgsTag, ResourceBind::Indirect);
 	prePass.Output(depthStencilTag, OutputBind::DSV, LoadType::Clear);
 	prePass.Output(geometricNormalsTag, OutputBind::RTV, LoadType::Clear);
@@ -614,12 +621,14 @@ void Renderer::Render(entt::registry& registry)
 			uint32_t cameraIndex;
 			uint32_t vertexPositionBuffer;
 			uint32_t vertexExtraBuffer;
+			uint32_t materialBuffer;
 		} bindData;
 
 		bindData.objectBuffer = resources.Get(instanceBufferTag);
 		bindData.cameraBuffer = resources.Get(cameraBufferTag);
 		bindData.vertexPositionBuffer = resources.Get(meshResources.positionTag);
 		bindData.vertexExtraBuffer = resources.Get(meshResources.extraTag);
+		bindData.materialBuffer = resources.Get(materialBufferTag);
 
 		list.BindPipeline(prepassLayout);
 

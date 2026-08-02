@@ -11,9 +11,10 @@ struct ObjectData
 {
 	matrix worldMatrix;
 	VertexMetadata vertexMetadata;
+	float3 boundingSphereCenter;  // Local space.
+	float boundingSphereRadius;  // World space.
 	uint materialIndex;
-	float boundingSphereRadius;
-	float2 padding;
+	float3 padding;
 };
 
 #endif  // __OBJECT_HLSLI__

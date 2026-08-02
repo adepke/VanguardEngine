@@ -162,24 +162,23 @@ AccelerationStructureResources AccelerationStructures::Render(RenderGraph& graph
 	auto builds = std::make_shared<std::vector<BlasBuild>>();
 	size_t scratchBytes = 0;
 
-	// First pass: create BLASes for meshes we haven't seen before.
+	// First pass: create BLASes for geometry we haven't seen before. One per unique mesh subset.
 	auto meshView = registry.view<const TransformComponent, const MeshComponent>();
 	meshView.each([&](entt::entity entity, const TransformComponent& transform, const MeshComponent& mesh)
 	{
-		const size_t key = mesh.globalOffset.position;
-		if (blasCache.contains(key))
-		{
-			return;
-		}
-
-		BlasBuild build;
-		build.geometry.reserve(mesh.subsets.size());
-
-		// Note that index data is subset-local (the draw path applies vertex offsets through the
-		// object's vertex metadata), so each subset gets its own geometry description with base
-		// addresses offset into the mesh factory's shared buffers.
 		for (const auto& subset : mesh.subsets)
 		{
+			const size_t key = mesh.globalOffset.position + subset.localOffset.position;
+			if (blasCache.contains(key))
+			{
+				continue;
+			}
+
+			BlasBuild build;
+
+			// Note that index data is subset-local (the draw path applies vertex offsets through
+			// the object's vertex metadata), so each subset's base addresses are offset into the
+			// mesh factory's shared buffers.
 			D3D12_RAYTRACING_GEOMETRY_DESC geometry{};
 			geometry.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
 			geometry.Flags = D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;  // #TODO: Proper alpha-testing support.
@@ -193,32 +192,32 @@ AccelerationStructureResources AccelerationStructures::Render(RenderGraph& graph
 			geometry.Triangles.VertexBuffer.StrideInBytes = mesh.metadata.channelStrides[0].values[0];  // Position channel stride.
 
 			build.geometry.emplace_back(geometry);
+
+			D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs{};
+			inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
+			inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;  // Static geometry, built once.
+			inputs.NumDescs = static_cast<UINT>(build.geometry.size());
+			inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
+			inputs.pGeometryDescs = build.geometry.data();
+
+			D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuild{};
+			device->Native()->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &prebuild);
+
+			BufferDescription description{
+				.updateRate = ResourceFrequency::Static,
+				.bindFlags = BindFlag::AccelerationStructure,
+				.accessFlags = AccessFlag::GPUWrite,
+				.size = prebuild.ResultDataMaxSizeInBytes,
+				.stride = 1
+			};
+
+			build.blas = resourceManager.Create(description, VGText("Bottom level acceleration structure"));
+			build.scratchOffset = scratchBytes;
+			scratchBytes += AlignedSize(prebuild.ScratchDataSizeInBytes, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT);
+
+			blasCache[key] = build.blas;
+			builds->emplace_back(std::move(build));
 		}
-
-		D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_INPUTS inputs{};
-		inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
-		inputs.Flags = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE;  // Static geometry, built once.
-		inputs.NumDescs = static_cast<UINT>(build.geometry.size());
-		inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-		inputs.pGeometryDescs = build.geometry.data();
-
-		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_PREBUILD_INFO prebuild{};
-		device->Native()->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &prebuild);
-
-		BufferDescription description{
-			.updateRate = ResourceFrequency::Static,
-			.bindFlags = BindFlag::AccelerationStructure,
-			.accessFlags = AccessFlag::GPUWrite,
-			.size = prebuild.ResultDataMaxSizeInBytes,
-			.stride = 1
-		};
-
-		build.blas = resourceManager.Create(description, VGText("Bottom level acceleration structure"));
-		build.scratchOffset = scratchBytes;
-		scratchBytes += AlignedSize(prebuild.ScratchDataSizeInBytes, D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT);
-
-		blasCache[key] = build.blas;
-		builds->emplace_back(std::move(build));
 	});
 
 	if (builds->size() > 0)
@@ -226,33 +225,43 @@ AccelerationStructureResources AccelerationStructures::Render(RenderGraph& graph
 		VGLog(logRendering, "Building {} bottom level acceleration structure(s).", builds->size());
 	}
 
-	// Second pass: gather TLAS instances. Every mesh has a BLAS in the cache by now.
+	// Second pass: gather TLAS instances, one per subset. Every subset has a BLAS in the cache by now.
 	std::vector<D3D12_RAYTRACING_INSTANCE_DESC> instances;
 	meshView.each([&](entt::entity entity, const TransformComponent& transform, const MeshComponent& mesh)
 	{
-		XMFLOAT4X4 world;
-		XMStoreFloat4x4(&world, BuildObjectWorldMatrix(transform));
-
-		D3D12_RAYTRACING_INSTANCE_DESC instance{};
-		// The engine uses row-vector convention, the instance transform expects column-vector, so transpose.
-		for (int row = 0; row < 3; ++row)
-		{
-			for (int column = 0; column < 4; ++column)
-			{
-				instance.Transform[row][column] = world.m[column][row];
-			}
-		}
-
 		// Store the GPU scene slot so hit shaders can look up per-object data directly.
 		VGAssert(registry.all_of<GpuSlotComponent>(entity), "Entity must has GPU scene setup before acceleration structure building.");
 		const auto slot = registry.get<GpuSlotComponent>(entity);
-		instance.InstanceID = slot.baseSlot;
-		instance.InstanceMask = 0xFF;  // Could reserve a bit for "casts shadows" or such?
-		instance.InstanceContributionToHitGroupIndex = 0;  // Unused with inline ray tracing.
-		instance.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
-		instance.AccelerationStructure = resourceManager.Get(blasCache[mesh.globalOffset.position]).Native()->GetGPUVirtualAddress();
 
-		instances.emplace_back(instance);
+		const auto entityMatrix = BuildObjectWorldMatrix(transform);
+
+		for (size_t subsetIndex = 0; subsetIndex < mesh.subsets.size(); ++subsetIndex)
+		{
+			const auto& subset = mesh.subsets[subsetIndex];
+
+			XMFLOAT4X4 world;
+			XMStoreFloat4x4(&world, XMMatrixMultiply(XMLoadFloat4x4(&subset.transform), entityMatrix));
+
+			D3D12_RAYTRACING_INSTANCE_DESC instance{};
+			// The engine uses row-vector convention, the instance transform expects column-vector, so transpose.
+			for (int row = 0; row < 3; ++row)
+			{
+				for (int column = 0; column < 4; ++column)
+				{
+					instance.Transform[row][column] = world.m[column][row];
+				}
+			}
+
+			// One GPU scene slot per subset, matching the draw path's batch ids.
+			instance.InstanceID = slot.baseSlot + (UINT)subsetIndex;
+			instance.InstanceMask = 0xFF;  // Could reserve a bit for "casts shadows" or such?
+			instance.InstanceContributionToHitGroupIndex = 0;  // Unused with inline ray tracing.
+			instance.Flags = D3D12_RAYTRACING_INSTANCE_FLAG_NONE;
+			instance.AccelerationStructure = resourceManager.Get(
+				blasCache[mesh.globalOffset.position + subset.localOffset.position]).Native()->GetGPUVirtualAddress();
+
+			instances.emplace_back(instance);
+		}
 	});
 
 	if (instances.size() == 0)

@@ -3,6 +3,10 @@
 #ifndef __MATERIAL_HLSLI__
 #define __MATERIAL_HLSLI__
 
+static const uint materialFlagAlphaMask = 1 << 0;
+static const uint materialFlagAlphaBlend = 1 << 1;
+static const uint materialFlagDoubleSided = 1 << 2;
+
 struct MaterialData
 {
 	uint baseColor;
@@ -17,8 +21,21 @@ struct MaterialData
 	// Boundary
 	float metallicFactor;
 	float roughnessFactor;
-	float2 padding;
+	float alphaCutoff;
+    uint flags;
 };
+
+// Returns true when the fragment should be discarded.
+bool MaterialAlphaTest(MaterialData material, float alpha)
+{
+	// #TODO: this is wrong for blending, need to properly support transparents.
+	if (material.flags & (materialFlagAlphaMask | materialFlagAlphaBlend))
+	{
+		return alpha < material.alphaCutoff;
+	}
+
+	return false;
+}
 
 struct Material
 {

@@ -21,6 +21,8 @@
 #include <Rendering/CommandList.h>
 #include <Rendering/Resource.h>
 #include <Core/Config.h>
+#include <Rendering/Object.h>
+#include <Asset/MeshGeometryUtils.h>
 #include <Utility/Math.h>
 #include <Utility/StringTools.h>
 
@@ -31,6 +33,7 @@
 
 #include <algorithm>
 #include <numeric>
+#include <limits>
 #include <string>
 #include <sstream>
 #include <optional>
@@ -1115,20 +1118,62 @@ void EditorUI::DrawSelectionGizmo(entt::registry& registry)
 		const auto& mesh = registry.get<MeshComponent>(hierarchySelectedEntity);
 		if (!mesh.subsets.empty())
 		{
-			// Gather the largest bounding sphere radius across all subsets so a single sphere
-			// fully encloses the whole mesh regardless of how many material regions it has.
-			float maxRadius = 0.f;
-			for (const auto& subset : mesh.subsets)
+			const auto entityMatrix = BuildObjectWorldMatrix(transform);
+
+			const auto mode = *CvarGet("editorMeshBoundsMode", int);
+			if (mode == 1)
 			{
-				maxRadius = std::max(maxRadius, subset.boundingSphereRadius);
+				// Draw one sphere for the smallest enclosing bounds around all subsets.
+
+				XMVECTOR minimum = XMVectorReplicate(std::numeric_limits<float>::max());
+				XMVECTOR maximum = XMVectorReplicate(std::numeric_limits<float>::lowest());
+
+				for (const auto& subset : mesh.subsets)
+				{
+					const auto worldMatrix = XMMatrixMultiply(XMLoadFloat4x4(&subset.transform), entityMatrix);
+					const auto center = XMVector3Transform(XMLoadFloat3(&subset.boundingSphereCenter), worldMatrix);
+					const auto radius = XMVectorReplicate(subset.boundingSphereRadius * MeshGeometry::MaxScaleAxis(worldMatrix));
+
+					minimum = XMVectorMin(minimum, XMVectorSubtract(center, radius));
+					maximum = XMVectorMax(maximum, XMVectorAdd(center, radius));
+				}
+
+				const auto center = XMVectorScale(XMVectorAdd(minimum, maximum), 0.5f);
+
+				float radius = 0.f;
+				for (const auto& subset : mesh.subsets)
+				{
+					const auto worldMatrix = XMMatrixMultiply(XMLoadFloat4x4(&subset.transform), entityMatrix);
+					const auto subsetCenter = XMVector3Transform(XMLoadFloat3(&subset.boundingSphereCenter), worldMatrix);
+					const float subsetRadius = subset.boundingSphereRadius * MeshGeometry::MaxScaleAxis(worldMatrix);
+					const float distance = XMVectorGetX(XMVector3Length(XMVectorSubtract(subsetCenter, center)));
+
+					radius = std::max(radius, distance + subsetRadius);
+				}
+
+				XMFLOAT3 centerStorage;
+				XMStoreFloat3(&centerStorage, center);
+
+				// Render without depth so the sphere is always visible.
+				Draw::Sphere(centerStorage, radius, { 0.f, 1.f, 0.f, 1.f }, false);
 			}
+			else if (mode == 2)
+			{
+				// Draw one sphere for each subset
 
-			// Scale the local-space radius up by the largest axis scale to approximate the
-			// world-space bounding sphere under non-uniform scaling.
-			const float maxScale = std::max({ transform.scale.x, transform.scale.y, transform.scale.z });
+				for (const auto& subset : mesh.subsets)
+				{
+					const auto worldMatrix = XMMatrixMultiply(XMLoadFloat4x4(&subset.transform), entityMatrix);
+					const auto center = XMVector3Transform(XMLoadFloat3(&subset.boundingSphereCenter), worldMatrix);
+					const float subsetRadius = subset.boundingSphereRadius * MeshGeometry::MaxScaleAxis(worldMatrix);
 
-			// Render without depth so the sphere is always visible.
-			Draw::Sphere(transform.translation, maxRadius * maxScale, { 0.f, 1.f, 0.f, 1.f }, false);
+					XMFLOAT3 centerStorage;
+					XMStoreFloat3(&centerStorage, center);
+
+					// Render without depth so the sphere is always visible.
+					Draw::Sphere(centerStorage, subsetRadius, { 0.f, 1.f, 1.f, 1.f }, false);
+				}
+			}
 		}
 	}
 

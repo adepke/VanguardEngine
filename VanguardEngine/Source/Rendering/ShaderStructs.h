@@ -26,6 +26,10 @@ struct Camera
 	float aspectRatio;
 };
 
+static const uint32_t materialFlagAlphaMask = 1 << 0;
+static const uint32_t materialFlagAlphaBlend = 1 << 1;
+static const uint32_t materialFlagDoubleSided = 1 << 2;
+
 struct MaterialData
 {
 	uint32_t baseColor;
@@ -37,7 +41,8 @@ struct MaterialData
 	XMFLOAT4 baseColorFactor;
 	float metallicFactor;
 	float roughnessFactor;
-	XMFLOAT2 padding;
+	float alphaCutoff;
+	uint32_t flags;
 };
 
 struct Light
@@ -105,9 +110,10 @@ struct ObjectData
 {
 	XMMATRIX worldMatrix;
 	VertexMetadata vertexMetadata;
+	XMFLOAT3 boundingSphereCenter;  // Local space.
+	float boundingSphereRadius;  // World space.
 	uint32_t materialIndex;
-	float boundingSphereRadius;
-	XMFLOAT2 padding;
+	XMFLOAT3 padding;
 };
 
 struct MeshIndirectArgument

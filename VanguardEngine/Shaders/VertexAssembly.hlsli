@@ -91,15 +91,16 @@ float4 LoadVertexBitangent(VertexAssemblyData assembly, uint vertexId)
 	if (HasVertexAttribute(assembly.metadata, vertexChannelBitangent))
 	{
 		ByteAddressBuffer extras = ResourceDescriptorHeap[assembly.extraBuffer];
-		
+
 		return extras.Load<float4>(GetVertexChannelIndex(assembly.metadata, vertexId, vertexChannelBitangent));
 	}
-	
+
 	else
 	{
+		// Handedness stored in w component.
 		float3 normal = LoadVertexNormal(assembly, vertexId);
-		float3 tangent = LoadVertexTangent(assembly, vertexId).xyz;
-		return float4(cross(normal, tangent), 1.f);
+		float4 tangent = LoadVertexTangent(assembly, vertexId);
+		return float4(cross(normal, tangent.xyz) * (tangent.w < 0.f ? -1.f : 1.f), 1.f);
 	}
 }
 
@@ -107,9 +108,10 @@ float4 LoadVertexColor(VertexAssemblyData assembly, uint vertexId)
 {
 	ByteAddressBuffer extras = ResourceDescriptorHeap[assembly.extraBuffer];
 	
+	// Default is white, since GLTF multiplies all 3 color sources together (vertex, base, texture).
 	return HasVertexAttribute(assembly.metadata, vertexChannelColor) ?
 		extras.Load<float4>(GetVertexChannelIndex(assembly.metadata, vertexId, vertexChannelColor)) :
-		float4(0, 0, 0, 1);
+		float4(1, 1, 1, 1);
 }
 
 #endif  // __VERTEXASSEMBLY_HLSLI__

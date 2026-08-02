@@ -15,18 +15,21 @@ MaterialFactory::MaterialFactory(RenderDevice* device, size_t maxMaterials)
 		.stride = sizeof(MaterialData)
 	};
 
+	capacity = maxMaterials;
 	materialBuffer = device->GetResourceManager().Create(desc, VGText("Material table"));
 
-	// Zero out the buffer to ensure that if we try and render a material which hasn't loaded yet, we
-	// don't read from uninitialized descriptor indexes.
+	// Fill the material table with a plain white material that can be used while async loading materials.
+	MaterialData placeholder{};
+	placeholder.baseColorFactor = XMFLOAT4{ 1.f, 1.f, 1.f, 1.f };
+	placeholder.metallicFactor = 0.f;
+	placeholder.roughnessFactor = 1.f;
 
-	std::vector<uint8_t> emptyBytes;
-	emptyBytes.resize(maxMaterials * sizeof(MaterialData), 0);
-
-	device->GetResourceManager().Write(materialBuffer, emptyBytes);
+	std::vector<MaterialData> defaults(maxMaterials, placeholder);
+	device->GetResourceManager().Write(materialBuffer, defaults);
 }
 
 size_t MaterialFactory::Create()
 {
+	VGAssert(count < capacity, "Material table is full, increase maxMaterials.");
 	return count++;
 }

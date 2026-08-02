@@ -5,10 +5,11 @@
 #include <Rendering/Base.h>
 
 #include <span>
-#include <variant>
 #include <map>
 #include <string>
 #include <string_view>
+#include <algorithm>
+#include <cstdint>
 
 struct AttributeSort
 {
@@ -33,20 +34,48 @@ struct AttributeSort
 	}
 };
 
-// Non-owning view of primitive data for a single mesh.
+// Non-owning view of primitive data for a single mesh. Streams are not necessarily tightly packed.
 class PrimitiveAssembly
 {
 	friend class MeshFactory;
 
-	using VertexAttributeView = std::variant<std::span<XMFLOAT2>, std::span<XMFLOAT3>, std::span<XMFLOAT4>>;
+	struct VertexAttributeView
+	{
+		const uint8_t* data = nullptr;
+		size_t count = 0;
+		size_t size = 0;
+		size_t stride = 0;
+	};
 
 	std::span<uint32_t> indexStream;
 	std::map<std::string, VertexAttributeView, AttributeSort> vertexStream;
 
 public:
 	void AddIndexStream(std::span<uint32_t> stream) { indexStream = stream; }
+
+	// Tightly packed source.
 	template <typename T>
-	void AddVertexStream(const std::string_view name, std::span<T> stream) { vertexStream[std::string{ name }] = stream; }
+	void AddVertexStream(const std::string_view name, std::span<T> stream)
+	{
+		vertexStream[std::string{ name }] = VertexAttributeView{
+			.data = reinterpret_cast<const uint8_t*>(stream.data()),
+			.count = stream.size(),
+			.size = sizeof(T),
+			.stride = sizeof(T)
+		};
+	}
+
+	// Interleaved source.
+	template <typename T>
+	void AddVertexStream(const std::string_view name, const T* first, size_t count, size_t stride)
+	{
+		vertexStream[std::string{ name }] = VertexAttributeView{
+			.data = reinterpret_cast<const uint8_t*>(first),
+			.count = count,
+			.size = sizeof(T),
+			.stride = stride
+		};
+	}
 
 	const std::span<uint32_t> GetIndexStream() const
 	{
@@ -55,25 +84,21 @@ public:
 
 	size_t GetAttributeSize(const std::string_view name) const
 	{
-		return std::visit([](auto&& arg)
-		{
-			return arg.size_bytes() / arg.size();
-		}, vertexStream.at(std::string{ name }));
+		return vertexStream.at(std::string{ name }).size;
 	}
 
 	size_t GetAttributeCount(const std::string_view name) const
 	{
-		return std::visit([](auto&& arg)
-		{
-			return arg.size();
-		}, vertexStream.at(std::string{ name }));
+		return vertexStream.at(std::string{ name }).count;
 	}
 
-	uint8_t* GetAttributeData(const std::string_view name) const
+	size_t GetAttributeStride(const std::string_view name) const
 	{
-		return std::visit([](auto&& arg)
-		{
-			return reinterpret_cast<uint8_t*>(arg.data());
-		}, vertexStream.at(std::string{ name }));
+		return vertexStream.at(std::string{ name }).stride;
+	}
+
+	const uint8_t* GetAttributeData(const std::string_view name) const
+	{
+		return vertexStream.at(std::string{ name }).data;
 	}
 };

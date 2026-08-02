@@ -14,6 +14,7 @@ public:
 
 private:
 	size_t count = 0;
+	size_t capacity = 0;
 
 public:
 	MaterialFactory(RenderDevice* device, size_t maxMaterials);

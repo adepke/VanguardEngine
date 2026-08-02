@@ -63,8 +63,7 @@ struct PixelIn
 	float3 position : POSITION;  // World space.
 	float3 normal : NORMAL;  // World space.
 	float2 uv : UV;
-	float3 tangent : TANGENT;  // World space.
-	float3 bitangent : BITANGENT;  // World space.
+	float4 tangent : TANGENT;  // World space. Bitangent sign in w component.
 	float depthVS : DEPTH;  // View space.
 	float4 color : COLOR;
 	uint instanceId : SV_InstanceID;
@@ -87,9 +86,11 @@ PixelIn VSMain(VertexIn input)
 	float4 normal = float4(LoadVertexNormal(assemblyData, input.vertexId), 0.f);
 	float2 uv = LoadVertexTexcoord(assemblyData, input.vertexId);
 	float4 tangent = LoadVertexTangent(assemblyData, input.vertexId);
-	float4 bitangent = LoadVertexBitangent(assemblyData, input.vertexId);
 	float4 color = LoadVertexColor(assemblyData, input.vertexId);
 	
+	// Support negatively scaled geometry. This flips the handedness of the bitangent sign.
+	float mirror = determinant((float3x3)object.worldMatrix) < 0.f ? -1.f : 1.f;
+
 	PixelIn output;
 	output.positionCS = position;
 	output.positionCS = mul(output.positionCS, object.worldMatrix);
@@ -99,16 +100,15 @@ PixelIn VSMain(VertexIn input)
 	output.position = mul(position, object.worldMatrix).xyz;
 	output.normal = normalize(mul(normal, object.worldMatrix)).xyz;
 	output.uv = uv;
-	output.tangent = normalize(mul(tangent, object.worldMatrix)).xyz;
-	output.bitangent = normalize(mul(bitangent, object.worldMatrix)).xyz;
+	output.tangent = float4(mul(float4(tangent.xyz, 0.f), object.worldMatrix).xyz, tangent.w * mirror);
 	output.color = color;
 	output.instanceId = input.instanceId;
-	
+
 	return output;
 }
 
 [RootSignature(RS)]
-float4 PSMain(PixelIn input) : SV_Target
+float4 PSMain(PixelIn input, bool frontFace : SV_IsFrontFace) : SV_Target
 {
 	StructuredBuffer<ObjectData> objectBuffer = ResourceDescriptorHeap[bindData.objectBuffer];
 	ObjectData object = objectBuffer[bindData.batchId + input.instanceId];
@@ -118,21 +118,26 @@ float4 PSMain(PixelIn input) : SV_Target
 	StructuredBuffer<MaterialData> materialBuffer = ResourceDescriptorHeap[bindData.materialBuffer];
 	MaterialData material = materialBuffer[object.materialIndex];
 	
+	// Software backface culling for dynamic material support. #TODO: partition these to get hardware
+	// back.
+	clip((frontFace || (material.flags & materialFlagDoubleSided)) ? 1 : -1);
+
 	float4 baseColor = input.color;
-	
 	if (material.baseColor > 0)
 	{
 		Texture2D<float4> baseColorMap = ResourceDescriptorHeap[material.baseColor];
-		baseColor = baseColorMap.Sample(anisotropicWrap, input.uv);
-		
-		clip(baseColor.a < alphaTestThreshold ? -1 : 1);
+		baseColor *= baseColorMap.Sample(anisotropicWrap, input.uv);
 	}
-	
+
+	baseColor *= material.baseColorFactor;
+	clip(MaterialAlphaTest(material, baseColor.a) ? -1 : 1);
+
 	float2 metallicRoughness = { 1.0, 1.0 };
-	float3 normal = input.normal;
+	// Invert normal for back faces so we get proper lighting.
+	float3 normal = frontFace ? input.normal : -input.normal;
 	float ambientOcclusion = 1.0;
 	float3 emissive = { 1.0, 1.0, 1.0 };
-	
+
 	if (material.metallicRoughness > 0)
 	{
 		Texture2D<float4> metallicRoughnessMap = ResourceDescriptorHeap[material.metallicRoughness];
@@ -141,14 +146,32 @@ float4 PSMain(PixelIn input) : SV_Target
 
 	if (material.normal > 0)
 	{
-		// Construct the TBN matrix.
-		// #TODO: consider using ComputeOrthonormalBasis instead to reduce input channels?
-		float3x3 TBN = float3x3(input.tangent, input.bitangent, input.normal);
+		// Re-orthonormalize the tangent frame. This isn't free, but the mesh data I work with
+		// doesn't provide perfect tangents. Could experiment with asset pre-processing offline
+		// to ensure the tangents are high quality here, but for now it's probably not expensive
+		// enough to do that.
+		float3 t = input.tangent.xyz - normal * dot(normal, input.tangent.xyz);
+		float tangentLengthSq = dot(t, t);
+
+		if (tangentLengthSq < 1e-12f)
+		{
+			// Tangent collapsed onto the normal, it's useless. Come up with some abitrary tangent instead.
+			float3 up = abs(normal.y) < 0.999f ? float3(0, 1, 0) : float3(1, 0, 0);
+			t = normalize(cross(up, normal));
+		}
+
+		else
+		{
+			t *= rsqrt(tangentLengthSq);
+		}
+		
+		float3 b = cross(normal, t) * (input.tangent.w < 0.f ? -1.f : 1.f);
+		float3x3 TBN = float3x3(t, b, normal);
 
 		Texture2D<float4> normalMap = ResourceDescriptorHeap[material.normal];
-		normal = normalMap.Sample(anisotropicWrap, input.uv).rgb;
-		normal = normal * 2.0 - 1.0;  // Remap from [0, 1] to [-1, 1].
-		normal = normalize(mul(normal, TBN));  // Convert the normal vector from tangent space to world space.
+		float3 tangentNormal = normalMap.Sample(anisotropicWrap, input.uv).rgb;
+		tangentNormal = tangentNormal * 2.0 - 1.0;  // Remap from [0, 1] to [-1, 1].
+		normal = normalize(mul(tangentNormal, TBN));  // Convert the normal vector from tangent space to world space.
 	}
 
 	if (material.occlusion > 0)
@@ -163,10 +186,9 @@ float4 PSMain(PixelIn input) : SV_Target
 		emissive = emissiveMap.Sample(anisotropicWrap, input.uv).rgb;
 	}
 	
-	baseColor *= material.baseColorFactor;
 	metallicRoughness *= float2(material.metallicFactor, material.roughnessFactor);
 	emissive *= material.emissiveFactor;
-	
+
 	float4 output;
 	output.rgb = float3(0.0, 0.0, 0.0);
 	output.a = baseColor.a;

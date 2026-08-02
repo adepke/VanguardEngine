@@ -143,9 +143,9 @@ void SetupDefaultScene()
 	const auto AddTerrain = []()
 	{
 		TransformComponent transform{};
-		transform.translation = { 532.f, -2700.f, 0.f };
-		transform.rotation = { 90 * 3.14159f / 180.f, 0.f, 13 * 3.14159f / 180.f };
-		transform.scale = { 15000.f, 13000.f, 15000.f };
+		transform.translation = { 780.f, -1260.f, 0.f };
+		transform.rotation = { -90 * 3.14159f / 180.f, 0.f, 5.5 * 3.14159f / 180.f };
+		transform.scale = { 70.f, 70.f, 70.f };
 
 		const auto path = Config::shadersPath / "../Assets/Models/deathValley.glb";
 		const auto entity = registry.create();

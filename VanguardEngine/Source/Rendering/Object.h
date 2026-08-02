@@ -6,6 +6,7 @@
 #include <Rendering/ShaderStructs.h>
 #include <Core/CoreComponents.h>
 #include <Rendering/RenderComponents.h>
+#include <Asset/MeshGeometryUtils.h>
 
 inline XMMATRIX BuildObjectWorldMatrix(const TransformComponent& transform)
 {
@@ -25,13 +26,16 @@ inline ObjectData BuildObjectData(const TransformComponent& transform, const Mes
 
 	const auto positionOffset = (uint32_t)(mesh.globalOffset.position + subset.localOffset.position);
 	const auto extraOffset = (uint32_t)(mesh.globalOffset.extra + subset.localOffset.extra);
-	const auto maxScale = std::max(std::max(transform.scale.x, transform.scale.y), transform.scale.z);
+
+	// The subset transform is in local space.
+	const auto worldMatrix = XMMatrixMultiply(XMLoadFloat4x4(&subset.transform), BuildObjectWorldMatrix(transform));
 
 	ObjectData instance;
-	instance.worldMatrix = BuildObjectWorldMatrix(transform);
+	instance.worldMatrix = worldMatrix;
 	instance.vertexMetadata = mesh.metadata;
 	instance.materialIndex = (uint32_t)subset.materialIndex;
-	instance.boundingSphereRadius = subset.boundingSphereRadius * maxScale;
+	instance.boundingSphereRadius = subset.boundingSphereRadius * MeshGeometry::MaxScaleAxis(worldMatrix);
+	instance.boundingSphereCenter = subset.boundingSphereCenter;
 
 	// Apply offsets
 	const auto old = instance.vertexMetadata.channelOffsets[0][0];

@@ -4,6 +4,8 @@
 
 #include <Core/CoreComponents.h>
 #include <Rendering/RenderComponents.h>
+#include <Rendering/Object.h>
+#include <Asset/MeshGeometryUtils.h>
 
 #include <algorithm>
 #include <limits>
@@ -77,25 +79,39 @@ namespace Picking
 		entt::entity hit = entt::null;
 		float bestT = std::numeric_limits<float>::max();
 
+		// Large entities like terrain have massive bounding spheres that always win (t=0), so
+		// try to find the smallest selected radius and prefer that, otherwise fall back to
+		// closest sphere.
+		entt::entity enclosingHit = entt::null;
+		float enclosingRadius = std::numeric_limits<float>::max();
+
 		const auto view = registry.view<const TransformComponent, const MeshComponent>();
 		view.each([&](auto entity, const TransformComponent& transform, const MeshComponent& mesh)
 		{
-			const XMVECTOR center = XMVectorSet(transform.translation.x, transform.translation.y, transform.translation.z, 0.f);
-			const float maxScale = std::max(std::max(transform.scale.x, transform.scale.y), transform.scale.z);
+			const auto entityMatrix = BuildObjectWorldMatrix(transform);
 
-			// Search against all subset bounding boxes to find the best match for the entity.
+			// Search against all subset bounding spheres to find the best match for the entity.
 			for (const auto& subset : mesh.subsets)
 			{
-				const float radius = subset.boundingSphereRadius * maxScale;
+				const auto worldMatrix = XMMatrixMultiply(XMLoadFloat4x4(&subset.transform), entityMatrix);
+				const auto center = XMVector3Transform(XMLoadFloat3(&subset.boundingSphereCenter), worldMatrix);
+				const float radius = subset.boundingSphereRadius * MeshGeometry::MaxScaleAxis(worldMatrix);
 				const float t = RaySphereIntersect(origin, direction, center, radius);
-				if (t >= 0.f && t < bestT)
+
+				if (t > 0.f && t < bestT)
 				{
 					bestT = t;
 					hit = entity;
 				}
+
+				else if (t == 0.f && radius < enclosingRadius)
+				{
+					enclosingRadius = radius;
+					enclosingHit = entity;
+				}
 			}
 		});
 
-		return hit;
+		return hit != entt::null ? hit : enclosingHit;
 	}
 }

@@ -52,6 +52,8 @@ void Editor::Update(RenderDevice& device, entt::registry& registry)
 		Editor::Get().ui->showFps = !Editor::Get().ui->showFps;
 	});
 
+	CvarCreate("editorMeshBoundsMode", "Controls how mesh bounds are displayed. 0=off, 1=single bound, 2=per-subset bound", 1);
+
 	// Process keybinds.
 	const bool textInputActive = ImGui::GetIO().WantTextInput;
 	for (auto& [key, state, bind] : keybinds)
