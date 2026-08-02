@@ -57,14 +57,14 @@ bool ProjectSphere(float3 center, float radius, Camera camera, out float4 aabb)
 
 bool IsVisible(ObjectData object, Camera camera)
 {
-	float3 center = float3(object.worldMatrix._m30, object.worldMatrix._m31, object.worldMatrix._m32);
-	float radius = object.boundingSphereRadius * 4.f;  // #TODO: Something weird with bounding sphere size...
+	// Transform the bounding sphere to world space.
+	float3 centerWorld = mul(float4(object.boundingSphereCenter, 1.f), object.worldMatrix).xyz;
+	float radius = object.boundingSphereRadius;
 
-	// Project sphere into view space.
-	float4 viewSpace = mul(float4(center, 1.f), camera.view);
-	center = (viewSpace / viewSpace.w).xyz;  // Perspective division.
+	// Project to view space (affine, no perspective division).
+	float3 center = mul(float4(centerWorld, 1.f), camera.view).xyz;
 
-	matrix projectionTranspose = transpose(camera.lastFrameProjection);
+	matrix projectionTranspose = transpose(camera.projection);
 	float4 r0 = float4(projectionTranspose._m00, projectionTranspose._m01, projectionTranspose._m02, projectionTranspose._m03);
 	float4 r1 = float4(projectionTranspose._m10, projectionTranspose._m11, projectionTranspose._m12, projectionTranspose._m13);
 	float4 r2 = float4(projectionTranspose._m20, projectionTranspose._m21, projectionTranspose._m22, projectionTranspose._m23);
@@ -77,19 +77,23 @@ bool IsVisible(ObjectData object, Camera camera)
 	// 0 <= z <= w
 	// #TODO: More efficient frustum culling: https://github.com/zeux/niagara/blob/master/src/shaders/drawcull.comp.glsl
 
+	float4 centerH = float4(center, 1.f);
 	bool visible = true;
-	visible = visible && -radius <= mul(center, r3 + r0);  // Left plane
-	visible = visible && -radius <= mul(center, r3 - r0);  // Right plane
-	visible = visible && -radius <= mul(center, r3 + r1);  // Bottom plane
-	visible = visible && -radius <= mul(center, r3 - r1);  // Top plane
-	visible = visible && -radius <= mul(center, r3);  // Near plane
-	visible = visible && -radius <= mul(center, r3 - r2);  // Far plane
+	visible = visible && dot(centerH, r3 + r0) >= -radius * length((r3 + r0).xyz);  // Left plane
+	visible = visible && dot(centerH, r3 - r0) >= -radius * length((r3 - r0).xyz);  // Right plane
+	visible = visible && dot(centerH, r3 + r1) >= -radius * length((r3 + r1).xyz);  // Bottom plane
+	visible = visible && dot(centerH, r3 - r1) >= -radius * length((r3 - r1).xyz);  // Top plane
+	visible = visible && dot(centerH, r3) >= -radius * length(r3.xyz);  // Near plane
+	visible = visible && dot(centerH, r3 - r2) >= -radius * length((r3 - r2).xyz);  // Far plane
 
 	if (visible && bindData.cullingLevel > 1)
 	{
+		// Project the entity to view space of the last frame's camera, since the pyramid will
+		// contain the cull data of last frame.
+		center = mul(float4(centerWorld, 1.f), camera.lastFrameView).xyz;
+
 		// Convention here is +Z going outwards from camera.
 		center.z *= -1;
-		radius *= 0.25;  // Revert the weird 4x scaling above.
 		radius += 2;  // Add buffering zone to reduce artifacts from 1-frame delay.
 
 		float4 aabb;
