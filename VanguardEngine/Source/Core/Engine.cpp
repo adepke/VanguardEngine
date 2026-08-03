@@ -433,7 +433,10 @@ bool EngineLoop()
 	{
 		const auto& output = *GCommandLineOptions.output;
 		const uint32_t captureFrame = GCommandLineOptions.delayFrames;
-		constexpr float fixedDelta = 1.f / 60.f;  // Make temporal effects consistent.
+		// Fixed timestep makes temporal effects consistent. App time is accumulated from the same
+		// value so it advances deterministically as well.
+		constexpr uint32_t fixedDeltaUs = 1000000 / 60;
+		constexpr float fixedDelta = static_cast<float>(fixedDeltaUs) / 1000000.f;
 
 		for (uint32_t frame = 0; ; ++frame)
 		{
@@ -460,6 +463,9 @@ bool EngineLoop()
 
 			Renderer::Get().Render(registry);
 			Renderer::Get().device->AdvanceCPU();
+
+			// Advance app time by the fixed delta rather than the measured wall clock.
+			Renderer::Get().SubmitFrameTime(fixedDeltaUs);
 
 			if (frame == captureFrame)
 			{
