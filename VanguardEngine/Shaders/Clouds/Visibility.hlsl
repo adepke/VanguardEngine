@@ -77,9 +77,26 @@ float2 RayMarch(Camera camera, float2 baseUv, float2 jitteredUv, uint width, uin
 	marchEnd = clamp(marchEnd, 0.f, visibilityMarchMax);
 
 	// Early out of the march if we hit opaque geometry.
-	// Using the base UV instead of jittered provides slightly better edges around geometry.
-	float geometryDepth = geometryDepthTexture.Sample(bilinearClamp, baseUv);
-	geometryDepth = LinearizeDepth(camera, geometryDepth) * camera.farPlane;
+	// Sample at the unjittered UV in 4 taps to get a conservative mask. Without this, there's a single pixel
+	// seam around the edges of geometry where clouds are behind them. Compose pass does exact per pixel occlusion.
+	// Note this is nearly identical to same code in clouds core raymarch, except 0 depth needs to be treated specially.
+	const float2 footprintOffset = 0.5f / float2(width, height);
+	float rawGeometryDepth = 0.f;  // Cleared depth, treated as no geometry.
+
+	[unroll]
+	for (int tap = 0; tap < 4; ++tap)
+	{
+		const float2 offset = float2((tap & 1) ? footprintOffset.x : -footprintOffset.x,
+			(tap & 2) ? footprintOffset.y : -footprintOffset.y);
+		const float sampledDepth = geometryDepthTexture.Sample(pointClamp, baseUv + offset);
+
+		if (sampledDepth > 0.f)
+		{
+			rawGeometryDepth = (rawGeometryDepth > 0.f) ? min(rawGeometryDepth, sampledDepth) : sampledDepth;
+		}
+	}
+
+	float geometryDepth = LinearizeDepth(camera, rawGeometryDepth) * camera.farPlane;
 	if (geometryDepth < camera.farPlane)
 	{
 		geometryDepth *= 0.001;  // Meters to kilometers.
