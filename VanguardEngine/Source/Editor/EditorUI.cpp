@@ -1310,6 +1310,39 @@ void EditorUI::DrawSceneToolbar(const ImVec2& viewportMin, const ImVec2& viewpor
 	ImGui::PopStyleVar();
 }
 
+void EditorUI::DrawMaterialLoadingBanner(const ImVec2& viewportMin, const ImVec2& viewportMax)
+{
+	// Display how many materials are pending load, if any.
+	const auto* factory = Renderer::Get().materialFactory.get();
+	if (!factory)
+		return;
+
+	const size_t pending = factory->GetPendingCount();
+	if (pending == 0)
+		return;
+
+	const float padding = 12.f;  // Matches the scene toolbar's viewport inset.
+	const float toolbarHeight = 28.f;
+	const float spacing = 8.f;
+
+	// Sit directly beneath the floating toolbar, dropping below the FPS readout when it's visible
+	// so the two don't overlap.
+	float top = viewportMin.y + padding + toolbarHeight + spacing;
+	if (showFps && frameTimes.size() > 0)
+	{
+		top += ImGui::GetTextLineHeight() * 1.5f + spacing;
+	}
+
+	const auto text = std::to_string(pending) + (pending == 1 ? " material loading..." : " materials loading...");
+	const auto textSize = ImGui::CalcTextSize(text.c_str());
+	const ImVec2 textPosition{ viewportMax.x - textSize.x - padding, top };
+
+	ImGui::SetCursorPos(textPosition);
+	ImGui::PushStyleColor(ImGuiCol_Text, IM_COL32(255, 64, 64, 255));
+	ImGui::TextUnformatted(text.c_str());
+	ImGui::PopStyleColor();
+}
+
 void EditorUI::DrawSceneIcon(RenderDevice* device, entt::registry& registry, const SceneMetadata& scene)
 {
 	// Card geometry. The thumbnail occupies the upper square region, the name is rendered below
@@ -1537,6 +1570,8 @@ void EditorUI::DrawScene(RenderDevice* device, entt::registry& registry, Texture
 			ImGui::PopStyleColor();
 			ImGui::SetWindowFontScale(1.f);
 		}
+
+		DrawMaterialLoadingBanner(viewportMin, viewportMax);
 
 		ImGui::SetCursorPos(viewportMin);
 		DrawConsole(registry, sceneViewportMin, sceneViewportMax);

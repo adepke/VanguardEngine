@@ -31,5 +31,12 @@ MaterialFactory::MaterialFactory(RenderDevice* device, size_t maxMaterials)
 size_t MaterialFactory::Create()
 {
 	VGAssert(count < capacity, "Material table is full, increase maxMaterials.");
+	++pending;
 	return count++;
+}
+
+void MaterialFactory::MarkLoaded()
+{
+	VGAssert(pending > 0, "More materials marked as loaded than were created.");
+	--pending;
 }

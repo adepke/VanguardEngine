@@ -184,4 +184,6 @@ void AssetManager::Update()
 	const auto materialBuffer = Renderer::Get().materialFactory->materialBuffer;
 
 	device->GetResourceManager().Write(materialBuffer, materialData, bufferIndex * sizeof(MaterialData));
+
+	Renderer::Get().materialFactory->MarkLoaded();
 }

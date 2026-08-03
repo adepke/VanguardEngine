@@ -146,6 +146,7 @@ private:
 	void DrawConsole(entt::registry& registry, const ImVec2& min, const ImVec2& max);
 	void DrawSelectionGizmo(entt::registry& registry);
 	void DrawSceneToolbar(const ImVec2& viewportMin, const ImVec2& viewportMax);
+	void DrawMaterialLoadingBanner(const ImVec2& viewportMin, const ImVec2& viewportMax);
 	void DrawSceneIcon(RenderDevice* device, entt::registry& registry, const SceneMetadata& scene);
 
 	// Model browser.
