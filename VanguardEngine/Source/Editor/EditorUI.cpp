@@ -1180,10 +1180,12 @@ void EditorUI::DrawSelectionGizmo(entt::registry& registry)
 	// Behind-camera early-out. ImGuizmo has its own check, but it doesn't work with reverse Z.
 	// Do the test in view space, where the projection quirk doesn't apply: in RH view space,
 	// in-front points have z < 0. Allow an in-progress drag to keep updating even if the entity
-	// briefly crosses behind the camera.
+	// briefly crosses behind the camera. Also check for "too close" to the camera, so the gizmo
+	// doesn't bug out.
 	const XMVECTOR worldPos = XMVectorSetW(translation, 1.f);
 	const XMVECTOR viewPos = XMVector4Transform(worldPos, globalViewMatrix);
-	if (XMVectorGetZ(viewPos) >= 0.f && !ImGuizmo::IsUsing())
+	const float eyeDistance = XMVectorGetX(XMVector3Length(viewPos));
+	if ((XMVectorGetZ(viewPos) >= 0.f || eyeDistance < 0.1f) && !ImGuizmo::IsUsing())
 	{
 		return;
 	}
