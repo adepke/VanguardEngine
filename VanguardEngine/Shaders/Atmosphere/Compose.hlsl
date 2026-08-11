@@ -67,7 +67,7 @@ float3 SampleCirrusClouds(Texture2D<float4> cirrusTexture, float3 planetCenter, 
 	// so scale faster than the rest of the clouds.
 	uv += bindData.wind * bindData.time * 0.038;
 	
-	float opacityScale = smoothstep(0.f, 0.4f, bindData.globalWeatherCoverage) * 0.35f;
+	float opacityScale = smoothstep(0.f, 0.4f, bindData.globalWeatherCoverage) * 0.15f;
 	
 	return cirrusTexture.Sample(bilinearWrap, uv).aaa * opacityScale;
 }

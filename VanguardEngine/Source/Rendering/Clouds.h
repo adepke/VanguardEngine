@@ -25,8 +25,8 @@ struct CloudResources
 class Clouds
 {
 public:
-	float densityMultiplier = 1.3f;
-	int msOctaves = 5;  // Number of multiple-scattering octaves
+	float densityMultiplier = 1.8f;
+	int msOctaves = 14;  // Number of multiple-scattering octaves
 
 private:
 	RenderDevice* device;

@@ -11,7 +11,8 @@ void ComputeScatteringIntegration(float density, float3 luminance, float dist, f
 	const float3 extinction = max(extinctionCoeff * density, 0.0000001.xxx);
 	const float3 transmittanceSample = exp(-extinction * dist);
 
-	luminance *= scatteringCoeff;
+	// The in-scatter source must include density, matching the extinction in the denominator.
+	luminance *= scatteringCoeff * density;
 	const float3 integScatt = (luminance - luminance * transmittanceSample) / extinction;
 
 	scatteredLuminance += transmittance * integScatt;

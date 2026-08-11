@@ -2246,7 +2246,7 @@ void EditorUI::DrawAtmosphereControls(RenderDevice* device, entt::registry& regi
 			ImGui::Text("Clouds");
 
 			ImGui::DragFloat("Density scale", &clouds.densityMultiplier, 0.01f, 0.f, 20.f);
-			ImGui::SliderInt("Multi-scatter octaves", &clouds.msOctaves, 1, 10);
+			ImGui::SliderInt("Multi-scatter octaves", &clouds.msOctaves, 1, 20);
 
 			static int rayMarchQuality = *CvarGet("cloudRayMarchQuality", int);
 			static int lastRayMarchQuality = rayMarchQuality;

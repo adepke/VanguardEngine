@@ -395,7 +395,7 @@ void Renderer::Initialize(std::unique_ptr<WindowFrame>&& inWindow, std::unique_p
 	{
 		Renderer::Get().ReloadShaderPipelines();
 	});
-	CvarCreate("exposure", "Linear scene exposure multiplier applied before tone mapping", 8.5f);
+	CvarCreate("exposure", "Linear scene exposure multiplier applied before tone mapping", 10.0f);
 	// Keep in sync with ToneMapping.hlsli
 	CvarCreate("toneMapper", "Selects the tone mapping operator (0=disabled, 1=ACES Hill, 2=ACES Narkowicz, 3=AgX, 4=Khronos PBR Neutral, 5=Reinhard)", 3);
 	CvarCreate("referenceGridEnabled", "Controls if the reference grid is visible", 0);
